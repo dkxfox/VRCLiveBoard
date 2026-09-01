@@ -1,0 +1,25 @@
+node_modules/
+logs/
+*.log
+.ocr-cache/
+.ocr-langs/
+.ocr-tmp.png
+.electron-cache/
+.pydist/
+autostart.bat
+
+# 本地配置与机密(永远不要提交)
+config.json
+dev-dongle/
+
+# 构建产物与安装包
+dist/
+VRCLiveBoard-*.zip
+
+# 测试素材
+测试OCR功能用截图/
+
+# 系统文件
+Thumbs.db
+desktop.ini
+.DS_Store

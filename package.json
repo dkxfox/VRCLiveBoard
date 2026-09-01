@@ -1,0 +1,22 @@
+{
+  "name": "vrcliveboard",
+  "version": "1.3.0",
+  "private": true,
+  "description": "VRChat OSC 工具: 电脑状态 / 媒体 / 公告板(私有项目)",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "node src/main.js",
+    "desktop": "electron electron/main.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@tesseract.js-data/chi_sim": "^1.0.0",
+    "@tesseract.js-data/jpn": "^1.0.0",
+    "electron": "43.4.0",
+    "osc": "^2.4.5",
+    "systeminformation": "^5.33.5",
+    "tesseract.js": "^7.0.0"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "osc": { "host": "127.0.0.1", "port": 9000, "minSendIntervalMs": 1200 },
+  "oscIn": { "port": 9001 },
+  "chatbox": { "maxChars": 144, "swearFilter": { "enabled": true } },
+  "web": { "host": "127.0.0.1", "port": 19190, "openBrowser": true, "lang": "zh-CN" },
+  "desktop": { "showConsole": true },
+  "autostart": false,
+  "sources": {
+    "pages": {
+      "enabled": true,
+      "priority": 5,
+      "rotationMs": 8000,
+      "pages": [
+        { "text": "== 欢迎 ==\n这是 VRCLiveBoard\n电脑状态正在轮播" },
+        { "text": "== PC 状态 ==\nCPU {cpu_util}% {cpu_temp}C | GPU {gpu_util}% {gpu_temp}C\nRAM {mem_used}/{mem_total}G" },
+        { "text": "== 时间 ==\n{date} {time}" },
+        { "text": "==作者==\ndkxfox 使用deepseek制作" }
+      ]
+    },
+    "hardware": {
+      "enabled": true,
+      "priority": 10,
+      "intervalMs": 5000,
+      "template": "[PC] CPU {cpu_util}% {cpu_temp}C | GPU {gpu_util}% {gpu_temp}C\nRAM {mem_used}/{mem_total}G | {net_down}/s D {net_up}/s U"
+    },
+    "media": {
+      "enabled": false,
+      "priority": 30,
+      "intervalMs": 2000,
+      "template": ">> {song}\n   {artist} {album}"
+    },
+    "livetranslate": {
+      "enabled": false,
+      "priority": 40,
+      "intervalMs": 1500,
+      "maxAgeMs": 12000,
+      "lines": 2,
+      "transcriptsDir": ""
+    },
+    "ocrregion": {
+      "enabled": false,
+      "priority": 45,
+      "intervalMs": 3000,
+      "lines": 2,
+      "region": { "title": "", "x": 0, "y": 0, "w": 0, "h": 0 }
+    }
+  },
+  "ocrtl": {
+    "delayMs": 5000,
+    "displayMs": 8000,
+    "loops": 2,
+    "mode": "auto",
+    "vision": { "apiBase": "https://api.deepseek.com", "apiKey": "", "model": "deepseek-v4-flash-vision-exp", "targetLang": "zh" },
+    "capture": { "mode": "window", "windowTitle": "VRChat", "region": { "x": 0, "y": 0, "w": 0, "h": 0 } },
+    "liveTranslateDir": ""
+  },
+  "plugins": {
+    "friend-welcome": { "friends": [] }
+  },
+  "pluginApprovals": {},
+  "pluginEnabled": []
+}

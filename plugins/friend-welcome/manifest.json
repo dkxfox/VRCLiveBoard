@@ -1,0 +1,21 @@
+{
+  "id": "friend-welcome",
+  "name": "好友欢迎",
+  "version": "1.3.0",
+  "author": "VRCLiveBoard 官方",
+  "description": "指定好友进入房间时显示专属欢迎语并轮巡(仅显示显示名,不发送 UID),结束后自动恢复原状",
+  "api": "2.0.0",
+  "permissions": {
+    "network": [],
+    "filesystem": {
+      "read": [],
+      "write": []
+    },
+    "process": false,
+    "ports": []
+  },
+  "dependencies": {},
+  "conflicts": [],
+  "exclusive": [],
+  "loadOrder": 100
+}

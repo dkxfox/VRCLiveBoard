@@ -1,0 +1,21 @@
+{
+  "id": "scheduled-board",
+  "name": "定时公告",
+  "version": "2.0.0",
+  "author": "VRCLiveBoard 官方",
+  "description": "定时公告: 常规轮播 + 整点/半点播报 + 指定日期时间特殊公告(可中断其它功能, 支持 Excel 批量管理)",
+  "api": "2.0.0",
+  "permissions": {
+    "network": [],
+    "filesystem": {
+      "read": [],
+      "write": []
+    },
+    "process": false,
+    "ports": []
+  },
+  "dependencies": {},
+  "conflicts": [],
+  "exclusive": [],
+  "loadOrder": 100
+}
