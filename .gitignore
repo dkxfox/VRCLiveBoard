@@ -10,6 +10,7 @@ autostart.bat
 
 # 本地配置与机密(永远不要提交)
 config.json
+config.json.bak
 dev-dongle/
 
 # 构建产物与安装包
@@ -18,6 +19,9 @@ VRCLiveBoard-*.zip
 
 # 测试素材
 测试OCR功能用截图/
+
+# 本地便签
+继续开发命令.txt
 
 # 系统文件
 Thumbs.db
