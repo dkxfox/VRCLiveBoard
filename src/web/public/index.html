@@ -88,6 +88,7 @@ pre::-webkit-scrollbar-thumb, #logView::-webkit-scrollbar-thumb { background: va
     <div class="sub" id="consoleUrl" style="color:#5b8def;font-family:Consolas,monospace;margin-top:4px"></div>
   </div>
   <div style="display:flex;gap:8px;align-items:center">
+    <a id="updateBtn" class="small" style="display:none;background:var(--accent);color:#fff;text-decoration:none;font-weight:600" target="_blank" rel="noopener"></a>
     <button id="reloadBtn" class="gray small" data-t="reloadBtn"></button>
     <button id="navToggle" class="gray small">☰</button>
     <button id="guideBtn" class="small gray" data-t="guideBtn"></button>
@@ -1465,7 +1466,10 @@ fetch('/api/version').then(function (r) { return r.json(); }).then(function (j) 
 function checkUpdate() {
   fetch('/api/version/check').then(function (r) { return r.json(); }).then(function (j) {
     const el = document.getElementById('updateHint');
-    if (!el || !j || !j.remote || !j.newer) return;
+    const btn = document.getElementById('updateBtn');
+    if (!j || !j.remote || !j.newer) return;
+    if (btn) { btn.href = j.remote.releaseUrl || 'https://github.com/dkxfox/VRCLiveBoard/releases/latest'; btn.textContent = t('updateBtn'); btn.style.display = 'inline-block'; }
+    if (!el) return;
     const a = document.createElement('a');
     a.href = j.remote.releaseUrl || 'https://github.com/dkxfox/VRCLiveBoard/releases/latest';
     a.target = '_blank';
