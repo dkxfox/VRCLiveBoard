@@ -33,16 +33,18 @@ function validate(j) {
   };
 }
 async function fetchRemote(sources) {
+  // 全部源都查一遍, 取版本号最高的(jsDelivr 对 GitHub 文件有缓存, 单源优先可能拿到旧版本号)
+  let best = null;
   for (const s of sources) {
     try {
       const r = await fetch(s + (s.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now(), { signal: AbortSignal.timeout(10000) });
       if (!r.ok) continue;
       const j = await r.json();
       const v = validate(j);
-      if (v) return { remote: v, source: s };
+      if (v && (!best || compareVersions(v.version, best.remote.version) > 0)) best = { remote: v, source: s };
     } catch (e) {}
   }
-  return { remote: null, source: null };
+  return best || { remote: null, source: null };
 }
 async function checkUpdate(config, force) {
   const now = Date.now();

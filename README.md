@@ -2,8 +2,8 @@
 
 **把电脑状态、正在播放的音乐、公告板、翻译字幕,显示到 VRChat 头顶聊天框的 Windows 小工具。**
 
-> 第一个正式公开版:v1.3.0(代号「星光」)
-> 发布日期:2026-09-01 —— 这一天也是作者 27 岁的生日。
+> 当前版本:v1.3.1(代号「星光」)
+> 首个正式公开版 v1.3.0 发布于 2026-09-01 —— 这一天也是作者 27 岁的生日。
 > 无数散落的星光汇成轨道,从凌晨三点走到黎明。
 
 ## 功能一览
@@ -18,8 +18,8 @@
 ## 快速开始(Windows)
 
 1. 下载发行包(见本仓库 **Releases**):
-   - `VRCLiveBoard-Desktop-SelfContained-v1.3.0.zip` — 免装环境, 解压即用
-   - `VRCLiveBoard-Lite-RequiresNode-v1.3.0.zip` — 需 Node.js, 首次启动自动安装依赖
+   - `VRCLiveBoard-Desktop-SelfContained-v1.3.1.zip` — 免装环境, 解压即用
+   - `VRCLiveBoard-Lite-RequiresNode-v1.3.1.zip` — 需 Node.js, 首次启动自动安装依赖
 2. 解压 → 双击 `启动.bat`(或桌面版 `启动桌面版.bat` / `VRCLiveBoard.exe`)
 3. VRChat 内:Action Menu → Options → OSC → Enabled
 4. 从零开始的完整教程:随包《使用说明.txt》(13 章)
