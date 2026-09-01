@@ -4,6 +4,7 @@
   "chatbox": { "maxChars": 144, "swearFilter": { "enabled": true } },
   "web": { "host": "127.0.0.1", "port": 19190, "openBrowser": true, "lang": "zh-CN" },
   "desktop": { "showConsole": true },
+  "update": { "mirror": "" },
   "autostart": false,
   "sources": {
     "pages": {

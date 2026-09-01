@@ -7,6 +7,7 @@ const { diagnose } = require('../diagnose');
 const { runOnce: runOcrTranslate, getLtStatus } = require('../ocrtranslate');
 const { installPortablePython, existsPython, pyExe } = require('../portablepy');
 const { resolvePython } = require('../pyhelper');
+const { checkUpdate, compareVersions } = require('../versioncheck');
 const { execFile, execFileSync, spawn } = require('child_process');
 const { setConsoleVisible } = require('../consolewin');
 const devgate = require('../devgate');
@@ -154,6 +155,16 @@ function createServer(opts) {
     if (req.method === 'GET' && url.pathname === '/api/version') {
       try { const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')); return json(res, 200, { version: pkg.version || '0.0.0' }); }
       catch (e) { return json(res, 200, { version: 'unknown' }); }
+    }
+    if (req.method === 'GET' && url.pathname === '/api/version/check') {
+      const force = url.searchParams.get('force') === '1';
+      checkUpdate(rootConfig, force).then(function (r) {
+        let cur = '0.0.0';
+        try { cur = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')).version || cur; } catch (e) {}
+        const newer = r.remote ? compareVersions(r.remote.version, cur) > 0 : false;
+        return json(res, 200, { ok: r.ok, current: cur, newer: newer, remote: r.remote, source: r.source });
+      }).catch(function (e) { return json(res, 200, { ok: false, error: String(e.message) }); });
+      return;
     }
     if (req.method === 'GET' && url.pathname === '/api/status') {
       return json(res, 200, Object.assign({ vrcOn: composer.vrcOn, vrc: composer.vrcInfo, time: Date.now() }, composer.status()));
@@ -420,12 +431,42 @@ function createServer(opts) {
       return json(res, 200, { ok: true, started: true });
     }
     if (req.method === 'POST' && url.pathname === '/api/env/install-winsdk') {
-      execFile('python', ['-m', 'pip', 'install', 'winsdk', '--no-input'], { timeout: 300000, windowsHide: true }, function (err, stdout, stderr) {
-        if (err) return json(res, 500, { ok: false, error: 'winsdk 安装失败: ' + String(stderr || err.message || '').slice(0, 200) });
-        const media = composer.sources.find(function (s) { return s.id === 'media'; });
-        if (media && media.restart) { try { media.restart(); } catch (e) {} }
-        json(res, 200, { ok: true });
-      });
+      const root = path.join(__dirname, '..');
+      let py = null;
+      if (existsPython(root)) py = pyExe(root);
+      else {
+        try {
+          const chk = execFileSync('python', ['-c', 'import sys; print(sys.version.split()[0])'], { timeout: 20000, windowsHide: true, encoding: 'utf8' });
+          if (String(chk).trim()) py = 'python';
+        } catch (e) {}
+      }
+      if (!py) return json(res, 500, { ok: false, error: '未找到可用 Python: 请先点环境检测里的 Python 一键安装按钮(便携版), 完成后再装 winsdk' });
+      const steps = [
+        ['-m', 'pip', 'install', '--upgrade', 'pip', 'setuptools', 'wheel', '--no-input', '--timeout', '60'],
+        ['-m', 'pip', 'install', 'winsdk', '--no-input', '--timeout', '60', '--only-binary', ':all:']
+      ];
+      let step = 0;
+      const runNext = function () {
+        if (step >= steps.length) {
+          execFile(py, ['-c', 'import winsdk; print("winsdk-ok")'], { timeout: 30000, windowsHide: true }, function (e2, so) {
+            if (e2 || String(so).indexOf('winsdk-ok') < 0) return json(res, 500, { ok: false, error: 'winsdk 安装后验证失败, 请重试; 仍失败可先装便携版 Python(自带 winsdk)' });
+            const media = composer.sources.find(function (s) { return s.id === 'media'; });
+            if (media && media.restart) { try { media.restart(); } catch (e3) {} }
+            json(res, 200, { ok: true });
+          });
+          return;
+        }
+        const args = steps[step];
+        step++;
+        execFile(py, args, { timeout: 600000, windowsHide: true, maxBuffer: 8 * 1024 * 1024 }, function (err, stdout, stderr) {
+          if (err) {
+            const tail = String(stderr || '').split(/\r?\n/).filter(Boolean).slice(-6).join(' | ');
+            return json(res, 500, { ok: false, error: 'winsdk 安装失败(' + (step === 2 ? '安装' : '升级 pip') + '步骤): ' + tail.slice(-280) + '。若为网络错误: 可先点环境检测的 Python 一键安装按钮(便携版自带 winsdk)' });
+          }
+          runNext();
+        });
+      };
+      runNext();
       return;
     }
     if (req.method === 'GET' && url.pathname === '/api/icon') {

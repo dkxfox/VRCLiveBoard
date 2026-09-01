@@ -367,6 +367,7 @@ pre::-webkit-scrollbar-thumb, #logView::-webkit-scrollbar-thumb { background: va
       <span data-t="advBoxHint"></span><br>
       <span id="advHttpHint" data-t="advHttpHint"></span><br>
       <span id="ver"></span>
+      <span id="updateHint" style="margin-left:12px"></span>
     </div>
   </div>
 </details>
@@ -524,7 +525,7 @@ async function poll() {
     const v = s.vrc;
     let dotCls = 'off'; let txt = t('vrcOff');
     if (v && v.running && v.oscEnabled) { dotCls = 'on'; txt = t('vrcOn') + (v.oscPort || '?') + ')'; }
-    else if (v && v.running) { dotCls = 'warn'; txt = t('vrcWarn'); }
+    else if (v && v.running) { dotCls = 'warn'; txt = (v.oscEnabled === null || v.oscEnabled === undefined) ? t('vrcUnknown') : t('vrcWarn'); }
     else if (v && !v.running && v.oscEnabled !== null) { txt = v.oscEnabled ? t('vrcLastOn') : t('vrcLastOff'); }
     document.getElementById('vrcDot').className = 'dot ' + dotCls;
     document.getElementById('vrcText').textContent = txt;
@@ -1461,6 +1462,21 @@ document.getElementById('ltOpen').onclick = function () {
   window.open('https://space.bilibili.com/21426055/lists/7714676?type=season', '_blank');
 };
 fetch('/api/version').then(function (r) { return r.json(); }).then(function (j) { document.getElementById('ver').textContent = t('verLine') + j.version + t('codeName') + t('verLine2'); }).catch(function () {});
+function checkUpdate() {
+  fetch('/api/version/check').then(function (r) { return r.json(); }).then(function (j) {
+    const el = document.getElementById('updateHint');
+    if (!el || !j || !j.remote || !j.newer) return;
+    const a = document.createElement('a');
+    a.href = j.remote.releaseUrl || 'https://github.com/dkxfox/VRCLiveBoard/releases/latest';
+    a.target = '_blank';
+    a.style.color = 'var(--accent)';
+    a.style.fontWeight = '600';
+    a.textContent = t('updateNew').replace('{ver}', j.remote.version).replace('{name}', j.remote.codename || '');
+    el.appendChild(a);
+  }).catch(function () {});
+}
+checkUpdate();
+setInterval(checkUpdate, 6 * 60 * 60 * 1000);
 loadAuto();
 loadPages();
 // ===== 健康总览(零级) =====
@@ -1474,7 +1490,7 @@ async function healthLoad() {
     const vrc = j.vrc || {};
     const u = j.udp9000 || {};
     const lines = [];
-    if (vrc.running) lines.push((vrc.oscEnabled ? '🟢 ' + t('portsVrcOn') + (vrc.oscPort || '?') : '🟡 ' + t('portsVrcOff')));
+    if (vrc.running) lines.push(vrc.oscEnabled ? ('🟢 ' + t('portsVrcOn') + (vrc.oscPort || '?')) : ((vrc.oscEnabled === null || vrc.oscEnabled === undefined) ? ('🟡 ' + t('portsVrcUnknown')) : ('🟡 ' + t('portsVrcOff'))));
     else lines.push('⚪ ' + t('portsVrcStop'));
     if (u.occupied === false) lines.push('🔴 ' + t('portsUdpFree'));
     else if (u.occupied === true) lines.push('🔴 ' + t('portsUdpBusy') + (u.name || ('PID ' + (u.pid || '?'))));
@@ -1498,7 +1514,7 @@ document.getElementById('healthCopy').onclick = async function () {
     if (j) {
       const vrc = j.vrc || {}; const u = j.udp9000 || {};
       txt = 'VRCLiveBoard v' + j.version + '\n' +
-        'VRChat: ' + (vrc.running ? (vrc.oscEnabled ? ('OSC on, port ' + (vrc.oscPort || '?')) : 'OSC OFF') : 'not running') + '\n' +
+        'VRChat: ' + (vrc.running ? (vrc.oscEnabled ? ('OSC on, port ' + (vrc.oscPort || '?')) : ((vrc.oscEnabled === null || vrc.oscEnabled === undefined) ? 'OSC unknown (check in game)' : 'OSC OFF')) : 'not running') + '\n' +
         'UDP 9000: ' + (u.occupied === false ? 'free' : (u.occupied === true ? ('occupied by ' + (u.name || u.pid)) : 'unknown')) + '\n' +
         'Console: http://' + j.web.host + ':' + j.web.actual + '\n' +
         'OSC target: ' + j.osc.host + ':' + j.osc.port + '\n' +

@@ -11,6 +11,6 @@ if not exist "%~dp0node_modules\electron\dist\electron.exe" (
   exit /b 1
 )
 echo [%date% %time%] desktop launching >> "%LOG%"
-"%~dp0node_modules\electron\dist\electron.exe" --disable-gpu --disable-gpu-sandbox --no-sandbox "%~dp0electron\main.js"
-echo [%date% %time%] desktop exited, code=%errorlevel% >> "%LOG%"
+start "" "%~dp0node_modules\electron\dist\electron.exe" --no-sandbox "%~dp0electron\main.js"
+echo [%date% %time%] desktop launched (window closes now; app runs in its own window) >> "%LOG%"
 exit /b 0

@@ -32,8 +32,8 @@ function getVrcStatus() {
   try {
     const text = fs.readFileSync(log.path, 'utf8');
     let m;
-    const reOsc = /OSC enabled:\s*(True|False)/gi;
-    while ((m = reOsc.exec(text)) !== null) oscEnabled = m[1] === 'True';
+    const reOsc = /OSC[:\s]*enabled[:\s=]*(true|false)/gi;
+    while ((m = reOsc.exec(text)) !== null) oscEnabled = String(m[1]).toLowerCase() === 'true';
     const reP = /of type OSC on\s+(\d+)/gi;
     while ((m = reP.exec(text)) !== null) oscPort = Number(m[1]);
     const reQ = /of type OSCQuery on\s+(\d+)/gi;

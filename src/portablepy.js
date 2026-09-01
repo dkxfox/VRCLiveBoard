@@ -87,7 +87,7 @@ async function installPortablePython(projectRoot, logger, onProgress) {
     if (r.code !== 0) { report('pip 安装异常(继续尝试 winsdk): ' + (r.err || r.out).slice(0, 150)); }
     // 安装 winsdk
     report('安装 winsdk(媒体功能依赖)...');
-    r = await run(pyExe(projectRoot), ['-m', 'pip', 'install', 'winsdk', '--no-input'], 600000);
+    r = await run(pyExe(projectRoot), ['-m', 'pip', 'install', 'winsdk', '--no-input', '--timeout', '60', '--only-binary', ':all:'], 900000);
     if (r.code !== 0) throw new Error('winsdk 安装失败: ' + (r.err || r.out).slice(0, 300));
     // 验证
     r = await run(pyExe(projectRoot), ['-c', 'import winsdk; print("winsdk-ok")'], 30000);
