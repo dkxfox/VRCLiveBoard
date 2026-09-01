@@ -68,8 +68,9 @@ $secStmt = (-join @([char]0x52A0,[char]0x5BC6,[char]0x72D7,[char]0x5B89,[char]0x
 $releaseNote = (-join @([char]0x53D1,[char]0x5E03,[char]0x516C,[char]0x544A)) + '-' + (-join @([char]0x661F,[char]0x5149)) + '.txt'  # 发布公告-星光.txt(对外公告, 不进包)
 $launcherExe = 'VRCLiveBoard.exe'  # 自建桌面版启动器(scripts\launcher\build.bat 编译; 是否随包分发由用户定, 目前不进包)
 $dongleDoc = (-join @([char]0x52A0,[char]0x5BC6,[char]0x72D7,[char]0x5DE5,[char]0x4F5C,[char]0x539F,[char]0x7406,[char]0x8BF4,[char]0x660E)) + '.txt'  # 加密狗工作原理说明(开发者申请版内容, 不进公开包)
-# 注意: robocopy /XF 只认文件名不认相对路径, 这里写裸文件名
-$xfFiles = @('config.json', '.ocr-tmp.png', '.ocr-preview.png', 'dev-unlocker.js', 'dev-unlocker.bat', 'dev-unlocker.ps1', $secStmt, $releaseNote, $launcherExe, $dongleDoc, 'dev-apply-note.txt', $humphrey, $promoScript, ($verNote + '-v1.1.0.md'), ($verNote + '-v1.2.1.md'))  # 旧版说明仅存档不进包, 随包的是 版本说明.txt
+$contNote = (-join @([char]0x7EE7,[char]0x7EED,[char]0x5F00,[char]0x53D1,[char]0x547D,[char]0x4EE4)) + '.txt'  # 继续开发命令.txt(开发者本地便签, 不进包)
+# 注意: robocopy /XF 只认文件名不认相对路径, 这里写裸文件名; '*.bak' 拦截 config.json.bak 这类含真实密钥的本地备份
+$xfFiles = @('config.json', 'config.json.bak', '*.bak', '.ocr-tmp.png', '.ocr-preview.png', 'dev-unlocker.js', 'dev-unlocker.bat', 'dev-unlocker.ps1', $secStmt, $releaseNote, $launcherExe, $dongleDoc, $contNote, 'dev-apply-note.txt', $humphrey, $promoScript, ($verNote + '-v1.1.0.md'), ($verNote + '-v1.2.1.md'))  # 旧版说明仅存档不进包, 随包的是 版本说明.txt
 
 # zip writer: .NET ZipFile writes non-ASCII entry names as UTF-8 with the EFS flag set
 # (Windows tar.exe writes GBK-codepage bytes without the flag -> breaks extractors on non-CJK systems)
@@ -79,6 +80,20 @@ function New-VrcbZip($srcDir, $zipPath) {
   [System.IO.Compression.ZipFile]::CreateFromDirectory($srcDir, $zipPath, [System.IO.Compression.CompressionLevel]::Optimal, $false)
   $node = Get-Command node -ErrorAction SilentlyContinue
   if ($node) { & node (Join-Path $p 'scripts\fix-zip-sep.js') $zipPath } else { Write-Output '[WARN] node 不存在, 跳过 zip 分隔符规整' }
+}
+# 出厂前最后一道闸: 扫描 stage 目录(= 即将打进 zip 的真实内容), 命中真实密钥/私有字段即中止
+function Check-Stage($dir) {
+  $bad = @()
+  $files = Get-ChildItem $dir -Recurse -File -Include *.json,*.bak,*.txt,*.cfg,*.ini,*.env -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch 'node_modules' }
+  $hits = $files | Select-String -Pattern 'sk-[a-zA-Z0-9]{16,}', '"(devchain|level1Password)"\s*:', 'SESSDATA=[0-9a-fA-F]{8}' -ErrorAction SilentlyContinue
+  foreach ($h in $hits) { $bad += ($h.Path.Replace($dir + '\', '') + ' line ' + $h.LineNumber) }
+  foreach ($b in @(Get-ChildItem $dir -Recurse -File -Filter '*.bak' -ErrorAction SilentlyContinue)) { $bad += ('stray backup file: ' + $b.FullName.Replace($dir + '\', '')) }
+  if ($bad.Count -gt 0) {
+    Write-Output '[PROBLEM] stage secret scan FAILED (real key / private field about to ship):'
+    $bad | Select-Object -First 12 | ForEach-Object { Write-Output ('   ' + $_) }
+    exit 1
+  }
+  Write-Output 'stage secret scan: CLEAN'
 }
 function Get-ZipNames($zipPath) {
   $z = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
@@ -95,13 +110,16 @@ robocopy $p $stage /E /NFL /NDL /NJH /NJS /XD $exclAbs /XF $xfFiles | Out-Null
 robocopy (Join-Path $p 'node_modules') (Join-Path $stage 'node_modules') /E /NFL /NDL /NJH /NJS | Out-Null
 Copy-Item (Join-Path $p 'config.default.json') (Join-Path $stage 'config.json') -Force
 Scrub-Secrets (Join-Path $stage 'config.json')
+Check-Stage $stage
 Write-Output '==== 3. zip self-contained (big, wait) ===='
 $zipSc = Join-Path $pubDir ('VRCLiveBoard-Desktop-SelfContained-v' + $ver + '.zip')
 New-VrcbZip $stage $zipSc
 Write-Output ('made: ' + $zipSc + ' (' + [math]::Round((Get-Item $zipSc).Length / 1MB) + ' MB)')
 $manNameSc = (-join @([char]0x4F7F,[char]0x7528,[char]0x8BF4,[char]0x660E)) + '.txt'  # 使用说明.txt
-if (-not ((Get-ZipNames $zipSc) -contains $manNameSc)) { Write-Output '[PROBLEM] self-contained zip 中文文件名编码异常'; exit 1 }
-Write-Output 'utf8 name check: OK'
+$namesSc = Get-ZipNames $zipSc
+if (-not ($namesSc -contains $manNameSc)) { Write-Output '[PROBLEM] self-contained zip 中文文件名编码异常'; exit 1 }
+if ($namesSc | Where-Object { $_ -like '*.bak' }) { Write-Output '[PROBLEM] self-contained zip 混入 .bak 备份文件'; exit 1 }
+Write-Output 'utf8 name check: OK / no .bak: OK'
 
 if (-not $SkipLight) {
   Write-Output '==== 4. stage lite (requires Node) ===='
@@ -111,6 +129,7 @@ if (-not $SkipLight) {
   robocopy $p $stageL /E /NFL /NDL /NJH /NJS /XD $exclAbs /XF $xfFiles | Out-Null
   Copy-Item (Join-Path $p 'config.default.json') (Join-Path $stageL 'config.json') -Force
   Scrub-Secrets (Join-Path $stageL 'config.json')
+  Check-Stage $stageL
   Write-Output '==== 5. zip lite ===='
   $zipL = Join-Path $pubDir ('VRCLiveBoard-Lite-RequiresNode-v' + $ver + '.zip')
   New-VrcbZip $stageL $zipL
@@ -126,7 +145,8 @@ if (-not $SkipLight) {
   Write-Output 'internal-files check: excluded OK'
   $manName = (-join @([char]0x4F7F,[char]0x7528,[char]0x8BF4,[char]0x660E)) + '.txt'  # 使用说明.txt
   if (-not ($namesL -contains $manName)) { Write-Output '[PROBLEM] lite zip 中文文件名编码异常(缺 使用说明.txt)'; exit 1 }
-  Write-Output 'utf8 name check: OK'
+  if ($namesL | Where-Object { $_ -like '*.bak' }) { Write-Output '[PROBLEM] lite zip 混入 .bak 备份文件'; exit 1 }
+  Write-Output 'utf8 name check: OK / no .bak: OK'
 }
 Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
 if (-not $SkipLight) { Remove-Item $stageL -Recurse -Force -ErrorAction SilentlyContinue }

@@ -5,7 +5,7 @@
 //       解锁器按逆序发放一次性密码, 应用验证 H(code) == 锚点, 通过后锚点前移、次数 -1。
 //       应用分发包内不存在任何可生成密码的秘密(只有锚点哈希), 拿文件给 AI/内存工具均无法逆推下一个密码。
 const crypto = require('crypto');
-const SALT = 'vrcb-dev-chain-v2';
+const SALT = 'vrcb-dev-chain-v3-9600e2c7ba9bd75e';  // 2026-09-01 轮换(v2 随旧包外流, 全部旧锚点/旧迷你狗随之作废)
 
 function h16(input) {
   return crypto.createHash('sha256').update(String(input)).digest('hex').slice(0, 16);

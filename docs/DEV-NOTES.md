@@ -3,7 +3,7 @@
 > 本文件是**给未来接手的开发者/AI 看的会话记忆**。用户可能会删除工作区聊天记录,
 > 但只要这个文件在,就能完整恢复上下文继续开发。更新代码后请同步更新本文件。
 
-## 1. 项目现状(2026-09-01, v1.3.1「星光 · 修补版」正式发布并闭环: GitHub 仓库 + Release + 新版本检测全链路实测通过; 同日会话存档收尾见条目 83, 新会话接手后完成本地↔GitHub 全量对账与许可拍板(保留所有权利)见条目 84。历史: v1.3.0 正式版发布于同日(用户 27 岁生日), 代号星光。)
+## 1. 项目现状(2026-09-01, v1.3.1「星光 · 修补版」正式发布并闭环: GitHub 仓库 + Release + 新版本检测全链路实测通过; 同日会话存档收尾见条目 83, 新会话接手后完成本地↔GitHub 全量对账与许可拍板(保留所有权利)见条目 84。**发现并修复发布包泄密事故(config.json.bak 随包分发含真实 API key), 见条目 85(用户已吊销密钥); 随后按用户指令轮换链盐并清空全部授信数据, 见条目 86 —— 授权体系现为空白状态, 下次打包才产出新盐的包。**历史: v1.3.0 正式版发布于同日(用户 27 岁生日), 代号星光。)
 
 - 2026-08-28: **母狗/迷你狗授权体系落地**(见坑 37/38): 开发者母狗(Node CLI + 授权登记表.xlsx + PBKDF2 强口令)永不外发; 分发按份绑定迷你狗 + 按份随机一级密码; 发包分公开版/授权版; 脏话过滤器开关降为零级。分发包内零秘密(只有锚点+盐)。
 
@@ -100,6 +100,22 @@
 37. **母狗/迷你狗授权体系**(2026-08-28 用户拍板, 威胁模型 = "不担心本机物理窃取, 担心分发包被恶意利用/加密狗从他人处被盗导致批量解锁"): 母狗(Node CLI, 只存在于开发者机器, 永不外发) + 迷你狗(按份绑定, 随授权版分发)。dev-dongle\master\master.js 命令: init(自动生成强口令: 大小写+数字+符号≥12位, PBKDF2-SHA512 21万轮+32字节盐 → master.key 只存 verifier, 口令不落盘; MASTER_PASS 环境变量供自动化)/ register 姓名 [--config 路径](把该人锚点 c[999]+六位随机一级密码写进 config.json, 登记 Excel)/ issue 姓名(发下一个一次性码, Excel 剩余-1)/ make-mini 姓名 输出目录(mini-unlock.ps1+启动迷你狗.bat+chain.json{seed,total,salt})/ revoke / list / backup 输出目录(明文+ AES-GCM 加密双份, 刻碟用)/ authorize 姓名 基础zip 输出目录。**每份隔离原理**: 种子 = HMAC-SHA256(masterKey,'chain|'+姓名) → 每个人的链完全不同, 迷你狗泄露只影响该人(实测李四狗打孙七程序 400 拒); 锚点确定性 → 只要 master.key+姓名可重算全部, Excel 只是登记本; 计数以程序 /api/devgate/status 的 devRemaining 为权威, 可重同步; 只有口令不可再生。授权登记表.xlsx 表头: 姓名/一级密码/剩余次数/状态/迷你狗已发/锚点已装/创建时间/备注(vendor\xlsx.js 从 friend-welcome 复制)。授权版 = 基础 zip 解包 → config.json 打锚点+一级密码 → 塞入 mini-dongle-<姓名>\ → 重打包 VRCLiveBoard-Authorized-<姓名>-v<版本>.zip。坑: ①authorize 曾产出 0 字节 zip(tar -a -cf 中文名输出在节点内偶发静默失败, 单独复现正常) → 已加大小校验(>1000 字节否则抛错), 防带病发包; ②master.js 模板串里 '\r\n' 会变真换行导致语法错误 → 用 String.fromCharCode(13,10); ③Excel loadXlsx 返回裸数组 → 归一化为对象 {name,l1,remaining,status,mini,anchor,created,note}; ④mini-unlock.ps1 取码公式 = Chain-Code(rem-1)(程序剩余 rem 次时, 能过验证的码是链上第 rem-1 个, 不是 total-1-rem); ⑤PS 函数参数不能叫 $input(保留自动变量, 绑定为空) → 一律 $s; ⑥mini 发现程序端口扫 19190~19210 /api/version。
 69. **九月一日首发决定 + 发布公告草稿**(2026-08-29 用户拍板: 2026-09-01 为第一个正式公开版发布日期, 恰逢用户 27 岁生日; 首个正式版代号 = 星光(昕=黎明/星轨茶会诞生于凌晨三点/测试者深夜反馈); 软件作为生日礼物送给大家)。产出根目录 发布公告-星光.txt 草稿(完整版+群公告精简版+备选句; 已按用户要求修订: 下载地址=群文件、加入开发者申请版获取方式(私聊报姓名按人定制)及安全限制原因(一次一码/每份隔离/泄露不连坐)、顺手修正 scripts\dev-apply-note.txt 一级密码 六位→八位)。文案已由用户定为最终版(下载地址=群文件, 含开发者申请版获取方式与安全限制原因)。待用户下令打包时执行: 星光署名写入 版本说明.txt/使用说明.txt/控制台版本行与副标题/开机日志首行(版本号仍 1.3.0 不变)→ 重新打包(dist 现有双 zip 为无代号版, 发布前必须重打)。
 
+86. **母狗盐值轮换 + 清空全部授信数据**(2026-09-01 晚, 用户指令: "把母狗的盐值换新的, 清空一切原有授信数据, 以后新版本的会重新打包"; 前置: 用户已吊销泄露的 API key, 并判定已发出的包都在授信人员手里、不再追溯):
+- **盐轮换**: 链盐 `vrcb-dev-chain-v2` → `vrcb-dev-chain-v3-9600e2c7ba9bd75e`(随机后缀)。**必须成对改**: `src/devgate.js` 的 `SALT` 与 `dev-dongle/master/master.js` 的 `CHAIN_SALT` 必须逐字一致(前者验证 `h16(code+SALT)==anchor`, 后者生成链 `h16(prev+CHAIN_SALT)`)。迷你狗**不用改代码** —— `mini-unlock.ps1` 从 `chain.json.salt` 读盐, make-mini / authorize 会把当时的盐写进去。盐本就随包公开(不是秘密), 轮换的意义是把"旧锚点 ↔ 旧迷你狗"这一整套旧世界作废。
+- **清空的内容**: ①`授权登记表.xlsx` → 只剩表头(原 4 行: 开发者 / 测试组(已吊销)/ 星轨茶会管理组专用 / 欧辰的落尘 全删); ②工作区 `config.json` 删除 `devchain` / `level1Password` / `gate`(开发者本机现在 = 零级、未装锚点); ③`dist\开发者申请版\` 下已生成的授权包目录(星轨茶会管理组专用 v1.3.1 —— 也正是含泄密 .bak 的那份)删除, 只留 申请说明.txt; ④母狗 `backup\` 下 2026-08-27 的明文/加密备份(含旧登记表与口令快照)删除; ⑤`legacy\dev-unlocker.state.json`(TOTP 时代残留)删除。全工作区扫描确认: mini-template 之外无任何 `chain.json` / `mini-unlock.ps1` 残留。
+- **保留未动**: `master.key` 与 `master-pass.txt` —— **母狗口令没换**(口令从未外泄; 换口令等于重算所有人的链种子, 且会让既有备份失效)。已实测该口令能通过 master.key 的 verifier 校验。将来若要连口令一起换: `node master.js init --pass <新强口令>`。
+- **实测(临时沙箱, 全程不碰真登记表)**: register → 装锚点(999 次)→ issue 取码 → `devgate.verifyDev` **接受** ✓ / 同码重放**被拒** ✓ / 锚点前移后下一码**接受** ✓ / 用**旧盐**算的码**被拒** ✓ / make-mini 产出的 chain.json 盐 == 应用 SALT ✓ / 真实登记表全程保持空 ✓ / 沙箱已删 —— **7/7 通过**。
+- ⚠ **踩坑预警**: `dist\公开版\` 现有两个 v1.3.1 zip 是**盐轮换之前**打的(包内 devgate.js 仍是旧盐)。**不要拿它们做授权版** —— master 会用新盐算锚点写进 config.json, 而包内 devgate 用旧盐验证 → 必然解锁失败。做授权版前先跑一次 `scripts\make-dist.ps1` 出新包(用户已定: 以后新版本才重新打包)。同理, 已发布在 GitHub Release 的包也是旧盐世界, 与新母狗互不兼容(设计如此)。
+- **开发者本机怎么恢复权限**: 启动程序后 `node dev-dongle\master\master.js unlock 开发者 --config config.json`(未登记会自动登记 → 装锚点 → 发码 → 顺带解一级); 或先 `register 开发者 --config config.json` 再重启程序。免交互口令: 设 `MASTER_PASS_FILE=dev-dongle\master\master-pass.txt`。
+
+85. **发布包泄密事故: config.json.bak 混进公开包**(2026-09-01 晚, 同号重打包前的例行核查中发现 — 本条最重要, 务必读完):
+- **事故**: 项目根的 `config.json.bak`(15481 字节 = 用户真实 config.json 的备份)被打进了**所有**分发物: dist 双 zip、GitHub Release v1.3.0 与 v1.3.1 的公开安装包、以及用户自建的 星轨茶会管理组专用 授权包。内含 ①可用的 DeepSeek API key(sk-…, 35 字符)②开发者本人的一级密码(6 位)③devchain 锚点。另混入 `继续开发命令.txt`(开发者本地便签, 含工作区绝对路径)。
+- **根因(两道防线同时失效)**: ①make-dist 的 `robocopy /XF` 只写了 `'config.json'`, 而 /XF 是**精确文件名匹配**, `config.json.bak` 自然不在其列; ②步骤 1b 的机密扫描用 `Get-ChildItem -Include *.json,*.txt,*.js,*.md,*.log,*.ps1,*.py,*.bat,*.cfg` —— **白名单里没有 `*.bak`**, 所以扫描器根本看不见这个文件(不是判定放行, 是压根没扫); ③`Scrub-Secrets` 只脱敏 stage 里的 `config.json`, 对 .bak 无效。三处叠加 = 真实密钥随包出厂。
+- **影响面**: 该 .bak 创建于 2026-08-28 19:02, 因此 **08-28 之后打的所有包**(v1.3.0-preview / v1.3.0 / v1.3.1 / 各授权包)都含它。缓解事实: 发现时 GitHub 两个 Release 的**全部资产 download_count = 0**(没人从 GitHub 下过); 群文件与已发给测试者的包需另行处置。
+- **处置(本次已做)**: ①把 config.json.bak 移出项目树 → `C:\Users\10166\Documents\VRCLiveBoard-backup\config.json.bak-20260901-184643.json`(备份仍在, 只是不再位于打包源); ②make-dist 加**三道闸**: /XF 增 `'config.json.bak'` 与通配 `'*.bak'` + $contNote(继续开发命令.txt, 码点构造); 新增 **`Check-Stage`(出厂前扫 stage 目录 = 真正要发出去的内容)**, 命中 `sk-[A-Za-z0-9]{16,}` / `"devchain":` / `"level1Password":` / `SESSDATA=` 或发现任何 `*.bak` 即 `exit 1`; 打包后再断言 zip 条目内无 `*.bak`; ③同号重打双 zip: sc 1325 / lite 148 条目(比旧包各少 2 个文件 = .bak + 便签), stage 扫描 CLEAN; 字节级 nonAscii=42 / noUtf8Flag=0 / invalidUtf8=0 / backslash=0 / .bak=0; 内容检查(README 公开版含许可条款、.gitignore 新版、config.json apiKey 空且无 devchain/level1Password、使用说明 v1.3.1、package 1.3.1)全过; lite 包真实启动冒烟 **8/8**(version/health/status/ports/plugins/version-check/控制台页/lang 星光), 测试端口 19250 已释放、TEMP 已清。
+- **用户侧必做**: **吊销并轮换那把 DeepSeek API key**(唯一不可挽回项, 密钥一旦公开只能换); 建议改掉一级密码; anchor 泄露按设计不可逆推(只有锚点无法生成有效一次性码, 见条目 33/37), 但要绝对保险可用母狗重新 `register` 换链。
+- **教训**: ①排除清单只维护"文件名黑名单"迟早漏 —— 备份/临时/编辑器副本天生就是新名字, 必须**通配符 + 出厂前实扫**双保险; ②机密扫描器的**文件类型白名单本身就是漏洞面**, 且扫源目录不如**扫 stage 目录**(stage = 真正要发出去的东西, 所见即所发); ③本机备份文件不要放在项目根, 备份一律出树; ④踩坑复现: 我给临时 .ps1 写 UTF-8 无 BOM, `powershell.exe -File` 按 GBK 读 → 中文路径变乱码找不到文件(与条目 66 同一个 BOM 坑, 换了个马甲又踩一次)。
+
 84. **新会话接手: 本地↔GitHub 全量对账 + 许可拍板**(2026-09-01 晚, 用户"接手项目, 继续后续工作"):
 - 状态核对(实测): 本地 v1.3.1 全套一致(package.json / version.json / 使用说明.txt / 版本说明.txt); GitHub 仓库公开, Release v1.3.1(三资产)与 v1.3.0(历史)在线; jsDelivr 与 raw.githubusercontent 均返回 1.3.1(新版本检测链路健康); 用户实例 19190 当时未运行(非故障, 用户没开)。
 - **对账方法(可复用)**: 项目根没有 .git, 用 GitHub trees API(`git/trees/main?recursive=1`)取全部 blob sha, 本地按 git 规则自算 `sha1('blob '+len+'\0'+content)` 逐文件比对 —— 无需 git 客户端就能精确回答"哪些文件和仓库不一致"。结果: 6 文件内容不同、3 文件仅本地(scripts/dev-apply-note.txt、加密狗安全声明.txt、加密狗工作原理说明.txt = 按条目 77/79 有意不上传)、0 文件仅远端。
@@ -108,6 +124,7 @@
 - **许可拍板(用户选)**: 维持「保留所有权利」, **不加 LICENSE 文件**(GitHub 无 LICENSE 即默认保留所有权利); README 许可段补明确条款 —— 允许: 下载阅读源码 / 学习交流 / 按原样使用官方发行包(公开版免费); 禁止: 未经书面授权再分发或二次打包(含改名、去署名)、商用或付费服务、移除绕过授权校验代码; 其他用途先联系作者。与加密狗授权体系口径一致。
 - 补推 GitHub: 提交 `2642b81`(README.md / .gitignore / scripts/make-dist.ps1 / scripts/launcher/launcher.cs / VRCLiveBoard.exe 五文件)+ 本条存档单独一次提交。推送脚本走 blobs→tree(base_tree 增量)→commit→PATCH refs/heads/main, 保留原 mode。
 - **令牌纪律**: 上次会话已按纪律删净令牌文件与脚本(本次全盘扫 TEMP + 工作区 = 0 命中), 所以"令牌还有效"≠"我还能用" —— 每次推送都需用户重新把值写进 TEMP 文件(用完即删)。**再次提醒用户吊销该经典令牌。**
+- 已发布包的遗留(核实过): 旧 v1.3.1 zip 内的 README.md 仍是老"私有项目"版、.gitignore 也是弱版 —— 用户拍板同号重打; 重打前的例行核查捅出了真正的大问题(config.json.bak 随包分发含真实密钥), 见条目 85。
 - 用户待办(仍未核销): ①群文件上传 v1.3.1 两个 zip; ②吊销 GitHub 经典令牌; ③通知反馈问题的使用者下载 v1.3.1 验证四项修复。
 
 83. **会话存档(2026-09-01 收尾, 用户指示"存档开新会话")**:
