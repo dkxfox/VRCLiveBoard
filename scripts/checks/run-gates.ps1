@@ -59,6 +59,8 @@ Gate 'G2'    '编码规范'        { node scripts\checks\encoding-lint.js }
 Gate 'GVER'  '版本一致性'      { node scripts\checks\version-sync.js }
 Gate 'GI18N' '三语键对齐'      { node scripts\checks\i18n-check.js }
 Gate 'GHTML' '控制台页面'      { node scripts\checks\html-inline-check.js }
+Gate 'GPLUG' '插件契约/单一源'   { node scripts\checks\plugin-check.js }
+Gate 'GCONF' '配置契约/安全默认' { node scripts\checks\config-contract.js }
 if ($Smoke) {
   Gate 'G4' ('隔离冒烟 :' + $Port) {
     if ($Assert.Count) { powershell -NoProfile -ExecutionPolicy Bypass -File scripts\checks\smoke.ps1 -Port $Port -Assert $Assert }

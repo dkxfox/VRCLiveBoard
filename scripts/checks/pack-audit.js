@@ -78,6 +78,14 @@ function audit(zp) {
     if (/"level1Password"/.test(cfg)) fails.push('config.json 含一级密码');
   }
 
+  // 4b. 官方插件恢复备份: 打包必须为 plugins\ 下每个插件生成 官方可选插件\<id>\ 副本(用户误删可拷回)
+  const officialDirs = fs.readdirSync(path.join(ROOT, 'plugins'), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+  for (const id of officialDirs) {
+    if (!names.includes('plugins/' + id + '/manifest.json')) fails.push('包内缺少插件本体: plugins/' + id);
+    if (!names.includes('官方可选插件/' + id + '/manifest.json')) fails.push('包内缺少误删恢复备份: 官方可选插件/' + id);
+  }
+  if (!names.includes('官方可选插件/说明-如何装回插件.txt')) fails.push('包内缺少 官方可选插件/说明-如何装回插件.txt');
+
   // 5. 盐一致性: 包内 devgate 必须与当前源码同盐(否则授权版必然解锁失败)
   const dgEntry = z.entries.find((e) => e.name === 'src/devgate.js');
   if (dgEntry) {
