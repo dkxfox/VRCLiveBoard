@@ -35,6 +35,25 @@
 
 ## 已关闭
 
+### A-20260902-01 ws 8.18.0 高危(经 osc 依赖)
+- 状态: CLOSED
+- 严重度: S1(安全, 按 C2 流程处置)
+- 来源: 流程 3 首轮 npm audit
+- 现象: GHSA-58qx-3vcg-4xpx(未初始化内存泄露)+ GHSA-96hv-2xvq-fx4p(内存耗尽 DoS), ws 8.18.0 由 osc@2.4.5 精确依赖带入
+- 根因: osc 锁死 ws 8.18.0(修复版为 8.21.3)
+- 改动: package.json 加 overrides {"ws": "8.21.3"}
+- 验证: npm audit = 0 vulnerabilities;osc UDPPort 加载正常;smoke 8/8
+- 关联: DEV-NOTES 条目 91
+
+### A-20260902-02 门禁自测首跑抓出两个盲区
+- 状态: CLOSED
+- 严重度: S4(流程自身)
+- 现象: 红队夹具首跑 8/9 —— encoding-lint 漏掉「GBK bat 文件混入 UTF-8 中文行」的混合编码
+- 根因: bat 检查只看整文件是否合法 UTF-8;且夹具自身构造的故障也不对(UTF-8 字节追加到 GBK 文件后整文件不再合法 UTF-8)
+- 改动: encoding-lint bat 改为逐行判定;夹具改为"纯 UTF-8 中文 bat 文件"
+- 验证: gate-selftest 9/9
+- 关联: DEV-NOTES 条目 91
+
 ### M-20260901-01 迷你狗启动脚本不是 CRLF
 - 状态: CLOSED
 - 严重度: S3
