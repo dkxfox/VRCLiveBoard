@@ -52,6 +52,7 @@
     "loops": 2,
     "mode": "auto",
     "vision": { "apiBase": "https://api.deepseek.com", "apiKey": "", "model": "deepseek-v4-flash-vision-exp", "targetLang": "zh" },
+    "security": { "promptDefense": true, "jsonMode": true, "outputSanitize": true, "extraPrompt": "", "blockWords": [] },
     "capture": { "mode": "window", "windowTitle": "VRChat", "region": { "x": 0, "y": 0, "w": 0, "h": 0 } },
     "liveTranslateDir": ""
   },
