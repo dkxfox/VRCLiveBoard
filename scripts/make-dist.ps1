@@ -19,7 +19,7 @@ Copy-Item (Join-Path $p 'scripts\dev-apply-note.txt') (Join-Path $appDir $appNot
 Get-ChildItem $dist -Filter 'VRCLiveBoard-*.zip' -File | Remove-Item -Force
 # exclude dirs whose names match test/OCR material (Unicode-safe: via variables, not literals)
 $userDirs = @(Get-ChildItem $p -Directory | Where-Object { $_.Name -match '测试|OCR|截图' } | ForEach-Object { $_.Name })
-$exclDirs = @('node_modules','logs','.electron-cache','.ocr-cache','.ocr-langs','.pydist') + $userDirs
+$exclDirs = @('node_modules','logs','.electron-cache','.ocr-cache','.ocr-langs','.pydist','.git') + $userDirs
 # 只排除项目顶层的 dist(用绝对路径),避免误伤插件自带的 vendor\dist 等嵌套同名目录
 # scripts\checks 是开发期门禁工具, 不随分发包出厂(仓库里保留)
 $exclAbs = @($dist, (Join-Path $p 'dev-dongle'), (Join-Path $p 'scripts\checks')) + $exclDirs
@@ -40,7 +40,8 @@ foreach ($d in @('osc','systeminformation','tesseract.js','@tesseract.js-data\ch
   if (-not (Test-Path (Join-Path $p ('node_modules\' + $d)))) { $problems += ('missing dep: node_modules\' + $d) }
 }
 Write-Output '== 1b. secret scan (sk- keys) =='
-$secAll = Get-ChildItem $p -Recurse -File -Include *.json,*.txt,*.js,*.md,*.log,*.ps1,*.py,*.bat,*.cfg | Where-Object { $_.FullName -notmatch 'node_modules' } | Select-String -Pattern 'sk-[a-zA-Z0-9]{16,}|SESSDATA=[0-9a-fA-F]{8}' -ErrorAction SilentlyContinue
+# 扫描范围排除两个不随包出厂、且自带"假密钥夹具"的开发目录: node_modules(第三方)与 scripts\checks(门禁自测会故意放 sk- 样例)
+$secAll = Get-ChildItem $p -Recurse -File -Include *.json,*.txt,*.js,*.md,*.log,*.ps1,*.py,*.bat,*.cfg | Where-Object { $_.FullName -notmatch 'node_modules' -and $_.FullName -notmatch '\\scripts\\checks\\' } | Select-String -Pattern 'sk-[a-zA-Z0-9]{16,}|SESSDATA=[0-9a-fA-F]{8}' -ErrorAction SilentlyContinue
 $secFatal = $secAll | Where-Object { $_.Path -notmatch '\\config\.json$' }
 if ($secFatal) { $problems += ('[SECRET] key found: ' + ($secFatal | Select-Object -First 3 | ForEach-Object { $_.Path.Replace($p + '\', '') })) }
 $secCfg = $secAll | Where-Object { $_.Path -match '\\config\.json$' }
