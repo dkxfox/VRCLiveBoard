@@ -96,6 +96,18 @@ function Check-Stage($dir) {
   }
   Write-Output 'stage secret scan: CLEAN'
 }
+# 插件单一源: plugins\ 是唯一源, 打包时在 stage 里生成 官方可选插件\ 恢复备份(用户误删可从这里拷回)
+function Copy-OfficialPlugins($stageDir) {
+  $optName = -join @([char]0x5B98, [char]0x65B9, [char]0x53EF, [char]0x9009, [char]0x63D2, [char]0x4EF6)  # 官方可选插件
+  $optDir = Join-Path $stageDir $optName
+  New-Item -ItemType Directory -Force -Path $optDir | Out-Null
+  $n = 0
+  foreach ($d in @(Get-ChildItem (Join-Path $p 'plugins') -Directory)) {
+    robocopy $d.FullName (Join-Path $optDir $d.Name) /E /NFL /NDL /NJH /NJS | Out-Null
+    $n++
+  }
+  Write-Output ('official plugin backups: ' + $n + ' 个 -> ' + $optName + '\')
+}
 function Get-ZipNames($zipPath) {
   $z = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
   $names = @($z.Entries | ForEach-Object { $_.FullName })
@@ -111,6 +123,7 @@ robocopy $p $stage /E /NFL /NDL /NJH /NJS /XD $exclAbs /XF $xfFiles | Out-Null
 robocopy (Join-Path $p 'node_modules') (Join-Path $stage 'node_modules') /E /NFL /NDL /NJH /NJS | Out-Null
 Copy-Item (Join-Path $p 'config.default.json') (Join-Path $stage 'config.json') -Force
 Scrub-Secrets (Join-Path $stage 'config.json')
+Copy-OfficialPlugins $stage
 Check-Stage $stage
 Write-Output '==== 3. zip self-contained (big, wait) ===='
 $zipSc = Join-Path $pubDir ('VRCLiveBoard-Desktop-SelfContained-v' + $ver + '.zip')
@@ -130,6 +143,7 @@ if (-not $SkipLight) {
   robocopy $p $stageL /E /NFL /NDL /NJH /NJS /XD $exclAbs /XF $xfFiles | Out-Null
   Copy-Item (Join-Path $p 'config.default.json') (Join-Path $stageL 'config.json') -Force
   Scrub-Secrets (Join-Path $stageL 'config.json')
+  Copy-OfficialPlugins $stageL
   Check-Stage $stageL
   Write-Output '==== 5. zip lite ===='
   $zipL = Join-Path $pubDir ('VRCLiveBoard-Lite-RequiresNode-v' + $ver + '.zip')
