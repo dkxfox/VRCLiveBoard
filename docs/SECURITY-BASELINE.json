@@ -1,0 +1,86 @@
+{
+  "surface": {
+    "domains": [
+      "api.deepseek.com",
+      "api.open-meteo.com",
+      "bootstrap.pypa.io",
+      "cdn.jsdelivr.net",
+      "geocoding-api.open-meteo.com",
+      "github.com",
+      "music.163.com",
+      "nodejs.org",
+      "raw.githubusercontent.com",
+      "space.bilibili.com",
+      "wttr.in",
+      "www.python.org"
+    ],
+    "ports": [
+      "9000",
+      "9001",
+      "9234",
+      "11434",
+      "19190"
+    ],
+    "dangerous": {
+      "child_process": [
+        "plugins/netease-lyrics/index.js",
+        "plugins/ocrregion.js",
+        "src/consolewin.js",
+        "src/diagnose.js",
+        "src/main.js",
+        "src/ocrtranslate.js",
+        "src/pluginsys/manager.js",
+        "src/portablepy.js",
+        "src/pyhelper.js",
+        "src/sources/hardware.js",
+        "src/sources/media.js",
+        "src/web/server.js"
+      ],
+      "execFile": [
+        "plugins/netease-lyrics/index.js",
+        "plugins/ocrregion.js",
+        "src/consolewin.js",
+        "src/diagnose.js",
+        "src/ocrtranslate.js",
+        "src/pluginsys/manager.js",
+        "src/portablepy.js",
+        "src/pyhelper.js",
+        "src/sources/hardware.js",
+        "src/sources/media.js",
+        "src/web/server.js"
+      ],
+      "spawn(": [
+        "plugins/netease-lyrics/index.js",
+        "src/main.js",
+        "src/ocrtranslate.js",
+        "src/pluginsys/manager.js",
+        "src/sources/media.js",
+        "src/web/server.js"
+      ],
+      "fs.rmSync": [
+        "src/pluginsys/manager.js"
+      ]
+    }
+  },
+  "updatedAt": "2026-09-02",
+  "supplyChain": {
+    "dependencies": {
+      "@tesseract.js-data/chi_sim": "^1.0.0",
+      "@tesseract.js-data/jpn": "^1.0.0",
+      "electron": "43.4.0",
+      "osc": "^2.4.5",
+      "systeminformation": "^5.33.5",
+      "tesseract.js": "^7.0.0"
+    },
+    "artifacts": {
+      "VRCLiveBoard.exe": "d0f7456b53a2bf49632c019e812961c08fcb829925d48a9e150f8d52f78c0efd",
+      "electron/app.ico": "6abfc57d3b487d58ee619dd692bc1e4160ee76202dd86f21cafe12237b28c4f3",
+      "scripts/launcher/launcher.cs": "49785430701c1bafcd8acb404641e7c5e0fb809c89c939e1edb7f8934a4feb65",
+      "src/helpers/smtc.py": "1f56bcb0ead2fac496662b682ed061600a3d88652851506d6a14df36271ee96a",
+      "src/helpers/screen_capture.ps1": "5f6ac5cc07f8ce0880eaaff85ed507407ae2f0b03bf1c1d4d813b13f43d99200",
+      "plugins/friend-welcome/vendor/": "2c4f232272eba0b742bd1bafcdee7ada0eb47a814435f3fe86726250434902a2",
+      "plugins/scheduled-board/vendor/": "2c4f232272eba0b742bd1bafcdee7ada0eb47a814435f3fe86726250434902a2",
+      "plugins/weather-board/vendor/": "7ce96564dcf5a7891e9db552fb1eaf347dcd18f0dc5c96341ba819d0a589652d"
+    }
+  }
+}

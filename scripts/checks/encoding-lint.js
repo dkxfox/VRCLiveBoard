@@ -42,7 +42,12 @@ function check(file) {
     if (hasBom(b)) bad.push([rel, 'bat 不得带 BOM(cmd 会把 BOM 当命令)']);
     const txt = b.toString('latin1');
     if (txt.indexOf('\n') >= 0 && !/\r\n/.test(txt)) bad.push([rel, 'bat 必须是 CRLF 换行']);
-    if (isValidUtf8(b) && hasCjk(b.toString('utf8'))) bad.push([rel, 'bat 含 UTF-8 中文 -> 必须改存 GBK(代码页 936), 否则中文变乱码']);
+    // 逐行判定: 整文件可能是 GBK, 但其中混进 UTF-8 编码的中文行一样会乱码(不能只看整文件是否合法 UTF-8)
+    const lines = b.toString('latin1').split(/\r?\n/);
+    for (const [i, line] of lines.entries()) {
+      const lb = Buffer.from(line, 'latin1');
+      if (isValidUtf8(lb) && hasCjk(lb.toString('utf8'))) { bad.push([rel, '第 ' + (i + 1) + ' 行是 UTF-8 中文 -> 必须改存 GBK(代码页 936)']); break; }
+    }
   } else if (ext === '.ps1') {
     const nonAscii = b.some((x) => x > 127);
     if (doubleBom(b)) bad.push([rel, '双 BOM(第二个 BOM 会顶掉首行, PS5.1 解析错)']);
