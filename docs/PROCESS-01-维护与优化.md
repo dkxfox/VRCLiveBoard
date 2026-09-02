@@ -77,7 +77,9 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke -Assert '被修的bug|/api/
 | **GI18N** | zh-CN / zh-TW / en 键集合一致 | `i18n-check.js` | 65 / 71 |
 | **GHTML** | 内联脚本**动态边界**语法 + id 唯一 + getElementById 目标 | `html-inline-check.js` | 81 / 19 |
 | **G4** | 隔离冒烟:临时目录 + 测试端口真启动 + 8 项端点 + **本次专项断言** | `smoke.ps1` | 30(测试打到用户实例) |
-| **GPACK** | 发布包审计:禁入文件 / UTF-8 文件名标志 / config 脱敏 / **包内盐与源码一致** / 全量机密扫描 | `pack-audit.js` | 85 / 67 / 87 |
+| **GPLUG** | 插件单一源 + manifest 契约 + 更新包版本 + 预置授权哈希 | `plugin-check.js` | 63 / 72 |
+| **GCONF** | 必备键 + **安全开关默认 true** + 公开版无私有内容 | `config-contract.js` | 15 / 31 |
+| **GPACK** | 发布包审计:禁入文件 / UTF-8 文件名标志 / config 脱敏 / **包内盐与源码一致** / **官方插件恢复备份齐全** / 全量机密扫描 | `pack-audit.js` | 85 / 67 / 87 |
 | **GSYNC** | 工作区干净 + 与 origin/main 零差 + 无悬空未跟踪文件 | `git-sync-check.js` | 84 |
 
 **证据规范**:只有 `GATES SUMMARY` 表可以作为"已验证"的证据贴进 DEV-NOTES;禁止用"我检查过了 / 应该没问题"代替。
@@ -103,7 +105,8 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke -Assert '被修的bug|/api/
 | `src/web/server.js` | 路由契约(200/403 各自正确)、`no-store`、未解锁时 403 |
 | `src/web/public/index.html` | GHTML + 侧边栏锚点 + 三语渲染 |
 | `src/web/public/lang.js` | GI18N |
-| `plugins/**` | 版本号变更 → 授权哈希失效 → **必须提示用户重新红窗授权** |
+| `plugins/**` | GPLUG;版本号变更 → 授权哈希失效 → **必须提示用户重新红窗授权**;`plugins/` 是唯一源,`官方可选插件/` 由打包生成,**不要手工同步第二份** |
+| `config.default.json` | GCONF;新功能默认关闭、安全开关默认 true、公开版无私有内容 |
 | `src/devgate.js` / `dev-dongle/master/master.js` | 两处盐逐字一致 + 沙箱七项(注册→发码→接受→重放拒→旧盐拒→迷你狗盐→登记表未污染) |
 | `启动*.bat` | G2 + 含空格路径双击可用 |
 | `scripts/make-dist.ps1` | 单 BOM + PARSE_OK + 实跑打包 + GPACK |
