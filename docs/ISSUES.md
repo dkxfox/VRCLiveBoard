@@ -23,7 +23,15 @@
 
 ## 进行中
 
-(空)
+### M-20260901-04 插件 vendor 重复导致包体积膨胀
+- 状态: OPEN
+- 严重度: S4
+- 来源: 流程 2 落地时实测(启用官方插件恢复备份后)
+- 现象: friend-welcome / scheduled-board / weather-board 各自带一份 ~7MB 的 xlsx vendor(仓库内合计 21MB);启用"官方可选插件"恢复备份后,lite 包 11.9MB → 20.2MB,自包含包 221.7MB → 230.0MB
+- 根因: 三个插件各自复制了完整 xlsx 发行版(含 .map / extendscript / full.min / mini.min 等运行时用不到的文件),打包时又复制一份作恢复备份 → 同一份库进包 6 次
+- 候选方案: ①**裁剪 vendor**(只保留 `xlsx.js` + `dist/cpexcel.js`,预计每插件省 ~6MB,且不破坏"复制文件夹即可装回"的自包含特性)②共享 vendor(会破坏插件自包含,不推荐)③备份不含 vendor(恢复后 Excel 导入会坏,不推荐)
+- 影响面: 仅体积;功能不受影响
+- 待办: 验证插件实际引用了哪些 vendor 文件 → 裁剪 → 跑 Excel 导入/导出实测 → 重打包对比体积
 
 ## 已关闭
 
