@@ -23,6 +23,11 @@ VRCLiveBoard-*.zip
 # 本地便签
 继续开发命令.txt
 
+# 加密狗/授权申请材料(仅本地与授权包内分发, 永不进仓库)
+scripts/dev-apply-note.txt
+加密狗安全声明.txt
+加密狗工作原理说明.txt
+
 # 系统文件
 Thumbs.db
 desktop.ini
