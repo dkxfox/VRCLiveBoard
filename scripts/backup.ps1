@@ -8,7 +8,7 @@ if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Force -Path $outDi
 $pkg = Get-Content (Join-Path $p 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $zip = Join-Path $outDir ('VRCLiveBoard-src-v' + $pkg.version + '-' + $stamp + '.zip')
-# 用绝对路径排除(robocopy /XD), 避免裸名 'dist' 误杀 plugins\friend-welcome\vendor\dist
+# Exclude by ABSOLUTE path (robocopy /XD): a bare 'dist' would also kill plugins\friend-welcome\vendor\dist
 $exclAbs = @()
 foreach ($n in @('node_modules','dist','logs','.electron-cache','.ocr-cache','.ocr-langs','.pydist')) { $exclAbs += (Join-Path $p $n) }
 $stage = Join-Path $env:TEMP ('vrcb-backup-' + $stamp)
