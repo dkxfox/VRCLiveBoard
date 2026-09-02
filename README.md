@@ -24,6 +24,17 @@
 3. VRChat 内:Action Menu → Options → OSC → Enabled
 4. 从零开始的完整教程:随包《使用说明.txt》(13 章)
 
+### ⚠️ 唯一官方分发渠道
+
+**只有两个来源是官方的**:本仓库的 **GitHub Releases** 页面,以及作者在星轨茶会群内发布的群文件。
+其它任何网站、网盘、第三方"增强版/汉化版/破解版"都**不是**本项目发布的,请勿下载。
+
+每个发行版的 **SHA256 校验值公示在对应 Release 说明里**,下载后可自行核对:
+
+```powershell
+Get-FileHash .\VRCLiveBoard-Lite-RequiresNode-v1.3.1.zip -Algorithm SHA256
+```
+
 ## 从源码运行
 
 - 需要 Node.js 18+(建议 20+),Windows 10/11

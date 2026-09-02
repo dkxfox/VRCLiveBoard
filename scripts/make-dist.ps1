@@ -21,7 +21,8 @@ Get-ChildItem $dist -Filter 'VRCLiveBoard-*.zip' -File | Remove-Item -Force
 $userDirs = @(Get-ChildItem $p -Directory | Where-Object { $_.Name -match '测试|OCR|截图' } | ForEach-Object { $_.Name })
 $exclDirs = @('node_modules','logs','.electron-cache','.ocr-cache','.ocr-langs','.pydist') + $userDirs
 # 只排除项目顶层的 dist(用绝对路径),避免误伤插件自带的 vendor\dist 等嵌套同名目录
-$exclAbs = @($dist, (Join-Path $p 'dev-dongle')) + $exclDirs
+# scripts\checks 是开发期门禁工具, 不随分发包出厂(仓库里保留)
+$exclAbs = @($dist, (Join-Path $p 'dev-dongle'), (Join-Path $p 'scripts\checks')) + $exclDirs
 
 Write-Output '==== 1. integrity check ===='
 $problems = @()
