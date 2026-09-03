@@ -6,9 +6,9 @@ const path = require('path');
 function runHousekeeping(config, logger) {
   const root = path.join(__dirname, '..');
   try {
-    // 1) 日志截断: 超过 1MB 只保留尾部 100KB
+    // 1) 日志截断: 超过 1MB 只保留尾部 100KB(F-01 起插件审计日志同样落盘, 一并管理)
     const logsDir = path.join(root, 'logs');
-    for (const f of ['boot.log', 'app.log', 'autostart.log']) {
+    for (const f of ['boot.log', 'app.log', 'autostart.log', 'plugin-audit.log']) {
       const p = path.join(logsDir, f);
       try {
         const st = fs.statSync(p);
@@ -31,6 +31,12 @@ function runHousekeeping(config, logger) {
         const p = path.join(cacheDir, f);
         try { if (now - fs.statSync(p).mtimeMs > 30 * 86400 * 1000) { fs.unlinkSync(p); logger.info('清理过期 OCR 缓存: ' + f); } } catch (e) {}
       }
+    } catch (e) {}
+    // 2b) 崩溃残留的截图临时文件(>1 天未动; 运行中正在写时 mtime 是新的, 不会误删)
+    try {
+      const tmpPng = path.join(root, '.ocr-tmp.png');
+      const st = fs.statSync(tmpPng);
+      if (Date.now() - st.mtimeMs > 86400 * 1000) { fs.unlinkSync(tmpPng); logger.info('清理残留截图临时文件: .ocr-tmp.png'); }
     } catch (e) {}
     // 3) Electron 缓存: 只保留当前版本的 zip
     const ec = path.join(root, '.electron-cache');

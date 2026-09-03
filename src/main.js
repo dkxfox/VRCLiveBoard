@@ -29,6 +29,7 @@ async function main() {
   logger.info('OSC 已就绪, 目标 ' + config.osc.host + ':' + config.osc.port);
 
   runHousekeeping(config, logger);
+  setInterval(function () { runHousekeeping(config, logger); }, 6 * 3600 * 1000); // 周期化: 长期挂机也受管(M-20260903-01)
 
   const projectDir = path.join(__dirname, '..');
   if (config.autostart) {

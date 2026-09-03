@@ -3,6 +3,7 @@ const { app, BrowserWindow, Tray, Menu, nativeImage, shell } = require('electron
 const path = require('path');
 const fs = require('fs');
 const { setConsoleVisible } = require(path.join(__dirname, '..', 'src', 'consolewin'));
+const { cleanupUserData } = require('./userdata-cleanup');
 
 function applyConsoleSetting() {
   try {
@@ -84,6 +85,11 @@ if (!app.requestSingleInstanceLock()) {
   app.on('before-quit', function () { quitting = true; });
   app.whenReady().then(function () {
     applyConsoleSetting();
+    try {
+      const n = cleanupUserData(app.getPath('userData')); // M-20260903-01: 清运行时 Chromium 缓存
+      if (n > 0) console.log('[清理] 用户数据缓存已清理 ' + n + ' 项');
+      require('electron').session.defaultSession.clearCache().catch(function () {});
+    } catch (e) { /* 非致命 */ }
     startCore();
     if (process.env.VRCB_HEADLESS_TEST === '1') { console.log('SHELL-OK'); setTimeout(function () { app.quit(); }, 500); return; }
     createWindow();
