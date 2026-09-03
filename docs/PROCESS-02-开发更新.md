@@ -52,7 +52,7 @@
 
 **关于插件权限的事实**(别误解):`src/pluginsys/permissions.js` 是**契约式权限**——只在插件通过 `ctx.net / ctx.fs / ctx.process` 调用时强制,并写 `logs/plugin-audit.log`;插件若直接 `require('fs')` 可绕过。**真正的信任边界是红窗授权**,权限声明的价值是审计与知情同意。
 
-**插件安全策略(2026-09-03, F-20260903-01)**: 在契约之上叠加了执行级收紧, 默认档(whitelist / consent / sandbox / self)对正常插件透明: ①未声明域名一律拒; ②敏感文件(config.json、*.bak、dev-dongle、src、scripts、logs、dist)硬拒读写; ③审批哈希 = `id@version|api|sha256(index.js)`, 改代码不升版本也会使审批失效; ④插件直接 require 危险内置模块(child_process/http/https/net/dgram/tls)走 `Module._load` 审计钩子(默认记录, `processPolicy=deny` 拦 child_process, `networkPolicy=off` 拦网络模块); ⑤收紧档(localOnly/off/deny/declared)由一级密码经 `/api/security` 热切换。诚实边界不变: 不做进程级沙箱, 本机文件写权限者始终可改代码绕过。
+**插件安全策略(2026-09-03, F-20260903-01)**: 在契约之上叠加了执行级收紧, 默认档(whitelist / consent / sandbox / self)对正常插件透明: ①未声明域名一律拒; ②敏感文件(config.json、*.bak、dev-dongle、src、scripts、logs、dist)硬拒读写; ③审批哈希 = `id@version|api|sha256(index.js)`, 改代码不升版本也会使审批失效; ④插件直接 require 危险内置模块(child_process/http/https/net/dgram/tls)走 `Module._load` 审计钩子(默认记录, `processPolicy=deny` 拦 child_process, `networkPolicy=off` 拦网络模块); ⑤收紧档(localOnly/off/deny/declared)由一级密码经 `/api/security` 热切换。⑥**插件 AI 一律走 `ctx.ai` 网关**(F-20260903-02): 插件声明 `manifest.ai.tasks`, 主体代理复用用户 AI 配置与三层防线, 密钥不进插件上下文, 每插件 5 秒节流, `aiPolicy`(allow/localOnly/off, L1 可切换)。诚实边界不变: 不做进程级沙箱, 本机文件写权限者始终可改代码绕过。
 
 **现有优先级阶梯**(新功能必须在此表里找到自己的位置):
 
