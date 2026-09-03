@@ -33,6 +33,8 @@
 
 最后 git-sync-check 确认工作区与 origin 零差。**发布允许条件 = 报告结尾出现 AUDIT PASS,且第 0 步自测 10/10。**
 
+**Release 上传令牌纪律(2026-09-03 用户拍板"维持现状")**: GitHub API(建 Release/传资产)所需令牌**不做机器常驻** —— 每次发版由用户把令牌值写入 TEMP 文件, 上传脚本静默读取(绝不回显到会话/日志), 用后立即删除该文件; 方案 B(细粒度常驻)与 C(读凭据管理器)已被用户否决, 若未来重议须重新走 A0 确认。git push 不在此列(已走 Windows 凭据管理器, 无令牌传递)。
+
 ## 3. 基线文件管理
 
 - docs/SECURITY-BASELINE.json 有四个区块:surface(攻击面)、supplyChain(依赖+产物哈希)、zipVolumes(发布包体积/条目数, 按包种类 Lite-RequiresNode / Desktop-SelfContained)、updatedAt。发布重打包后, 用 pack-audit 打印的体积/条目数更新 zipVolumes(漂移比对依赖它)。
