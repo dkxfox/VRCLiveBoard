@@ -33,7 +33,7 @@ function createSource(config, logger) {
   startHelper();
   s.restart = function () { if (child) { try { child.kill(); } catch (e) {} } child = null; s.helperRunning = false; s.lastError = null; startHelper(); };
   s.getText = async function (ctx) {
-    if (!latest || Date.now() - latestAt > 6000) return null;
+    if (!latest || Date.now() - latestAt > 6000) { ctx.vars.song = ''; ctx.vars.artist = ''; ctx.vars.album = ''; return null; }
     ctx.vars.song = latest.title; ctx.vars.artist = latest.artist || ''; ctx.vars.album = latest.album || '';
     return config.template;
   };

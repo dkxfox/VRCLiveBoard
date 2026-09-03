@@ -246,7 +246,7 @@ module.exports = function (ctx) {
         const otherChk = cfg.allowOtherPlayers ? 'checked' : '';
         const rhythmChk = cfg.rhythmMode ? 'checked' : '';
         const titleChk = cfg.showTitle !== false ? 'checked' : '';
-        return '<div class="sub">当"正在播放的歌"(SMTC)功能与本插件都启用时, 自动识别网易云当前歌曲的歌词, 按播放进度在聊天框同步显示原文+译文。进度来源: CDP 直读客户端(精确, 拖动进度条也同步)→ 其它播放器的 SMTC 进度 → 本地时钟估算。首次使用: ①启用本插件并重启程序; ②完全退出网易云; ③双击桌面"网易云音乐-歌词同步"快捷方式(连不上 CDP 时插件会自动创建)。详见插件目录 歌词同步-首次使用说明.txt。</div>' +
+        return '<div class="sub">当"正在播放的歌"(SMTC)功能与本插件都启用时, 自动识别网易云当前歌曲的歌词, 按播放进度在聊天框同步显示原文+译文。进度来源: CDP 直读客户端(精确, 拖动/暂停/切歌全同步)→ 其它播放器的 SMTC 进度 → 本地时钟估算。首次使用: ①插件页授权并启用本插件(同时确认"正在播放的歌"已开启); ②点下方「用调试端口启动网易云」一键启动(自动退出旧实例并带调试端口重启); 桌面"网易云音乐-歌词同步"快捷方式仍可用作备用。详见插件目录 歌词同步-首次使用说明.txt。</div>' +
           '<div class="row" style="margin-top:8px"><span style="font-size:13px">CDP 调试端口:</span><input id="nlPort" type="number" min="1024" max="65535" value="' + (cfg.cdpPort || 9234) + '" style="width:80px"><span style="font-size:12px;color:#8b98a9;margin-left:8px" id="nlCdp">(状态点"查看状态")</span></div>' +
           '<div class="row" style="margin-top:8px"><span style="font-size:13px">网易云安装路径(自动找不到时手动填, 可留空):</span><input id="nlExe" type="text" value="' + String(cfg.cloudExe || '').replace(/"/g, '&quot;') + '" placeholder="cloudmusic.exe 完整路径" style="width:340px"></div>' +
           '<div class="row" style="margin-top:8px"><span style="font-size:13px">每行显示(秒, 节奏模式关闭时生效):</span><input id="nlUpdate" type="number" min="3" max="30" value="' + (cfg.updateSec || 4) + '" style="width:60px"><span style="font-size:13px;margin-left:12px">优先级:</span><input id="nlPrio" type="number" min="-999" max="999" value="' + (cfg.priority !== undefined ? cfg.priority : 35) + '" style="width:60px"></div>' +

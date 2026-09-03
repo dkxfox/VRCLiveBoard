@@ -1091,7 +1091,7 @@ async function healthLoad() {
     const lines = [];
     if (vrc.running) lines.push(vrc.oscEnabled ? ('🟢 ' + t('portsVrcOn') + (vrc.oscPort || '?')) : ((vrc.oscEnabled === null || vrc.oscEnabled === undefined) ? ('🟡 ' + t('portsVrcUnknown')) : ('🟡 ' + t('portsVrcOff'))));
     else lines.push('⚪ ' + t('portsVrcStop'));
-    if (u.occupied === false) lines.push('🔴 ' + t('portsUdpFree'));
+    if (u.occupied === false) lines.push('⚪ ' + t('portsUdpFree'));
     else if (u.occupied === true) lines.push('🔴 ' + t('portsUdpBusy') + (u.name || ('PID ' + (u.pid || '?'))));
     else lines.push('⚪ UDP 9000: ' + t('portsUdpUnknown'));
     lines.push('🖥 控制台: http://' + j.web.host + ':' + j.web.actual + (j.web.actual !== j.web.configured ? (' (' + t('portsNow') + j.web.configured + ')') : ''));

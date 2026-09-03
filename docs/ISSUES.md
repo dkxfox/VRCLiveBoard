@@ -24,31 +24,52 @@
 ## 进行中
 
 ### M-20260902-05 快捷导航 ☰ 按钮不显眼, 改为文字
-- 状态: OPEN
+- 状态: FIXED
 - 严重度: S4
 - 来源: 用户反馈(2026-09-02)
 - 现象: 侧边栏收起时页头只显示 ☰ 符号, 视觉上不明显
 - 复现: 窄屏(<980px)或收起侧边栏后看页头按钮
 - 影响面: 全部控制台用户
+- 根因: 按钮是静态 HTML 文本 '☰', 无文字标签
+- 改动: index.html:navToggle 加 data-t="navMenu"; lang.js 三语新增 navMenu(菜单/選單/Menu)
+- 验证: GATES 9/9 PASS(GHTML/GI18N/G4 专项断言 navMenu); 独立实例 19260 验证 lang.js 三语含 navMenu
+- 关联: DEV-NOTES 条目 93
 
 ### M-20260902-06 健康总览 UDP 9000 行红色指示灯误报
-- 状态: OPEN
+- 状态: FIXED
 - 严重度: S3
 - 来源: 多名使用者反馈
 - 现象: "UDP 9000 空闲: VRChat 没在监听" 一直红灯, 被误认为软件异常
+- 复现: 不开游戏打开控制台 → 健康总览 UDP 9000 行显示 🔴
 - 影响面: 全部用户
+- 根因: healthLoad 把 UDP 9000 空闲(游戏没开/没开 OSC 的常态)标成 🔴, 文案也未说明这是正常状态
+- 改动: app.js healthLoad 空闲态 🔴→⚪; lang.js 三语 portsUdpFree 改为"未运行或没开 OSC(正常; 打开游戏后会自动变绿)"
+- 验证: GATES 9/9 PASS(GI18N/G4); 独立实例验证 /app.js 空闲态已用 ⚪(🔴 已消失)+ 三语新文案
+- 关联: DEV-NOTES 条目 93
 
 ### M-20260902-07 公告板变量 {song} {artist} {album} 不好用
-- 状态: OPEN
+- 状态: FIXED
 - 严重度: S3
-- 来源: 使用者反馈
+- 来源: 使用者反馈(现象经回问拍板: 停播后残留 + 默认关闭无提示, 两项都修)
+- 现象: 停播后公告板 {song} 残留最后一首歌; 媒体功能默认关闭时变量恒为空却无任何提示
+- 复现: 1. 开启"正在播放的歌"并放歌 2. 停止播放 3. 公告板含 {song} 的页面仍显示上一首歌
 - 影响面: 使用公告板 + 媒体变量的用户
+- 根因: media.js 只在有新鲜 SMTC 数据时写 vars, 停播/超时直接 return null 不清空 → 残留; 且媒体源默认关闭时 vars 从未赋值
+- 改动: media.js getText 无新鲜数据时清空 song/artist/album; lang.js 三语 pagesVars 注明媒体变量需开启"正在播放的歌"
+- 验证: GATES 9/9 PASS(G1/GI18N/G4); 独立实例验证: 停播超 6s 后 getText 返回 null 且 song/artist/album 三变量清空
+- 关联: DEV-NOTES 条目 93
 
 ### M-20260902-08 网易云歌词设置描述文本过时
-- 状态: OPEN
+- 状态: FIXED
 - 严重度: S4
 - 来源: 用户要求
+- 现象: 插件面板与使用说明第六节的"首次使用"步骤仍描述旧流程(完全退出网易云→双击桌面快捷方式), 未提面板内已有的一键启动按钮(v1.1.2 起)
+- 复现: 打开网易云歌词插件面板看顶部说明段; 使用说明.txt 第六节步骤 2/3 与 FAQ
 - 影响面: 网易云插件用户
+- 根因: 1.1.2 增加 launchCdp 一键启动后, 面板描述与使用说明未同步更新
+- 改动: plugins/netease-lyrics/index.js 面板描述(拖动/暂停/切歌全同步; 首次使用改为一键启动为主、桌面快捷方式为备); 使用说明.txt 第六节步骤与 FAQ 同步(插件版本保持 1.1.3, 授权哈希不失效)
+- 验证: GATES 9/9 PASS(G1/G2/GPLUG); 独立实例 approve+enable 后面板返回新文案且旧文案已消失
+- 关联: DEV-NOTES 条目 93
 
 ### M-20260901-04 插件 vendor 重复导致包体积膨胀
 - 状态: OPEN
@@ -59,6 +80,16 @@
 - 候选方案: ①**裁剪 vendor**(只保留 `xlsx.js` + `dist/cpexcel.js`,预计每插件省 ~6MB,且不破坏"复制文件夹即可装回"的自包含特性)②共享 vendor(会破坏插件自包含,不推荐)③备份不含 vendor(恢复后 Excel 导入会坏,不推荐)
 - 影响面: 仅体积;功能不受影响
 - 待办: 验证插件实际引用了哪些 vendor 文件 → 裁剪 → 跑 Excel 导入/导出实测 → 重打包对比体积
+- 体积实测(2026-09-02): lite 包 15.74MB 压缩后 = 基础 9.23MB + 官方可选插件恢复备份 6.51MB(占 41%); vendor xlsx 双份合计 12.94MB。裁剪 vendor 后预计 lite 回到 ~10MB
+
+### M-20260902-09 run-gates 多断言转发被嵌套 powershell 空格合并
+- 状态: OPEN
+- 严重度: S4(流程工具)
+- 来源: 条目 93 四修复跑门禁时发现
+- 现象: run-gates.ps1 -Smoke -Assert 'a|/x|r1','b|/x|r2' 经嵌套 powershell -File 转发后, 数组被空格合并成单个参数, smoke 只收到一条拼串断言(且中文断言还会被 Invoke-WebRequest 按拉丁-1 解码成乱码, 永远匹配不上)
+- 复现: run-gates.ps1 -Smoke -Assert 两个以上断言 → G4 只跑出一条专项且必 FAIL; 单条纯 ASCII 断言正常
+- 影响面: 只有开发者跑门禁时; 不影响用户
+- 候选方案: ①run-gates 把断言数组用分隔符拼成单参数, smoke 内再拆分; ②run-gates 直接调用 smoke.ps1 而非嵌套 powershell; ③smoke 对 UTF-8 响应显式按 UTF-8 解码(Invoke-WebRequest 无 charset 头时按拉丁-1)
 
 ## 已关闭
 
