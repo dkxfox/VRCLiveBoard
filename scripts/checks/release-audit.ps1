@@ -39,19 +39,22 @@ RunStep '1. 机密扫描(工作区 + git 历史)' { node scripts\checks\secret-s
 # 2. 攻击面基线
 RunStep '2. 攻击面基线比对' { node scripts\checks\surface-scan.js }
 
-# 3. 依赖与产物完整性 + npm audit
-RunStep '3. 依赖审计(npm audit + 产物哈希)' { node scripts\checks\dep-audit.js }
+# 3. 授权体系状态(仅开发者机; 非开发者机自动跳过; 只输出投影信息, 不打印口令)
+RunStep '3. 授权体系状态(登记表/锚点/盐/mini-template)' { node scripts\checks\auth-state-check.js }
 
-# 4. 常规门禁
-RunStep '4. 常规门禁(语法/编码/版本/i18n/HTML/插件/配置)' { powershell -NoProfile -ExecutionPolicy Bypass -File scripts\checks\run-gates.ps1 -AllowDirty }
+# 4. 依赖与产物完整性 + npm audit
+RunStep '4. 依赖审计(npm audit + 产物哈希)' { node scripts\checks\dep-audit.js }
 
-# 5. 隔离冒烟
+# 5. 常规门禁
+RunStep '5. 常规门禁(语法/编码/版本/i18n/HTML/插件/配置)' { powershell -NoProfile -ExecutionPolicy Bypass -File scripts\checks\run-gates.ps1 -AllowDirty }
+
+# 6. 隔离冒烟
 if (-not $SkipSmoke) {
-  RunStep '5. 隔离冒烟(端口 19260)' { powershell -NoProfile -ExecutionPolicy Bypass -File scripts\checks\smoke.ps1 -Port 19260 }
-} else { Log '[skipped] 5. 冒烟(-SkipSmoke)'; Log '' }
+  RunStep '6. 隔离冒烟(端口 19260)' { powershell -NoProfile -ExecutionPolicy Bypass -File scripts\checks\smoke.ps1 -Port 19260 }
+} else { Log '[skipped] 6. 冒烟(-SkipSmoke)'; Log '' }
 
-# 6. 发布包审计 + SHA256 清单
-RunStep '6. 发布包审计 + SHA256 清单' {
+# 7. 发布包审计 + SHA256 清单
+RunStep '7. 发布包审计 + SHA256 清单' {
   $pub = Join-Path $proj 'dist\公开版'
   $zips = @(Get-ChildItem $pub -Filter ('*v' + $ver + '.zip') | ForEach-Object { $_.FullName })
   if ($zips.Count -eq 0) { Log 'FAIL dist\公开版 没有当前版本号的 zip(先跑 make-dist)'; exit 1 }
@@ -61,8 +64,8 @@ RunStep '6. 发布包审计 + SHA256 清单' {
   Log ('已生成校验和清单: ' + $sums)
 }
 
-# 7. git 同步
-RunStep '7. git 同步状态' { node scripts\checks\git-sync-check.js }
+# 8. git 同步
+RunStep '8. git 同步状态' { node scripts\checks\git-sync-check.js }
 
 Log '==================== 审计结论 ===================='
 Log $(if ($exit -eq 0) { 'AUDIT PASS —— 可以发布' } else { 'AUDIT FAIL —— 修复所有 FAIL 后重跑' })
