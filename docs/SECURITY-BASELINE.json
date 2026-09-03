@@ -58,15 +58,22 @@
         "src/web/server.js"
       ],
       "fs.rmSync": [
+        "electron/userdata-cleanup.js",
         "src/pluginsys/manager.js"
       ]
     }
   },
-  "updatedAt": "2026-09-02",
+  "updatedAt": "2026-09-03",
   "zipVolumes": {
     "asOf": "v1.3.1 (2026-09-02)",
-    "Lite-RequiresNode": { "entries": 193, "bytes": 16531662 },
-    "Desktop-SelfContained": { "entries": 1370, "bytes": 226320871 }
+    "Lite-RequiresNode": {
+      "entries": 193,
+      "bytes": 16531662
+    },
+    "Desktop-SelfContained": {
+      "entries": 1370,
+      "bytes": 226320871
+    }
   },
   "supplyChain": {
     "dependencies": {
