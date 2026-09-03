@@ -103,6 +103,17 @@
 - 影响面: 长期运行用户(磁盘占用/目录整洁)
 - 备注: 已知候选 —— config.json.bak(configio 救命档, 设计内)、logs/app.log(环形+housekeeping)、TEMP 下 vrcb-* 测试目录(测试脚本会清)、plugins/<id>/data/(新插件沙盒数据目录, 停用/删除插件时不自动清理)、.ocr-cache/.pydist/.electron-cache(依赖缓存, 打包排除)、zip 导入 .tmp-import(importZip finally 清理)。待用户确认哪些需要自动化清理与保留策略。
 
+### M-20260903-02 UDP 9000 探测不可靠: 游戏正常运行时仍显示空闲
+- 状态: FIXED
+- 严重度: S3
+- 来源: 用户实机反馈(2026-09-03, M-06 指示灯修复之后)
+- 现象: 游戏与软件正常运行时, 健康总览 UDP 9000 行大部分时间仍显示"空闲"
+- 复现: 开 VRChat(OSC 已开, 默认 9000)并运行软件 → 健康总览仍显示"空闲"
+- 根因: udpProbe 用 bind 探测 —— Windows 上 Node UDP 默认 SO_REUSEADDR, VRChat 已持 0.0.0.0:9000 时我们对 127.0.0.1:9000 的 bind 依然成功 → 永远返回 occupied:false
+- 改动: server.js udpProbe 改为查 netstat UDP 端点表(有进程绑定 :9000 即占用); 健康总览与端口体检: 占用且进程名含 VRChat → 🟢"正常", 其他程序占用 → 🔴"被占用"; lang.js 三语 portsUdpFree 补"改了自定义接收端口"说明
+- 验证: 隔离实例(19260)实测 —— VRChat 运行中(用户正实机测试)时新探测返回 occupied:true + name VRChat.exe(旧探测此场景必报空闲, 正是用户反馈的现象); 假监听器因 EADDRINUSE 无法抢占(证明 VRChat 套接字未被影响); GATES 9 PASS / 0 FAIL(冒烟 10/10 含两专项断言)
+- 关联: M-20260902-06、DEV-NOTES 条目 97
+
 ## 已关闭
 
 ### A-20260902-01 ws 8.18.0 高危(经 osc 依赖)

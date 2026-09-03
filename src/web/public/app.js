@@ -1116,7 +1116,11 @@ async function healthLoad() {
     if (vrc.running) lines.push(vrc.oscEnabled ? ('🟢 ' + t('portsVrcOn') + (vrc.oscPort || '?')) : ((vrc.oscEnabled === null || vrc.oscEnabled === undefined) ? ('🟡 ' + t('portsVrcUnknown')) : ('🟡 ' + t('portsVrcOff'))));
     else lines.push('⚪ ' + t('portsVrcStop'));
     if (u.occupied === false) lines.push('⚪ ' + t('portsUdpFree'));
-    else if (u.occupied === true) lines.push('🔴 ' + t('portsUdpBusy') + (u.name || ('PID ' + (u.pid || '?'))));
+    else if (u.occupied === true) {
+      const nm = String(u.name || ('PID ' + (u.pid || '?')));
+      if (nm.toLowerCase().indexOf('vrchat') >= 0) lines.push('🟢 ' + t('portsUdpOk'));
+      else lines.push('🔴 ' + t('portsUdpBusy') + nm);
+    }
     else lines.push('⚪ UDP 9000: ' + t('portsUdpUnknown'));
     lines.push('🖥 控制台: http://' + j.web.host + ':' + j.web.actual + (j.web.actual !== j.web.configured ? (' (' + t('portsNow') + j.web.configured + ')') : ''));
     lines.push('📡 OSC 目标: ' + j.osc.host + ':' + j.osc.port);
@@ -1262,7 +1266,10 @@ async function portsCheck() {
     const j = await (await fetch('/api/ports/check')).json();
     let s = '';
     if (j.udp9000 && j.udp9000.occupied === false) s = t('portsUdpFree');
-    else if (j.udp9000 && j.udp9000.occupied === true) s = t('portsUdpBusy') + (j.udp9000.name || ('PID ' + (j.udp9000.pid || '?')));
+    else if (j.udp9000 && j.udp9000.occupied === true) {
+      const nm = String(j.udp9000.name || ('PID ' + (j.udp9000.pid || '?')));
+      s = nm.toLowerCase().indexOf('vrchat') >= 0 ? t('portsUdpOk') : (t('portsUdpBusy') + nm);
+    }
     else s = t('portsUdpUnknown');
     if (j.vrc) {
       if (j.vrc.running) s += '\n' + (j.vrc.oscEnabled ? (t('portsVrcOn') + (j.vrc.oscPort || '?')) : t('portsVrcOff'));

@@ -55,23 +55,14 @@ function effPluginSec() {
     return map;
   }
   function udpProbe(port) {
-    return new Promise(function (resolve) {
-      const dgram = require('dgram');
-      let done = false;
-      const s = dgram.createSocket('udp4');
-      const timer = setTimeout(function () { if (!done) { done = true; try { s.close(); } catch (e) {} resolve({ occupied: null, note: '探测超时' }); } }, 2000);
-      s.once('error', function (e) {
-        if (done) return; done = true; clearTimeout(timer);
-        try { s.close(); } catch (e2) {}
-        if (e && e.code === 'EADDRINUSE') resolve({ occupied: true });
-        else resolve({ occupied: null, note: String(e.message) });
-      });
-      s.bind(port, '127.0.0.1', function () {
-        if (done) return; done = true; clearTimeout(timer);
-        try { s.close(); } catch (e) {}
-        resolve({ occupied: false });
-      });
-    });
+    // 2026-09-03 修正(M-20260903-02): bind 探测在 Windows 上不可靠 —— Node UDP 默认 SO_REUSEADDR,
+    // VRChat 已持 0.0.0.0:9000 时我们对 127.0.0.1:9000 的 bind 仍会成功 → 永远报"空闲"。
+    // 改为查 netstat UDP 端点表: 有进程持续绑定该端口才算占用。
+    try {
+      const rows = netstatTable();
+      const hit = rows.find(function (r) { return r.proto === 'UDP' && new RegExp(':' + port + '$').test(r.local); });
+      return Promise.resolve({ occupied: !!hit });
+    } catch (e) { return Promise.resolve({ occupied: null, note: String(e.message) }); }
   }
   async function portCheck() {
     const out = { udp9000: null, tcpAround: [], vrc: null };
