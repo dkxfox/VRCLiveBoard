@@ -39,6 +39,10 @@ for (const id of dirs) {
   if (!m.name) problems.push('缺 name');
   if (typeof m.permissions !== 'object' || m.permissions === null) problems.push('缺 permissions 声明(契约式权限的审计依据)');
   if (!fs.existsSync(path.join(dir, 'index.js'))) problems.push('缺 index.js 入口');
+  if (m.ai !== undefined) {
+    if (typeof m.ai !== 'object' || m.ai === null || !Array.isArray(m.ai.tasks)) problems.push('ai 声明必须是 { tasks: [...] }');
+    else for (const t of m.ai.tasks) { if (t !== 'translate' && t !== 'chat') problems.push('ai.tasks 非法任务: ' + t + '(允许 translate/chat)'); }
+  }
   // vendor 依赖真实存在(cpexcel 那类坑)
   const idx = fs.existsSync(path.join(dir, 'index.js')) ? fs.readFileSync(path.join(dir, 'index.js'), 'utf8') : '';
   for (const rel of [...idx.matchAll(/require\(\s*['"]\.\/([^'"]+)['"]\s*\)/g)].map((x) => x[1])) {

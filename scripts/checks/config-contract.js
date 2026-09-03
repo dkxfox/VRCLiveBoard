@@ -59,8 +59,8 @@ if (missing.length) say('WARN', '代码读取但默认配置未定义(确认是�
 else say('OK', '代码读取的 config 键都有默认值');
 
 // 6. 插件安全策略默认档(2026-09-03, F-20260903-01): 默认 = 宽松但审计可见; 收紧档是可选的一级开关
-const PLUGIN_SEC_DEFAULT = { networkPolicy: 'whitelist', processPolicy: 'consent', fsWritePolicy: 'sandbox', fsReadPolicy: 'self' };
-const PLUGIN_SEC_ENUMS = { networkPolicy: ['whitelist', 'localOnly', 'off'], processPolicy: ['consent', 'deny'], fsWritePolicy: ['sandbox', 'declared', 'deny'], fsReadPolicy: ['self', 'declared', 'deny'] };
+const PLUGIN_SEC_DEFAULT = { networkPolicy: 'whitelist', processPolicy: 'consent', fsWritePolicy: 'sandbox', fsReadPolicy: 'self', aiPolicy: 'allow' };
+const PLUGIN_SEC_ENUMS = { networkPolicy: ['whitelist', 'localOnly', 'off'], processPolicy: ['consent', 'deny'], fsWritePolicy: ['sandbox', 'declared', 'deny'], fsReadPolicy: ['self', 'declared', 'deny'], aiPolicy: ['allow', 'localOnly', 'off'] };
 const ps = get(def, 'plugins.security') || {};
 let psBad = 0;
 for (const k of Object.keys(PLUGIN_SEC_DEFAULT)) {
