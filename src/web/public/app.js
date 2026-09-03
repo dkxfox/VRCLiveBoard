@@ -788,7 +788,7 @@ function gateVerify(level) {
     .then(function (r) { return r.json(); })
     .then(function (j) {
       const gm = document.getElementById('gateMsg');
-      if (j && j.ok) { if (gm) gm.textContent = level === 2 ? t('gateL2On') : t('gateL1On'); gateRender(); }
+      if (j && j.ok) { if (gm) gm.textContent = level === 2 ? t('gateL2On') : t('gateL1On'); gateRender(); psLoad(); }
       else if (j && j.lockRemainingSec) { const m = Math.floor(j.lockRemainingSec / 60); const s2 = j.lockRemainingSec % 60; if (gm) { gm.textContent = (t('gateLocked') || '').replace('{m}', m).replace('{s}', s2); gm.style.color = 'var(--err)'; } }
       else { if (gm) { gm.textContent = t('gateBad'); gm.style.color = 'var(--err)'; } }
     })
@@ -807,6 +807,19 @@ function secSave() {
     .then(function (r) { return r.json(); })
     .then(function (j) { const gm = document.getElementById('gateMsg'); if (gm) { gm.textContent = (j && j.ok) ? 'AI 安全设置已保存 ✓' : ('保存失败: ' + ((j && j.error) || '')); gm.style.color = (j && j.ok) ? 'var(--ok)' : 'var(--err)'; } })
     .catch(function (e) { const gm = document.getElementById('gateMsg'); if (gm) gm.textContent = '保存失败: ' + e.message; });
+}
+function psLoad() {
+  fetch('/api/config').then(function (r) { return r.json(); }).then(function (j) {
+    const s = j.pluginsSecurity || {};
+    const set = function (id, v) { const el = document.getElementById(id); if (el) el.value = v; };
+    set('psNet', s.networkPolicy || 'whitelist'); set('psProc', s.processPolicy || 'consent'); set('psFsW', s.fsWritePolicy || 'sandbox'); set('psFsR', s.fsReadPolicy || 'self');
+  }).catch(function () {});
+}
+function psSave() {
+  const v = function (id) { const el = document.getElementById(id); return el ? el.value : ''; };
+  fetch('/api/security', { method: 'POST', body: JSON.stringify({ pluginsSecurity: { networkPolicy: v('psNet'), processPolicy: v('psProc'), fsWritePolicy: v('psFsW'), fsReadPolicy: v('psFsR') } }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok && j.ok !== false, j: j }; }).catch(function () { return { ok: r.ok, j: {} }; }); })
+    .then(function (o) { const m = document.getElementById('psMsg'); if (m) m.textContent = o.ok ? t('plgSecSaved') : ('失败: ' + ((o.j && o.j.error) || '')); });
 }
 function secAddWordFn() {
   const w = ((document.getElementById('secAddWord') || {}).value || '').trim();
@@ -874,13 +887,13 @@ function plgSave() {
 function plgPermsText(p) {
   const parts = [];
   const net = (p && p.network) || [];
-  if (net.length) parts.push(t('permNet') + net.join(', '));
+  if (net.length) parts.push('<span style="color:#ffb37a">' + esc(t('permNet')) + net.map(esc).join(', ') + '</span>');
   const fsw = (p && p.filesystem && p.filesystem.write) || [];
   const fsr = (p && p.filesystem && p.filesystem.read) || [];
-  if (fsr.length) parts.push(t('permRead') + fsr.join(', '));
-  if (fsw.length) parts.push(t('permWrite') + fsw.join(', '));
-  if (p && p.process) parts.push(t('permProc'));
-  if (!parts.length) parts.push(t('modalNoPerms'));
+  if (fsr.length) parts.push(esc(t('permRead')) + fsr.map(esc).join(', '));
+  if (fsw.length) parts.push(esc(t('permWrite')) + fsw.map(esc).join(', '));
+  if (p && p.process) parts.push('<span style="color:#ff6b6b;font-weight:bold">' + esc(t('permProc')) + ' ' + esc(t('plgRiskHigh')) + '</span>');
+  if (!parts.length) parts.push(esc(t('modalNoPerms')));
   return parts;
 }
 function plgOpenModal(plugin, mode) {
@@ -899,7 +912,11 @@ function plgOpenModal(plugin, mode) {
     risk.style.display = 'block';
     risk.textContent = t('modalRisk');
     const perms = plgPermsText(plugin.permissions);
-    document.getElementById('plgWarnText').innerHTML = '<b>' + plugin.name + '</b> v' + plugin.version + '<br>' + plugin.description + '<br><br><b>' + t('modalPermsTitle') + '</b><br>' + perms.map(function (x) { return '· ' + x; }).join('<br>');
+    document.getElementById('plgWarnText').innerHTML = '<b>' + esc(plugin.name) + '</b> v' + esc(plugin.version) + '<br>' + esc(plugin.description || '') + '<br><br><b>' + esc(t('modalPermsTitle')) + '</b><br>' + perms.map(function (x) { return '· ' + x; }).join('<br>');
+    const highRisk = !!(plugin.permissions && plugin.permissions.process);
+    const row = document.getElementById('plgTypeRow');
+    if (row) row.style.display = highRisk ? 'flex' : 'none';
+    if (highRisk) { const ti = document.getElementById('plgTypeName'); if (ti) { ti.value = ''; ti.placeholder = t('plgTypePh'); } }
   }
   let n = 5;
   const btn = document.getElementById('plgConfirm');
@@ -928,6 +945,11 @@ function plgAct(name, url, body, after) {
 document.getElementById('plgCancel').onclick = function () { document.getElementById('plgModal').style.display = 'none'; plgModalTarget = null; if (plgTimer) clearInterval(plgTimer); };
 document.getElementById('plgConfirm').onclick = async function () {
   if (!plgModalTarget) return;
+  const highRisk = plgModalMode === 'approve' && !!(plgModalTarget.permissions && plgModalTarget.permissions.process);
+  if (highRisk) {
+    const ti = document.getElementById('plgTypeName');
+    if (!ti || String(ti.value || '').trim() !== plgModalTarget.id) { plgFail(t('plgTypeBad')); return; }
+  }
   const url = plgModalMode === 'delete' ? '/api/plugins/remove' : '/api/plugins/approve';
   const r = await fetch(url, { method: 'POST', body: JSON.stringify({ id: plgModalTarget.id }) });
   const j = await r.json().catch(function () { return {}; });
@@ -1258,4 +1280,5 @@ setInterval(poll, 2000); poll();
 setInterval(pollEnv, 5000); pollEnv();
 loadLt();
 plgLoad();
+psLoad();
 try { fetch('/api/fe-err', { method: 'POST', body: JSON.stringify({ msg: 'SCRIPT-BOTTOM-REACHED', line: 0 }) }); } catch (e) {}

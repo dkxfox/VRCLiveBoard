@@ -24,6 +24,10 @@ function createServer(opts) {
   const projectRoot = path.join(__dirname, '..', '..');
   const envState = { running: false, msg: '', ok: null };
   const unlockState = { level1: false, level2: false }; // 会话级解锁, 重启自动恢复锁定
+const PLUGIN_SEC_DEFAULTS = { networkPolicy: 'whitelist', processPolicy: 'consent', fsWritePolicy: 'sandbox', fsReadPolicy: 'self' };
+function effPluginSec() {
+  return Object.assign({}, PLUGIN_SEC_DEFAULTS, (rootConfig.plugins && rootConfig.plugins.security) || {});
+}
   let gateFails = []; // 密码门失败时间戳(防爆破节流)
   const pluginManager = opts.pluginManager || null;
   const oscSender = opts.osc || null;
@@ -177,7 +181,7 @@ function createServer(opts) {
       const cap = (rootConfig.ocrtl && rootConfig.ocrtl.capture) || {};
       const sec = (rootConfig.ocrtl && rootConfig.ocrtl.security) || {};
       const swf = (rootConfig.chatbox && rootConfig.chatbox.swearFilter) || {};
-      return json(res, 200, { pages: rootConfig.sources.pages.pages, rotationMs: rootConfig.sources.pages.rotationMs, sources: srcs, autostart: autostart, desktop: { showConsole: !((rootConfig.desktop || {}).showConsole === false) }, lang: (rootConfig.web && rootConfig.web.lang) || 'zh-CN', ocrtl: { delayMs: (rootConfig.ocrtl || {}).delayMs || 5000, displayMs: (rootConfig.ocrtl || {}).displayMs || 8000, loops: (rootConfig.ocrtl || {}).loops || 2, mode: (rootConfig.ocrtl || {}).mode || 'auto', vision: { apiBase: v.apiBase || '', model: v.model || 'deepseek-v4-flash-vision-exp', hasKey: !!v.apiKey, targetLang: v.targetLang || 'zh' }, capture: { mode: cap.mode || 'window', windowTitle: cap.windowTitle || 'VRChat', region: cap.region || { x: 0, y: 0, w: 0, h: 0 } }, security: { promptDefense: sec.promptDefense !== false, jsonMode: sec.jsonMode !== false, outputSanitize: sec.outputSanitize !== false, extraPrompt: sec.extraPrompt || '', blockWords: sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS } }, swearFilter: { enabled: swf.enabled !== false, words: swf.words && swf.words.length ? swf.words : swearfilter.DEFAULTS } });
+      return json(res, 200, { pages: rootConfig.sources.pages.pages, rotationMs: rootConfig.sources.pages.rotationMs, sources: srcs, autostart: autostart, desktop: { showConsole: !((rootConfig.desktop || {}).showConsole === false) }, lang: (rootConfig.web && rootConfig.web.lang) || 'zh-CN', ocrtl: { delayMs: (rootConfig.ocrtl || {}).delayMs || 5000, displayMs: (rootConfig.ocrtl || {}).displayMs || 8000, loops: (rootConfig.ocrtl || {}).loops || 2, mode: (rootConfig.ocrtl || {}).mode || 'auto', vision: { apiBase: v.apiBase || '', model: v.model || 'deepseek-v4-flash-vision-exp', hasKey: !!v.apiKey, targetLang: v.targetLang || 'zh' }, capture: { mode: cap.mode || 'window', windowTitle: cap.windowTitle || 'VRChat', region: cap.region || { x: 0, y: 0, w: 0, h: 0 } }, security: { promptDefense: sec.promptDefense !== false, jsonMode: sec.jsonMode !== false, outputSanitize: sec.outputSanitize !== false, extraPrompt: sec.extraPrompt || '', blockWords: sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS } }, swearFilter: { enabled: swf.enabled !== false, words: swf.words && swf.words.length ? swf.words : swearfilter.DEFAULTS }, pluginsSecurity: effPluginSec() });
     }
     if (req.method === 'POST' && (url.pathname === '/v1/chatbox' || url.pathname === '/api/chatbox')) {
       return readBody(req, function (body) {
@@ -242,7 +246,7 @@ function createServer(opts) {
           const entry = pluginManager.entries.find(function (e) { return e.id === o.id; });
           if (!entry) return json(res, 404, { ok: false, error: '插件不存在(请先把插件文件夹放进 plugins 目录后刷新)' });
           rootConfig.pluginApprovals = rootConfig.pluginApprovals || {};
-          rootConfig.pluginApprovals[o.id] = { hash: pluginManager.hash(entry.manifest), at: Date.now() };
+          rootConfig.pluginApprovals[o.id] = { hash: pluginManager.hash(entry), at: Date.now() };
           entry.approved = true;
           persist();
           return json(res, 200, { ok: true });
@@ -597,6 +601,18 @@ function createServer(opts) {
           if (o.jsonMode !== undefined) sec.jsonMode = o.jsonMode !== false;
           if (o.outputSanitize !== undefined) sec.outputSanitize = o.outputSanitize !== false;
           if (o.extraPrompt !== undefined) sec.extraPrompt = String(o.extraPrompt || '').slice(0, 2000);
+          // 插件安全策略(F-20260903-01): 收紧档由一级密码切换; 非法枚举值 400
+          if (o.pluginsSecurity && typeof o.pluginsSecurity === 'object') {
+            rootConfig.plugins = rootConfig.plugins || {};
+            const ps = rootConfig.plugins.security = Object.assign({}, PLUGIN_SEC_DEFAULTS, rootConfig.plugins.security || {});
+            const enums = { networkPolicy: ['whitelist', 'localOnly', 'off'], processPolicy: ['consent', 'deny'], fsWritePolicy: ['sandbox', 'declared', 'deny'], fsReadPolicy: ['self', 'declared', 'deny'] };
+            for (const k of Object.keys(enums)) {
+              if (o.pluginsSecurity[k] !== undefined) {
+                if (enums[k].indexOf(o.pluginsSecurity[k]) < 0) return json(res, 400, { ok: false, error: '插件安全策略非法值: ' + k + '=' + o.pluginsSecurity[k] });
+                ps[k] = o.pluginsSecurity[k];
+              }
+            }
+          }
           if (Array.isArray(o.addWords)) {
             sec.blockWords = sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS.slice();
             for (const w of o.addWords) { const s = String(w).trim(); if (s && sec.blockWords.indexOf(s) < 0) sec.blockWords.push(s); }
