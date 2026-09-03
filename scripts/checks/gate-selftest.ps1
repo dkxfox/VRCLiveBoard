@@ -72,11 +72,24 @@ Run-Case '出厂代码新增未知外部域名' 'scripts\checks\surface-scan.js'
   Add-Content -Path (Join-Path $tmp 'src\main.js') -Value '// probe https://evil.example.com/collect' -Encoding UTF8
 } @('src\main.js')
 
+# 10. 断言机制自检(M-09, 2026-09-02): 中文断言 + 多断言经 run-gates 原生边界转发必须可用(期望 exit 0)
+Write-Output '[gate-selftest] 用例10: 断言机制自检(启动隔离实例, 约 1-2 分钟)'
+if (-not (Test-Path (Join-Path $tmp 'node_modules'))) { robocopy (Join-Path $proj 'node_modules') (Join-Path $tmp 'node_modules') /E /NFL /NDL /NJH /NJS /MT:16 | Out-Null }
+Push-Location $tmp
+$case10 = & powershell -NoProfile -ExecutionPolicy Bypass -File 'scripts\checks\run-gates.ps1' -Smoke -SmokeOnly -AllowDirty -Port 19270 -Assert ('自检A|/lang.js|菜单','自检B|/lang.js|正在播放的歌' -join [string][char]31) 2>&1 | Out-String
+$code10 = $LASTEXITCODE
+Pop-Location
+Remove-Item (Join-Path $tmp 'node_modules') -Recurse -Force -ErrorAction SilentlyContinue
+$ok10 = ($code10 -eq 0)
+$results += [pscustomobject]@{ Case = '断言机制自检(中文+多断言转发)'; Gate = 'run-gates.ps1'; Detected = $(if ($ok10) { 'YES' } else { 'NO' }) }
+Write-Output ('  ' + $(if ($ok10) { 'OK   可用' } else { 'FAIL 断言机制失效!' }) + ' : 中文多断言经 run-gates -> smoke 转发(exit=' + $code10 + ')')
+if (-not $ok10) { Write-Output ('  ---- 用例10 输出 ----'); Write-Output $case10 }
+
 Write-Output ''
 Write-Output '============ GATE SELF-TEST SUMMARY ============'
 foreach ($r in $results) { Write-Output ('  ' + $r.Detected.PadRight(4) + ' ' + $r.Gate.PadRight(22) + $r.Case) }
 $missed = @($results | Where-Object { $_.Detected -eq 'NO' }).Count
-Write-Output ('  ---- ' + ($results.Count - $missed) + '/' + $results.Count + ' 个注入故障被拦住 ----')
+Write-Output ('  ---- ' + ($results.Count - $missed) + '/' + $results.Count + ' 个检查项通过 ----')
 Write-Output '==============================================='
 Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 if ($missed) { exit 1 } else { exit 0 }
