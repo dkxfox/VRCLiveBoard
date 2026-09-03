@@ -4,10 +4,12 @@
 #   powershell -File scripts\checks\run-gates.ps1                      # 按 git 改动自动判定
 #   powershell -File scripts\checks\run-gates.ps1 -Smoke               # 加隔离冒烟
 #   powershell -File scripts\checks\run-gates.ps1 -Smoke -Assert 'x|/|regex'
+#   powershell -File scripts\checks\run-gates.ps1 -Smoke -SmokeOnly -Assert 'a|/|r1','b|/|r2'   # 只跑 G4(门禁自测用)
 #   powershell -File scripts\checks\run-gates.ps1 -Pack dist\公开版\xxx.zip
 param(
   [string]$Changed = '',
   [switch]$Smoke,
+  [switch]$SmokeOnly,
   [int]$Port = 19250,
   [string[]]$Assert = @(),
   [string]$Pack = '',
@@ -34,6 +36,8 @@ else {
   $files = $files | Where-Object { $_ }
 }
 Write-Output ('[run-gates] 改动文件 ' + $files.Count + ' 个' + $(if ($files.Count) { ': ' + (($files | Select-Object -First 8) -join ', ') } else { '(工作区干净)' }))
+if ($SmokeOnly -and -not $Smoke) { Write-Output '[run-gates] -SmokeOnly 必须与 -Smoke 同用'; exit 2 }
+if (-not $SmokeOnly) {
 
 Gate 'G1' '语法解析(改动文件)' {
   $bad = 0
@@ -61,15 +65,19 @@ Gate 'GI18N' '三语键对齐'      { node scripts\checks\i18n-check.js }
 Gate 'GHTML' '控制台页面'      { node scripts\checks\html-inline-check.js }
 Gate 'GPLUG' '插件契约/单一源'   { node scripts\checks\plugin-check.js }
 Gate 'GCONF' '配置契约/安全默认' { node scripts\checks\config-contract.js }
+}
 if ($Smoke) {
   Gate 'G4' ('隔离冒烟 :' + $Port) {
-    if ($Assert.Count) { powershell -NoProfile -ExecutionPolicy Bypass -File scripts\checks\smoke.ps1 -Port $Port -Assert $Assert }
+    $joined = $Assert -join [string][char]31
+    if ($joined) { powershell -NoProfile -ExecutionPolicy Bypass -File scripts\checks\smoke.ps1 -Port $Port -Assert $joined }
     else { powershell -NoProfile -ExecutionPolicy Bypass -File scripts\checks\smoke.ps1 -Port $Port }
   }
 }
-if ($Pack) { Gate 'GPACK' '发布包审计' { node scripts\checks\pack-audit.js $Pack } }
-Gate 'GSYNC' 'git 同步状态' {
-  if ($AllowDirty) { node scripts\checks\git-sync-check.js --allow-dirty } else { node scripts\checks\git-sync-check.js }
+if (-not $SmokeOnly) {
+  if ($Pack) { Gate 'GPACK' '发布包审计' { node scripts\checks\pack-audit.js $Pack } }
+  Gate 'GSYNC' 'git 同步状态' {
+    if ($AllowDirty) { node scripts\checks\git-sync-check.js --allow-dirty } else { node scripts\checks\git-sync-check.js }
+  }
 }
 
 Write-Output ''

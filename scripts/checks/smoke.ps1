@@ -4,6 +4,7 @@
 #   powershell -File scripts\checks\smoke.ps1                      # 测当前工作树, 端口 19250
 #   powershell -File scripts\checks\smoke.ps1 -Zip dist\...zip -Port 19260
 #   powershell -File scripts\checks\smoke.ps1 -Assert 'updateBtn|/|id="updateBtn"'
+#   M-09(2026-09-02): 响应体按 UTF-8 解码(中文断言可用); 经 run-gates/feature-accept 转发时断言数组用 [char]31 拼成一个参数, 本脚本自动拆分
 param(
   [string]$Zip = '',
   [int]$Port = 19250,
@@ -11,6 +12,7 @@ param(
   [switch]$KeepTemp
 )
 $ErrorActionPreference = 'Stop'
+$Assert = @($Assert | ForEach-Object { $_ -split ([string][char]31) } | Where-Object { $_ })
 $proj = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 if ($Port -eq 19190) { Write-Output '[FATAL] 19190 是用户实例端口, 禁止用于测试'; exit 2 }
 $tmp = Join-Path $env:TEMP ('vrcb-smoke-' + $Port)
@@ -46,9 +48,18 @@ Start-Sleep -Seconds 12
 $script:pass = 0; $script:fail = 0
 function T($name, $urlPath, $pattern) {
   try {
-    $r = Invoke-WebRequest -Uri ('http://127.0.0.1:' + $Port + $urlPath) -UseBasicParsing -TimeoutSec 12
-    if ($r.Content -match $pattern) { Write-Output ('  PASS ' + $name); $script:pass++ }
-    else { Write-Output ('  FAIL ' + $name + '  body=' + $r.Content.Substring(0, [Math]::Min(140, $r.Content.Length))); $script:fail++ }
+    $resp = Invoke-WebRequest -Uri ('http://127.0.0.1:' + $Port + $urlPath) -UseBasicParsing -TimeoutSec 12
+    $body = $null
+    if ($resp.RawContentStream) {
+      try {
+        $ms = New-Object System.IO.MemoryStream
+        $resp.RawContentStream.CopyTo($ms)
+        $body = [System.Text.Encoding]::UTF8.GetString($ms.ToArray())
+        $ms.Dispose()
+      } catch { $body = $resp.Content }
+    } else { $body = $resp.Content }
+    if ($body -match $pattern) { Write-Output ('  PASS ' + $name); $script:pass++ }
+    else { Write-Output ('  FAIL ' + $name + '  body=' + $body.Substring(0, [Math]::Min(140, $body.Length))); $script:fail++ }
   } catch { Write-Output ('  FAIL ' + $name + '  err=' + $_.Exception.Message); $script:fail++ }
 }
 T 'version'        '/api/version'        ('"version"\s*:\s*"' + [regex]::Escape($pkgVer) + '"')

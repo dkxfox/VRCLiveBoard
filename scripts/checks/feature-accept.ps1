@@ -18,5 +18,6 @@ Write-Output ('[feature-accept] 功能卡 ' + (Split-Path $Card -Leaf) + ' 抽�
 if ($asserts.Count -eq 0) { Write-Output '[FATAL] 功能卡里没有 ASSERT 行 —— 成功标准必须写成可执行断言'; exit 2 }
 foreach ($a in $asserts) { Write-Output ('   ' + $a) }
 
-powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'smoke.ps1') -Port $Port -Assert $asserts
+$joined = $asserts -join [string][char]31
+powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'smoke.ps1') -Port $Port -Assert $joined
 exit $LASTEXITCODE
