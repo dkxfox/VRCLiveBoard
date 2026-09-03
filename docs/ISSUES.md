@@ -94,14 +94,16 @@
 - 验证: gate-selftest 10/10(含新第 10 夹具); run-gates 中文双断言 G4 冒烟 10/10(专项 2/2 PASS, 端口 19250 释放、TEMP 清理)
 - 关联: DEV-NOTES 条目 94
 
-### M-20260903-01 运行时垃圾文件管理(待用户确认方案)
-- 状态: OPEN(待用户确认)
+### M-20260903-01 运行时垃圾文件管理(已梳理并修复累积点)
+- 状态: FIXED
 - 严重度: S4
 - 来源: 用户提出"稍后想确认一下运行中的垃圾文件管理的问题"(2026-09-03)
-- 现象: 运行过程中会产生的临时/衍生文件, 待梳理清单与清理策略
-- 复现: 待用户描述具体关注点
-- 影响面: 长期运行用户(磁盘占用/目录整洁)
-- 备注: 已知候选 —— config.json.bak(configio 救命档, 设计内)、logs/app.log(环形+housekeeping)、TEMP 下 vrcb-* 测试目录(测试脚本会清)、plugins/<id>/data/(新插件沙盒数据目录, 停用/删除插件时不自动清理)、.ocr-cache/.pydist/.electron-cache(依赖缓存, 打包排除)、zip 导入 .tmp-import(importZip finally 清理)。待用户确认哪些需要自动化清理与保留策略。
+- 现象: 用户问"运行中是否会累积垃圾文件"
+- 复现: 取证结论 —— 真累积点两个半: ①logs/plugin-audit.log 每次插件调用都落盘但不在截断清单, 无限增长; ②Electron 用户数据目录(%APPDATA%\vrcliveboard)的 Chromium 缓存(Cache/Code Cache/GPUCache/ShaderCache)运行中持续增长, housekeeping 管不到; ③logs/app.log 只在启动时截断, 长期挂机会缓慢增长。其余均有管理(.ocr-cache 30天、.ocr-tmp.png 单文件、config.json.bak 设计内、插件 data 目录随删除清理、.tmp-import finally 清理)
+- 根因: 见上
+- 改动: housekeeping 截断清单加 plugin-audit.log + 清理 >1 天的 .ocr-tmp.png 残留; main.js 的 runHousekeeping 周期化(6 小时一次, 不再只跑启动时); 新增 electron/userdata-cleanup.js(GPU/Shader 类缓存启动即清, Cache/Code Cache/blob_storage 只清 >7 天未动的)+ electron/main.js 启动时接线并 clearCache()
+- 验证: 夹具实测 —— plugin-audit.log/app.log 1.5MB 截断为 100KB、.ocr-tmp.png 2 天旧文件被清; userData 夹具 GPUCache/ShaderCache 清、过期 Cache 清、新 Code Cache 保留; GATES(回填)
+- 关联: DEV-NOTES 条目 101
 
 ### M-20260903-02 UDP 9000 探测不可靠: 游戏正常运行时仍显示空闲
 - 状态: FIXED
