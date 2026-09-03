@@ -68,23 +68,6 @@ function createWindow() {
   });
   win.on('close', function (e) { if (!quitting) { e.preventDefault(); win.hide(); } });
 }
-// 任务栏分组图标源: 未打包 electron.exe 场景下, 自定义 AUMID 默认没有图标来源 ——
-// 自愈写一条开始菜单快捷方式(带 app.ico + AUMID), Windows 会用它作为分组/固定/首启的图标(M-20260903-03)
-function ensureShortcut() {
-  try {
-    const lnk = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'VRCLiveBoard.lnk');
-    const icoPath = path.join(__dirname, 'app.ico');
-    if (!fs.existsSync(icoPath)) return;
-    shell.writeShortcutLink(lnk, {
-      target: process.execPath,
-      args: path.join(__dirname, 'main.js'),
-      icon: icoPath,
-      iconIndex: 0,
-      appUserModelId: 'com.vrcliveboard.app',
-      description: 'VRCLiveBoard 桌面版'
-    });
-  } catch (e) { /* 非致命: 快捷方式写失败不影响运行 */ }
-}
 function startCore() {
   // 内嵌模式: 核心(网页服务/OSC/数据源)跑在本进程里
   process.env.VRCB_EMBEDDED = '1';
@@ -101,7 +84,6 @@ if (!app.requestSingleInstanceLock()) {
   app.on('before-quit', function () { quitting = true; });
   app.whenReady().then(function () {
     applyConsoleSetting();
-    if (process.env.VRCB_HEADLESS_TEST !== '1') ensureShortcut(); // 自愈: 给 AUMID 一个持久图标源(开始菜单快捷方式)
     startCore();
     if (process.env.VRCB_HEADLESS_TEST === '1') { console.log('SHELL-OK'); setTimeout(function () { app.quit(); }, 500); return; }
     createWindow();
