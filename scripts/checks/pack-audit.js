@@ -119,6 +119,22 @@ function audit(zp) {
 
   console.log('[G-PACK] ' + label);
   console.log('  条目 ' + z.entries.length + ' | 非ASCII名 ' + nonAscii + ' | 缺UTF8标志 ' + noFlag + ' | 非法UTF8 ' + badUtf8 + ' | 反斜杠 ' + backslash + ' | 机密扫描 ' + scanned + ' 个文本条目');
+
+  // 8. 体积与 zipVolumes 基线比对(漂移必须机器可见; 发布变化 → 人工复核后更新基线, 见 PROCESS-03)
+  const fileBytes = fs.statSync(zp).size;
+  console.log('  体积 ' + fileBytes + ' bytes(' + (fileBytes / 1048576).toFixed(2) + ' MB)');
+  let baseline = null;
+  try { baseline = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs', 'SECURITY-BASELINE.json'), 'utf8')).zipVolumes || null; } catch (e) {}
+  if (baseline) {
+    const key = Object.keys(baseline).find((k) => k !== 'asOf' && label.includes(k));
+    if (!key) warns.push('zipVolumes 基线没有与 ' + label + ' 匹配的键(应为 Lite-RequiresNode / Desktop-SelfContained)');
+    else {
+      const b = baseline[key];
+      if (b.entries !== z.entries.length || b.bytes !== fileBytes) {
+        fails.push('体积/条目数与基线 ' + key + '(entries=' + b.entries + ', bytes=' + b.bytes + ', ' + (baseline.asOf || '?') + ')不符: 现为 entries=' + z.entries.length + ', bytes=' + fileBytes + ' —— 若为发布变化, 人工复核后更新 SECURITY-BASELINE.json 的 zipVolumes(见 PROCESS-03)');
+      } else console.log('  体积与基线一致: ' + key);
+    }
+  }
   for (const w of warns) console.log('  WARN ' + w);
   for (const f of fails) console.log('  FAIL ' + f);
   if (!fails.length) console.log('  PASS');
