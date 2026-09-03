@@ -1,4 +1,4 @@
-// VRCLiveBoard 桌面版启动器(代号 星光)v1.3.0
+// VRCLiveBoard 桌面版启动器(代号 星光)v1.3.2
 // 用系统默认方式打开与本程序同目录的「启动桌面版.bat」(按本程序自身所在目录解析, 不受当前工作目录影响)。
 // 编译: 同目录 build.bat(使用 Windows 自带 .NET Framework csc, 无需安装任何工具)。
 using System;
@@ -11,8 +11,8 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyProduct("VRCLiveBoard")]
 [assembly: AssemblyCompany("DKXfox")]
 [assembly: AssemblyDescription("VRCLiveBoard 桌面版启动器(代号 星光)")]
-[assembly: AssemblyVersion("1.3.1.0")]
-[assembly: AssemblyFileVersion("1.3.1.0")]
+[assembly: AssemblyVersion("1.3.2.0")]
+[assembly: AssemblyFileVersion("1.3.2.0")]
 
 class Program
 {

@@ -65,14 +65,14 @@
   },
   "updatedAt": "2026-09-03",
   "zipVolumes": {
-    "asOf": "v1.3.1 (2026-09-02)",
+    "asOf": "v1.3.2 (2026-09-03)",
     "Lite-RequiresNode": {
-      "entries": 193,
-      "bytes": 16531662
+      "entries": 199,
+      "bytes": 16568725
     },
     "Desktop-SelfContained": {
-      "entries": 1370,
-      "bytes": 226320871
+      "entries": 1376,
+      "bytes": 226357934
     }
   },
   "supplyChain": {
@@ -85,9 +85,9 @@
       "tesseract.js": "^7.0.0"
     },
     "artifacts": {
-      "VRCLiveBoard.exe": "d0f7456b53a2bf49632c019e812961c08fcb829925d48a9e150f8d52f78c0efd",
+      "VRCLiveBoard.exe": "96db5f26efa8dc32e939ec336e57f54980b03175a7968b884f13f6b239d5306a",
       "electron/app.ico": "6abfc57d3b487d58ee619dd692bc1e4160ee76202dd86f21cafe12237b28c4f3",
-      "scripts/launcher/launcher.cs": "49785430701c1bafcd8acb404641e7c5e0fb809c89c939e1edb7f8934a4feb65",
+      "scripts/launcher/launcher.cs": "f73ac96fc16b94707373fe1a35bdea849e47b175a3a936b24cad3855c4ab5921",
       "src/helpers/smtc.py": "1f56bcb0ead2fac496662b682ed061600a3d88652851506d6a14df36271ee96a",
       "src/helpers/screen_capture.ps1": "5f6ac5cc07f8ce0880eaaff85ed507407ae2f0b03bf1c1d4d813b13f43d99200",
       "plugins/friend-welcome/vendor/": "2c4f232272eba0b742bd1bafcdee7ada0eb47a814435f3fe86726250434902a2",

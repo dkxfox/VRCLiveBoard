@@ -1,7 +1,7 @@
 {
-  "version": "1.3.1",
+  "version": "1.3.2",
   "codename": "星光",
-  "published": "2026-09-01",
-  "note": "1.3.1 修补版: 四项使用者反馈修复 + 新版本检测功能",
+  "published": "2026-09-03",
+  "note": "1.3.2 修补版2: 四项反馈修复 + UDP 探测与图标修复 + 插件安全收紧与 AI 网关 + 垃圾文件清理 + GitHub 按钮",
   "releaseUrl": "https://github.com/dkxfox/VRCLiveBoard/releases/latest"
 }
