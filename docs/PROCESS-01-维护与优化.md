@@ -57,7 +57,7 @@
 | **M1 取证** | 隔离实例复现(`smoke.ps1 -Port 19250`),取 `logs/app.log` 尾部 + `/api/diagnose` | 根因一句话("因为 X 所以 Y") | 根因含"可能/也许" → 回 M1。**L 档(文案/i18n/样式/日志措辞)例外**: 允许"代码级取证 + 修复后隔离实例断言"代替事前复现(2026-09-02 增补, 来自条目 93 的 M1 成本失衡) |
 | **M2 改动** | 只修这一个根因;禁止顺手重构 | 改动文件清单 | 超出规模档位 → 见第 5 节升级条款 |
 | **M3 门禁** | `run-gates.ps1`(必要时 `-Smoke` / `-Pack`) | **GATES SUMMARY 表** | 任一 FAIL 或未跑 → 不许说"已修复" |
-| **M4 收口** | 版本同步 → DEV-NOTES 条目 → commit/push → **`node scripts\checks\git-sync-check.js`(机器证据, 不许用 git status 人工代替)** → 关卡片 | 提交号 + GSYNC PASS | GSYNC 非 PASS → 未收口 |
+| **M4 收口** | 版本同步 → **GDOC 说明文件一致性(改动了功能描述/位置/口径必跑, 基线同步更新)** → DEV-NOTES 条目 → commit/push → **`node scripts\checks\git-sync-check.js`(机器证据, 不许用 git status 人工代替)** → 关卡片 | 提交号 + GSYNC PASS | GSYNC 非 PASS → 未收口 |
 
 **严重度与响应**:S1 崩溃/数据丢失/安全 → 立即单独发补丁;S2 主功能不可用 → 24 小时内;S3 体验 / S4 优化 → 攒批,满 5 条或满一周发一个补丁版。
 
@@ -79,6 +79,7 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke -Assert '被修的bug|/api/
 | **G4** | 隔离冒烟:临时目录 + 测试端口真启动 + 8 项端点 + **本次专项断言** | `smoke.ps1` | 30(测试打到用户实例) |
 | **GPLUG** | 插件单一源 + manifest 契约 + 更新包版本 + 预置授权哈希 | `plugin-check.js` | 63 / 72 |
 | **GCONF** | 必备键 + **安全开关默认 true** + 公开版无私有内容 | `config-contract.js` | 15 / 31 |
+| **GDOC** | 说明文件过时检查: DOC-BASELINE 的 must/mustNot 子串断言 + 引用文件存在 | `doc-consistency.js` | 2026-09-03 文档漂移审计 |
 | **GPACK** | 发布包审计:禁入文件 / UTF-8 文件名标志 / config 脱敏 / **包内盐与源码一致** / **官方插件恢复备份齐全** / 全量机密扫描 | `pack-audit.js` | 85 / 67 / 87 |
 | **GSYNC** | 工作区干净 + 与 origin/main 零差 + 无悬空未跟踪文件 | `git-sync-check.js` | 84 |
 
@@ -109,6 +110,7 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke -Assert '被修的bug|/api/
 | `src/web/public/lang.js` | GI18N |
 | `plugins/**` | GPLUG;版本号变更 → 授权哈希失效 → **必须提示用户重新红窗授权**;`plugins/` 是唯一源,`官方可选插件/` 由打包生成,**不要手工同步第二份** |
 | `config.default.json` | GCONF;新功能默认关闭、安全开关默认 true、公开版无私有内容 |
+| **文档事实变更**(功能描述/位置/权限口径/文案) | **GDOC**;同步更新 `docs/DOC-BASELINE.json` 并经人工复核 |
 | `src/devgate.js` / `dev-dongle/master/master.js` | 两处盐逐字一致 + 沙箱七项(注册→发码→接受→重放拒→旧盐拒→迷你狗盐→登记表未污染) |
 | `启动*.bat` | G2 + 含空格路径双击可用 |
 | `scripts/make-dist.ps1` | 单 BOM + PARSE_OK + 实跑打包 + GPACK |
@@ -142,4 +144,5 @@ powershell -File scripts\checks\smoke.ps1 -Zip dist\公开版\xxx.zip -Port 1926
 node scripts\checks\pack-audit.js dist\公开版\*.zip             # 发布前包审计
 node scripts\checks\version-sync.js                              # 改版本号后
 node scripts\checks\auth-state-check.js                         # 授权体系状态(流程 3 的 3A; 开发者机)
+node scripts\checks\doc-consistency.js                          # 说明文件过时检查(GDOC)
 ```

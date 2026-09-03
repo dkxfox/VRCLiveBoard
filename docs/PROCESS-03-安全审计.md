@@ -7,7 +7,7 @@
 
 | 子流程 | 何时触发 | 必跑 | 产出 |
 | --- | --- | --- | --- |
-| **3A 定期检查** | 每次重大改动收尾;或每周 | secret-scan / surface-scan / dep-audit / gate-selftest / **auth-state-check(授权体系状态, 开发者机)** | 发现项列表(分级 C1-C4) |
+| **3A 定期检查** | 每次重大改动收尾;或每周 | secret-scan / surface-scan / dep-audit / gate-selftest / **auth-state-check(授权体系状态, 开发者机)** / **doc-consistency(说明文件与实况一致性)** | 发现项列表(分级 C1-C4) |
 | **3B 发布前检查** | 每次打包发布前(补丁/次版本/插件更新包) | release-audit.ps1(7 步一次跑完) | 审计报告 + SHA256SUMS |
 | **3C 完整性测试** | 与 3B 合并执行 | 产物哈希基线比对 + 校验和公示 + 解包审计 | 哈希清单 |
 

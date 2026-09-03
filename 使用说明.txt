@@ -97,7 +97,7 @@ VRCLiveBoard 是一个 Windows 小工具。把它开着,你玩 VRChat 的时候,
   · 可用变量(实时替换): {cpu_util} CPU使用率%  {cpu_temp} CPU温度
     {gpu_util} 显卡使用率%  {gpu_temp} 显存温度  {gpu_mem} 显存占用
     {mem_used}/{mem_total} 内存已用/总  {net_down}/{net_up} 网速
-    {song}/{artist}/{album} 正在播放的歌(需开启"正在播放的歌"功能) {time}/{date} 时间日期;
+    {song}/{artist}/{album} 正在播放的歌(需开启“正在播放的歌”功能) {time}/{date} 时间日期;
   · 点"保存到 config.json"生效; 轮播间隔(秒)可调;
   · 页面太多时: 点标题行收起整卡; 点每页头部折叠单页(折叠后显示
     第一行预览); "全部折叠/全部展开"一键整理; 每页头部还有

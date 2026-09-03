@@ -72,6 +72,13 @@ Run-Case '出厂代码新增未知外部域名' 'scripts\checks\surface-scan.js'
   Add-Content -Path (Join-Path $tmp 'src\main.js') -Value '// probe https://evil.example.com/collect' -Encoding UTF8
 } @('src\main.js')
 
+# 11. 说明文件过时注入: 删掉一个"必须存在"的描述 → GDOC 必须 FAIL
+Run-Case '说明文件缺失关键描述' 'scripts\checks\doc-consistency.js' {
+  $p = Join-Path $tmp '使用说明.txt'
+  $t = [IO.File]::ReadAllText($p)
+  [IO.File]::WriteAllText($p, $t.Replace('插件卡顶部, 0 级可见', '插件卡顶部, 一级可见'), (New-Object Text.UTF8Encoding($false)))
+} @('使用说明.txt')
+
 # 10. 断言机制自检(M-09, 2026-09-02): 中文断言 + 多断言经 run-gates 原生边界转发必须可用(期望 exit 0)
 Write-Output '[gate-selftest] 用例10: 断言机制自检(启动隔离实例, 约 1-2 分钟)'
 if (-not (Test-Path (Join-Path $tmp 'node_modules'))) { robocopy (Join-Path $proj 'node_modules') (Join-Path $tmp 'node_modules') /E /NFL /NDL /NJH /NJS /MT:16 | Out-Null }

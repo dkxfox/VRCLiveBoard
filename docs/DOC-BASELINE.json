@@ -1,0 +1,58 @@
+{
+  "updatedAt": "2026-09-03",
+  "note": "must/mustNot 均为纯子串匹配(非正则); links 为本仓库内必须存在的文件。改代码动了文档事实(位置/文案/功能描述/权限口径)时, 必须同步更新本文件并经人工复核 —— 见 PROCESS-01 §4 GDOC",
+  "files": {
+    "使用说明.txt": {
+      "must": [
+        "插件卡顶部, 0 级可见",
+        "高危插件还需输入",
+        "插件名确认",
+        "需开启“正在播放的歌”功能",
+        "绿 = VRChat 在听",
+        "插件安全策略的放宽",
+        "安全策略、授权记录",
+        "ctx.ai",
+        "ClearIconCache.bat",
+        "单向收紧",
+        "每插件 5 秒节流"
+      ],
+      "mustNot": [
+        "高级设置 → 安全与权限, 一级密码): 默认档",
+        "唯一保护"
+      ]
+    },
+    "README.md": {
+      "must": [
+        "唯一官方分发渠道",
+        "保留所有权利",
+        "Releases"
+      ],
+      "mustNot": []
+    },
+    "开发者文档/02-插件开发规范.md": {
+      "must": [
+        "ai.chat",
+        "\"ai\": { \"tasks\"",
+        "sha256(index.js)",
+        "aiPolicy",
+        "networkPolicy",
+        "单向收紧",
+        "硬拒名单"
+      ],
+      "mustNot": [
+        "契约 + 门禁 + 告知\": 权限清单声明"
+      ]
+    }
+  },
+  "links": {
+    "README.md": [
+      "docs/PLUGIN-DEV.md",
+      "使用说明.txt",
+      "版本说明.txt",
+      "docs/DEV-NOTES.md"
+    ],
+    "使用说明.txt": [
+      "ClearIconCache.bat"
+    ]
+  }
+}

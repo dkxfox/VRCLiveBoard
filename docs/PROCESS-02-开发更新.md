@@ -96,7 +96,7 @@ powershell -File scripts\checks\feature-accept.ps1 -Card docs\FEATURES\F-2026090
 ## 5. D4 集成与发布准备
 
 - 版本:达到 milestone 才 +次版本(1.4.0);未达标的改动按流程 1 走补丁位
-- 文档四同步:`使用说明.txt` 章节 / `版本说明.txt` 条目 / `README.md` 功能一览 / `DEV-NOTES` 条目
+- 文档四同步:`使用说明.txt` 章节 / `版本说明.txt` 条目 / `README.md` 功能一览 / `DEV-NOTES` 条目; **凡改动功能描述/位置/权限口径, 同步更新 `docs/DOC-BASELINE.json`(GDOC 门禁的 must/mustNot 断言, 人工复核)**
 - **打包清单同步**:新增根目录文件默认视为"会进包",明确决定进 `$required` 还是 `$xfFiles`
 - 出包后必须跑 `pack-audit.js`(会校验:插件本体 + 官方可选插件恢复备份 + 盐一致 + 机密扫描)
 - 最后走流程 3(安全审计)的发布前检查
