@@ -63,6 +63,11 @@
     }
   },
   "updatedAt": "2026-09-02",
+  "zipVolumes": {
+    "asOf": "v1.3.1 (2026-09-02)",
+    "Lite-RequiresNode": { "entries": 193, "bytes": 16531662 },
+    "Desktop-SelfContained": { "entries": 1370, "bytes": 226320871 }
+  },
   "supplyChain": {
     "dependencies": {
       "@tesseract.js-data/chi_sim": "^1.0.0",

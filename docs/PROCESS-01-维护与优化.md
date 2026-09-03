@@ -21,7 +21,7 @@
 | 约束 | 值 |
 | --- | --- |
 | 版本语义 | 只允许补丁位 +1(如 1.3.1 → 1.3.2) |
-| 红线 | ①不碰用户实例 **19190** ②不改用户 `config.json` ③密钥永不进会话/提交 ④只改项目根 |
+| 红线 | ①不碰用户实例 **19190** ②不改用户 `config.json` ③密钥/凭据永不进会话/提交(含 API key、母狗口令、一级密码、token)④只改项目根; **凭据投影规则**: 查询含凭据文件(如 授权登记表.xlsx)时只输出投影列(姓名/状态/次数/布尔), 不打印口令值 —— 2026-09-02 增补 |
 | 测试端口 | 19250 / 19260(smoke.ps1 已硬性拒绝 19190) |
 
 ## 2. A0 指令歧义审查闸(所有流程共用,置于最前)
@@ -54,10 +54,10 @@
 | 阶段 | 动作 | 产出 | 不满足不许进下一步 |
 | --- | --- | --- | --- |
 | **M0 登记** | 在 `docs/ISSUES.md` 开卡:编号 / 来源 / 现象 / **复现步骤** / 影响面 / 严重度 / 状态 | 一行卡片 | 没有复现步骤 → 标 `NEED-REPRO` 回问,**不许猜着开工** |
-| **M1 取证** | 隔离实例复现(`smoke.ps1 -Port 19250`),取 `logs/app.log` 尾部 + `/api/diagnose` | 根因一句话("因为 X 所以 Y") | 根因含"可能/也许" → 回 M1 |
+| **M1 取证** | 隔离实例复现(`smoke.ps1 -Port 19250`),取 `logs/app.log` 尾部 + `/api/diagnose` | 根因一句话("因为 X 所以 Y") | 根因含"可能/也许" → 回 M1。**L 档(文案/i18n/样式/日志措辞)例外**: 允许"代码级取证 + 修复后隔离实例断言"代替事前复现(2026-09-02 增补, 来自条目 93 的 M1 成本失衡) |
 | **M2 改动** | 只修这一个根因;禁止顺手重构 | 改动文件清单 | 超出规模档位 → 见第 5 节升级条款 |
 | **M3 门禁** | `run-gates.ps1`(必要时 `-Smoke` / `-Pack`) | **GATES SUMMARY 表** | 任一 FAIL 或未跑 → 不许说"已修复" |
-| **M4 收口** | 版本同步 → DEV-NOTES 条目 → commit/push → 关卡片 | 提交号 + GSYNC PASS | GSYNC 非 PASS → 未收口 |
+| **M4 收口** | 版本同步 → DEV-NOTES 条目 → commit/push → **`node scripts\checks\git-sync-check.js`(机器证据, 不许用 git status 人工代替)** → 关卡片 | 提交号 + GSYNC PASS | GSYNC 非 PASS → 未收口 |
 
 **严重度与响应**:S1 崩溃/数据丢失/安全 → 立即单独发补丁;S2 主功能不可用 → 24 小时内;S3 体验 / S4 优化 → 攒批,满 5 条或满一周发一个补丁版。
 
@@ -95,6 +95,8 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke -Assert '被修的bug|/api/
 **真正的硬指标是可回滚性:每个 commit 必须能单独 `git revert` 而不破坏构建。**
 
 **超限不是禁止,而是触发升级条款**(任选其一):① 拆成多个可独立回滚的提交;② 补齐对应回归项并写明;③ 在 DEV-NOTES 说明"为什么必须一次做完"。
+
+**同质小修批量条款**(2026-09-02 增补, 来自条目 93): 同一批同质 L/M 档修复可以合并为一个 commit(即使合计文件数超过 M 档的 5 个), 档位按"任一单修的最高档"计, 合并批一律跑全门禁 + 影响面矩阵, 并在 DEV-NOTES 写明"为什么必须一次做完"。禁止跨档混批(例如把 H 档门禁改动混进 L 档文案批)。
 
 ## 6. 影响面矩阵(改左边 → 必测右边)
 
@@ -139,4 +141,5 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke             # 提交前完�
 powershell -File scripts\checks\smoke.ps1 -Zip dist\公开版\xxx.zip -Port 19260
 node scripts\checks\pack-audit.js dist\公开版\*.zip             # 发布前包审计
 node scripts\checks\version-sync.js                              # 改版本号后
+node scripts\checks\auth-state-check.js                         # 授权体系状态(流程 3 的 3A; 开发者机)
 ```

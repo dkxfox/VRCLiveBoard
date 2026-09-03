@@ -83,13 +83,16 @@
 - 体积实测(2026-09-02): lite 包 15.74MB 压缩后 = 基础 9.23MB + 官方可选插件恢复备份 6.51MB(占 41%); vendor xlsx 双份合计 12.94MB。裁剪 vendor 后预计 lite 回到 ~10MB
 
 ### M-20260902-09 run-gates 多断言转发被嵌套 powershell 空格合并
-- 状态: OPEN
+- 状态: FIXED
 - 严重度: S4(流程工具)
 - 来源: 条目 93 四修复跑门禁时发现
 - 现象: run-gates.ps1 -Smoke -Assert 'a|/x|r1','b|/x|r2' 经嵌套 powershell -File 转发后, 数组被空格合并成单个参数, smoke 只收到一条拼串断言(且中文断言还会被 Invoke-WebRequest 按拉丁-1 解码成乱码, 永远匹配不上)
 - 复现: run-gates.ps1 -Smoke -Assert 两个以上断言 → G4 只跑出一条专项且必 FAIL; 单条纯 ASCII 断言正常
 - 影响面: 只有开发者跑门禁时; 不影响用户
-- 候选方案: ①run-gates 把断言数组用分隔符拼成单参数, smoke 内再拆分; ②run-gates 直接调用 smoke.ps1 而非嵌套 powershell; ③smoke 对 UTF-8 响应显式按 UTF-8 解码(Invoke-WebRequest 无 charset 头时按拉丁-1)
+- 根因: ①PS 把数组传给原生 exe(powershell.exe -File)时按空格合并成一个参数 → 多断言塌成一条; ②smoke 的 T() 用 Invoke-WebRequest 的 .Content, 响应无 charset 头时按拉丁-1 解码 → UTF-8 中文变乱码
+- 改动: smoke.ps1 改用 RawContentStream 按 UTF-8 解码响应体 + 断言参数按 [char]31 拆分; run-gates.ps1 转发前用 [char]31 拼接 + 新增 -SmokeOnly(只跑 G4, 供门禁自测); feature-accept.ps1 同步先拼接再转发; gate-selftest.ps1 新增第 10 夹具(中文多断言经 run-gates→smoke 全链路自检)
+- 验证: gate-selftest 10/10(含新第 10 夹具); run-gates 中文双断言 G4 冒烟 10/10(专项 2/2 PASS, 端口 19250 释放、TEMP 清理)
+- 关联: DEV-NOTES 条目 94
 
 ## 已关闭
 
