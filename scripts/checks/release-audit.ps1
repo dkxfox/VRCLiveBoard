@@ -6,6 +6,7 @@ param(
   [switch]$NoSelftest
 )
 $proj = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+Set-Location $proj
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $ver = (Get-Content (Join-Path $proj 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json).version
 $report = Join-Path $proj ('审计报告-AUDIT-' + $stamp + '.txt')
