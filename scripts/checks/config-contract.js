@@ -58,5 +58,19 @@ const missing = [...seen].filter((k) => {
 if (missing.length) say('WARN', '代码读取但默认配置未定义(确认是否需要默认值): ' + missing.slice(0, 12).join(', '));
 else say('OK', '代码读取的 config 键都有默认值');
 
+// 6. 插件安全策略默认档(2026-09-03, F-20260903-01): 默认 = 宽松但审计可见; 收紧档是可选的一级开关
+const PLUGIN_SEC_DEFAULT = { networkPolicy: 'whitelist', processPolicy: 'consent', fsWritePolicy: 'sandbox', fsReadPolicy: 'self' };
+const PLUGIN_SEC_ENUMS = { networkPolicy: ['whitelist', 'localOnly', 'off'], processPolicy: ['consent', 'deny'], fsWritePolicy: ['sandbox', 'declared', 'deny'], fsReadPolicy: ['self', 'declared', 'deny'] };
+const ps = get(def, 'plugins.security') || {};
+let psBad = 0;
+for (const k of Object.keys(PLUGIN_SEC_DEFAULT)) {
+  if (ps[k] === undefined) { say('FAIL', 'plugins.security 缺 ' + k + '(默认 ' + PLUGIN_SEC_DEFAULT[k] + ')'); psBad++; }
+  else if (ps[k] !== PLUGIN_SEC_DEFAULT[k]) say('WARN', 'plugins.security.' + k + ' 默认值=' + ps[k] + '(标准默认 ' + PLUGIN_SEC_DEFAULT[k] + '; 收紧档应由一级密码切换, 默认配置保持标准默认)');
+}
+for (const k of Object.keys(PLUGIN_SEC_ENUMS)) {
+  if (ps[k] !== undefined && PLUGIN_SEC_ENUMS[k].indexOf(ps[k]) < 0) { say('FAIL', 'plugins.security.' + k + ' 非法枚举值 ' + ps[k]); psBad++; }
+}
+if (!psBad) say('OK', '插件安全策略默认档合规(whitelist/consent/sandbox/self)');
+
 console.log('  ---- ' + fail + ' FAIL / ' + warn + ' WARN ----');
 process.exit(fail ? 1 : 0);
