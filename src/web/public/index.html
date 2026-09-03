@@ -222,6 +222,23 @@ pre::-webkit-scrollbar-thumb, #logView::-webkit-scrollbar-thumb { background: va
 <div class="card" id="card-plg">
   <b data-t="plgTitle"></b>
   <div class="sub" style="margin:4px 0 8px" data-t="plgDesc"></div>
+  <div class="sub" style="margin-top:4px">🛡 <span data-t="plgSecTitle"></span> <span style="color:var(--muted)" data-t="plgSecDesc"></span></div>
+  <div class="row" style="margin-top:6px;flex-wrap:wrap;gap:8px">
+    <span style="font-size:13px" data-t="plgSecNet"></span>
+    <select id="psNet"><option value="whitelist" data-t="polWhitelist"></option><option value="localOnly" data-t="polLocalOnly"></option><option value="off" data-t="polOff"></option></select>
+    <span style="font-size:13px" data-t="plgSecProc"></span>
+    <select id="psProc"><option value="consent" data-t="polConsent"></option><option value="deny" data-t="polDeny"></option></select>
+  </div>
+  <div class="row" style="margin-top:6px;flex-wrap:wrap;gap:8px">
+    <span style="font-size:13px" data-t="plgSecFsW"></span>
+    <select id="psFsW"><option value="sandbox" data-t="polSandbox"></option><option value="declared" data-t="polDeclared"></option><option value="deny" data-t="polDeny"></option></select>
+    <span style="font-size:13px" data-t="plgSecFsR"></span>
+    <select id="psFsR"><option value="self" data-t="polSelf"></option><option value="declared" data-t="polDeclared"></option><option value="deny" data-t="polDeny"></option></select>
+    <span style="font-size:13px" data-t="plgSecAi"></span>
+    <select id="psAi"><option value="allow" data-t="polAllow"></option><option value="localOnly" data-t="polLocalOnly"></option><option value="off" data-t="polOff"></option></select>
+    <button class="small" onclick="psSave()" data-t="plgSecSave"></button>
+  </div>
+  <span id="psMsg" style="font-size:12px;color:var(--ok)"></span>
   <div class="row">
     <input id="plgZip" data-t-ph="plgZipPh" style="flex:1">
     <button id="plgImport" class="small" data-t="plgImport"></button>
@@ -321,24 +338,6 @@ pre::-webkit-scrollbar-thumb, #logView::-webkit-scrollbar-thumb { background: va
         <label style="font-size:13px;margin-right:12px"><input type="checkbox" id="secSan"> <span data-t="secSan"></span></label>
         <button class="small" onclick="secSave()" data-t="secSave"></button>
       </div>
-      <div class="sub" style="margin-top:12px">🔒1 <span data-t="plgSecTitle"></span></div>
-      <div class="sub" style="margin-top:4px;color:var(--muted)" data-t="plgSecDesc"></div>
-      <div class="row" style="margin-top:6px;flex-wrap:wrap;gap:8px">
-        <span style="font-size:13px" data-t="plgSecNet"></span>
-        <select id="psNet"><option value="whitelist" data-t="polWhitelist"></option><option value="localOnly" data-t="polLocalOnly"></option><option value="off" data-t="polOff"></option></select>
-        <span style="font-size:13px" data-t="plgSecProc"></span>
-        <select id="psProc"><option value="consent" data-t="polConsent"></option><option value="deny" data-t="polDeny"></option></select>
-      </div>
-      <div class="row" style="margin-top:6px;flex-wrap:wrap;gap:8px">
-        <span style="font-size:13px" data-t="plgSecFsW"></span>
-        <select id="psFsW"><option value="sandbox" data-t="polSandbox"></option><option value="declared" data-t="polDeclared"></option><option value="deny" data-t="polDeny"></option></select>
-        <span style="font-size:13px" data-t="plgSecFsR"></span>
-        <select id="psFsR"><option value="self" data-t="polSelf"></option><option value="declared" data-t="polDeclared"></option><option value="deny" data-t="polDeny"></option></select>
-        <span style="font-size:13px" data-t="plgSecAi"></span>
-        <select id="psAi"><option value="allow" data-t="polAllow"></option><option value="localOnly" data-t="polLocalOnly"></option><option value="off" data-t="polOff"></option></select>
-        <button class="small" onclick="psSave()" data-t="plgSecSave"></button>
-      </div>
-      <span id="psMsg" style="font-size:12px;color:var(--ok)"></span>
       <div class="sub" style="margin-top:10px" data-t="secWords"></div>
       <textarea id="secWordsView" rows="4" style="width:100%" readonly></textarea>
       <div class="row" style="margin-top:6px">

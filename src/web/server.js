@@ -582,34 +582,46 @@ function effPluginSec() {
       });
     }
     if (req.method === 'POST' && url.pathname === '/api/security') {
-      if (!unlockState.level1) return json(res, 403, { ok: false, error: '需要一级密码解锁' });
       return readBody(req, function (body) {
         try {
           const o = JSON.parse(body || '{}');
-          rootConfig.ocrtl = rootConfig.ocrtl || {};
-          const sec = rootConfig.ocrtl.security = rootConfig.ocrtl.security || {};
-          if (o.promptDefense !== undefined) sec.promptDefense = o.promptDefense !== false;
-          if (o.jsonMode !== undefined) sec.jsonMode = o.jsonMode !== false;
-          if (o.outputSanitize !== undefined) sec.outputSanitize = o.outputSanitize !== false;
-          if (o.extraPrompt !== undefined) sec.extraPrompt = String(o.extraPrompt || '').slice(0, 2000);
-          // 插件安全策略(F-20260903-01): 收紧档由一级密码切换; 非法枚举值 400
-          if (o.pluginsSecurity && typeof o.pluginsSecurity === 'object') {
+          const hasPs = !!(o.pluginsSecurity && typeof o.pluginsSecurity === 'object');
+          const hasOther = Object.keys(o).some(function (k) { return k !== 'pluginsSecurity'; });
+          // 提示词防线等一级字段仍一级; 插件安全策略 0 级可"单向收紧 + 恢复默认"(条目 98 用户拍板)
+          if (hasOther && !unlockState.level1) return json(res, 403, { ok: false, error: '需要一级密码解锁' });
+          if (hasPs) {
             rootConfig.plugins = rootConfig.plugins || {};
             const ps = rootConfig.plugins.security = Object.assign({}, PLUGIN_SEC_DEFAULTS, rootConfig.plugins.security || {});
-            const enums = { networkPolicy: ['whitelist', 'localOnly', 'off'], processPolicy: ['consent', 'deny'], fsWritePolicy: ['sandbox', 'declared', 'deny'], fsReadPolicy: ['self', 'declared', 'deny'], aiPolicy: ['allow', 'localOnly', 'off'] };
-            for (const k of Object.keys(enums)) {
-              if (o.pluginsSecurity[k] !== undefined) {
-                if (enums[k].indexOf(o.pluginsSecurity[k]) < 0) return json(res, 400, { ok: false, error: '插件安全策略非法值: ' + k + '=' + o.pluginsSecurity[k] });
-                ps[k] = o.pluginsSecurity[k];
+            // 宽松 -> 严格 顺序; 0 级只允许向后收紧或回到默认值(默认 = 安全基线, 公开版无一级密码也不会被自己锁死)
+            const ORDER = { networkPolicy: ['whitelist', 'localOnly', 'off'], processPolicy: ['consent', 'deny'], fsWritePolicy: ['declared', 'sandbox', 'deny'], fsReadPolicy: ['declared', 'self', 'deny'], aiPolicy: ['allow', 'localOnly', 'off'] };
+            for (const k of Object.keys(ORDER)) {
+              if (o.pluginsSecurity[k] === undefined) continue;
+              const v = o.pluginsSecurity[k];
+              const list = ORDER[k];
+              const idx = list.indexOf(v);
+              if (idx < 0) return json(res, 400, { ok: false, error: '插件安全策略非法值: ' + k + '=' + v });
+              if (!unlockState.level1) {
+                const curIdx = list.indexOf(ps[k]);
+                if (idx < curIdx && v !== PLUGIN_SEC_DEFAULTS[k]) return json(res, 403, { ok: false, error: '插件安全策略只能单向收紧: ' + k + ' 从 ' + ps[k] + ' 放宽到 ' + v + ' 需要一级密码解锁(恢复默认 ' + PLUGIN_SEC_DEFAULTS[k] + ' 除外)' });
               }
+              ps[k] = v;
             }
           }
-          if (Array.isArray(o.addWords)) {
-            sec.blockWords = sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS.slice();
-            for (const w of o.addWords) { const s = String(w).trim(); if (s && sec.blockWords.indexOf(s) < 0) sec.blockWords.push(s); }
+          let sec = null;
+          if (hasOther) {
+            rootConfig.ocrtl = rootConfig.ocrtl || {};
+            sec = rootConfig.ocrtl.security = rootConfig.ocrtl.security || {};
+            if (o.promptDefense !== undefined) sec.promptDefense = o.promptDefense !== false;
+            if (o.jsonMode !== undefined) sec.jsonMode = o.jsonMode !== false;
+            if (o.outputSanitize !== undefined) sec.outputSanitize = o.outputSanitize !== false;
+            if (o.extraPrompt !== undefined) sec.extraPrompt = String(o.extraPrompt || '').slice(0, 2000);
+            if (Array.isArray(o.addWords)) {
+              sec.blockWords = sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS.slice();
+              for (const w of o.addWords) { const s = String(w).trim(); if (s && sec.blockWords.indexOf(s) < 0) sec.blockWords.push(s); }
+            }
           }
           persist();
-          return json(res, 200, { ok: true, security: sec });
+          return json(res, 200, { ok: true, security: sec, pluginsSecurity: effPluginSec() });
         } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
       });
     }
