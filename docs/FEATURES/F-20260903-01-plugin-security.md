@@ -24,7 +24,7 @@
 ### API 契约
 | 端点 | 方法 | 请求 | 响应 | 错误码 | 门禁 |
 | --- | --- | --- | --- | --- | --- |
-| /api/security | POST | `{ pluginsSecurity:{ networkPolicy, processPolicy, fsWritePolicy, fsReadPolicy } }`(可选字段) | `{ ok:true, security:{...} }` | 403 未解锁 / 400 枚举非法 | 一级 |
+| /api/security | POST | `{ pluginsSecurity:{ networkPolicy, processPolicy, fsWritePolicy, fsReadPolicy, aiPolicy } }`(可选字段) | `{ ok:true, security, pluginsSecurity }` | 400 枚举非法 / 403 未解锁时放宽或改一级字段 | **0 级可单向收紧+恢复默认; 放宽与其余字段仍一级**(条目 98) |
 | /api/config | GET | - | 增加 `pluginsSecurity:{...}` 当前生效值 | - | 零级(只读) |
 | /api/plugins/approve | POST | 不变 | 不变(hash 算法升级) | 不变 | 零级 |
 
