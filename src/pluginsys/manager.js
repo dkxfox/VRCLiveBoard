@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const perms = require('./permissions');
+const aigateway = require('./aigateway');
 const RESERVED_IDS = new Set(['security']); // plugins.security 是策略配置块, 禁止插件占用该 id
 
 // 危险内置模块直接 require 的审计钩子(2026-09-03, F-20260903-01):
@@ -43,6 +44,7 @@ class PluginManager {
     this.logger = opts.logger;
     this.approvals = opts.approvals || {};
     this.getSecurity = opts.security || function () { return null; };
+    this.getAiConfig = opts.aiConfig || function () { return null; };
     this.entries = [];
     activeManager = this;
     this.timers = [];
@@ -63,6 +65,7 @@ class PluginManager {
           const entry = {
             id: manifest.id, dir: dir, manifest: manifest,
             approved: !!(this.approvals[manifest.id] && this.approvals[manifest.id].hash === this.hash({ manifest: manifest, dir: dir })),
+            _lastAiAt: 0,
             enabled: false, plugin: null, error: null, runtimeSources: [], runtimeErrors: [],
             settings: {}
           };
@@ -175,6 +178,31 @@ class PluginManager {
           if (!perms.check(entry.manifest, 'process', '', { policy: sec(), id: entry.id })) throw new Error('权限拒绝: 当前插件安全策略或 manifest 未声明进程执行权限');
           const { spawn } = require('child_process');
           return spawn(cmd, args || [], { windowsHide: true, stdio: 'ignore' });
+        }
+      },
+      ai: {
+        chat: async function (o) {
+          o = o || {};
+          const task = o.task === 'chat' ? 'chat' : 'translate';
+          const declared = entry.manifest && entry.manifest.ai && Array.isArray(entry.manifest.ai.tasks);
+          if (!declared || entry.manifest.ai.tasks.indexOf(task) < 0) {
+            throw new Error('权限拒绝: 插件未声明 AI 能力(manifest.ai.tasks 需包含 ' + task + ')');
+          }
+          const now = Date.now();
+          if (now - (entry._lastAiAt || 0) < aigateway.AI_MIN_INTERVAL_MS) {
+            throw new Error('调用过于频繁: 插件 AI 每 ' + (aigateway.AI_MIN_INTERVAL_MS / 1000) + ' 秒最多一次');
+          }
+          entry._lastAiAt = now;
+          const sec = self.getSecurity && self.getSecurity() || perms.SEC_DEFAULTS;
+          const cfg = self.getAiConfig && self.getAiConfig() || {};
+          try {
+            const r = await aigateway.chat({ cfg: cfg, policy: sec, task: task, text: o.text, lang: o.lang, logger: self.logger });
+            perms.auditEvent(entry.id, 'ai:' + task, true);
+            return r;
+          } catch (e) {
+            perms.auditEvent(entry.id, 'ai:' + task, false);
+            throw e;
+          }
         }
       },
       registerSource: function (src) {

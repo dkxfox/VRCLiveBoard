@@ -24,7 +24,7 @@ function createServer(opts) {
   const projectRoot = path.join(__dirname, '..', '..');
   const envState = { running: false, msg: '', ok: null };
   const unlockState = { level1: false, level2: false }; // 会话级解锁, 重启自动恢复锁定
-const PLUGIN_SEC_DEFAULTS = { networkPolicy: 'whitelist', processPolicy: 'consent', fsWritePolicy: 'sandbox', fsReadPolicy: 'self' };
+const PLUGIN_SEC_DEFAULTS = { networkPolicy: 'whitelist', processPolicy: 'consent', fsWritePolicy: 'sandbox', fsReadPolicy: 'self', aiPolicy: 'allow' };
 function effPluginSec() {
   return Object.assign({}, PLUGIN_SEC_DEFAULTS, (rootConfig.plugins && rootConfig.plugins.security) || {});
 }
@@ -605,7 +605,7 @@ function effPluginSec() {
           if (o.pluginsSecurity && typeof o.pluginsSecurity === 'object') {
             rootConfig.plugins = rootConfig.plugins || {};
             const ps = rootConfig.plugins.security = Object.assign({}, PLUGIN_SEC_DEFAULTS, rootConfig.plugins.security || {});
-            const enums = { networkPolicy: ['whitelist', 'localOnly', 'off'], processPolicy: ['consent', 'deny'], fsWritePolicy: ['sandbox', 'declared', 'deny'], fsReadPolicy: ['self', 'declared', 'deny'] };
+            const enums = { networkPolicy: ['whitelist', 'localOnly', 'off'], processPolicy: ['consent', 'deny'], fsWritePolicy: ['sandbox', 'declared', 'deny'], fsReadPolicy: ['self', 'declared', 'deny'], aiPolicy: ['allow', 'localOnly', 'off'] };
             for (const k of Object.keys(enums)) {
               if (o.pluginsSecurity[k] !== undefined) {
                 if (enums[k].indexOf(o.pluginsSecurity[k]) < 0) return json(res, 400, { ok: false, error: '插件安全策略非法值: ' + k + '=' + o.pluginsSecurity[k] });

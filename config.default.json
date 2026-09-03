@@ -62,7 +62,8 @@
       "networkPolicy": "whitelist",
       "processPolicy": "consent",
       "fsWritePolicy": "sandbox",
-      "fsReadPolicy": "self"
+      "fsReadPolicy": "self",
+      "aiPolicy": "allow"
     }
   },
   "pluginApprovals": {},

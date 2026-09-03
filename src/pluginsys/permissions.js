@@ -7,7 +7,7 @@ const path = require('path');
 // 策略默认档 = 宽松但审计可见(whitelist/consent/sandbox/self), 收紧档由一级密码经 /api/security 切换。
 const audit = [];
 const MAX_AUDIT = 200;
-const SEC_DEFAULTS = { networkPolicy: 'whitelist', processPolicy: 'consent', fsWritePolicy: 'sandbox', fsReadPolicy: 'self' };
+const SEC_DEFAULTS = { networkPolicy: 'whitelist', processPolicy: 'consent', fsWritePolicy: 'sandbox', fsReadPolicy: 'self', aiPolicy: 'allow' };
 const ROOT = path.resolve(__dirname, '..', '..');
 
 function auditLog(pluginId, action, target, allowed) {
@@ -106,4 +106,7 @@ function check(manifest, action, target, opts) {
 function requireAudit(pluginId, moduleName, allowed) {
   auditLog(pluginId, 'require:' + moduleName, '', !!allowed);
 }
-module.exports = { check, audit: function () { return audit.slice(); }, requireAudit, SEC_DEFAULTS, isLoopback };
+function auditEvent(pluginId, action, allowed) {
+  auditLog(pluginId, action, '', !!allowed);
+}
+module.exports = { check, audit: function () { return audit.slice(); }, requireAudit, auditEvent, SEC_DEFAULTS, isLoopback };
