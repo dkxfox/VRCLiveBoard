@@ -20,6 +20,9 @@ async function main() {
   const configio = require('./configio');
   // 配置损坏不炸: config.json -> .bak -> config.default.json 兜底链(日志警告)
   const config = configio.loadConfig(configPath, path.join(__dirname, '..', 'config.default.json'), logger);
+  // 插件安全策略默认档(F-20260903-01): 缺键兜底, 老配置无缝升级; /api/security(一级)可切换收紧档
+  config.plugins = config.plugins || {};
+  config.plugins.security = Object.assign({ networkPolicy: 'whitelist', processPolicy: 'consent', fsWritePolicy: 'sandbox', fsReadPolicy: 'self' }, config.plugins.security || {});
 
   const osc = new OscSender(config.osc);
   await osc.open();
@@ -72,7 +75,7 @@ async function main() {
   composer.start();
 
   // 插件系统(乐高扩展)
-  const pluginManager = new PluginManager({ root: pluginsDir, composer: composer, logger: logger, approvals: config.pluginApprovals || {} });
+  const pluginManager = new PluginManager({ root: pluginsDir, composer: composer, logger: logger, approvals: config.pluginApprovals || {}, security: function () { return config.plugins.security; } });
   pluginManager.scan();
   for (const e of pluginManager.entries) {
     if (config.plugins && config.plugins[e.id]) e.settings = config.plugins[e.id];

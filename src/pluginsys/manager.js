@@ -1,7 +1,36 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const perms = require('./permissions');
+const RESERVED_IDS = new Set(['security']); // plugins.security 是策略配置块, 禁止插件占用该 id
+
+// 危险内置模块直接 require 的审计钩子(2026-09-03, F-20260903-01):
+// 默认只审计(记录到 plugin-audit.log); processPolicy=deny 时拦 child_process, networkPolicy=off 时拦 http/https/tls/net/dgram。
+// 注意: 钩子只在"调用栈父模块位于 plugins/<id>/" 时生效, 主体代码的 require 不受任何影响。
+const Module = require('module');
+const DANGEROUS_REQUIRES = new Set(['child_process', 'net', 'dgram', 'http', 'https', 'tls']);
+let activeManager = null;
+const _origLoad = Module._load;
+Module._load = function (request, parent, isMain) {
+  const result = _origLoad.apply(this, arguments);
+  if (DANGEROUS_REQUIRES.has(request) && activeManager) {
+    const pf = parent && parent.filename ? String(parent.filename) : '';
+    const m = pf.match(/[\\/]plugins[\\/]([a-z0-9-]{1,64})[\\/]/i);
+    if (m && activeManager.hasPlugin(m[1])) {
+      const sec = activeManager.getSecurity() || perms.SEC_DEFAULTS;
+      const blocked = (request === 'child_process' && sec.processPolicy === 'deny') ||
+        ((request === 'http' || request === 'https' || request === 'tls' || request === 'net' || request === 'dgram') && sec.networkPolicy === 'off');
+      perms.requireAudit(m[1], request, !blocked);
+      if (blocked) {
+        const err = new Error('插件安全策略拒绝: 当前策略禁止插件直接 require("' + request + '")(' + (request === 'child_process' ? 'processPolicy=deny' : 'networkPolicy=off') + ')');
+        err.code = 'VRCB_PLUGIN_POLICY';
+        throw err;
+      }
+    }
+  }
+  return result;
+};
 const conflictMod = require('./conflicts');
 const vrclog = require('./vrclog');
 
@@ -13,7 +42,9 @@ class PluginManager {
     this.composer = opts.composer;
     this.logger = opts.logger;
     this.approvals = opts.approvals || {};
+    this.getSecurity = opts.security || function () { return null; };
     this.entries = [];
+    activeManager = this;
     this.timers = [];
     this.scan();
   }
@@ -28,9 +59,10 @@ class PluginManager {
         try {
           const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8').replace(/^\uFEFF/, ''));
           if (manifest.id !== name) { this.logger.warn('[插件] 目录名 ' + name + ' 与 manifest.id ' + manifest.id + ' 不一致,跳过'); continue; }
+          if (RESERVED_IDS.has(manifest.id)) { this.logger.warn('[插件] ' + name + ' 使用了保留 id(plugins.security 配置块), 跳过'); continue; }
           const entry = {
             id: manifest.id, dir: dir, manifest: manifest,
-            approved: !!(this.approvals[manifest.id] && this.approvals[manifest.id].hash === this.hash(manifest)),
+            approved: !!(this.approvals[manifest.id] && this.approvals[manifest.id].hash === this.hash({ manifest: manifest, dir: dir })),
             enabled: false, plugin: null, error: null, runtimeSources: [], runtimeErrors: [],
             settings: {}
           };
@@ -52,9 +84,22 @@ class PluginManager {
     vrclog.start();
     return this.entries.length;
   }
-  hash(m) { return String(m.id + '@' + m.version + '|' + (m.api || '')); }
+  // 审批哈希 = id@version|api|sha256(index.js 前 16 位): 代码内容变化但版本不升也会使审批失效, 必须重新红窗
+  hash(entry) {
+    const m = entry.manifest || entry;
+    let bodyHash = '';
+    try {
+      if (entry.dir && fs.existsSync(path.join(entry.dir, 'index.js'))) {
+        bodyHash = crypto.createHash('sha256').update(fs.readFileSync(path.join(entry.dir, 'index.js'))).digest('hex').slice(0, 16);
+      }
+    } catch (e) {}
+    return String(m.id + '@' + m.version + '|' + (m.api || '') + '|' + bodyHash);
+  }
+  hasPlugin(id) { return this.entries.some(function (e) { return e.id === id; }); }
   buildCtx(entry) {
     const self = this;
+    const sec = function () { const s = self.getSecurity && self.getSecurity(); return s || perms.SEC_DEFAULTS; };
+    const dataDir = path.join(entry.dir, 'data');
     const ctx = {
       id: entry.id,
       manifest: entry.manifest,
@@ -106,27 +151,28 @@ class PluginManager {
       },
       http: {
         request: async function (url, options) {
-          if (!perms.check(entry.manifest, 'network', url)) {
+          const pol = sec();
+          if (!perms.check(entry.manifest, 'network', url, { policy: pol, id: entry.id })) {
             entry.runtimeErrors.push('越权网络请求: ' + url);
-            throw new Error('权限拒绝: 未声明对 ' + url + ' 的网络访问');
+            throw new Error('权限拒绝: 当前插件安全策略或 manifest 未允许对 ' + url + ' 的网络访问');
           }
           return fetch(url, options);
         }
       },
       fs: {
         read: function (p) {
-          if (!perms.check(entry.manifest, 'fs.read', p)) throw new Error('权限拒绝: 未声明读取 ' + p);
+          if (!perms.check(entry.manifest, 'fs.read', p, { policy: sec(), id: entry.id, dir: entry.dir, dataDir: dataDir })) throw new Error('权限拒绝: 当前插件安全策略或 manifest 未允许读取 ' + p);
           return fs.readFileSync(p, 'utf8');
         },
         write: function (p, content) {
-          if (!perms.check(entry.manifest, 'fs.write', p)) throw new Error('权限拒绝: 未声明写入 ' + p);
+          if (!perms.check(entry.manifest, 'fs.write', p, { policy: sec(), id: entry.id, dir: entry.dir, dataDir: dataDir })) throw new Error('权限拒绝: 当前插件安全策略或 manifest 未允许写入 ' + p);
           fs.mkdirSync(path.dirname(p), { recursive: true });
           fs.writeFileSync(p, content, 'utf8');
         }
       },
       exec: {
         run: function (cmd, args) {
-          if (!perms.check(entry.manifest, 'process')) throw new Error('权限拒绝: 未声明进程执行权限');
+          if (!perms.check(entry.manifest, 'process', '', { policy: sec(), id: entry.id })) throw new Error('权限拒绝: 当前插件安全策略或 manifest 未声明进程执行权限');
           const { spawn } = require('child_process');
           return spawn(cmd, args || [], { windowsHide: true, stdio: 'ignore' });
         }
@@ -230,6 +276,7 @@ class PluginManager {
       // 安全: id 白名单(防 ..\ 穿越写出 plugins 目录), 目标必须落在插件根内
       const id = String(manifest.id || '');
       if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) return { ok: false, error: 'manifest.id 非法(仅小写字母/数字/连字符)' };
+      if (RESERVED_IDS.has(id)) return { ok: false, error: 'manifest.id 使用了保留 id(security 为插件安全策略配置块)' };
       const rootAbs = path.resolve(this.root);
       const dest = path.resolve(path.join(this.root, id));
       if (dest !== path.join(rootAbs, id) || dest.indexOf(rootAbs + path.sep) !== 0) return { ok: false, error: '插件目录非法' };

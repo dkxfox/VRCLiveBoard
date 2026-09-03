@@ -57,7 +57,13 @@
     "liveTranslateDir": ""
   },
   "plugins": {
-    "friend-welcome": { "friends": [] }
+    "friend-welcome": { "friends": [] },
+    "security": {
+      "networkPolicy": "whitelist",
+      "processPolicy": "consent",
+      "fsWritePolicy": "sandbox",
+      "fsReadPolicy": "self"
+    }
   },
   "pluginApprovals": {},
   "pluginEnabled": []
