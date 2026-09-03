@@ -51,8 +51,12 @@ function loadIcon() {
 }
 function createWindow() {
   const icon = loadIcon();
-  win = new BrowserWindow({ width: 940, height: 760, minWidth: 600, minHeight: 460, autoHideMenuBar: true, backgroundColor: '#10141a', title: 'VRCLiveBoard', icon: icon });
+  // show:false + ready-to-show: 首帧即带正确图标再上任务栏, 不给 Windows 缓存默认图标的机会(M-20260903-03)
+  win = new BrowserWindow({ width: 940, height: 760, minWidth: 600, minHeight: 460, autoHideMenuBar: true, backgroundColor: '#10141a', title: 'VRCLiveBoard', icon: icon, show: false });
   try { win.setIcon(icon); } catch (e) { /* 旧版本 Electron 无此方法则忽略 */ }
+  win.once('ready-to-show', function () { if (win && !win.isDestroyed()) { win.show(); win.focus(); } });
+  // 兜底: 页面加载异常时也要显示窗口(3 秒后仍未显示则强制)
+  setTimeout(function () { try { if (win && !win.isDestroyed() && !win.isVisible()) win.show(); } catch (e) {} }, 3000);
   win.loadURL(CONSOLE_URL);
   win.webContents.setWindowOpenHandler(function (details) { shell.openExternal(details.url); return { action: 'deny' }; });
   // Ctrl+R / Ctrl+Shift+R 刷新界面(桌面版没有地址栏和 F5)
@@ -63,6 +67,23 @@ function createWindow() {
     }
   });
   win.on('close', function (e) { if (!quitting) { e.preventDefault(); win.hide(); } });
+}
+// 任务栏分组图标源: 未打包 electron.exe 场景下, 自定义 AUMID 默认没有图标来源 ——
+// 自愈写一条开始菜单快捷方式(带 app.ico + AUMID), Windows 会用它作为分组/固定/首启的图标(M-20260903-03)
+function ensureShortcut() {
+  try {
+    const lnk = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'VRCLiveBoard.lnk');
+    const icoPath = path.join(__dirname, 'app.ico');
+    if (!fs.existsSync(icoPath)) return;
+    shell.writeShortcutLink(lnk, {
+      target: process.execPath,
+      args: path.join(__dirname, 'main.js'),
+      icon: icoPath,
+      iconIndex: 0,
+      appUserModelId: 'com.vrcliveboard.app',
+      description: 'VRCLiveBoard 桌面版'
+    });
+  } catch (e) { /* 非致命: 快捷方式写失败不影响运行 */ }
 }
 function startCore() {
   // 内嵌模式: 核心(网页服务/OSC/数据源)跑在本进程里
@@ -80,6 +101,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('before-quit', function () { quitting = true; });
   app.whenReady().then(function () {
     applyConsoleSetting();
+    if (process.env.VRCB_HEADLESS_TEST !== '1') ensureShortcut(); // 自愈: 给 AUMID 一个持久图标源(开始菜单快捷方式)
     startCore();
     if (process.env.VRCB_HEADLESS_TEST === '1') { console.log('SHELL-OK'); setTimeout(function () { app.quit(); }, 500); return; }
     createWindow();

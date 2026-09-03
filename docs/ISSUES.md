@@ -114,6 +114,17 @@
 - 验证: 隔离实例(19260)实测 —— VRChat 运行中(用户正实机测试)时新探测返回 occupied:true + name VRChat.exe(旧探测此场景必报空闲, 正是用户反馈的现象); 假监听器因 EADDRINUSE 无法抢占(证明 VRChat 套接字未被影响); GATES 9 PASS / 0 FAIL(冒烟 10/10 含两专项断言)
 - 关联: M-20260902-06、DEV-NOTES 条目 97
 
+### M-20260903-03 桌面版首次启动任务栏仍显示默认图标
+- 状态: FIXED
+- 严重度: S3
+- 来源: 用户反馈(2026-09-03, 坑 20/23 之后的第三次)
+- 现象: 桌面版第一次启动时任务栏显示 Electron 默认图标
+- 复现: 全新环境/清过图标缓存后第一次启动桌面版 → 任务栏默认图标
+- 根因: ①窗口创建即显示, 首帧前 Windows 按默认图标缓存了 AUMID 分组; ②未打包的 electron.exe 场景下, 自定义 AUMID(com.vrcliveboard.app)没有任何持久图标源(开始菜单无快捷方式), 任务栏只能拿 exe 默认图标; ③历史默认图标已进 Windows 图标缓存
+- 改动: electron/main.js 窗口 show:false + ready-to-show 再显示(3 秒兜底); 启动时自愈写入开始菜单快捷方式 VRCLiveBoard.lnk(带 app.ico + AUMID, 给分组持久图标源); 新增根目录 ClearIconCache.bat(清图标缓存一次性工具, ASCII+CRLF)
+- 验证: app.ico 168,394B 且 7 尺寸条目; electron/main.js 语法过; 无头 SHELL-OK; GATES(回填)
+- 关联: 坑 20/23、DEV-NOTES 条目 99
+
 ## 已关闭
 
 ### A-20260902-01 ws 8.18.0 高危(经 osc 依赖)
