@@ -143,6 +143,14 @@
 - 处置: 保持升级节奏(43 系列 EOL 2027-01-05), 无需立即动作
 - 关联: DEV-NOTES 条目 102
 
+### M-20260903-05 控制台加 GitHub 访问按钮
+- 状态: FIXED
+- 严重度: S4
+- 来源: 用户要求(2026-09-03)
+- 现象: 控制台页头无 GitHub 仓库入口
+- 改动: index.html 页头新增 GitHub 按钮(新窗口打开 + rel=noopener, 桌面版经 setWindowOpenHandler 走系统浏览器); lang.js 三语 ghBtn; 使用说明四章页头描述同步; DOC-BASELINE 增 must 断言
+- 验证: GATES(GHTML/GI18N/GSURF 域名基线已有 github.com/GDOC 新断言)
+
 ## 已关闭
 
 ### A-20260902-01 ws 8.18.0 高危(经 osc 依赖)
