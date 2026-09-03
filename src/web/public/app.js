@@ -812,12 +812,12 @@ function psLoad() {
   fetch('/api/config').then(function (r) { return r.json(); }).then(function (j) {
     const s = j.pluginsSecurity || {};
     const set = function (id, v) { const el = document.getElementById(id); if (el) el.value = v; };
-    set('psNet', s.networkPolicy || 'whitelist'); set('psProc', s.processPolicy || 'consent'); set('psFsW', s.fsWritePolicy || 'sandbox'); set('psFsR', s.fsReadPolicy || 'self');
+    set('psNet', s.networkPolicy || 'whitelist'); set('psProc', s.processPolicy || 'consent'); set('psFsW', s.fsWritePolicy || 'sandbox'); set('psFsR', s.fsReadPolicy || 'self'); set('psAi', s.aiPolicy || 'allow');
   }).catch(function () {});
 }
 function psSave() {
   const v = function (id) { const el = document.getElementById(id); return el ? el.value : ''; };
-  fetch('/api/security', { method: 'POST', body: JSON.stringify({ pluginsSecurity: { networkPolicy: v('psNet'), processPolicy: v('psProc'), fsWritePolicy: v('psFsW'), fsReadPolicy: v('psFsR') } }) })
+  fetch('/api/security', { method: 'POST', body: JSON.stringify({ pluginsSecurity: { networkPolicy: v('psNet'), processPolicy: v('psProc'), fsWritePolicy: v('psFsW'), fsReadPolicy: v('psFsR'), aiPolicy: v('psAi') } }) })
     .then(function (r) { return r.json().then(function (j) { return { ok: r.ok && j.ok !== false, j: j }; }).catch(function () { return { ok: r.ok, j: {} }; }); })
     .then(function (o) { const m = document.getElementById('psMsg'); if (m) m.textContent = o.ok ? t('plgSecSaved') : ('失败: ' + ((o.j && o.j.error) || '')); });
 }
@@ -893,6 +893,8 @@ function plgPermsText(p) {
   if (fsr.length) parts.push(esc(t('permRead')) + fsr.map(esc).join(', '));
   if (fsw.length) parts.push(esc(t('permWrite')) + fsw.map(esc).join(', '));
   if (p && p.process) parts.push('<span style="color:#ff6b6b;font-weight:bold">' + esc(t('permProc')) + ' ' + esc(t('plgRiskHigh')) + '</span>');
+  const aiTasks = (p && p.ai && p.ai.tasks) || [];
+  if (aiTasks.length) parts.push('<span style="color:#ffb37a">' + esc(t('permAi')) + aiTasks.map(esc).join(', ') + '</span>');
   if (!parts.length) parts.push(esc(t('modalNoPerms')));
   return parts;
 }
@@ -913,7 +915,7 @@ function plgOpenModal(plugin, mode) {
     risk.textContent = t('modalRisk');
     const perms = plgPermsText(plugin.permissions);
     document.getElementById('plgWarnText').innerHTML = '<b>' + esc(plugin.name) + '</b> v' + esc(plugin.version) + '<br>' + esc(plugin.description || '') + '<br><br><b>' + esc(t('modalPermsTitle')) + '</b><br>' + perms.map(function (x) { return '· ' + x; }).join('<br>');
-    const highRisk = !!(plugin.permissions && plugin.permissions.process);
+    const highRisk = !!(plugin.permissions && (plugin.permissions.process || (plugin.permissions.ai && plugin.permissions.ai.tasks && plugin.permissions.ai.tasks.length)));
     const row = document.getElementById('plgTypeRow');
     if (row) row.style.display = highRisk ? 'flex' : 'none';
     if (highRisk) { const ti = document.getElementById('plgTypeName'); if (ti) { ti.value = ''; ti.placeholder = t('plgTypePh'); } }
@@ -945,7 +947,7 @@ function plgAct(name, url, body, after) {
 document.getElementById('plgCancel').onclick = function () { document.getElementById('plgModal').style.display = 'none'; plgModalTarget = null; if (plgTimer) clearInterval(plgTimer); };
 document.getElementById('plgConfirm').onclick = async function () {
   if (!plgModalTarget) return;
-  const highRisk = plgModalMode === 'approve' && !!(plgModalTarget.permissions && plgModalTarget.permissions.process);
+  const highRisk = plgModalMode === 'approve' && !!(plgModalTarget.permissions && (plgModalTarget.permissions.process || (plgModalTarget.permissions.ai && plgModalTarget.permissions.ai.tasks && plgModalTarget.permissions.ai.tasks.length)));
   if (highRisk) {
     const ti = document.getElementById('plgTypeName');
     if (!ti || String(ti.value || '').trim() !== plgModalTarget.id) { plgFail(t('plgTypeBad')); return; }
