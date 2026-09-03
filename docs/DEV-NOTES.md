@@ -103,10 +103,10 @@
 105. **v1.3.2(星光 · 修补版2)发布**(2026-09-03, 用户"打包发布吧...这个就是1.3.2"):
 - 解读与边界: AI 网关暂无实机测试插件, 用户拍板先随版本发布(隔离实例 16/16 已验证, 实机验收后有问题走补丁); 其余全部实机通过。发布按条目 83 既定 SOP + 流程 3 的 3B。
 - 版本内容: ①四项使用者反馈(M-05~08: 导航文字/UDP 指示灯/公告板媒体变量/网易云文案); ②UDP 9000 探测修复(真实检测)+ 图标首帧修复(附 ClearIconCache.bat); ③插件安全收紧(五策略 0 级单向收紧/高危确认/内容哈希/审计)与插件 AI 网关(ctx.ai); ④垃圾文件管理(审计日志截断/周期清理/Electron 缓存清理); ⑤控制台 GitHub 按钮; ⑥说明文件一致性 GDOC 门禁等流程基建。
-- 发布动作: 版本七处 1.3.2(含 launcher.cs 重编译 VRCLiveBoard.exe 1.3.2.0); make-dist 双 zip(sc 226,357,934B/1376 条目, lite 16,568,725B/199 条目, 机密扫描 CLEAN); 产物哈希基线(dep-audit --update-baseline)+ 体积基线(zipVolumes asOf v1.3.2)人工复核更新; GPACK 双包 PASS + 体积与基线一致; release-audit 3B(回填); 修复 release-audit.ps1 缺 Set-Location $proj 的脚本 bug(相对路径在工作目录错位); jsDelivr purge; GitHub Release v1.3.2 三资产(回填); backup.ps1。
-- 证据: (回填)
-- 遗留 / 教训: ①release-audit.ps1 与 run-gates.ps1 行为不一致(一个 Set-Location 一个没有), 门禁脚本也要走同一条纪律 —— 已修并记入; ②老 v1.3.1 双 zip 与 SHA256SUMS 发布后删除; ③群文件上传仍属用户侧待办。
-- 提交: (回填)
+- 发布动作: 版本七处 1.3.2(含 launcher.cs 重编译 VRCLiveBoard.exe 1.3.2.0); make-dist 双 zip(sc 226,357,934B/1376 条目, lite 16,568,725B/199 条目, 机密扫描 CLEAN); 产物哈希基线(dep-audit --update-baseline)+ 体积基线(zipVolumes asOf v1.3.2)人工复核更新; GPACK 双包 PASS + 体积与基线一致; release-audit 3B 全套; 修复 release-audit.ps1 缺 Set-Location $proj 的脚本 bug(相对路径在工作目录错位); jsDelivr purge HTTP 200; GitHub Release v1.3.2(id 381763956)三资产上传; 老 v1.3.1 双 zip 删除; backup.ps1(23.12MB)。
+- 证据: **release-audit 3B = AUDIT PASS**(自测 11/11 → 机密扫描 PASS → 攻击面 PASS → 授权体系 PASS → 依赖审计 PASS → 门禁 9/9 → 冒烟 8/8 → GPACK 双包 PASS+体积基线一致 → SHA256SUMS-v1.3.2.txt → git-sync 0/0); Release 三资产上传成功, SHA256 公示 sc f347e268… / lite d5d4271b…; 令牌走 TEMP 文件纪律, 用后已删。
+- 遗留 / 教训: ①release-audit.ps1 与 run-gates.ps1 行为不一致(一个 Set-Location 一个没有), 门禁脚本也要走同一条纪律 —— 已修并记入; ②老 v1.3.1 双 zip 与 SHA256SUMS 已删; ③群文件上传仍属用户侧待办; ④AI 网关待用户实机验收, 有问题走 1.3.3。
+- 提交: f841fc9(版本七处+基线) / 32ae85f(release-audit 修复 + 草稿) + 本条目。
 104. **控制台页头新增 GitHub 仓库按钮(M-20260903-05)**(2026-09-03, 用户"控制台上加个按钮访问GitHub吧"):
 - 解读与边界: 页头加一个指向仓库主页的链接按钮, 新窗口打开; 不改其它页头元素; 桌面版经 setWindowOpenHandler 走系统浏览器(已有机制)。
 - 改动: index.html 页头(新手引导与语言切换之间)新增 <a id="ghBtn" ... target="_blank" rel="noopener" data-t="ghBtn">; lang.js 三语 ghBtn(GitHub 仓库/GitHub 倉庫/GitHub Repo); 使用说明四章页头描述同步; DOC-BASELINE 增 "GitHub 仓库" must 断言(人工复核)。
