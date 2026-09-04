@@ -132,6 +132,18 @@
 - 验证: app.ico 168,394B 且 7 尺寸条目; electron/main.js 语法过; 无头 SHELL-OK; GATES(回填)
 - 关联: 坑 20/23、DEV-NOTES 条目 99
 
+### M-20260904-01 三个官方插件 xlsx vendor 版本不一致
+- 状态: OPEN(已登记, 待后续统一版本 —— 用户 2026-09-04 拍板"稍后再更新版本")
+- 严重度: S4(优化)
+- 来源: M-20260901-04 裁剪时顺带发现(2026-09-04, 见 DEV-NOTES 条目 108 遗留②)
+- 现象: weather-board 的 vendor/xlsx.js 为 SheetJS 0.18.5, 而 friend-welcome / scheduled-board 为 0.20.3
+- 复现: 读各插件 plugins/<id>/vendor/xlsx.js 首行 "XLSX.version = 'x.y.z';"
+- 影响面: 仅版本漂移与维护负担; 当前各插件自带 vendor 且隔离实测正常, 无运行时冲突
+- 根因: 三插件各自复制完整 vendor, 复制时间线不同导致版本漂移
+- 候选方案: ①统一为 0.20.3(用 friend/scheduled 所带版本替换 weather-board 的 vendor/xlsx.js 与 vendor/dist/cpexcel.js, 再回归 Excel 导入/导出)②维持各自版本(现状, 不推荐但无害)
+- 待办: 统一版本 → 回归三插件 Excel 导入/导出 → 与 M-20260901-04 一并重打包
+- 关联: M-20260901-04、DEV-NOTES 条目 108
+
 ## 审计发现(2026-09-03 全量审计, 均为 C4 仅记录)
 
 ### A-20260903-04 systeminformation CVE-2025-68154(fsSize 命令注入)—— 不适用, 仅记录
