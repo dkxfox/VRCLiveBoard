@@ -87,7 +87,7 @@ body.no-anim *{animation:none!important;transition:none!important}
 #tab-plugins table{width:100%;margin-top:8px;border-collapse:collapse;font-size:13px}
 #tab-plugins th,#tab-plugins td{text-align:left;padding:6px 8px;border-bottom:1px solid #232c38}
 #tab-plugins .small{font-size:13px;padding:6px 12px}
-#plgModal{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center}
+#plgModal{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center}
 #plgModal.open{display:flex}
 #plgModal>div{background:#16202b;border:1px solid #2a3442;border-radius:12px;padding:18px;max-width:640px;width:92%;max-height:80vh;overflow:auto}
 #marketCard{background:#16202b;border:1px solid #2a3442;border-radius:10px;padding:12px}
@@ -296,7 +296,7 @@ body.no-anim *{animation:none!important;transition:none!important}
   </div>
 </div>
 <div class="card sub" id="marketCard" style="display:none"></div>
-<div id="plgModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;align-items:center;justify-content:center">
+<div id="plgModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:10000;align-items:center;justify-content:center">
   <div style="background:#2a0e0e;border:2px solid var(--err);border-radius:12px;max-width:520px;width:90%;padding:20px;color:#ffd7d7">
     <b id="plgModalTitle" style="color:#ff6b6b;font-size:16px"></b>
     <div id="plgWarnText" style="margin:10px 0;line-height:1.7;font-size:14px"></div>
@@ -322,10 +322,10 @@ const THEMES=[
  {name:'琥珀',c:{'--bg':'#14110b','--card':'#201a12','--inset':'#191510','--deep':'#0e0b07','--border':'#4a3d26','--border2':'#3d3220','--text':'#f5eeda','--muted':'#b8a98c','--faint':'#8f8168','--mono':'#d8c79a','--accent':'#f59e0b','--accent2':'#d97706','--gray':'#5c4f33','--gray2':'#4f452e','--ok':'#4ade80','--warn':'#fbbf24','--err':'#f87171'}},
  {name:'霓虹',c:{'--bg':'#0c0e1a','--card':'#141735','--inset':'#0f1228','--deep':'#080a16','--border':'#2c3568','--border2':'#242c56','--text':'#eef0ff','--muted':'#9aa3d6','--faint':'#727aa6','--mono':'#b9c2ff','--accent':'#6366f1','--accent2':'#4f46e5','--gray':'#3d4270','--gray2':'#343a63','--ok':'#4ade80','--warn':'#fde047','--err':'#fb7185'}},
 ];
-const sw=document.getElementById('swatches');
+const sw=document.getElementById('swatches');const THEME_LABELS={'海蓝':'themeOcean','深青':'themeTeal','紫罗兰':'themeViolet','墨绿':'themeGreen','琥珀':'themeAmber','霓虹':'themeNeon'};function themeLabel(n){return (window.t&&THEME_LABELS[n])?window.t(THEME_LABELS[n]):n;}window.__reThemeLabels=function(){var tn=document.getElementById('themeName');if(tn&&window.__curTheme)tn.textContent=themeLabel(window.__curTheme);THEMES.forEach(function(tm,i){var s=document.querySelectorAll('.swatch')[i];if(s)s.title=themeLabel(tm.name);});};
 function setTheme(n){const t=THEMES.find(x=>x.name===n);if(!t)return;const r=document.documentElement;for(const k in t.c){r.style.setProperty(k,t.c[k]);}document.getElementById('themeName').textContent=themeLabel(n);window.__curTheme=n;document.querySelectorAll('.swatch').forEach((s,i)=>s.style.boxShadow='0 0 0 2px '+(THEMES[i].name===n?'var(--accent)':'transparent'));}
 THEMES.forEach((t,i)=>{const d=document.createElement('span');d.className='swatch';d.title=themeLabel(t.name);d.style.cssText='cursor:pointer;width:22px;height:22px;border-radius:6px;background:'+t.c['--accent']+';border:1px solid var(--border);box-shadow:0 0 0 2px transparent';d.onclick=()=>setTheme(t.name);sw.appendChild(d);});
-const KEYMAP={'blue':'海蓝','teal':'深青','violet':'紫罗兰','green':'墨绿','amber':'琥珀','neon':'霓虹'};const THEME_LABELS={'海蓝':'themeOcean','深青':'themeTeal','紫罗兰':'themeViolet','墨绿':'themeGreen','琥珀':'themeAmber','霓虹':'themeNeon'};function themeLabel(n){return (window.t&&THEME_LABELS[n])?window.t(THEME_LABELS[n]):n;}window.__reThemeLabels=function(){var tn=document.getElementById('themeName');if(tn&&window.__curTheme)tn.textContent=themeLabel(window.__curTheme);THEMES.forEach(function(tm,i){var s=document.querySelectorAll('.swatch')[i];if(s)s.title=themeLabel(tm.name);});};
+const KEYMAP={'blue':'海蓝','teal':'深青','violet':'紫罗兰','green':'墨绿','amber':'琥珀','neon':'霓虹'};
 setTheme('海蓝');
 const tq=new URLSearchParams(location.search).get('t');if(tq&&KEYMAP[tq])setTheme(KEYMAP[tq]);
 </script><script>
