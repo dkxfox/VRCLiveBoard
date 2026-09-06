@@ -106,10 +106,10 @@ body.no-anim *{animation:none!important;transition:none!important}
 <div class="card">
   <div class="card-head"><b class="card-title" data-t="secStatus"></b><span class="row"><button class="small gray" id="diagBtn" data-t="btnDiag"></button><button class="small gray" id="healthRefresh" data-t="btnRefresh"></button><button class="small gray" id="oscTest" data-t="btnTestOsc"></button></span></div>
   <div class="stripe">
-    <div class="healthpill"><span class="dot on" id="hpDot"></span><b id="hpText">状态正常</b></div>
-    <div class="stat"><span class="dot" id="vrcDot"></span><span class="k">VRChat</span><b id="vrcText">未运行</b></div>
-    <div class="stat"><span class="dot" id="oscDot"></span><span class="k">OSC</span><b id="oscText">关闭</b></div>
-    <div class="stat"><span class="dot" id="udpDot"></span><span class="k">UDP 9000</span><b id="udpText">空闲(正常)</b></div>
+    <div class="healthpill"><span class="dot on" id="hpDot"></span><b id="hpText" data-t="hpNormal">状态正常</b></div>
+    <div class="stat"><span class="dot" id="vrcDot"></span><span class="k">VRChat</span><b id="vrcText" data-t="notRunning">未运行</b></div>
+    <div class="stat"><span class="dot" id="oscDot"></span><span class="k">OSC</span><b id="oscText" data-t="oscOff">关闭</b></div>
+    <div class="stat"><span class="dot" id="udpDot"></span><span class="k">UDP 9000</span><b id="udpText" data-t="udpFree">空闲(正常)</b></div>
     <div class="stat"><span class="dot on breathe"></span><span class="k" data-t="console">控制台</span><b data-t="running">运行中</b></div>
     <div class="legend"><span><i class="dot on" style="width:8px;height:8px"></i><span data-t="lgNormal">正常</span></span><span><i class="dot" style="width:8px;height:8px"></i><span data-t="lgNotRun">未运行(正常)</span></span><span><i class="dot warn" style="width:8px;height:8px"></i><span data-t="lgPending">待检</span></span><span><i class="dot off" style="width:8px;height:8px"></i><span data-t="lgError">异常</span></span></div>
   </div>
