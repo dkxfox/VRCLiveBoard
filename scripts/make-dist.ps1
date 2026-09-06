@@ -22,7 +22,7 @@ $userDirs = @(Get-ChildItem $p -Directory | Where-Object { $_.Name -match '测�
 $exclDirs = @('node_modules','logs','.electron-cache','.ocr-cache','.ocr-langs','.pydist','.git') + $userDirs
 # 只排除项目顶层的 dist(用绝对路径),避免误伤插件自带的 vendor\dist 等嵌套同名目录
 # scripts\checks 是开发期门禁工具, 不随分发包出厂(仓库里保留)
-$exclAbs = @($dist, (Join-Path $p 'dev-dongle'), (Join-Path $p 'scripts\checks')) + $exclDirs
+$exclAbs = @($dist, (Join-Path $p 'dev-dongle'), (Join-Path $p 'scripts\checks'), (Join-Path $p '秘密开发项目素材')) + $exclDirs
 
 Write-Output '==== 1. integrity check ===='
 $problems = @()
@@ -72,7 +72,7 @@ $launcherExe = 'VRCLiveBoard.exe'  # 自建桌面版启动器(scripts\launcher\b
 $dongleDoc = (-join @([char]0x52A0,[char]0x5BC6,[char]0x72D7,[char]0x5DE5,[char]0x4F5C,[char]0x539F,[char]0x7406,[char]0x8BF4,[char]0x660E)) + '.txt'  # 加密狗工作原理说明(开发者申请版内容, 不进公开包)
 $contNote = (-join @([char]0x7EE7,[char]0x7EED,[char]0x5F00,[char]0x53D1,[char]0x547D,[char]0x4EE4)) + '.txt'  # 继续开发命令.txt(开发者本地便签, 不进包)
 # 注意: robocopy /XF 只认文件名不认相对路径, 这里写裸文件名; '*.bak' 拦截 config.json.bak 这类含真实密钥的本地备份
-$xfFiles = @('config.json', 'config.json.bak', '*.bak', '.ocr-tmp.png', '.ocr-preview.png', 'dev-unlocker.js', 'dev-unlocker.bat', 'dev-unlocker.ps1', $secStmt, $releaseNote, $launcherExe, $dongleDoc, $contNote, 'dev-apply-note.txt', $humphrey, $promoScript, ($verNote + '-v1.1.0.md'), ($verNote + '-v1.2.1.md'))  # 旧版说明仅存档不进包, 随包的是 版本说明.txt
+$xfFiles = @('config.json', 'config.json.bak', '*.bak', '.ocr-tmp.png', '.ocr-preview.png', 'dev-unlocker.js', 'dev-unlocker.bat', 'dev-unlocker.ps1', $secStmt, $releaseNote, $launcherExe, $dongleDoc, $contNote, 'dev-apply-note.txt', $humphrey, $promoScript, ($verNote + '-v1.1.0.md'), ($verNote + '-v1.2.1.md'), '秘密开发-新版UI计划.txt', 'ui-dashboard-preview.html', '.serve-preview.js')  # 旧版说明/秘密开发/预览 仅存档不进包
 
 # zip writer: .NET ZipFile writes non-ASCII entry names as UTF-8 with the EFS flag set
 # (Windows tar.exe writes GBK-codepage bytes without the flag -> breaks extractors on non-CJK systems)

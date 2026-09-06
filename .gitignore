@@ -28,7 +28,18 @@ scripts/dev-apply-note.txt
 加密狗安全声明.txt
 加密狗工作原理说明.txt
 
+# 秘密开发 / 新版 UI 原型(仅本地, 永不进仓库/云端)
+秘密开发-新版UI计划.txt
+秘密开发-彩蛋设计.txt
+秘密开发-彩蛋设计演示.html
+秘密开发项目素材/
+ui-dashboard-preview.html
+.serve-preview.js
+.serve-easteregg.js
+.serve-egtest.js
+
 # 系统文件
 Thumbs.db
 desktop.ini
 .DS_Store
+旧版控制台备份/

@@ -139,7 +139,7 @@ module.exports = function (ctx) {
     },
     dispose: function () { if (stopInterval) stopInterval(); if (stopMinute) stopMinute(); },
     importRows: importRows,
-    api: { getRows: getRows, saveRows: saveRows, saveAll: saveAll, testFire: testFire },
+    api: { getRows: getRows, saveRows: saveRows, saveAll: saveAll, testFire: testFire, status: function () { return { ok: true, items: ctx.config.items || [], intervalMin: ctx.config.intervalMin || 30, onHour: !!ctx.config.onHour, onHalf: !!ctx.config.onHalf, hourlyText: ctx.config.hourlyText || [], interruptHourly: !!ctx.config.interruptHourly }; } },
     panel: {
       title: '定时公告设置',
       html: function (cfg) {

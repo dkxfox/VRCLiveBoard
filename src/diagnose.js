@@ -1,21 +1,44 @@
 'use strict';
-const dgram = require('dgram');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { execFile } = require('child_process');
+const { execFile, execFileSync } = require('child_process');
 const { isEnabled } = require('./autostart');
 const { resolvePython } = require('./pyhelper');
 
+function netstatTable() {
+  const raw = execFileSync('netstat', ['-ano'], { encoding: 'utf8', windowsHide: true, timeout: 8000 });
+  const rows = [];
+  for (const line of String(raw).split(/\r?\n/)) {
+    const m = /^\s*(TCP|UDP)\s+(\S+)\s+(\S+)\s*(LISTENING|ESTABLISHED|\S*)?\s+(\d+)\s*$/.exec(line);
+    if (m) rows.push({ proto: m[1], local: m[2], foreign: m[3], state: m[4] || '', pid: Number(m[5]) });
+  }
+  return rows;
+}
+function pidNames() {
+  const map = {};
+  try {
+    const raw = execFileSync('tasklist', ['/FO', 'CSV', '/NH'], { encoding: 'utf8', windowsHide: true, timeout: 8000 });
+    for (const line of String(raw).split(/\r?\n/)) {
+      const m = /^"([^"]+)","(\d+)"/.exec(line.trim());
+      if (m) map[m[2]] = m[1];
+    }
+  } catch (e) {}
+  return map;
+}
 function udpPortTest(port) {
+  // 2026-09-04 修复(M-20260903-02 同源): bind 探测在 Windows 因 SO_REUSEADDR 不可靠, VRChat 持 9000 时 bind 仍成功 → 误报"空闲"。
+  // 与 web/server.js 的 udpProbe 保持一致: 查 netstat UDP 端点表, 有进程绑定才算占用。
   return new Promise(function (resolve) {
-    const s = dgram.createSocket('udp4');
-    let done = false;
-    const finish = function (v) { if (!done) { done = true; try { s.close(); } catch (e) {} resolve(v); } };
-    s.on('error', function (e) { finish(e.code === 'EADDRINUSE' ? '占用中(若 VRChat 正在运行则属正常;否则有进程冲突,建议重启电脑)' : '错误: ' + e.code); });
-    s.on('listening', function () { finish('空闲(可以接收)'); });
-    try { s.bind(port, '127.0.0.1'); } catch (e) { finish('异常: ' + e.message); }
-    setTimeout(function () { finish('超时'); }, 3000);
+    try {
+      const rows = netstatTable();
+      const hit = rows.find(function (r) { return r.proto === 'UDP' && new RegExp(':' + port + '$').test(r.local); });
+      if (!hit) return resolve('空闲(可以接收)');
+      const names = pidNames();
+      const nm = names[hit.pid] || ('PID ' + hit.pid);
+      if (/vrchat/i.test(nm)) return resolve('被 VRChat 占用(正常)');
+      return resolve('被占用: ' + nm + '(若非 VRChat 建议排查端口占用)');
+    } catch (e) { return resolve('无法读取端口表: ' + (e.message || '')); }
   });
 }
 function smtcOneShot() {

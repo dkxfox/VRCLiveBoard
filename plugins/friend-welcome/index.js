@@ -77,7 +77,7 @@ module.exports = function (ctx) {
     return { ok: true, count: n.out.length, deduped: n.deduped };
   }
   return {
-    apply: function () { ctx.events.on('player.joined', onJoin); },
+    apply: function () { ctx.resource && ctx.resource('exclusive', 'chatbox-timeline'); ctx.events.on('player.joined', onJoin); },
     dispose: function () { ctx.events.off('player.joined', onJoin); },
     importRows: importRows,
     api: { getRows: getRows, saveRows: saveRows },

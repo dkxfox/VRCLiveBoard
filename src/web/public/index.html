@@ -1,257 +1,261 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="icon" href="/api/icon">
-<title>VRCLiveBoard</title>
-<style>
-:root {
-  color-scheme: dark;
-  --bg: #10141a; --card: #1a212b; --inset: #141b24; --deep: #0c0f14;
-  --border: #2a3442; --border2: #232c38;
-  --text: #e8edf3; --muted: #8b98a8; --faint: #6b7888; --mono: #9fb3c8;
-  --accent: #3b82f6; --accent2: #2f6fd0; --gray: #55606e; --gray2: #48525e;
-  --ok: #3ddc84; --warn: #f0b429; --err: #e5484d;
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>VRCLiveBoard 控制台</title><style>
+:root { color-scheme: dark;
+  --bg:#10141a; --card:#1a212b; --inset:#141b24; --deep:#0c0f14;
+  --border:#2a3442; --border2:#232c38;
+  --text:#e8edf3; --muted:#8b98a8; --faint:#6b7888; --mono:#9fb3c8;
+  --accent:#3b82f6; --accent2:#2f6fd0; --gray:#55606e; --gray2:#48525e;
+  --ok:#3ddc84; --warn:#f0b429; --err:#e5484d;
 }
-body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 24px; }
-h1 { font-size: 20px; margin: 0 0 4px; }
-.sub { color: var(--muted); font-size: 12px; }
-.card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; max-width: 860px; }
-.card-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
-.card-title { font-size: 16px; font-weight: 600; }
-details.card summary { cursor: pointer; font-size: 16px; font-weight: 600; }
-.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-.dot { width: 10px; height: 10px; border-radius: 50%; background: #666; display: inline-block; }
-.dot.on { background: var(--ok); }
-.dot.off { background: var(--err); }
-.dot.warn { background: var(--warn); }
-pre { background: var(--deep); padding: 12px; border-radius: 8px; white-space: pre-wrap; font-size: 15px; margin: 8px 0; }
-textarea { width: 100%; box-sizing: border-box; background: var(--deep); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-size: 14px; font-family: inherit; }
-input[type=number], input[type=text], input[type=password], input[type=file] { background: var(--deep); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px; }
-input[type=number] { width: 70px; }
-select { background: var(--deep); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px; }
-input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
-button { background: var(--accent); border: 0; color: white; padding: 9px 18px; border-radius: 8px; cursor: pointer; font-size: 14px; }
-button:hover { background: var(--accent2); }
-button.gray { background: var(--gray); }
-button.gray:hover { background: var(--gray2); }
-button.danger { background: var(--err); padding: 7px 12px; font-size: 13px; }
-button.danger:hover { background: #c23a3f; }
-button.small { padding: 7px 12px; font-size: 13px; }
-button:disabled { opacity: .5; cursor: not-allowed; }
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border2); }
-.mono { font-family: Consolas, monospace; font-size: 12px; color: var(--mono); }
-#msg, #pageMsg { margin-left: 12px; color: var(--ok); font-size: 13px; }
-.pagebox { margin-bottom: 10px; padding: 10px; background: var(--inset); border: 1px solid var(--border2); border-radius: 8px; }
-.pagehead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; color: var(--muted); font-size: 12px; }
-.vars { color: var(--faint); font-size: 12px; margin: 4px 0 10px; }
-.headrow { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
-#layout { display: flex; gap: 16px; max-width: 1080px; margin: 0 auto; align-items: flex-start; }
-#sidebar { position: sticky; top: 16px; width: 168px; flex-shrink: 0; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 10px; }
-.side-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px; padding: 0 8px; }
-.side-sub { font-size: 12px; color: var(--faint); margin: 10px 8px 4px; }
-.side-link { display: block; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--muted); text-decoration: none; }
-.side-link:hover { background: var(--inset); color: var(--text); }
-.side-link.active { background: var(--inset); color: var(--accent); }
-.side-indent { padding-left: 16px; }
-#content { flex: 1; min-width: 0; }
-#navToggle { display: none; }
-@media (max-width: 1080px) { #sidebar { display: none; } #navToggle { display: inline-block; } #sidebar.open { display: block; position: fixed; z-index: 50; left: 8px; top: 56px; } }
-pre::-webkit-scrollbar, #logView::-webkit-scrollbar { width: 8px; height: 8px; }
-pre::-webkit-scrollbar-thumb, #logView::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-</style>
-</head>
-<body>
-<div id="layout">
-<nav id="sidebar">
-  <div class="side-title" data-t="navTitle"></div>
-  <a class="side-link" data-target="card-status" data-t="navStatus"></a>
-  <a class="side-link" data-target="card-health" data-t="healthTitle"></a>
-  <a class="side-link" data-target="card-boards" data-t="pagesTitle"></a>
-  <a class="side-link" data-target="card-trans" data-t="transSysTitle"></a>
-  <a class="side-link" data-target="card-env" data-t="envTitle"></a>
-  <a class="side-link" data-target="card-src" data-t="srcTitle"></a>
-  <a class="side-link" data-target="card-plg" data-t="plgTitle"></a>
-  <div class="side-sub" data-t="advGeneral"></div>
-  <a class="side-link side-indent" data-target="card-adv-general" data-t="advGeneral"></a>
-  <a class="side-link side-indent" data-target="card-adv-network" data-t="advNetwork"></a>
-  <a class="side-link side-indent" data-target="card-adv-security" data-t="advSecurity"></a>
-  <a class="side-link side-indent" data-target="card-adv-log" data-t="advLog"></a>
-</nav>
-<main id="content">
-<div class="headrow">
-  <div>
-    <h1 data-t="appTitle"></h1>
-    <div class="sub" data-t="subtitle"></div>
-    <div class="sub" id="consoleUrl" style="color:#5b8def;font-family:Consolas,monospace;margin-top:4px"></div>
-  </div>
-  <div style="display:flex;gap:8px;align-items:center">
-    <a id="updateBtn" class="small" style="display:none;background:var(--accent);color:#fff;text-decoration:none;font-weight:600" target="_blank" rel="noopener"></a>
-    <button id="reloadBtn" class="gray small" data-t="reloadBtn"></button>
-    <button id="navToggle" class="gray small" data-t="navMenu">☰</button>
-    <button id="guideBtn" class="small gray" data-t="guideBtn"></button>
-    <a id="ghBtn" class="small gray" style="text-decoration:none" href="https://github.com/dkxfox/VRCLiveBoard" target="_blank" rel="noopener" data-t="ghBtn"></a>
-    <select id="langSel">
-      <option value="zh-CN">简体中文</option>
-      <option value="zh-TW">繁體中文</option>
-      <option value="en">English</option>
-    </select>
+body { font-family:"Segoe UI","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); margin:0; padding:24px; }
+h1{font-size:20px;margin:0 0 4px}
+.sub{color:var(--muted);font-size:12px}
+.card{background:rgba(26,34,46,.55);border:1px solid rgba(96,128,180,.22);border-radius:12px;padding:16px;margin-bottom:16px;width:100%;box-sizing:border-box;backdrop-filter:blur(16px) saturate(1.15);-webkit-backdrop-filter:blur(16px) saturate(1.15)}
+.card-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.card-title{font-size:16px;font-weight:600}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.dot{width:10px;height:10px;border-radius:50%;background:#666;display:inline-block}
+.dot.on{background:var(--ok)}.dot.off{background:var(--err)}.dot.warn{background:var(--warn)}
+pre{background:var(--deep);padding:12px;border-radius:8px;white-space:pre-wrap;font-size:15px;margin:8px 0}
+textarea{width:100%;box-sizing:border-box;background:var(--deep);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:14px;font-family:inherit}
+input[type=text],input[type=password],input[type=number],select{background:var(--deep);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px}
+input[type=number]{width:70px}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent)}
+button{background:var(--accent);border:0;color:white;padding:9px 18px;border-radius:8px;cursor:pointer;font-size:14px;font-family:inherit}
+button:hover{background:var(--accent2)}
+button.gray{background:var(--gray)}button.gray:hover{background:var(--gray2)}
+button.small{padding:7px 12px;font-size:13px}
+button.danger{background:var(--err);padding:7px 12px;font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border2)}
+.mono{font-family:Consolas,monospace;font-size:12px;color:var(--mono)}
+#layout{max-width:1080px;margin:0 auto}
+.headrow{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.stripe{display:flex;gap:18px;align-items:center;flex-wrap:wrap;background:var(--inset);border:1px solid var(--border2);border-radius:8px;padding:12px}
+.healthpill{display:flex;align-items:center;gap:8px;font-size:13px;background:var(--deep);border:1px solid var(--border2);border-radius:8px;padding:6px 10px}
+.stripe .stat{display:flex;align-items:center;gap:6px;font-size:13px}.stripe .stat .k{color:var(--muted)}
+.legend{display:flex;gap:12px;font-size:12px;color:var(--faint);margin-left:auto}.legend span{display:flex;align-items:center;gap:4px}
+.edlist{display:flex;flex-direction:column;gap:8px;overflow:auto}
+.edlist::-webkit-scrollbar{width:8px;height:8px}.edlist::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+.edrow{display:flex;align-items:center;gap:10px;background:var(--inset);border:1px solid var(--border2);border-radius:8px;padding:8px 10px}
+.edrow .drag{color:var(--faint);cursor:grab}.edrow .snip{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.edrow .ops{display:flex;gap:4px}
+.edrow.sel{border-color:var(--accent);background:#1c2740}
+.sw{width:38px;height:20px;border-radius:20px;background:var(--gray);position:relative;flex:none;cursor:pointer}
+.sw i{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#c9d1da;transition:.15s}
+.sw.on{background:var(--ok)}.sw.on i{left:20px}
+.tag{font-size:11px;color:var(--muted);background:var(--deep);border:1px solid var(--border2);padding:2px 8px;border-radius:16px}
+.psearch{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}.psearch input{flex:1;min-width:180px}
+.pitem{display:flex;align-items:center;gap:12px;background:var(--inset);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:6px}
+.pitem .nm{font-weight:600}.pitem .meta{color:var(--muted);font-size:12px}
+.drawer{position:fixed;top:0;right:-330px;width:310px;height:100%;background:var(--card);border-left:1px solid var(--border);z-index:60;transition:right .2s;padding:18px;overflow:auto}
+.drawer.open{right:0}.scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;opacity:0;pointer-events:none;transition:.2s}.scrim.on{opacity:1;pointer-events:auto}
+.tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}.tabs .tab{background:rgba(22,30,42,.5);border:1px solid var(--border2);color:var(--muted);padding:8px 14px;border-radius:8px;font-size:13px;cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}.tabs .tab.on{background:rgba(59,130,246,.85);color:#fff;border-color:var(--accent)}
+#grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:stretch}
+#grid2 .card{display:flex;flex-direction:column;margin-bottom:0;min-height:310px}
+#grid2 .card .btnRow{flex:none}
+#grid2 .preFlex{flex:1;min-height:0}
+.funcgrid{display:grid;grid-template-columns:1fr 1fr;gap:18px;flex:1;min-height:0;overflow:auto;padding-right:6px}
+.funcgrid::-webkit-scrollbar{width:8px}.funcgrid::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+.fgroup .sub{font-weight:600;color:var(--text);margin-bottom:6px}
+.frow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 2px;border-bottom:1px solid var(--border2);font-size:13px}
+.frow .k{color:var(--text)}.frow .k .d{color:var(--faint);font-size:11px}
+#beGrid{display:grid;grid-template-columns:minmax(0,0.86fr) minmax(0,1.14fr);gap:20px;align-items:stretch}
+#beGrid .edrow .snip{padding-left:12px}
+#beGrid .edrow .mono{color:var(--faint);width:20px;flex:none}
+#bdText{min-height:150px;font-size:14px}
+#beGrid .col{display:flex;flex-direction:column}
+.chatbox-wrap{background:var(--deep);border:1px solid var(--border2);border-radius:10px;padding:16px;display:flex;align-items:center;justify-content:center;min-height:120px}
+.chatbox-bubble{background:var(--panel2,#1c1d24);border:1px solid var(--border2,#34364a);border-radius:12px;padding:10px 14px;font:600 15px/1.55 "Segoe UI","Microsoft YaHei",system-ui,sans-serif;color:var(--text,#fff);white-space:pre-wrap;word-break:break-word;max-width:100%;text-align:center}
+/* ---- 低耗微动效(仅 opacity/transform, 不动布局) ---- */
+@keyframes breathe{0%,100%{opacity:.45}50%{opacity:1}}
+.breathe{animation:breathe 2.4s ease-in-out infinite}
+@keyframes fadein{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:none}}
+.fadein{animation:fadein .25s ease}
+.tab{position:relative}
+.tab::after{content:'';position:absolute;left:10px;right:10px;bottom:-1px;height:2px;background:var(--accent);transform:scaleX(0);transform-origin:left;transition:transform .22s}
+.tab.on::after{transform:scaleX(1)}
+body.no-anim *{animation:none!important;transition:none!important}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+#fxbg{position:fixed;inset:0;width:100vw;height:100vh;z-index:0;pointer-events:none}
+#layout{position:relative;z-index:1}
+@media(max-width:920px){#grid2,#beGrid{grid-template-columns:1fr}}
+
+/* ---- 插件区(旧版布局修复, 套皮对齐) ---- */
+#tab-plugins .card{background:#16202b;border:1px solid #2a3442;border-radius:10px;padding:14px 16px}
+#tab-plugins .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
+#tab-plugins .row>span{font-size:13px;flex:none}
+#tab-plugins select{min-width:110px;padding:5px 8px;font-size:13px}
+#tab-plugins input[type=text],#tab-plugins input[type=number]{padding:5px 8px;font-size:13px}
+#tab-plugins table{width:100%;margin-top:8px;border-collapse:collapse;font-size:13px}
+#tab-plugins th,#tab-plugins td{text-align:left;padding:6px 8px;border-bottom:1px solid #232c38}
+#tab-plugins .small{font-size:13px;padding:6px 12px}
+#plgModal{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center}
+#plgModal.open{display:flex}
+#plgModal>div{background:#16202b;border:1px solid #2a3442;border-radius:12px;padding:18px;max-width:640px;width:92%;max-height:80vh;overflow:auto}
+#marketCard{background:#16202b;border:1px solid #2a3442;border-radius:10px;padding:12px}
+
+/* ---- 插件卡片 ---- */
+.plgcard{background:rgba(26,33,43,.58);border:1px solid rgba(96,128,180,.22);border-radius:12px;padding:14px 16px;margin-bottom:12px;backdrop-filter:blur(16px) saturate(1.15)}
+.plgcard-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.plgcard-name{font-size:16px;font-weight:700}
+.plgcard .tag{font-size:11px;color:var(--muted);background:var(--deep);border:1px solid var(--border);padding:2px 8px;border-radius:14px}
+.plgstat{display:flex;gap:6px}.pill{font-size:11px;padding:2px 9px;border-radius:14px;border:1px solid}.pill.ok{color:#3ddc84;border-color:#2c6a4f;background:rgba(61,220,132,.1)}.pill.warn{color:#f0b429;border-color:#7a5c16;background:rgba(240,180,41,.1)}.pill.gray{color:#8b98a8;border-color:#333d4c;background:rgba(139,152,168,.08)}
+.plgcard-ctrl{margin-left:auto;display:flex;gap:8px;align-items:center}
+.plgcard-desc{color:var(--text);font-size:13px;margin:8px 0 4px}
+.plgcard-meta{color:var(--muted);font-size:12px}
+.plgcard-body{margin-top:12px;border-top:1px solid var(--border2);padding-top:10px}
+</style></head><body><canvas id="fxbg"></canvas><div id="layout"><div class="headrow" style="margin-bottom:14px"><div><h1>VRCLiveBoard 控制台</h1><div class="sub">星光落进聊天框</div><div class="mono" style="color:#5b8def;margin-top:4px">http://127.0.0.1:19190/</div></div><div class="row"><button class="gray small">新手引导</button><a class="gray small" style="text-decoration:none">GitHub 仓库</a><span class="sub" style="font-size:12px;color:var(--muted)">动效</span><span class="sw on" id="animTop" title="游戏时关闭动效"></span><select><option>简体中文</option><option>繁體中文</option><option>English</option></select></div></div>
+<!-- ① 状态总览 -->
+<div class="card">
+  <div class="card-head"><b class="card-title">状态总览</b><span class="row"><button class="small gray" id="diagBtn">一键诊断</button><button class="small gray" id="healthRefresh">重新检测</button><button class="small gray" id="oscTest">测试 OSC</button></span></div>
+  <div class="stripe">
+    <div class="healthpill"><span class="dot on" id="hpDot"></span><b id="hpText">状态正常</b></div>
+    <div class="stat"><span class="dot" id="vrcDot"></span><span class="k">VRChat</span><b id="vrcText">未运行</b></div>
+    <div class="stat"><span class="dot" id="oscDot"></span><span class="k">OSC</span><b id="oscText">关闭</b></div>
+    <div class="stat"><span class="dot" id="udpDot"></span><span class="k">UDP 9000</span><b id="udpText">空闲(正常)</b></div>
+    <div class="stat"><span class="dot on breathe"></span><span class="k">控制台</span><b>运行中</b></div>
+    <div class="legend"><span><i class="dot on" style="width:8px;height:8px"></i>正常</span><span><i class="dot" style="width:8px;height:8px"></i>未运行(正常)</span><span><i class="dot warn" style="width:8px;height:8px"></i>待检</span><span><i class="dot off" style="width:8px;height:8px"></i>异常</span></div>
   </div>
 </div>
-<div class="card" id="card-status">
-  <div class="row"><span class="dot" id="vrcDot"></span><b id="vrcText"></b></div>
-  <p data-t="currentLabel"></p>
-  <pre id="current">-</pre>
-  <p class="sub" id="currentMeta" style="margin:-2px 0 8px"></p>
-  <textarea id="box" rows="2" data-t-ph="boxPh"></textarea>
-  <div class="row" style="margin-top:10px">
-    <button id="send" data-t="sendBtn"></button><span id="msg"></span>
-  </div>
-  <div class="row" style="margin-top:14px">
-    <button id="diag" class="gray" data-t="diagBtn"></button><button id="diagCopy" class="small gray" style="display:none" data-t="diagCopy"></button><span class="sub" data-t="diagHint"></span>
-  </div>
-  <pre id="diagOut" style="display:none;max-height:300px;overflow:auto;font-size:12px"></pre>
+<!-- ② 发送卡(含 当前聊天框内容) -->
+<div class="card" style="position:sticky;top:0;z-index:30">
+  <div class="card-head"><b class="card-title">发送到聊天框</b><span class="sub">Ctrl+Enter 发送</span></div>
+  <div class="sub" style="margin-top:8px">当前聊天框内容:</div>
+  <pre id="curChat" style="min-height:46px;margin-top:4px">( 尚未发送 )</pre>
+  <textarea id="box" rows="2" placeholder="输入要发送到聊天框的内容…"></textarea>
+  <div class="row" style="margin-top:10px"><button id="send">发送</button><span class="sub" style="margin-left:auto">144 字符 / 9 行 · 当前 <span class="mono" id="charCount">0</span>/144</span></div>
 </div>
-<div class="card" id="card-health">
-  <div class="headrow">
-    <b class="card-title" data-t="healthTitle"></b>
-    <button id="healthRefresh" class="small gray" data-t="healthRefresh"></button>
-  </div>
-  <div id="healthBody" class="sub" style="line-height:2;margin-top:8px"></div>
-  <div class="row" style="margin-top:8px">
-    <button id="healthCopy" class="small gray" data-t="healthCopy"></button>
-    <span id="healthMsg" style="font-size:12px;color:var(--ok)"></span>
-  </div>
+<!-- ③ Tab(含 公告板) -->
+<div class="tabs" id="tabs">
+  <div class="tab on" data-tab="dash">常用</div>
+  <div class="tab" data-tab="board">公告板</div>
+  <div class="tab" data-tab="plugins">插件</div>
+  <div class="tab" data-tab="src">数据源</div>
+  <div class="tab" data-tab="trans">翻译系统</div>
+  <div class="tab" data-tab="env">环境检测</div>
+  <div class="tab" data-tab="adv">高级设置</div>
 </div>
-<div class="card" id="card-boards">
-  <div class="headrow" style="cursor:pointer" onclick="toggleBoardsCard()">
-    <b class="card-title" data-t="pagesTitle"></b>
-    <span style="display:flex;gap:8px;align-items:center">
-      <span id="boardsCount" class="sub"></span>
-      <span id="boardsCaret" class="sub">▼</span>
-    </span>
-  </div>
-  <div id="boardsBody">
-    <div class="vars" data-t="pagesVars"></div>
-    <div id="pages"></div>
-    <div class="row" style="margin-top:8px">
-      <button id="addPage" class="small" data-t="addPage"></button>
-      <button id="collapseAll" class="small gray" data-t="collapseAll"></button>
-      <button id="expandAll" class="small gray" data-t="expandAll"></button>
-      <span style="font-size:13px" data-t="rotLabel"></span>
-      <input id="rotMs" type="number" min="3" step="1">
-      <button id="savePages" class="small" data-t="savePages"></button>
-      <span id="pageMsg"></span>
+
+<!-- ④ 常用: 公告板(紧凑, 少条目直接编) + 功能开关 -->
+<div id="tab-dash">
+  <div id="grid2">
+    <div class="card">
+      <div class="card-head"><b class="card-title">公告板</b><span class="row" style="gap:8px"><span class="sub" id="boardCount">共 4 条</span><button class="small gray" id="boardEdit">编辑</button></span></div>
+      <pre id="pageText" class="preFlex">== 欢迎 ==
+这是 VRCLiveBoard
+电脑状态正在轮播</pre>
+      <div class="btnRow"><button class="small gray" id="pgPrev">上一页</button><button class="small gray" id="pgNext">下一页</button><span class="sub" id="pgNum">第 1 / 4 页</span><span class="mono" style="margin-left:auto" id="pgDots"></span></div>
+      <div id="editMode" hidden style="margin-top:12px">
+        <div class="edlist" id="edlist" style="max-height:220px"></div>
+        <div class="row" style="margin-top:10px"><button class="small" id="addPage">+ 添加</button><span class="sub" style="margin-left:auto">条目多时请用上方「公告板」Tab 大编辑器</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><b class="card-title">功能开关</b><span class="sub">数据源 / 插件 一键启停</span></div>
+      <div class="funcgrid">
+        <div class="fgroup"><div class="sub">数据源</div>
+          <div class="frow"><span class="k">公告板<span class="d"> 多页轮播</span></span><div class="sw on" data-src="pages"></div></div>
+          <div class="frow"><span class="k">电脑状态<span class="d"> CPU/GPU</span></span><div class="sw on" data-src="hardware"></div></div>
+          <div class="frow"><span class="k">媒体<span class="d"> SMTC</span></span><div class="sw" data-src="media"></div></div>
+          <div class="frow"><span class="k">字幕<span class="d"> LiveTranslate</span></span><div class="sw" data-src="livetranslate"></div></div>
+          <div class="frow"><span class="k">OCR 截图</span><div class="sw" data-src="ocrregion"></div></div>
+          <div class="frow"><span class="k">更多…</span><div class="sw"></div></div>
+        </div>
+        <div class="fgroup"><div class="sub">插件</div>
+          <div class="frow"><span class="k">好友欢迎</span><div class="sw on" data-plg="friend-welcome"></div></div>
+          <div class="frow"><span class="k">定时公告</span><div class="sw on" data-plg="scheduled-board"></div></div>
+          <div class="frow"><span class="k">天气播报</span><div class="sw on" data-plg="weather-board"></div></div>
+          <div class="frow"><span class="k">网易云歌词</span><div class="sw on" data-plg="netease-lyrics"></div></div>
+          <div class="frow"><span class="k">社区插件</span><div class="sw"></div></div>
+          <div class="frow"><span class="k">更多…</span><div class="sw"></div></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
-<div class="card" id="card-trans">
-  <b class="card-title" data-t="transSysTitle"></b>
-  <div class="sub" style="margin:6px 0" data-t="transSysDesc"></div>
-  <div class="row" style="margin-top:4px">
-    <span style="font-size:13px" data-t="ltSvcLabel"></span>
-    <b id="ltStatus" style="font-size:13px"></b>
-    <button id="ltCheck" class="small gray" data-t="ltCheckBtn"></button>
-    <button id="ltOpen" class="small gray" data-t="ltDownloadBtn"></button>
-  </div>
-  <div id="ltGuide" class="sub" style="display:none;margin-top:8px;line-height:1.7"></div>
-  <div class="sub" style="margin-top:6px;line-height:1.7" data-t="ocrLtNote"></div>
-  <div class="sub" style="margin-top:14px;font-size:15px;font-weight:600;color:var(--text)">🎙️ <span data-t="transVoice"></span></div>
-  <div class="row" style="margin-top:6px">
-    <input type="checkbox" id="transVoiceOn">
-    <span class="sub" data-t="transVoiceDesc"></span>
-  </div>
-  <div class="sub" style="margin-top:14px;font-size:15px;font-weight:600;color:var(--text)">📷 <span data-t="transShot"></span></div>
-  <div class="sub" style="margin:4px 0" data-t="ocrDesc"></div>
-  <div class="row" style="margin:8px 0">
-    <span style="font-size:13px" data-t="visModeLabel"></span>
-    <select id="ocrtlMode">
-      <option value="auto" data-t="visModeAuto"></option>
-      <option value="vision" data-t="visModeVision"></option>
-      <option value="ocr" data-t="visModeOcr"></option>
-    </select>
-  </div>
-  <div id="visionBox" style="display:none;background:var(--inset);border:1px solid var(--border2);border-radius:8px;padding:10px;margin:8px 0">
-    <div class="sub" style="line-height:1.7" id="visGuide"></div>
-    <div class="row" style="margin-top:8px">
-      <input id="visBase" type="text" data-t-ph="visBasePh" style="flex:2">
-      <input id="visKey" type="password" data-t-ph="visKeyPh" style="flex:1">
-      <input id="visModel" type="text" data-t-ph="visModelPh" style="flex:1">
-      <button id="visSave" class="small" data-t="visSave"></button>
-      <span id="visMsg" style="color:var(--ok);font-size:13px"></span>
+
+<!-- ⑤ 公告板独立 Tab: 大编辑空间(列表 + 内容编辑 + 预览) -->
+<div id="tab-board" hidden>
+  <div class="card">
+    <div class="card-head"><b class="card-title">公告板编辑</b><span class="sub">共 <span id="bdCount">4</span> 条 · 拖动 / ↑↓ 排序 · 点某页在右侧编辑</span></div>
+    <div id="beGrid">
+      <div class="col">
+        <div class="sub" style="margin-bottom:6px">页面列表</div>
+        <div class="edlist" id="bdList" style="max-height:360px;flex:1"></div>
+        <div class="row" style="margin-top:10px"><button class="small" id="bdAdd">+ 添加页面</button><button class="small">批量导入(Excel)</button><button class="small">导出</button></div>
+      </div>
+      <div class="col">
+        <div class="row" style="margin-bottom:4px"><span class="sub">内容(一页最多 144 字符)</span><span class="row" style="margin-left:auto;gap:4px"><select id="bdVar" style="max-width:200px"><option value="{cpu_util}">{cpu_util} · CPU 使用率 %</option><option value="{cpu_temp}">{cpu_temp} · CPU 温度 ℃</option><option value="{gpu_util}">{gpu_util} · GPU 使用率 %</option><option value="{gpu_temp}">{gpu_temp} · GPU 温度 ℃</option><option value="{mem_used}">{mem_used} · 内存已用 GB</option><option value="{mem_total}">{mem_total} · 内存总量 GB</option><option value="{net_down}">{net_down} · 下载 KB/s</option><option value="{net_up}">{net_up} · 上传 KB/s</option><option value="{song}">{song} · 歌名</option><option value="{artist}">{artist} · 歌手</option><option value="{album}">{album} · 专辑</option><option value="{date}">{date} · 日期</option><option value="{time}">{time} · 时间</option></select><button class="small gray" id="bdVarBtn">插入变量</button></span></div>
+        <textarea id="bdText" rows="4"></textarea>
+        <div class="row" style="margin:10px 0 4px;justify-content:space-between"><span class="sub">游戏内实际效果(聊天框 · 宽度随最宽一行自适应)</span><span class="sub">每行 <input id="bdWidth" type="number" value="28" style="width:52px"> 宽(半角)</span></div>
+        <div class="chatbox-wrap" style="flex:1"><div class="chatbox-bubble" id="bdPrev">( 空白页 )</div></div>
+        <div class="row" style="margin-top:10px"><button class="small" id="bdSave">保存页面</button><button class="small gray" id="bdDup">复制此页</button><button class="small gray" id="bdDel">删除此页</button><span class="sub" style="margin-left:auto">轮播间隔 <input type="number" value="8" style="width:60px"> 秒</span></div>
+      </div>
     </div>
-    <div class="sub" style="line-height:1.7;margin-top:6px" data-t="visGuideLocal"></div>
-  </div>
-  <div class="row">
-    <button id="ocrtlBtn" data-t="ocrBtn"></button>
-    <span style="font-size:13px" data-t="cdLabel"></span>
-    <input id="ocrtlDelay" type="number" min="1" max="60" step="1" style="width:56px">
-    <span style="font-size:13px" data-t="eachLabel"></span>
-    <input id="ocrtlDisplay" type="number" min="3" max="120" step="1" style="width:56px">
-    <span style="font-size:13px" data-t="loopsLabel"></span>
-    <input id="ocrtlLoops" type="number" min="1" max="10" step="1" style="width:48px">
-    <span style="font-size:13px" data-t="times"></span>
-    <span id="ocrtlState" style="font-size:14px;color:var(--warn)"></span>
-  </div>
-  <pre id="ocrtlOut" style="display:none;max-height:220px;overflow:auto;font-size:13px;margin-top:10px"></pre>
-  <div class="sub" style="margin:12px 0 4px" data-t="capTitle"></div>
-  <div class="row">
-    <select id="capMode">
-      <option value="window" data-t="capModeWin"></option>
-      <option value="region" data-t="capModeReg"></option>
-      <option value="screen" data-t="capModeScr"></option>
-    </select>
-    <button id="capAdj" class="small gray" data-t="capAdjBtn"></button>
-    <button id="capFull" class="small gray" data-t="capFullBtn"></button>
-    <span id="capInfo" style="font-size:13px;color:var(--muted)"></span>
   </div>
 </div>
-<div class="card" id="card-env">
-  <b class="card-title" data-t="envTitle"></b>
-  <div class="sub" style="margin:4px 0 8px" data-t="envDesc"></div>
-  <table><thead><tr><th data-t="thDep"></th><th data-t="thUse"></th><th data-t="thState"></th><th data-t="thAct"></th></tr></thead><tbody id="envRows"></tbody></table>
-  <div class="sub" id="envMsg" style="margin-top:8px;color:var(--warn)"></div>
-</div>
-<div class="card" id="card-src">
-  <b class="card-title" data-t="srcTitle"></b>
-  <div class="sub" style="margin:4px 0 8px" data-t="prioExplain"></div>
-  <table><thead><tr><th data-t="thOn"></th><th data-t="thName"></th><th data-t="thDesc"></th><th data-t="thPrio"></th></tr></thead><tbody id="srcs"></tbody></table>
-  <div class="row" style="margin-top:8px"><button id="srcPrioReset" class="small gray" data-t="prioReset"></button></div>
-</div>
-<div class="card" id="card-plg">
-  <b data-t="plgTitle"></b>
-  <div class="sub" style="margin:4px 0 8px" data-t="plgDesc"></div>
-  <div class="sub" style="margin-top:4px">🛡 <span data-t="plgSecTitle"></span> <span style="color:var(--muted)" data-t="plgSecDesc"></span></div>
-  <div class="row" style="margin-top:6px;flex-wrap:wrap;gap:8px">
-    <span style="font-size:13px" data-t="plgSecNet"></span>
-    <select id="psNet"><option value="whitelist" data-t="polWhitelist"></option><option value="localOnly" data-t="polLocalOnly"></option><option value="off" data-t="polOff"></option></select>
-    <span style="font-size:13px" data-t="plgSecProc"></span>
-    <select id="psProc"><option value="consent" data-t="polConsent"></option><option value="deny" data-t="polDeny"></option></select>
+<!-- 插件 -->
+<div id="tab-plugins" hidden><div id="plugCards"></div></div>
+<div id="tab-src" hidden>
+  <div class="card">
+    <div class="card-title" style="margin-bottom:8px">数据源(优先级排序)</div>
+    <div class="sub" style="margin:0 0 8px">值越大越先显示; 调整后保存</div>
+    <table><thead><tr><th>启用</th><th>名称</th><th>说明</th><th>优先级</th></tr></thead><tbody id="srcRows">
+      <tr><td><input type="checkbox" checked></td><td>公告板</td><td>多页轮播</td><td><input type="number" value="5" style="width:56px"></td></tr>
+      <tr><td><input type="checkbox" checked></td><td>电脑状态</td><td>CPU/GPU/内存/网速</td><td><input type="number" value="10" style="width:56px"></td></tr>
+      <tr><td><input type="checkbox"></td><td>媒体</td><td>正在播放(SMTC)</td><td><input type="number" value="30" style="width:56px"></td></tr>
+      <tr><td><input type="checkbox"></td><td>字幕</td><td>LiveTranslate</td><td><input type="number" value="40" style="width:56px"></td></tr>
+      <tr><td><input type="checkbox"></td><td>OCR 截图</td><td>区域识别兜底</td><td><input type="number" value="45" style="width:56px"></td></tr>
+    </tbody></table>
+    <div class="row" style="margin-top:8px"><button class="small gray">优先级重置</button></div>
   </div>
-  <div class="row" style="margin-top:6px;flex-wrap:wrap;gap:8px">
-    <span style="font-size:13px" data-t="plgSecFsW"></span>
-    <select id="psFsW"><option value="sandbox" data-t="polSandbox"></option><option value="declared" data-t="polDeclared"></option><option value="deny" data-t="polDeny"></option></select>
-    <span style="font-size:13px" data-t="plgSecFsR"></span>
-    <select id="psFsR"><option value="self" data-t="polSelf"></option><option value="declared" data-t="polDeclared"></option><option value="deny" data-t="polDeny"></option></select>
-    <span style="font-size:13px" data-t="plgSecAi"></span>
-    <select id="psAi"><option value="allow" data-t="polAllow"></option><option value="localOnly" data-t="polLocalOnly"></option><option value="off" data-t="polOff"></option></select>
-    <button class="small" onclick="psSave()" data-t="plgSecSave"></button>
-  </div>
-  <span id="psMsg" style="font-size:12px;color:var(--ok)"></span>
-  <div class="row">
-    <input id="plgZip" data-t-ph="plgZipPh" style="flex:1">
-    <button id="plgImport" class="small" data-t="plgImport"></button>
-    <button id="plgRefresh" class="small" data-t="plgRefresh"></button>
-    <button id="plgPrioReset" class="small gray" data-t="prioReset"></button>
-  </div>
-  <div class="sub" style="margin:6px 0 4px" data-t="plgPrioExplain"></div>
-  <span id="plgErrMsg" style="font-size:12px;color:var(--err)"></span>
-  <table style="margin-top:8px"><thead><tr><th data-t="thPlg"></th><th data-t="thVer"></th><th data-t="thPerm"></th><th data-t="thState"></th><th data-t="thPrio"></th><th data-t="thAct"></th></tr></thead><tbody id="plgRows"></tbody></table>
-  <div class="sub" id="plgMsg" style="margin-top:8px;color:var(--warn)"></div>
-  <div id="plgPanel" style="margin-top:10px"></div>
 </div>
+<!-- 翻译系统 -->
+<div id="tab-trans" hidden>
+  <div class="card">
+    <div class="card-title" style="margin-bottom:8px">翻译系统</div>
+    <div class="row" style="margin:4px 0"><span style="font-size:13px">翻译服务</span><b style="font-size:13px" id="ltStatus">未配置</b><button class="small gray">检测</button><button class="small gray">下载</button></div>
+    <div class="sub" style="margin:10px 0 4px;font-size:15px;font-weight:600">🎙️ 语音字幕</div>
+    <div class="row"><input type="checkbox" id="transVoice"><span class="sub">启用(需 LiveTranslate 转录)</span></div>
+    <div class="sub" style="margin:10px 0 4px;font-size:15px;font-weight:600">📷 截图翻译</div>
+    <div class="row"><span style="font-size:13px">模式</span><select id="transMode"><option>auto</option><option>vision</option><option>ocr</option></select></div>
+    <div class="row" style="margin-top:8px"><input type="text" id="transApiBase" placeholder="接口地址" style="flex:2"><input type="password" id="transApiKey" placeholder="API Key" style="flex:1"><input type="text" placeholder="模型" style="flex:1"><button class="small">保存</button></div>
+    <div class="row" style="margin-top:8px"><button>截图翻译</button><span style="font-size:13px">倒计时(秒)</span><input type="number" value="5" style="width:56px"><span style="font-size:13px">显示(秒)</span><input type="number" value="8" style="width:56px"><span style="font-size:13px">循环</span><input type="number" value="2" style="width:48px"></div>
+    <div class="row" style="margin-top:8px"><span style="font-size:13px">截图区域</span><select id="transRegion"><option>窗口</option><option>区域</option><option>全屏</option></select><button class="small gray">调整区域</button><button class="small gray">设为全屏</button></div>
+  </div>
+</div>
+<!-- 环境检测 -->
+<div id="tab-env" hidden>
+  <div class="card">
+    <div class="card-title" style="margin-bottom:8px">环境检测</div>
+    <table><thead><tr><th>依赖</th><th>用途</th><th>状态</th><th>操作</th></tr></thead><tbody id="envRows">
+      <tr><td>Node.js</td><td>运行本体</td><td class="sub">✅ 已内置</td><td>-</td></tr>
+      <tr><td>听歌显示(Python+winsdk)</td><td>SMTC 读取</td><td class="sub">✅ 就绪</td><td>-</td></tr>
+      <tr><td>翻译服务(LiveTranslate)</td><td>字幕</td><td class="sub">⚠ 未配置</td><td><button class="small gray">安装</button></td></tr>
+    </tbody></table>
+  </div>
+</div>
+<!-- 高级设置 -->
+<div id="tab-adv" hidden>
+  <div class="card">
+    <div class="card-title" style="margin-bottom:8px">高级设置</div>
+    <div class="row"><input type="checkbox" id="advAuto"><b style="font-size:13px">开机自启</b><span class="sub">登录时自动运行</span></div>
+    <div class="row" style="margin-top:8px"><input type="checkbox" id="advConsole"><b style="font-size:13px">显示命令行窗口</b><span class="sub">桌面版</span><input type="checkbox"><b style="font-size:13px">脏话过滤器</b></div>
+    <div class="sub" style="margin:12px 0 4px">🔒1 配置备用</div>
+    <div class="row"><button class="small gray" id="expCfg">导出配置</button><button class="small gray" id="impCfg">导入配置</button></div>
+    <div class="sub" style="margin:12px 0 4px">网络 / 端口</div>
+    <div class="row"><span style="font-size:13px">OSC</span><input type="number" id="oscPort" value="9000" style="width:80px"><button class="small" id="oscApply">应用</button><span style="font-size:13px">Web</span><input type="number" value="19190" style="width:80px"><button class="small">保存并重启</button><button class="small gray" style="margin-left:6px">端口体检</button></div>
+    <div class="sub" style="margin:12px 0 4px">安全与权限</div>
+    <div class="row"><button class="small gray" id="devdocsBtn">开发者文档</button><button class="small danger" id="quitBtn">完全关闭</button><button class="small" id="restartBtn">快速重启</button><input type="password" placeholder="一级密码 / TOTP" style="flex:1"><button class="small">解锁</button></div>
+    <div class="sub" style="margin:12px 0 4px">界面 → 配色 / 动效</div>
+    <div class="row" style="gap:8px;margin-top:6px"><div id="swatches" style="display:flex;gap:6px;flex-wrap:wrap"></div><span class="sub" id="themeName">海蓝</span></div>
+    <div class="row" style="margin-top:8px"><span class="sub">低耗微动效</span><span class="sw on" id="animTgl" title="低耗微动效 开关"></span><span class="sub" style="font-size:11px">游戏时建议关 · 尊重系统减弱动态</span></div>
+    <div class="row" style="margin-top:8px"><span class="sub">启动动画 · 品牌</span><select id="brandSel"><option>自动(按社区身份)</option><option>星轨茶会(社区)</option><option>默认</option></select><span class="sub" style="font-size:11px">优先检测: 加密狗授权名 / config 品牌标记; 插件名单含"星轨茶会"仅作弱提示; 可手动覆盖</span></div>
+    <div class="sub" style="margin:12px 0 4px">运行日志</div>
+    <div class="row"><button class="small gray" id="logRefresh">刷新</button><label style="font-size:13px"><input type="checkbox"> 自动刷新</label><input type="checkbox" id="logAuto" style="display:none"><input type="text" placeholder="过滤关键字" style="flex:1"><button class="small gray">复制</button></div>
+    <pre id="logView" style="max-height:180px;overflow:auto;background:var(--deep);border:1px solid var(--border2);border-radius:6px;padding:8px;font-size:12px;white-space:pre-wrap"></pre>
+  </div>
+</div>
+<div class="sub" style="width:100%">状态 / 发送 / 公告板 / 数据源 / 插件 / 主题 —— 已接真实数据</div>
 <div class="card sub" id="marketCard" style="display:none"></div>
 <div id="plgModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;align-items:center;justify-content:center">
   <div style="background:#2a0e0e;border:2px solid var(--err);border-radius:12px;max-width:520px;width:90%;padding:20px;color:#ffd7d7">
@@ -268,165 +272,61 @@ pre::-webkit-scrollbar-thumb, #logView::-webkit-scrollbar-thumb { background: va
     </div>
   </div>
 </div>
-<details class="card" id="card-adv-general" style="cursor:pointer">
-  <summary style="font-weight:bold" data-t="advGeneral"></summary>
-  <div style="margin-top:12px">
-    <div class="row">
-      <input type="checkbox" id="autoStart">
-      <b data-t="autoStart"></b>
-      <span class="sub" data-t="autoStartDesc"></span>
-      <span id="autoMsg" style="color:var(--ok);font-size:13px"></span>
-    </div>
-    <div class="row" style="margin-top:10px">
-      <input type="checkbox" id="showConsole">
-      <b data-t="showConsole"></b>
-      <span class="sub" data-t="showConsoleDesc"></span>
-    </div>
-    <div class="row" style="margin-top:10px">
-      <label style="font-size:13px;margin-right:12px"><input type="checkbox" id="swfOn"> <span data-t="swfToggle"></span></label>
-      <button class="small gray" onclick="swfSave()" data-t="swfSaveBtn"></button>
-    </div>
-    <div class="sub" style="margin-top:10px">🔒1 <span data-t="cfgBackupTitle"></span></div>
-    <div class="row" style="margin-top:6px">
-      <button id="cfgExport" class="small gray" data-t="cfgExport"></button>
-      <button id="cfgImport" class="small gray" data-t="cfgImport"></button>
-      <input id="cfgFile" type="file" style="display:none" accept=".json">
-      <span id="cfgMsg" style="font-size:12px;color:var(--ok)"></span>
-    </div>
-  </div>
-</details>
-<details class="card" id="card-adv-network" style="cursor:pointer">
-  <summary style="font-weight:bold" data-t="advNetwork"></summary>
-  <div style="margin-top:12px">
-    <div class="row" style="margin-top:10px;flex-wrap:wrap;gap:6px">
-      <span style="font-size:13px" data-t="portsOsc"></span>
-      <input id="oscPort" type="number" min="1" max="65535" style="width:80px">
-      <button class="small" onclick="portsSaveOsc()" data-t="portsApply"></button>
-      <span style="font-size:13px;margin-left:10px" data-t="portsWeb"></span>
-      <input id="webPort" type="number" min="1" max="65535" style="width:80px">
-      <button class="small" onclick="portsSaveWeb()" data-t="portsSaveRestart"></button>
-      <span id="portsInfo" class="sub" style="margin-left:8px"></span>
-    </div>
-    <div class="row" style="margin-top:6px">
-      <button class="small gray" onclick="portsCheck()" data-t="portsCheckBtn"></button>
-      <span id="portsCheckOut" class="sub" style="margin-left:8px;white-space:pre-wrap"></span>
-    </div>
-  </div>
-</details>
-<details class="card" id="card-adv-security" style="cursor:pointer">
-  <summary style="font-weight:bold" data-t="advSecurity"></summary>
-  <div style="margin-top:12px">
-    <div class="sub" style="margin-top:4px">🔓 <span data-t="gateLv0"></span> · 🔒1 <span data-t="gateLv1"></span> · 🔒2 <span data-t="gateLv2"></span></div>
-    <div class="row" style="margin-top:10px">
-      <button id="devdocsBtn" class="small gray" data-t="devdocsBtn"></button>
-      <button id="quitBtn" class="small danger" data-t="quitBtn"></button>
-      <button id="restartBtn" class="small" data-t="restartBtn"></button>
-    </div>
-    <div class="sub" style="margin-top:12px" data-t="gateTitle"></div>
-    <div class="row" style="margin-top:6px">
-      <input id="gateCode" type="password" style="flex:1" data-t-ph="gatePh">
-      <button id="gateL1" class="small" data-t="gateL1Btn"></button>
-      <button id="gateL2" class="small" data-t="gateL2Btn"></button>
-      <span id="gateMsg" style="font-size:13px;color:var(--ok)"></span>
-    </div>
-    <div id="secBox" style="display:none;margin-top:8px;background:var(--inset);border:1px solid var(--border2);border-radius:8px;padding:10px">
-      <div class="sub">🔒1 <span data-t="secTitle"></span></div>
-      <div class="sub" style="margin-top:6px" data-t="secExtra"></div>
-      <textarea id="secExtra" rows="2" style="width:100%"></textarea>
-      <div class="row" style="margin-top:6px;flex-wrap:wrap;gap:4px">
-        <label style="font-size:13px;margin-right:12px"><input type="checkbox" id="secDef"> <span data-t="secDef"></span></label>
-        <label style="font-size:13px;margin-right:12px"><input type="checkbox" id="secJson"> <span data-t="secJson"></span></label>
-        <label style="font-size:13px;margin-right:12px"><input type="checkbox" id="secSan"> <span data-t="secSan"></span></label>
-        <button class="small" onclick="secSave()" data-t="secSave"></button>
-      </div>
-      <div class="sub" style="margin-top:10px" data-t="secWords"></div>
-      <textarea id="secWordsView" rows="4" style="width:100%" readonly></textarea>
-      <div class="row" style="margin-top:6px">
-        <input id="secAddWord" type="text" style="flex:1" data-t-ph="secAddPh">
-        <button class="small" onclick="secAddWordFn()" data-t="secAdd"></button>
-      </div>
-      <div id="devBoxSec" style="display:none;margin-top:8px">
-        <div class="sub">🔒2 <span data-t="secEdit"></span></div>
-        <textarea id="secWordsEdit" rows="4" style="width:100%"></textarea>
-        <div class="row" style="margin-top:6px">
-          <button class="small" onclick="secWordsSave()" data-t="secWordsSave"></button>
-          <button class="small gray" onclick="secWordsReset()" data-t="secWordsReset"></button>
-        </div>
-      </div>
-      <div class="sub" style="margin-top:6px">🔒1 <span data-t="swfWords"></span></div>
-      <textarea id="swfWordsView" rows="4" style="width:100%" readonly></textarea>
-      <div class="row" style="margin-top:6px">
-        <input id="swfAddWord" type="text" style="flex:1" data-t-ph="swfAddPh">
-        <button class="small" onclick="swfAddWordFn()" data-t="swfAdd"></button>
-      </div>
-      <div id="devBoxSwf" style="display:none;margin-top:8px">
-        <div class="sub">🔒2 <span data-t="swfEdit"></span></div>
-        <textarea id="swfWords" rows="5" style="width:100%"></textarea>
-        <div class="row" style="margin-top:6px">
-          <button class="small" onclick="swfWordsSave()" data-t="swfSave"></button>
-          <button class="small gray" onclick="swfWordsReset()" data-t="swfReset"></button>
-        </div>
-      </div>
-    </div>
-  </div>
-</details>
-<details class="card" id="card-adv-log" style="cursor:pointer">
-  <summary style="font-weight:bold" data-t="advLog"></summary>
-  <div style="margin-top:12px">
-    <div class="sub" style="margin-top:4px" data-t="logTitle"></div>
-    <div class="row" style="margin-top:6px">
-      <button id="logRefresh" class="small gray" data-t="logRefresh"></button>
-      <label style="font-size:13px"><input type="checkbox" id="logAuto"> <span data-t="logAuto"></span></label>
-      <span id="logMsg" style="font-size:13px;color:var(--muted)"></span>
-    </div>
-    <div class="row" style="margin-top:6px">
-      <input id="logFilter" type="text" style="flex:1" data-t-ph="logFilterPh">
-      <label style="font-size:13px"><input type="checkbox" id="logErrOnly"> <span data-t="logErrOnly"></span></label>
-      <button id="logCopy" class="small gray" data-t="logCopy"></button>
-    </div>
-    <pre id="logView" style="max-height:260px;overflow:auto;background:var(--deep);border:1px solid var(--border2);border-radius:6px;padding:8px;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-all"></pre>
-    <div class="sub" style="margin-top:10px;line-height:1.7">
-      <span data-t="advGameHint"></span><br>
-      <span data-t="advBoxHint"></span><br>
-      <span id="advHttpHint" data-t="advHttpHint"></span><br>
-      <span id="ver"></span>
-      <span id="updateHint" style="margin-left:12px"></span>
-    </div>
-  </div>
-</details>
-<div id="guideOverlay" style="display:none;position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,.78);z-index:70;align-items:center;justify-content:center">
-  <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px;max-width:560px;width:92vw">
-    <div class="row" style="margin-bottom:8px">
-      <b data-t="guideTitle" style="flex:1"></b>
-      <button class="small gray" onclick="guideClose()">✕</button>
-    </div>
-    <div id="guideBody" class="sub" style="line-height:2.1;white-space:pre-wrap"></div>
-    <div class="row" style="margin-top:12px">
-      <label style="font-size:13px"><input type="checkbox" id="guideNoAuto"> <span data-t="guideNoAuto"></span></label>
-      <span style="flex:1"></span>
-      <button onclick="guideClose()" data-t="ok"></button>
-    </div>
-  </div>
-</div>
-<div id="capOverlay" style="display:none;position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,.78);z-index:60;align-items:center;justify-content:center">
-  <div style="background:var(--bg);border:1px solid var(--border2);border-radius:10px;padding:14px;max-width:94vw;max-height:94vh;display:flex;flex-direction:column">
-    <div class="row" style="margin-bottom:8px">
-      <b style="flex:1" id="capSelT" data-t="capAdjTitle"></b>
-      <button class="small gray" id="capRefresh" data-t="capRefreshBtn"></button>
-      <button class="small" id="capSave" data-t="capSaveBtn"></button>
-      <button class="small gray" id="capCancel" data-t="capCancelBtn"></button>
-    </div>
-    <div id="capWrap" style="position:relative;display:inline-block;overflow:auto;max-width:100%;max-height:76vh;background:#000">
-      <img id="capImg" style="display:block;user-select:none;-webkit-user-drag:none;max-width:none" draggable="false">
-      <div id="capRect" style="display:none;position:absolute;border:2px solid var(--ok);background:rgba(61,220,132,.16);pointer-events:none"></div>
-    </div>
-    <div class="sub" style="margin-top:8px;line-height:1.6" data-t="capHint"></div>
-    <div class="sub" style="margin-top:4px;color:var(--ok);font-size:13px" id="capSel"></div>
-  </div>
-</div>
-<script src="/lang.js"></script>
-<script src="/app.js"></script>
-</main>
-</div>
-</body>
-</html>
+<div class="scrim" id="scrim"></div><div class="drawer" id="drawer"><div class="row" style="justify-content:space-between;margin-bottom:14px"><b id="dT">插件设置</b><button class="small gray" id="dC">✕</button></div><div id="drBody" class="sub"></div></div><script src="/lang.js"></script>
+<script src="/app.js"></script><script>
+const THEMES=[
+ {name:'海蓝',c:{'--bg':'#10141a','--card':'#1a212b','--inset':'#141b24','--deep':'#0c0f14','--border':'#2a3442','--border2':'#232c38','--text':'#e8edf3','--muted':'#8b98a8','--faint':'#6b7888','--mono':'#9fb3c8','--accent':'#3b82f6','--accent2':'#2f6fd0','--gray':'#55606e','--gray2':'#48525e','--ok':'#3ddc84','--warn':'#f0b429','--err':'#e5484d'}},
+ {name:'深青',c:{'--bg':'#0d1416','--card':'#14201f','--inset':'#101a19','--deep':'#0a1010','--border':'#23403d','--border2':'#1d3431','--text':'#e6f2f0','--muted':'#8fb0ab','--faint':'#6a8a85','--mono':'#9fd0c8','--accent':'#2dd4bf','--accent2':'#14b8a6','--gray':'#3f5c58','--gray2':'#37514e','--ok':'#34d399','--warn':'#fbbf24','--err':'#f87171'}},
+ {name:'紫罗兰',c:{'--bg':'#12101a','--card':'#1c1830','--inset':'#161228','--deep':'#0d0a16','--border':'#3a2f5c','--border2':'#302944','--text':'#ede9ff','--muted':'#a49bc9','--faint':'#7e76a5','--mono':'#c4b8f0','--accent':'#8b5cf6','--accent2':'#7c4ce0','--gray':'#4a4468','--gray2':'#3f3a5a','--ok':'#34d399','--warn':'#fbbf24','--err':'#fb7185'}},
+ {name:'墨绿',c:{'--bg':'#0e1211','--card':'#16211c','--inset':'#111a16','--deep':'#0a0f0d','--border':'#274239','--border2':'#1f352d','--text':'#e7f3ec','--muted':'#93b3a4','--faint':'#6f9182','--mono':'#a3d3bd','--accent':'#34d399','--accent2':'#10b981','--gray':'#3c5a4e','--gray2':'#345048','--ok':'#4ade80','--warn':'#fbbf24','--err':'#f87171'}},
+ {name:'琥珀',c:{'--bg':'#14110b','--card':'#201a12','--inset':'#191510','--deep':'#0e0b07','--border':'#4a3d26','--border2':'#3d3220','--text':'#f5eeda','--muted':'#b8a98c','--faint':'#8f8168','--mono':'#d8c79a','--accent':'#f59e0b','--accent2':'#d97706','--gray':'#5c4f33','--gray2':'#4f452e','--ok':'#4ade80','--warn':'#fbbf24','--err':'#f87171'}},
+ {name:'霓虹',c:{'--bg':'#0c0e1a','--card':'#141735','--inset':'#0f1228','--deep':'#080a16','--border':'#2c3568','--border2':'#242c56','--text':'#eef0ff','--muted':'#9aa3d6','--faint':'#727aa6','--mono':'#b9c2ff','--accent':'#6366f1','--accent2':'#4f46e5','--gray':'#3d4270','--gray2':'#343a63','--ok':'#4ade80','--warn':'#fde047','--err':'#fb7185'}},
+ {name:'晨曦(浅)',c:{'--bg':'#f2f5f9','--card':'#ffffff','--inset':'#eef2f7','--deep':'#ffffff','--border':'#d3dbe6','--border2':'#e1e7ef','--text':'#1f2937','--muted':'#64748b','--faint':'#94a3b8','--mono':'#334155','--accent':'#2563eb','--accent2':'#1d4ed8','--gray':'#64748b','--gray2':'#475569','--ok':'#16a34a','--warn':'#d97706','--err':'#dc2626'}}
+];
+const sw=document.getElementById('swatches');
+function setTheme(n){const t=THEMES.find(x=>x.name===n);if(!t)return;const r=document.documentElement;for(const k in t.c){r.style.setProperty(k,t.c[k]);}document.getElementById('themeName').textContent=n;document.querySelectorAll('.swatch').forEach((s,i)=>s.style.boxShadow='0 0 0 2px '+(THEMES[i].name===n?'var(--accent)':'transparent'));}
+THEMES.forEach((t,i)=>{const d=document.createElement('span');d.className='swatch';d.title=t.name;d.style.cssText='cursor:pointer;width:22px;height:22px;border-radius:6px;background:'+t.c['--accent']+';border:1px solid var(--border);box-shadow:0 0 0 2px transparent';d.onclick=()=>setTheme(t.name);sw.appendChild(d);});
+const KEYMAP={'blue':'海蓝','teal':'深青','violet':'紫罗兰','green':'墨绿','amber':'琥珀','neon':'霓虹','light':'晨曦(浅)'};
+setTheme('海蓝');
+const tq=new URLSearchParams(location.search).get('t');if(tq&&KEYMAP[tq])setTheme(KEYMAP[tq]);
+const at=document.getElementById('animTgl');
+function setAnim(on){document.body.classList.toggle('no-anim',!on);if(at)at.classList.toggle('on',on);if(document.getElementById('animTop'))document.getElementById('animTop').classList.toggle('on',on);}
+function toggleAnim(){setAnim(!document.body.classList.contains('no-anim'));}
+if(at)at.addEventListener('click',toggleAnim);
+if(document.getElementById('animTop'))document.getElementById('animTop').addEventListener('click',toggleAnim);
+</script><script>
+(function(){
+  var cv=document.getElementById('fxbg'); if(!cv)return; var ctx=cv.getContext('2d');
+  var W=0,H=0; function rs(){W=cv.width=Math.floor(innerWidth);H=cv.height=Math.floor(innerHeight);}
+  function hash(ix,iy){var h=(ix*374761393+iy*668265263)|0;h=((h^(h>>13))*1274126177)|0;return (((h^(h>>16))>>>0)/4294967295);}
+  function sm(t){return t*t*(3-2*t);}
+  function vnoise(x,y){var ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy;var a=hash(ix,iy),b=hash(ix+1,iy),c=hash(ix,iy+1),d=hash(ix+1,iy+1),u=sm(fx),v=sm(fy);return (a*(1-u)+b*u)*(1-v)+(c*(1-u)+d*u)*v;}
+  function flow(x,y){var e=.02;var n1=vnoise(x,y),n2=vnoise(x+e,y),n3=vnoise(x,y+e);return [(n3-n1)/e,-(n2-n1)/e];}
+  var P=[]; var N= innerWidth<720?150:300;
+  function seed(){P.length=0; for(var i=0;i<N;i++)P.push({x:Math.random()*W,y:Math.random()*H,vx:0,vy:0,r:Math.random()*1.7+0.5,a:Math.random()*.16+.10,hue:Math.random()<.5?0:1});}
+  rs(); seed();
+  var mx=-9999,my=-9999,mvx=0,mvy=0,raf=0;
+  addEventListener('mousemove',function(e){var nx=e.clientX,ny=e.clientY;mvx=nx-mx;mvy=ny-my;mx=nx;my=ny;});
+  addEventListener('mouseout',function(e){if(!e.relatedTarget){mx=-9999;my=-9999;mvx=0;mvy=0;}});
+  function step(){
+    ctx.clearRect(0,0,W,H); ctx.globalCompositeOperation='lighter';
+    for(var i=0;i<P.length;i++){var p=P[i];
+      var f=flow(p.x*0.0040,p.y*0.0040); var vx=f[0]*1.0, vy=f[1]*1.0;
+      if(mx>-9000){var dx=p.x-mx,dy=p.y-my,d=Math.sqrt(dx*dx+dy*dy); if(d<190&&d>0.01){var s=(190-d)/190,tx=-dy/d,ty=dx/d; vx+=tx*s*2.8;vy+=ty*s*2.8;vx+=mvx*0.02*s;vy+=mvy*0.02*s;}}
+      p.x+=vx; p.y+=vy; if(p.x<-10)p.x=W+10;if(p.x>W+10)p.x=-10;if(p.y<-10)p.y=H+10;if(p.y>H+10)p.y=-10;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r*1.9,0,6.2832); ctx.fillStyle= p.hue? ('rgba(100,170,240,'+(p.a*0.4).toFixed(3)+')') : ('rgba(120,160,250,'+(p.a*0.4).toFixed(3)+')'); ctx.fill();
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,6.2832); ctx.fillStyle= p.hue? ('rgba(150,205,250,'+p.a.toFixed(3)+')') : ('rgba(170,190,255,'+p.a.toFixed(3)+')'); ctx.fill();
+    }
+    ctx.globalCompositeOperation='source-over';
+  }
+  function loop(){
+    if(document.body.classList.contains('no-anim')||matchMedia('(prefers-reduced-motion: reduce)').matches){ ctx.clearRect(0,0,W,H); raf=0; return; }
+    step(); raf=requestAnimationFrame(loop);
+  }
+  function start(){ if(!raf){ mx=-9999;my=-9999;mvx=0;mvy=0; raf=requestAnimationFrame(loop);} }
+  addEventListener('resize',function(){ rs(); seed(); if(!raf)start(); });
+  var at=document.getElementById('animTgl'); if(at){at.addEventListener('click',function(){setTimeout(start,0);});}
+  var fm=new URLSearchParams(location.search).get('fx'); if(fm){var a=fm.split(','); mx=+a[0];my=+a[1];}
+  start();
+})();
+</script></body></html>

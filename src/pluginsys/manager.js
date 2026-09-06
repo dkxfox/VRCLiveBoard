@@ -108,6 +108,12 @@ class PluginManager {
       manifest: entry.manifest,
       logger: self.logger,
       config: entry.settings,
+      resource: function (kind, name) {
+        entry.resources = entry.resources || [];
+        const key = String(kind) + ':' + String(name);
+        if (entry.resources.indexOf(key) < 0) entry.resources.push(key);
+        return key;
+      },
       events: {
         on: function (ev, fn) {
           // 插件回调异常隔离: 单个插件炸不拖垮整个程序
@@ -228,6 +234,19 @@ class PluginManager {
       if (!create) return { ok: false, error: 'index.js 缺少导出' };
       entry.plugin = create(this.buildCtx(entry));
       if (entry.plugin && entry.plugin.apply) entry.plugin.apply();
+      // 运行时资源重叠检测(先启者优先): 与本插件资源重叠的已启用插件
+      const mine = entry.resources || [];
+      for (const other of this.entries) {
+        if (other.id === entry.id || !other.enabled) continue;
+        const theirs = other.resources || [];
+        for (const rk of mine) {
+          if (theirs.indexOf(rk) >= 0) {
+            if (entry.plugin && entry.plugin.dispose) { try { entry.plugin.dispose(); } catch (e2) {} }
+            entry.plugin = null; entry.enabled = false; entry.resources = [];
+            return { ok: false, error: '运行时资源冲突: 与已启用插件 ' + other.id + ' 共享资源 ' + rk + '(先启者优先)' };
+          }
+        }
+      }
       if (entry.plugin && entry.plugin.sources) {
         for (const s of entry.plugin.sources) { entry.runtimeSources.push(s); this.composer.registerSource(s); }
       }

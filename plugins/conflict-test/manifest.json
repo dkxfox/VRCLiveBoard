@@ -1,0 +1,19 @@
+{
+  "id": "conflict-test",
+  "name": "冲突测试插件",
+  "version": "1.0.0",
+  "author": "开发自测",
+  "description": "测试运行时资源注册表 + 安全警告文案(全部权限打开)",
+  "api": "2.0.0",
+  "permissions": {
+    "network": ["*"],
+    "filesystem": { "read": ["*"], "write": ["*"] },
+    "process": true,
+    "ports": [9000, 9234],
+    "ai": { "tasks": ["*"] }
+  },
+  "dependencies": {},
+  "conflicts": [],
+  "exclusive": [ "chatbox-timeline" ],
+  "loadOrder": 200
+}

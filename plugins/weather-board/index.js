@@ -198,7 +198,7 @@ module.exports = function (ctx) {
     },
     dispose: function () { if (stopTimer) stopTimer(); },
     importRows: importRows,
-    api: { getRows: getRows, saveRows: saveRows, saveConfig: saveConfig, testCity: testCity, addPresets: function (input) {
+    api: { getRows: getRows, saveRows: saveRows, saveConfig: saveConfig, testCity: testCity, status: function () { return { ok: true, intervalMin: ctx.config.intervalMin, displaySec: ctx.config.displaySec, continuous: !!ctx.config.continuous, prefix: ctx.config.prefix !== undefined ? String(ctx.config.prefix) : '【天气】' }; }, addPresets: function (input) {
       if (input && typeof input === 'object' && input.args) input = input.args;
       const kind = (input && input.kind === 'world') ? 'world' : 'cn';
       const list = PRESETS[kind] || [];
