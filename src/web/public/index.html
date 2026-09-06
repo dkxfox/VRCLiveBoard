@@ -87,7 +87,7 @@ body.no-anim *{animation:none!important;transition:none!important}
 #tab-plugins table{width:100%;margin-top:8px;border-collapse:collapse;font-size:13px}
 #tab-plugins th,#tab-plugins td{text-align:left;padding:6px 8px;border-bottom:1px solid #232c38}
 #tab-plugins .small{font-size:13px;padding:6px 12px}
-#plgModal{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center}
+#plgModal{position:fixed;top:0;left:0;width:100%;height:100%;z-index:10000;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center}
 #plgModal.open{display:flex}
 #plgModal>div{background:#16202b;border:1px solid #2a3442;border-radius:12px;padding:18px;max-width:640px;width:92%;max-height:80vh;overflow:auto}
 #marketCard{background:#16202b;border:1px solid #2a3442;border-radius:10px;padding:12px}
@@ -295,8 +295,9 @@ body.no-anim *{animation:none!important;transition:none!important}
     <pre id="logView" style="max-height:180px;overflow:auto;background:var(--deep);border:1px solid var(--border2);border-radius:6px;padding:8px;font-size:12px;white-space:pre-wrap"></pre>
   </div>
 </div>
+</div>
 <div class="card sub" id="marketCard" style="display:none"></div>
-<div id="plgModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:10000;align-items:center;justify-content:center">
+<div id="plgModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:10000;top:0;left:0;width:100%;height:100%;align-items:center;justify-content:center">
   <div style="background:#2a0e0e;border:2px solid var(--err);border-radius:12px;max-width:520px;width:90%;padding:20px;color:#ffd7d7">
     <b id="plgModalTitle" style="color:#ff6b6b;font-size:16px"></b>
     <div id="plgWarnText" style="margin:10px 0;line-height:1.7;font-size:14px"></div>
