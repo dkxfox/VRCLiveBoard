@@ -181,9 +181,11 @@
 98. **插件安全策略改为 0 级可看 + 单向收紧**(2026-09-03, 用户提议"插件的安全策略应该在0级可看, 用户可以单向收紧权限"):
 ## 110. 控制台前端改版(仪表盘化)+ 数据接线(WIP, 未上传)
 ## 111. 新版 UI 开发中踩的坑(2026-09-05)
-- 前端经典 script 里不能有顶层 await(浏览器按 classic script 解析会整体拒绝执行); 项目 package.json 是 ESM, node --check 能过会掩盖此坑。顶层 await 必须包进 async 函数/IIFE。
-- 插件启停是两个独立接口: POST /api/plugins/enable(只启用)与 /api/plugins/disable(只停用); 给 enable 传 enabled:false 会被忽略, 导致开关"关一秒又弹回开"。
-- /api/plugins/call 需要插件已启用: manager 只在 enable() 里 require 插件并创建 entry.plugin; 未启用时 call 返回 400 该插件不支持此操作, 插件设置表单看起来"空"其实是没数据可读。旧版同理: 先启用再配置。
-- 插件 id 用连字符(scheduled-board), 但 window.__plgset_xxx 里连字符是非法标识符, 需用下划线注册并在查询时 id.replace(/-/g,'_') 归一化, 否则设置面板命中不到。
-- 教训: 大文件改动用整体重写, 不要反复 append/truncate(多次拼接会把括号/函数边界切坏, 造成 Unexpected end of input)。
-- 开发流程纪律不变: 门禁照跑、DEV-NOTES 记坑、不上传; 保密内容已解密(可提交), 旧版数据(旧版控制台备份/ 与 config.json)保留不删。
+## 112. 启动品牌/季节/特殊彩蛋视频(2026-09-06)
+- 启动动画三档: 特殊彩蛋视频(日期命中, 带声音/单次/点画面跳过) > 星轨茶会进度条(进度条→旧logo/字标展开→玻璃擦旧换新→文案) > 季节/节日图标版; 品牌/日期读 config(specialVideo / branding)。
+- 坑:
+  1) 静态资源路由只放行 ASCII 文件名(/^[a-zA-Z0-9_.-]+$/), 中文名 png(新版.png)会 404 → 素材改 ASCII 名(starry-*.png);
+  2) GET /api/config 每加新字段都要显式写进返回对象, 漏写前端拿不到(specialVideo 一开始漏了, 视频判定分支不触发);
+  3) PowerShell Test-Path 把路径里 [...] 当通配符(字符类), 含 [MP4 720p] 的路径误报"文件不存在" → 用 -LiteralPath;
+  4) 浏览器/Electron 自动播放带声音有策略限制, 桌面端需 app.commandLine.appendSwitch('autoplay-policy','no-user-gesture-required');
+  5) 视频走专用路由 /api/special/video(带 Range), 不经静态白名单; 大视频不进 git(测试视频/ 已 gitignore)。

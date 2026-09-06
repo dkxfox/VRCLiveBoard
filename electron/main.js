@@ -4,6 +4,8 @@ const path = require('path');
 const fs = require('fs');
 const { setConsoleVisible } = require(path.join(__dirname, '..', 'src', 'consolewin'));
 const { cleanupUserData } = require('./userdata-cleanup');
+// 允许自动播放(含声音): 特殊彩蛋启动视频需要无手势自动播
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 function applyConsoleSetting() {
   try {

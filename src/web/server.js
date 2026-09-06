@@ -172,7 +172,7 @@ function effPluginSec() {
       const cap = (rootConfig.ocrtl && rootConfig.ocrtl.capture) || {};
       const sec = (rootConfig.ocrtl && rootConfig.ocrtl.security) || {};
       const swf = (rootConfig.chatbox && rootConfig.chatbox.swearFilter) || {};
-      return json(res, 200, { pages: rootConfig.sources.pages.pages, rotationMs: rootConfig.sources.pages.rotationMs, sources: srcs, autostart: autostart, desktop: { showConsole: !((rootConfig.desktop || {}).showConsole === false) }, lang: (rootConfig.web && rootConfig.web.lang) || 'zh-CN', ocrtl: { delayMs: (rootConfig.ocrtl || {}).delayMs || 5000, displayMs: (rootConfig.ocrtl || {}).displayMs || 8000, loops: (rootConfig.ocrtl || {}).loops || 2, mode: (rootConfig.ocrtl || {}).mode || 'auto', vision: { apiBase: v.apiBase || '', model: v.model || 'deepseek-v4-flash-vision-exp', hasKey: !!v.apiKey, targetLang: v.targetLang || 'zh' }, capture: { mode: cap.mode || 'window', windowTitle: cap.windowTitle || 'VRChat', region: cap.region || { x: 0, y: 0, w: 0, h: 0 } }, security: { promptDefense: sec.promptDefense !== false, jsonMode: sec.jsonMode !== false, outputSanitize: sec.outputSanitize !== false, extraPrompt: sec.extraPrompt || '', blockWords: sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS } }, swearFilter: { enabled: swf.enabled !== false, words: swf.words && swf.words.length ? swf.words : swearfilter.DEFAULTS }, pluginsSecurity: effPluginSec() });
+      return json(res, 200, { pages: rootConfig.sources.pages.pages, rotationMs: rootConfig.sources.pages.rotationMs, sources: srcs, autostart: autostart, desktop: { showConsole: !((rootConfig.desktop || {}).showConsole === false) }, lang: (rootConfig.web && rootConfig.web.lang) || 'zh-CN', ocrtl: { delayMs: (rootConfig.ocrtl || {}).delayMs || 5000, displayMs: (rootConfig.ocrtl || {}).displayMs || 8000, loops: (rootConfig.ocrtl || {}).loops || 2, mode: (rootConfig.ocrtl || {}).mode || 'auto', vision: { apiBase: v.apiBase || '', model: v.model || 'deepseek-v4-flash-vision-exp', hasKey: !!v.apiKey, targetLang: v.targetLang || 'zh' }, capture: { mode: cap.mode || 'window', windowTitle: cap.windowTitle || 'VRChat', region: cap.region || { x: 0, y: 0, w: 0, h: 0 } }, security: { promptDefense: sec.promptDefense !== false, jsonMode: sec.jsonMode !== false, outputSanitize: sec.outputSanitize !== false, extraPrompt: sec.extraPrompt || '', blockWords: sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS } }, swearFilter: { enabled: swf.enabled !== false, words: swf.words && swf.words.length ? swf.words : swearfilter.DEFAULTS }, pluginsSecurity: effPluginSec(), branding: (rootConfig.branding || 'default'), specialVideo: (rootConfig.specialVideo || null) });
     }
     if (req.method === 'POST' && (url.pathname === '/v1/chatbox' || url.pathname === '/api/chatbox')) {
       return readBody(req, function (body) {
@@ -196,6 +196,7 @@ function effPluginSec() {
             const rm = Number(o.rotationMs);
             if (rm >= 3000 && rm <= 300000) rootConfig.sources.pages.rotationMs = rm;
           }
+          if (o.branding) rootConfig.branding = String(o.branding);
           persist();
           return json(res, 200, { ok: true, pageCount: rootConfig.sources.pages.pages.length });
         } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
@@ -463,6 +464,20 @@ function effPluginSec() {
       };
       runNext();
       return;
+    }
+    if (req.method === 'GET' && url.pathname === '/api/special/video') {
+      const sv = rootConfig.specialVideo;
+      const rel = sv && sv.file ? String(sv.file) : '';
+      if (!rel) return json(res, 404, { ok: false, error: '未配置特殊彩蛋视频' });
+      const f = path.join(__dirname, '..', '..', rel);
+      return fs.stat(f, function (err, stat) {
+        if (err) return json(res, 404, { ok: false });
+        const total = stat.size; const range = req.headers.range; let start = 0, end = total - 1;
+        if (range) { const m = /bytes=(\d*)-(\d*)/.exec(range); if (m) { if (m[1]) start = parseInt(m[1], 10); if (m[2]) end = parseInt(m[2], 10); if (end >= total) end = total - 1; } }
+        const ct = path.extname(f).toLowerCase() === '.webm' ? 'video/webm' : 'video/mp4';
+        if (range) { res.writeHead(206, { 'Content-Range': 'bytes ' + start + '-' + end + '/' + total, 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1, 'Content-Type': ct }); fs.createReadStream(f, { start: start, end: end }).pipe(res); }
+        else { res.writeHead(200, { 'Content-Length': total, 'Content-Type': ct, 'Accept-Ranges': 'bytes' }); fs.createReadStream(f).pipe(res); }
+      });
     }
     if (req.method === 'GET' && url.pathname === '/api/icon') {
       const iconPath = path.join(__dirname, '..', '..', '软件图标.png');

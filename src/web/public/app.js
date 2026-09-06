@@ -100,13 +100,37 @@ if($('oscTest'))$('oscTest').onclick=async function(){try{var s=await (await fet
 function applyAnim(){var master=localStorage.getItem('vrcbAnimMaster')==='1';var auto=localStorage.getItem('vrcbAnimAutoOff')==='1'&&!!window._vrcRunning;document.body.classList.toggle('no-anim',master||auto);}
 if($('animTop')){$('animTop').onclick=function(){var off=!document.body.classList.contains('no-anim');document.body.classList.toggle('no-anim',off);localStorage.setItem('vrcbAnimMaster',off?'1':'0');$('animTop').classList.toggle('on',!off);};$('animTop').classList.toggle('on',localStorage.getItem('vrcbAnimMaster')!=='1');}
 if($('animTgl')){$('animTgl').onclick=function(){var on=this.classList.contains('on');this.classList.toggle('on',!on);localStorage.setItem('vrcbAnimAutoOff',on?'0':'1');applyAnim();};$('animTgl').classList.toggle('on',localStorage.getItem('vrcbAnimAutoOff')==='1');}
+function starryBoot(){
+  var st=document.createElement('style');st.textContent='.pl{position:absolute;left:16%;top:50%;transform:translateY(-50%);height:3px;width:0;background:linear-gradient(90deg,#7c5cf6,#c4b5fd,#7c5cf6);border-radius:2px;box-shadow:0 0 18px #7c5cf6aa;z-index:5}.plogo{position:absolute;left:0;right:0;bottom:50%;height:30%;display:flex;align-items:flex-end;justify-content:center;transform-origin:50% 100%;transform:scaleY(0);z-index:4}.plogo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}.plogo .pnew{visibility:hidden;z-index:1}.plogo .pold{z-index:2}.pwipe{position:absolute;top:-12%;bottom:-12%;left:0;width:80px;transform:skewX(-14deg);background:linear-gradient(90deg,transparent,rgba(255,255,255,.3),rgba(167,139,250,.42),transparent);mix-blend-mode:screen;z-index:3;opacity:0}.pword{position:absolute;left:0;right:0;top:50%;width:44%;margin:0 auto;transform-origin:50% 0%;transform:scaleY(0)}.pword img{width:100%;display:block}.ptag{position:absolute;left:0;right:0;bottom:13%;text-align:center;font-size:16px;color:#c4b5fd;opacity:0;letter-spacing:1px}';document.head.appendChild(st);
+  var ov=document.createElement('div');ov.style.cssText='position:fixed;inset:0;z-index:9999;pointer-events:none;background:radial-gradient(110% 110% at 50% 32%, #7c5cf62e 0%, #0b0e13 72%)';
+  ov.innerHTML='<div class="pl"></div><div class="plogo"><img class="pnew" src="/starry-new.png"><img class="pold" src="/starry-old.png"><div class="pwipe"></div></div><div class="pword"><img src="/starry-wordmark.png"></div><div class="ptag">凌晨三点的星光,落进你的聊天框</div>';
+  document.body.appendChild(ov);
+  var pl=ov.querySelector('.pl'),plogo=ov.querySelector('.plogo'),pold=ov.querySelector('.pold'),pnew=ov.querySelector('.pnew'),pwipe=ov.querySelector('.pwipe'),pword=ov.querySelector('.pword'),ptag=ov.querySelector('.ptag');
+  var prog=0,iv=setInterval(function(){prog+=1.2;if(prog>66){prog=66;clearInterval(iv);}pl.style.width=prog+'%';},20);
+  setTimeout(function(){plogo.style.transition='transform .9s cubic-bezier(.2,.7,.3,1)';plogo.style.transform='scaleY(1)';pword.style.transition='transform .9s cubic-bezier(.2,.7,.3,1)';pword.style.transform='scaleY(1)';},1300);
+  setTimeout(function(){pwipe.style.opacity='1';pnew.style.visibility='visible';pnew.style.clipPath='inset(0 100% 0 0)';var p=0,iv2=setInterval(function(){p+=2;if(p>108){p=108;clearInterval(iv2);pwipe.style.opacity='0';}pwipe.style.left=p+'%';pold.style.clipPath='inset(0 0 0 '+p+'%)';pnew.style.clipPath='inset(0 '+(100-p)+'% 0 0)';},18);},2700);
+  setTimeout(function(){ptag.style.transition='opacity .5s';ptag.style.opacity='1';},3800);
+  setTimeout(function(){ov.style.transition='opacity .6s';ov.style.opacity='0';},5600);
+  setTimeout(function(){ov.remove();},6300);
+}
+function playSpecialVideo(sv){
+  var ov=document.createElement('div');ov.style.cssText='position:fixed;inset:0;z-index:9999;background:#000;cursor:pointer';
+  ov.innerHTML='<video src="/api/special/video" autoplay playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain"></video>'+(sv&&sv.title?('<div style="position:absolute;bottom:26px;left:0;right:0;text-align:center;color:rgba(255,255,255,.7);font-size:13px;letter-spacing:2px;pointer-events:none">点击任意处跳过</div>'):'');
+  document.body.appendChild(ov);
+  var skipped=false; var skip=function(){if(skipped)return;skipped=true;ov.remove();};
+  ov.addEventListener('click',skip);
+  var v=ov.querySelector('video');
+  if(v){v.addEventListener('ended',skip);v.addEventListener('error',function(){if(!skipped)skip();});}
+  setTimeout(skip,120000);
+}
 // 启动动画(品牌感知)
-(async function(){var brd='default';try{var bc=await (await fetch('/api/config')).json();brd=bc.branding||'default';}catch(e){}
+(async function(){var brd='default';var bc=null;try{bc=await (await fetch('/api/config')).json();brd=bc.branding||'default';}catch(e){}
+ if(bc&&bc.specialVideo&&bc.specialVideo.date){var _d0=new Date();var _today=('0'+(_d0.getMonth()+1)).slice(-2)+'-'+('0'+_d0.getDate()).slice(-2);if(bc.specialVideo.date===_today){playSpecialVideo(bc.specialVideo);return;}}
  var now=new Date(),m=now.getMonth()+1,d=now.getDate();
  var fest=[[1,1,'元旦快乐','#f59e0b','#60a5fa','🎆'],[9,15,'中秋快乐','#f5c518','#ff8c42','🥮'],[10,1,'国庆快乐','#ff5b5b','#f5c518','🎆'],[10,31,'万圣节快乐','#ff8c00','#c084fc','🎃'],[12,25,'圣诞快乐','#2fbf71','#e2405b','🎄']];
  var t=null;for(var i=0;i<fest.length;i++){var f=fest[i];if(f[0]===m&&f[1]===d){t=f;break;}}
  var c1,c2,greet,deco,title,tag;
- if(brd==='starry'){title='星轨茶会';tag='凌晨三点的星光,落进你的聊天框';c1='#7c5cf6';c2='#3b82f6';greet='欢迎回到星轨茶会';deco='✦';}
+ if(brd==='starry'){starryBoot();return;}
  else if(t){c1=t[3];c2=t[4];greet=t[2];deco=t[5];title='VRCLiveBoard';tag='星光落进聊天框';}
  else if(m>=3&&m<=5){c1='#34d399';c2='#f9a8d4';greet='春色满园';deco='🌸';title='VRCLiveBoard';tag='星光落进聊天框';}
  else if(m>=6&&m<=8){c1='#38bdf8';c2='#86efac';greet='夏日浓荫';deco='☀️';title='VRCLiveBoard';tag='星光落进聊天框';}
@@ -188,6 +212,9 @@ window.__plgset_netease_lyrics=function(p,body){
   plugCall('netease-lyrics','status',{}).then(function(j){if(j&&j.cfg){var c=j.cfg;body.querySelector('.nlUpdate').value=c.updateSec||4;body.querySelector('.nlPrio').value=c.priority||35;body.querySelector('.nlPort').value=c.cdpPort||9234;body.querySelector('.nlExe').value=c.cloudExe||'';body.querySelector('.nlTrans').checked=c.showTranslation!==false;body.querySelector('.nlOther').checked=!!c.allowOtherPlayers;body.querySelector('.nlRhythm').checked=!!c.rhythmMode;body.querySelector('.nlTitle').checked=c.showTitle!==false;}});
 };
 
+// 品牌选择: 变更即保存 + 回显已保存值
+if($('brandSel'))$('brandSel').onchange=function(){try{fetch('/api/config',{method:'POST',body:JSON.stringify({branding:this.value})});}catch(e){}};
+(async function(){try{var _c=await (await fetch('/api/config')).json();var _bs=$('brandSel');if(_bs&&_c.branding)_bs.value=_c.branding;}catch(e){}})();
 // init
 try{applyLang();}catch(e){}
 pollStatus();setInterval(pollStatus,5000);
