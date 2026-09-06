@@ -101,7 +101,7 @@ body.no-anim *{animation:none!important;transition:none!important}
 .plgcard-desc{color:var(--text);font-size:13px;margin:8px 0 4px}
 .plgcard-meta{color:var(--muted);font-size:12px}
 .plgcard-body{margin-top:12px;border-top:1px solid var(--border2);padding-top:10px}
-</style></head><body><div id="bootscrim" style="position:fixed;inset:0;z-index:9997;background:#0b0e13;display:flex;align-items:center;justify-content:center"><div style="color:#3b82f6;font-size:15px;letter-spacing:4px;opacity:.75">VRCLiveBoard</div></div><canvas id="fxbg"></canvas><div id="layout"><div class="headrow" style="margin-bottom:14px"><div><h1>VRCLiveBoard 控制台</h1><div class="sub">星光落进聊天框</div><div class="mono" style="color:#5b8def;margin-top:4px">http://127.0.0.1:19190/</div></div><div class="row"><span class="sub" style="font-size:12px;color:var(--muted)">动效</span><span class="sw on" id="animTop" title="游戏时关闭动效"></span><select id="langSel"><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option><option value="en">English</option></select></div></div>
+</style></head><body><div id="bootscrim" style="position:fixed;inset:0;z-index:9997;background:#0b0e13;display:flex;align-items:center;justify-content:center"><div style="color:#3b82f6;font-size:15px;letter-spacing:4px;opacity:.75">VRCLiveBoard</div></div><canvas id="fxbg"></canvas><div id="layout"><div class="headrow" style="margin-bottom:14px"><div><h1 data-t="appTitle">VRCLiveBoard 控制台</h1><div class="sub" data-t="bootTagline">星光落进聊天框</div><div class="mono" style="color:#5b8def;margin-top:4px">http://127.0.0.1:19190/</div></div><div class="row"><span class="sub" style="font-size:12px;color:var(--muted)" data-t="animMaster">动效</span><span class="sw on" id="animTop" data-tt="animTitle" title="游戏时关闭动效"></span><select id="langSel"><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option><option value="en">English</option></select></div></div>
 <!-- ① 状态总览 -->
 <div class="card">
   <div class="card-head"><b class="card-title" data-t="secStatus"></b><span class="row"><button class="small gray" id="diagBtn" data-t="btnDiag"></button><button class="small gray" id="healthRefresh" data-t="btnRefresh"></button><button class="small gray" id="oscTest" data-t="btnTestOsc"></button></span></div>
@@ -110,17 +110,17 @@ body.no-anim *{animation:none!important;transition:none!important}
     <div class="stat"><span class="dot" id="vrcDot"></span><span class="k">VRChat</span><b id="vrcText">未运行</b></div>
     <div class="stat"><span class="dot" id="oscDot"></span><span class="k">OSC</span><b id="oscText">关闭</b></div>
     <div class="stat"><span class="dot" id="udpDot"></span><span class="k">UDP 9000</span><b id="udpText">空闲(正常)</b></div>
-    <div class="stat"><span class="dot on breathe"></span><span class="k">控制台</span><b>运行中</b></div>
-    <div class="legend"><span><i class="dot on" style="width:8px;height:8px"></i>正常</span><span><i class="dot" style="width:8px;height:8px"></i>未运行(正常)</span><span><i class="dot warn" style="width:8px;height:8px"></i>待检</span><span><i class="dot off" style="width:8px;height:8px"></i>异常</span></div>
+    <div class="stat"><span class="dot on breathe"></span><span class="k" data-t="console">控制台</span><b data-t="running">运行中</b></div>
+    <div class="legend"><span><i class="dot on" style="width:8px;height:8px"></i><span data-t="lgNormal">正常</span></span><span><i class="dot" style="width:8px;height:8px"></i><span data-t="lgNotRun">未运行(正常)</span></span><span><i class="dot warn" style="width:8px;height:8px"></i><span data-t="lgPending">待检</span></span><span><i class="dot off" style="width:8px;height:8px"></i><span data-t="lgError">异常</span></span></div>
   </div>
 </div>
 <!-- ② 发送卡(含 当前聊天框内容) -->
 <div class="card" style="position:sticky;top:0;z-index:30">
-  <div class="card-head"><b class="card-title" data-t="secComposer"></b><span class="sub">Ctrl+Enter 发送</span></div>
-  <div class="sub" style="margin-top:8px">当前聊天框内容:</div>
-  <pre id="curChat" style="min-height:46px;margin-top:4px">( 尚未发送 )</pre>
-  <textarea id="box" rows="2" placeholder="输入要发送到聊天框的内容…"></textarea>
-  <div class="row" style="margin-top:10px"><button id="send" data-t="btnSend"></button><span class="sub" style="margin-left:auto">144 字符 / 9 行 · 当前 <span class="mono" id="charCount">0</span>/144</span></div>
+  <div class="card-head"><b class="card-title" data-t="secComposer"></b><span class="sub" data-t="lblCtrlEnter">Ctrl+Enter 发送</span></div>
+  <div class="sub" style="margin-top:8px" data-t="currentLabel">当前聊天框内容:</div>
+  <pre id="curChat" style="min-height:46px;margin-top:4px" data-t="notSent">( 尚未发送 )</pre>
+  <textarea id="box" rows="2" data-t-ph="placeSend" placeholder="输入要发送到聊天框的内容…"></textarea>
+  <div class="row" style="margin-top:10px"><button id="send" data-t="btnSend"></button><span class="sub" style="margin-left:auto"><span data-t="charLimit">144 字符 / 9 行 · 当前</span> <span class="mono" id="charCount">0</span>/144</span></div>
 </div>
 <!-- ③ Tab(含 公告板) -->
 <div class="tabs" id="tabs">
@@ -137,30 +137,30 @@ body.no-anim *{animation:none!important;transition:none!important}
 <div id="tab-dash">
   <div id="grid2">
     <div class="card">
-      <div class="card-head"><b class="card-title" data-t="secBoard"></b><span class="row" style="gap:8px"><span class="sub" id="boardCount">共 4 条</span><button class="small gray" id="boardEdit">编辑</button></span></div>
+      <div class="card-head"><b class="card-title" data-t="secBoard"></b><span class="row" style="gap:8px"><span class="sub" id="boardCount">共 4 条</span><button class="small gray" id="boardEdit" data-t="btnEdit">编辑</button></span></div>
       <pre id="pageText" class="preFlex">== 欢迎 ==
 这是 VRCLiveBoard
 电脑状态正在轮播</pre>
-      <div class="btnRow"><button class="small gray" id="pgPrev">上一页</button><button class="small gray" id="pgNext">下一页</button><span class="sub" id="pgNum">第 1 / 4 页</span><span class="mono" style="margin-left:auto" id="pgDots"></span></div>
+      <div class="btnRow"><button class="small gray" id="pgPrev" data-t="btnPrev">上一页</button><button class="small gray" id="pgNext" data-t="btnNext">下一页</button><span class="sub" id="pgNum">第 1 / 4 页</span><span class="mono" style="margin-left:auto" id="pgDots"></span></div>
       <div id="editMode" hidden style="margin-top:12px">
         <div class="edlist" id="edlist" style="max-height:220px"></div>
-        <div class="row" style="margin-top:10px"><button class="small" id="addPage">+ 添加</button><span class="sub" style="margin-left:auto">条目多时请用上方「公告板」Tab 大编辑器</span></div>
+        <div class="row" style="margin-top:10px"><button class="small" id="addPage" data-t="btnAdd">+ 添加</button><span class="sub" style="margin-left:auto" data-t="boardHintDash">条目多时请用上方「公告板」Tab 大编辑器</span></div>
       </div>
     </div>
     <div class="card">
-      <div class="card-head"><b class="card-title" data-t="secSwitches"></b><span class="sub">数据源 / 插件 一键启停</span></div>
+      <div class="card-head"><b class="card-title" data-t="secSwitches"></b><span class="sub" data-t="switchesHint">数据源 / 插件 一键启停</span></div>
       <div class="funcgrid">
-        <div class="fgroup"><div class="sub">数据源</div>
-          <div class="frow"><span class="k">公告板<span class="d"> 多页轮播</span></span><div class="sw on" data-src="pages"></div></div>
-          <div class="frow"><span class="k">电脑状态<span class="d"> CPU/GPU</span></span><div class="sw on" data-src="hardware"></div></div>
-          <div class="frow"><span class="k">媒体<span class="d"> SMTC</span></span><div class="sw" data-src="media"></div></div>
-          <div class="frow"><span class="k">字幕<span class="d"> LiveTranslate</span></span><div class="sw" data-src="livetranslate"></div></div>
+        <div class="fgroup"><div class="sub" data-t="grpSources">数据源</div>
+          <div class="frow"><span class="k"><span data-t="srcPages">公告板</span><span class="d"><span data-t="srcPagesShort"> 多页轮播</span></span></span><div class="sw on" data-src="pages"></div></div>
+          <div class="frow"><span class="k"><span data-t="srcHW">电脑状态</span><span class="d"><span data-t="srcHWShort"> CPU/GPU</span></span></span><div class="sw on" data-src="hardware"></div></div>
+          <div class="frow"><span class="k"><span data-t="srcMedia">媒体</span><span class="d"><span data-t="srcMediaShort"> SMTC</span></span></span><div class="sw" data-src="media"></div></div>
+          <div class="frow"><span class="k"><span data-t="srcLive">字幕</span><span class="d"><span data-t="srcLiveShort"> LiveTranslate</span></span></span><div class="sw" data-src="livetranslate"></div></div>
         </div>
-        <div class="fgroup"><div class="sub">插件</div>
-          <div class="frow"><span class="k">好友欢迎</span><div class="sw on" data-plg="friend-welcome"></div></div>
-          <div class="frow"><span class="k">定时公告</span><div class="sw on" data-plg="scheduled-board"></div></div>
-          <div class="frow"><span class="k">天气播报</span><div class="sw on" data-plg="weather-board"></div></div>
-          <div class="frow"><span class="k">网易云歌词</span><div class="sw on" data-plg="netease-lyrics"></div></div>
+        <div class="fgroup"><div class="sub" data-t="grpPlugins">插件</div>
+          <div class="frow"><span class="k" data-t="plgNameFriendWelcome">好友欢迎</span><div class="sw on" data-plg="friend-welcome"></div></div>
+          <div class="frow"><span class="k" data-t="plgNameScheduled">定时公告</span><div class="sw on" data-plg="scheduled-board"></div></div>
+          <div class="frow"><span class="k" data-t="plgNameWeather">天气播报</span><div class="sw on" data-plg="weather-board"></div></div>
+          <div class="frow"><span class="k" data-t="plgNameNetease">网易云歌词</span><div class="sw on" data-plg="netease-lyrics"></div></div>
         </div>
       </div>
     </div>
@@ -170,19 +170,19 @@ body.no-anim *{animation:none!important;transition:none!important}
 <!-- ⑤ 公告板独立 Tab: 大编辑空间(列表 + 内容编辑 + 预览) -->
 <div id="tab-board" hidden>
   <div class="card">
-    <div class="card-head"><b class="card-title">公告板编辑</b><span class="sub">共 <span id="bdCount">4</span> 条 · 拖动 / ↑↓ 排序 · 点某页在右侧编辑</span></div>
+    <div class="card-head"><b class="card-title" data-t="boardEditTitle">公告板编辑</b><span class="sub" id="bdHint">共 <span id="bdCount">4</span> 条 · 拖动 / ↑↓ 排序 · 点某页在右侧编辑</span></div>
     <div id="beGrid">
       <div class="col">
-        <div class="sub" style="margin-bottom:6px">页面列表</div>
+        <div class="sub" style="margin-bottom:6px" data-t="pageList">页面列表</div>
         <div class="edlist" id="bdList" style="max-height:360px;flex:1"></div>
-        <div class="row" style="margin-top:10px"><button class="small" id="bdAdd">+ 添加页面</button><button class="small">批量导入(Excel)</button><button class="small">导出</button></div>
+        <div class="row" style="margin-top:10px"><button class="small" id="bdAdd" data-t="btnAddPage">+ 添加页面</button><button class="small" data-t="btnBatchImport">批量导入(Excel)</button><button class="small" data-t="btnExport">导出</button></div>
       </div>
       <div class="col">
-        <div class="row" style="margin-bottom:4px"><span class="sub">内容(一页最多 144 字符)</span><span class="row" style="margin-left:auto;gap:4px"><select id="bdVar" style="max-width:200px"><option value="{cpu_util}">{cpu_util} · CPU 使用率 %</option><option value="{cpu_temp}">{cpu_temp} · CPU 温度 ℃</option><option value="{gpu_util}">{gpu_util} · GPU 使用率 %</option><option value="{gpu_temp}">{gpu_temp} · GPU 温度 ℃</option><option value="{mem_used}">{mem_used} · 内存已用 GB</option><option value="{mem_total}">{mem_total} · 内存总量 GB</option><option value="{net_down}">{net_down} · 下载 KB/s</option><option value="{net_up}">{net_up} · 上传 KB/s</option><option value="{song}">{song} · 歌名</option><option value="{artist}">{artist} · 歌手</option><option value="{album}">{album} · 专辑</option><option value="{date}">{date} · 日期</option><option value="{time}">{time} · 时间</option></select><button class="small gray" id="bdVarBtn">插入变量</button></span></div>
+        <div class="row" style="margin-bottom:4px"><span class="sub" data-t="lblContent144">内容(一页最多 144 字符)</span><span class="row" style="margin-left:auto;gap:4px"><select id="bdVar" style="max-width:200px"><option value="{cpu_util}">{cpu_util} · CPU 使用率 %</option><option value="{cpu_temp}">{cpu_temp} · CPU 温度 ℃</option><option value="{gpu_util}">{gpu_util} · GPU 使用率 %</option><option value="{gpu_temp}">{gpu_temp} · GPU 温度 ℃</option><option value="{mem_used}">{mem_used} · 内存已用 GB</option><option value="{mem_total}">{mem_total} · 内存总量 GB</option><option value="{net_down}">{net_down} · 下载 KB/s</option><option value="{net_up}">{net_up} · 上传 KB/s</option><option value="{song}">{song} · 歌名</option><option value="{artist}">{artist} · 歌手</option><option value="{album}">{album} · 专辑</option><option value="{date}">{date} · 日期</option><option value="{time}">{time} · 时间</option></select><button class="small gray" id="bdVarBtn" data-t="btnInsertVar">插入变量</button></span></div>
         <textarea id="bdText" rows="4"></textarea>
-        <div class="row" style="margin:10px 0 4px;justify-content:space-between"><span class="sub">游戏内实际效果(聊天框 · 宽度随最宽一行自适应)</span><span class="sub">每行 <input id="bdWidth" type="number" value="28" style="width:52px"> 宽(半角)</span></div>
+        <div class="row" style="margin:10px 0 4px;justify-content:space-between"><span class="sub" data-t="lblGamePreviewFull">游戏内实际效果(聊天框 · 宽度随最宽一行自适应)</span><span class="sub"><span data-t="lblWidth">每行</span> <input id="bdWidth" type="number" value="28" style="width:52px"> <span data-t="lblWidthUnit">宽(半角)</span></span></div>
         <div class="chatbox-wrap" style="flex:1"><div class="chatbox-bubble" id="bdPrev">( 空白页 )</div></div>
-        <div class="row" style="margin-top:10px"><button class="small" id="bdSave" data-t="btnSavePage"></button><button class="small gray" id="bdDup" data-t="btnDupPage"></button><button class="small gray" id="bdDel">删除此页</button><span class="sub" style="margin-left:auto">轮播间隔 <input type="number" value="8" style="width:60px"> 秒</span></div>
+        <div class="row" style="margin-top:10px"><button class="small" id="bdSave" data-t="btnSavePage"></button><button class="small gray" id="bdDup" data-t="btnDupPage"></button><button class="small gray" id="bdDel" data-t="btnDelPage">删除此页</button><span class="sub" style="margin-left:auto"><span data-t="rotInterval">轮播间隔</span> <input type="number" value="8" style="width:60px"> <span data-t="rotSec">秒</span></span></div>
       </div>
     </div>
   </div>
@@ -192,30 +192,30 @@ body.no-anim *{animation:none!important;transition:none!important}
 <div id="tab-src" hidden>
   <div class="card">
     <div class="card-title" style="margin-bottom:8px" data-t="secSrc"></div>
-    <div class="sub" style="margin:0 0 8px">值越大越先显示; 调整后保存</div>
-    <table><thead><tr><th>启用</th><th>名称</th><th>说明</th><th>优先级</th></tr></thead><tbody id="srcRows"></tbody></table>
-    <div class="row" style="margin-top:8px"><button class="small gray">优先级重置</button></div>
+    <div class="sub" style="margin:0 0 8px" data-t="lblPriorityHint">值越大越先显示; 调整后保存</div>
+    <table><thead><tr><th data-t="thEnable">启用</th><th data-t="thName">名称</th><th data-t="thDesc">说明</th><th data-t="thPriority">优先级</th></tr></thead><tbody id="srcRows"></tbody></table>
+    <div class="row" style="margin-top:8px"><button class="small gray" data-t="prioReset">优先级重置</button></div>
   </div>
 </div>
 <!-- 翻译系统 -->
 <div id="tab-trans" hidden>
   <div class="card">
     <div class="card-title" style="margin-bottom:8px" data-t="secTrans"></div>
-    <div class="row" style="margin:4px 0"><span style="font-size:13px">翻译服务</span><b style="font-size:13px" id="ltStatus">未配置</b><button class="small gray">检测</button><button class="small gray">下载</button></div>
-    <div class="sub" style="margin:10px 0 4px;font-size:15px;font-weight:600">🎙️ 语音字幕</div>
-    <div class="row"><input type="checkbox" id="transVoice"><span class="sub">启用(需 LiveTranslate 转录)</span></div>
-    <div class="sub" style="margin:10px 0 4px;font-size:15px;font-weight:600">📷 截图翻译</div>
-    <div class="row"><span style="font-size:13px">模式</span><select id="transMode"><option>auto</option><option>vision</option><option>ocr</option></select></div>
-    <div class="row" style="margin-top:8px"><input type="text" id="transApiBase" placeholder="接口地址" style="flex:2"><input type="password" id="transApiKey" placeholder="API Key" style="flex:1"><input type="text" placeholder="模型" style="flex:1"><button class="small">保存</button></div>
-    <div class="row" style="margin-top:8px"><button>截图翻译</button><span style="font-size:13px">倒计时(秒)</span><input type="number" value="5" style="width:56px"><span style="font-size:13px">显示(秒)</span><input type="number" value="8" style="width:56px"><span style="font-size:13px">循环</span><input type="number" value="2" style="width:48px"></div>
-    <div class="row" style="margin-top:8px"><span style="font-size:13px">截图区域</span><select id="transRegion"><option>窗口</option><option>区域</option><option>全屏</option></select><button class="small gray">调整区域</button><button class="small gray">设为全屏</button></div>
+    <div class="row" style="margin:4px 0"><span style="font-size:13px" data-t="ltSvcLabel">翻译服务</span><b style="font-size:13px" id="ltStatus">未配置</b><button class="small gray" data-t="ltCheckBtn">检测</button><button class="small gray" data-t="ltDownloadBtn">下载</button></div>
+    <div class="sub" style="margin:10px 0 4px;font-size:15px;font-weight:600" data-t="transVoice">🎙️ 语音字幕</div>
+    <div class="row"><input type="checkbox" id="transVoice"><span class="sub" data-t="transVoiceHint">启用(需 LiveTranslate 转录)</span></div>
+    <div class="sub" style="margin:10px 0 4px;font-size:15px;font-weight:600" data-t="transShot">📷 截图翻译</div>
+    <div class="row"><span style="font-size:13px" data-t="visModeLabel">模式</span><select id="transMode"><option>auto</option><option>vision</option><option>ocr</option></select></div>
+    <div class="row" style="margin-top:8px"><input type="text" id="transApiBase" data-t-ph="visBasePh" placeholder="接口地址" style="flex:2"><input type="password" id="transApiKey" placeholder="API Key" style="flex:1"><input type="text" data-t-ph="visModelPh" placeholder="模型" style="flex:1"><button class="small" data-t="visSave">保存</button></div>
+    <div class="row" style="margin-top:8px"><button data-t="btnShot">截图翻译</button><span style="font-size:13px" data-t="lblCountdownSec">倒计时(秒)</span><input type="number" value="5" style="width:56px"><span style="font-size:13px" data-t="lblDisplaySec">显示(秒)</span><input type="number" value="8" style="width:56px"><span style="font-size:13px" data-t="lblLoop">循环</span><input type="number" value="2" style="width:48px"></div>
+    <div class="row" style="margin-top:8px"><span style="font-size:13px" data-t="capTitle">截图区域</span><select id="transRegion"><option data-t="capModeWin">窗口</option><option data-t="capModeReg">区域</option><option data-t="capModeScr">全屏</option></select><button class="small gray" data-t="capAdjBtn">调整区域</button><button class="small gray" data-t="capFullBtn">设为全屏</button></div>
   </div>
 </div>
 <!-- 环境检测 -->
 <div id="tab-env" hidden>
   <div class="card">
     <div class="card-title" style="margin-bottom:8px" data-t="secEnv"></div>
-    <table><thead><tr><th>依赖</th><th>用途</th><th>状态</th><th>操作</th></tr></thead><tbody id="envRows">
+    <table><thead><tr><th data-t="thDep">依赖</th><th data-t="thUse">用途</th><th data-t="thState">状态</th><th data-t="thAct">操作</th></tr></thead><tbody id="envRows">
       <tr><td>Node.js</td><td>运行本体</td><td class="sub">✅ 已内置</td><td>-</td></tr>
       <tr><td>听歌显示(Python+winsdk)</td><td>SMTC 读取</td><td class="sub">✅ 就绪</td><td>-</td></tr>
       <tr><td>翻译服务(LiveTranslate)</td><td>字幕</td><td class="sub">⚠ 未配置</td><td><button class="small gray">安装</button></td></tr>
@@ -225,13 +225,13 @@ body.no-anim *{animation:none!important;transition:none!important}
 <!-- 高级设置 -->
 <div id="tab-adv" hidden>
   <div class="card">
-    <div class="card-title" style="margin-bottom:8px">高级设置</div>
-    <div class="row"><input type="checkbox" id="advAuto"><b style="font-size:13px">开机自启</b><span class="sub">登录时自动运行</span></div>
-    <div class="row" style="margin-top:8px"><input type="checkbox" id="advConsole"><b style="font-size:13px">显示命令行窗口</b><span class="sub">桌面版</span><input type="checkbox" id="swfOn"><b style="font-size:13px">脏话过滤器</b><button class="small gray" onclick="swfSave()">保存</button></div>
-    <div class="sub" style="margin:12px 0 4px">🔒1 配置备用</div>
+    <div class="card-title" style="margin-bottom:8px" data-t="advTitle">高级设置</div>
+    <div class="row"><input type="checkbox" id="advAuto"><b style="font-size:13px" data-t="autoStart">开机自启</b><span class="sub" data-t="autoStartDesc">登录时自动运行</span></div>
+    <div class="row" style="margin-top:8px"><input type="checkbox" id="advConsole"><b style="font-size:13px" data-t="showConsole">显示命令行窗口</b><span class="sub" data-t="desktop">桌面版</span><input type="checkbox" id="swfOn"><b style="font-size:13px" data-t="swfToggle">脏话过滤器</b><button class="small gray" onclick="swfSave()" data-t="swfSaveBtn">保存</button></div>
+    <div class="sub" style="margin:12px 0 4px">🔒1 <span data-t="cfgBackupTitle">配置备用</span></div>
     <div class="row"><button class="small gray" id="expCfg" data-t="btnExportCfg"></button><button class="small gray" id="impCfg" data-t="btnImportCfg"></button></div>
-    <div class="sub" style="margin:12px 0 4px">网络 / 端口</div>
-    <div class="row"><span style="font-size:13px">OSC</span><input type="number" id="oscPort" value="9000" style="width:80px"><button class="small" id="oscApply" data-t="btnApply"></button><span style="font-size:13px">Web</span><input type="number" value="19190" style="width:80px"><button class="small">保存并重启</button><button class="small gray" style="margin-left:6px">端口体检</button></div>
+    <div class="sub" style="margin:12px 0 4px" data-t="advNetwork">网络 / 端口</div>
+    <div class="row"><span style="font-size:13px">OSC</span><input type="number" id="oscPort" value="9000" style="width:80px"><button class="small" id="oscApply" data-t="btnApply"></button><span style="font-size:13px">Web</span><input type="number" value="19190" style="width:80px"><button class="small" data-t="portsSaveRestart">保存并重启</button><button class="small gray" style="margin-left:6px" data-t="portsCheckBtn">端口体检</button></div>
     <div class="sub" style="margin:12px 0 4px" data-t="secSecurity"></div>
   <div style="margin-top:12px">
     <div class="sub" style="margin-top:4px">🔓 <span data-t="gateLv0"></span> · 🔒1 <span data-t="gateLv1"></span> · 🔒2 <span data-t="gateLv2"></span></div>
@@ -289,13 +289,12 @@ body.no-anim *{animation:none!important;transition:none!important}
     <div class="sub" style="margin:12px 0 4px" data-t="secUi"></div>
     <div class="row" style="gap:8px;margin-top:6px"><div id="swatches" style="display:flex;gap:6px;flex-wrap:wrap"></div><span class="sub" id="themeName">海蓝</span></div>
     <div class="row" style="margin-top:8px"><span class="sub" data-t="secAnim"></span><span class="sw on" id="animTgl" title="检测到游戏在运行就自动关闭动效"></span><span class="sub" style="font-size:11px" data-t="lblDetectGame"></span></div>
-    <div class="row" style="margin-top:8px"><span class="sub">启动动画 · 品牌</span><select id="brandSel"><option value="auto">自动(按社区身份)</option><option value="starry">星轨茶会(社区)</option><option value="normal">默认</option></select><span class="sub" style="font-size:11px">优先检测: 加密狗授权名 / config 品牌标记; 插件名单含"星轨茶会"仅作弱提示; 可手动覆盖</span></div>
+    <div class="row" style="margin-top:8px"><span class="sub" data-t="startupBrand">启动动画 · 品牌</span><select id="brandSel"><option value="auto" data-t="brandAuto">自动(按社区身份)</option><option value="starry" data-t="brandStarry">星轨茶会(社区)</option><option value="normal" data-t="brandDefault">默认</option></select><span class="sub" style="font-size:11px" data-t="brandHint">优先检测: 加密狗授权名 / config 品牌标记; 插件名单含"星轨茶会"仅作弱提示; 可手动覆盖</span></div>
     <div class="sub" style="margin:12px 0 4px" data-t="secLog"></div>
-    <div class="row"><button class="small gray" id="logRefresh">刷新</button><label style="font-size:13px"><input type="checkbox"> 自动刷新</label><input type="checkbox" id="logAuto" style="display:none"><input type="text" placeholder="过滤关键字" style="flex:1"><button class="small gray">复制</button></div>
+    <div class="row"><button class="small gray" id="logRefresh" data-t="logRefresh">刷新</button><label style="font-size:13px"><input type="checkbox"> <span data-t="logAuto">自动刷新</span></label><input type="checkbox" id="logAuto" style="display:none"><input type="text" data-t-ph="logFilterPh" placeholder="过滤关键字" style="flex:1"><button class="small gray" data-t="logCopy">复制</button></div>
     <pre id="logView" style="max-height:180px;overflow:auto;background:var(--deep);border:1px solid var(--border2);border-radius:6px;padding:8px;font-size:12px;white-space:pre-wrap"></pre>
   </div>
 </div>
-<div class="sub" style="width:100%">状态 / 发送 / 公告板 / 数据源 / 插件 / 主题 —— 已接真实数据</div>
 <div class="card sub" id="marketCard" style="display:none"></div>
 <div id="plgModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;align-items:center;justify-content:center">
   <div style="background:#2a0e0e;border:2px solid var(--err);border-radius:12px;max-width:520px;width:90%;padding:20px;color:#ffd7d7">
@@ -312,7 +311,7 @@ body.no-anim *{animation:none!important;transition:none!important}
     </div>
   </div>
 </div>
-<div class="scrim" id="scrim"></div><div class="drawer" id="drawer"><div class="row" style="justify-content:space-between;margin-bottom:14px"><b id="dT">插件设置</b><button class="small gray" id="dC">✕</button></div><div id="drBody" class="sub"></div></div><script src="/lang.js"></script>
+<div class="scrim" id="scrim"></div><div class="drawer" id="drawer"><div class="row" style="justify-content:space-between;margin-bottom:14px"><b id="dT" data-t="plgSettingsTitle">插件设置</b><button class="small gray" id="dC">✕</button></div><div id="drBody" class="sub"></div></div><script src="/lang.js"></script>
 <script src="/skin.js"></script>
 <script src="/app.js"></script><script>
 const THEMES=[
@@ -324,9 +323,9 @@ const THEMES=[
  {name:'霓虹',c:{'--bg':'#0c0e1a','--card':'#141735','--inset':'#0f1228','--deep':'#080a16','--border':'#2c3568','--border2':'#242c56','--text':'#eef0ff','--muted':'#9aa3d6','--faint':'#727aa6','--mono':'#b9c2ff','--accent':'#6366f1','--accent2':'#4f46e5','--gray':'#3d4270','--gray2':'#343a63','--ok':'#4ade80','--warn':'#fde047','--err':'#fb7185'}},
 ];
 const sw=document.getElementById('swatches');
-function setTheme(n){const t=THEMES.find(x=>x.name===n);if(!t)return;const r=document.documentElement;for(const k in t.c){r.style.setProperty(k,t.c[k]);}document.getElementById('themeName').textContent=n;document.querySelectorAll('.swatch').forEach((s,i)=>s.style.boxShadow='0 0 0 2px '+(THEMES[i].name===n?'var(--accent)':'transparent'));}
-THEMES.forEach((t,i)=>{const d=document.createElement('span');d.className='swatch';d.title=t.name;d.style.cssText='cursor:pointer;width:22px;height:22px;border-radius:6px;background:'+t.c['--accent']+';border:1px solid var(--border);box-shadow:0 0 0 2px transparent';d.onclick=()=>setTheme(t.name);sw.appendChild(d);});
-const KEYMAP={'blue':'海蓝','teal':'深青','violet':'紫罗兰','green':'墨绿','amber':'琥珀','neon':'霓虹'};
+function setTheme(n){const t=THEMES.find(x=>x.name===n);if(!t)return;const r=document.documentElement;for(const k in t.c){r.style.setProperty(k,t.c[k]);}document.getElementById('themeName').textContent=themeLabel(n);window.__curTheme=n;document.querySelectorAll('.swatch').forEach((s,i)=>s.style.boxShadow='0 0 0 2px '+(THEMES[i].name===n?'var(--accent)':'transparent'));}
+THEMES.forEach((t,i)=>{const d=document.createElement('span');d.className='swatch';d.title=themeLabel(t.name);d.style.cssText='cursor:pointer;width:22px;height:22px;border-radius:6px;background:'+t.c['--accent']+';border:1px solid var(--border);box-shadow:0 0 0 2px transparent';d.onclick=()=>setTheme(t.name);sw.appendChild(d);});
+const KEYMAP={'blue':'海蓝','teal':'深青','violet':'紫罗兰','green':'墨绿','amber':'琥珀','neon':'霓虹'};const THEME_LABELS={'海蓝':'themeOcean','深青':'themeTeal','紫罗兰':'themeViolet','墨绿':'themeGreen','琥珀':'themeAmber','霓虹':'themeNeon'};function themeLabel(n){return (window.t&&THEME_LABELS[n])?window.t(THEME_LABELS[n]):n;}window.__reThemeLabels=function(){var tn=document.getElementById('themeName');if(tn&&window.__curTheme)tn.textContent=themeLabel(window.__curTheme);THEMES.forEach(function(tm,i){var s=document.querySelectorAll('.swatch')[i];if(s)s.title=themeLabel(tm.name);});};
 setTheme('海蓝');
 const tq=new URLSearchParams(location.search).get('t');if(tq&&KEYMAP[tq])setTheme(KEYMAP[tq]);
 </script><script>
