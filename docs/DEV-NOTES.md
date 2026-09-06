@@ -181,11 +181,12 @@
 98. **插件安全策略改为 0 级可看 + 单向收紧**(2026-09-03, 用户提议"插件的安全策略应该在0级可看, 用户可以单向收紧权限"):
 ## 110. 控制台前端改版(仪表盘化)+ 数据接线(WIP, 未上传)
 ## 111. 新版 UI 开发中踩的坑(2026-09-05)
-## 112. 启动品牌/季节/特殊彩蛋视频(2026-09-06)
-- 启动动画三档: 特殊彩蛋视频(日期命中, 带声音/单次/点画面跳过) > 星轨茶会进度条(进度条→旧logo/字标展开→玻璃擦旧换新→文案) > 季节/节日图标版; 品牌/日期读 config(specialVideo / branding)。
+## 113. 新 UI 逐项核查 + 多语言(2026-09-06)
+- 端点核对: 前端所有 /api 调用逐一比对后端路由, 修正 1 处 /api/ocrtl/run(不存在)→ /api/ocrtl(截图翻译)。
+- 脏话过滤器: 旧版"复选框 + 保存按钮(swfSave)"配套, 移植漏了保存按钮 → 勾选不生效; 已补。
+- 安全与权限: 首次只搬了按钮、缺门禁/OCR安全/安全词/脏话; 已按旧版套皮补全(函数 + data-t 文案 + lang.js 键)。
+- 功能开关清理: 删掉占位项(OCR截图/更多…/社区插件)+ 数据源 Tab 写死演示行。
 - 坑:
-  1) 静态资源路由只放行 ASCII 文件名(/^[a-zA-Z0-9_.-]+$/), 中文名 png(新版.png)会 404 → 素材改 ASCII 名(starry-*.png);
-  2) GET /api/config 每加新字段都要显式写进返回对象, 漏写前端拿不到(specialVideo 一开始漏了, 视频判定分支不触发);
-  3) PowerShell Test-Path 把路径里 [...] 当通配符(字符类), 含 [MP4 720p] 的路径误报"文件不存在" → 用 -LiteralPath;
-  4) 浏览器/Electron 自动播放带声音有策略限制, 桌面端需 app.commandLine.appendSwitch('autoplay-policy','no-user-gesture-required');
-  5) 视频走专用路由 /api/special/video(带 Range), 不经静态白名单; 大视频不进 git(测试视频/ 已 gitignore)。
+  1) applyLang() 在 const T/let lang 声明前执行 → TDZ 报错被 try/catch 吞 → data-t 文案全空; 初始化必须放 T/lang 声明之后;
+  2) tools.write 对大文件(数百行)反复截断、丢尾部多段 → 改用 pwsh [IO.File]::WriteAllText 写大文件;
+  3) 前端经典 script 顶层 await 会让浏览器整体拒绝执行(见 111)。

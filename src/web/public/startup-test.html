@@ -1,0 +1,83 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><title>启动动画测试台</title><style>
+*{box-sizing:border-box;margin:0;padding:0}body{background:#0b0e13;color:#e8edf3;font:14px/1.5 "Segoe UI","Microsoft YaHei",sans-serif}
+.bar{position:fixed;left:0;right:0;top:0;z-index:10000;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 14px;background:rgba(16,20,26,.9);border-bottom:1px solid #232a37}
+.bar button,.bar select,.bar input{background:#1c2430;color:#e8edf3;border:1px solid #30363d;border-radius:8px;padding:7px 12px;font:inherit}
+.bar button.on{background:#3b82f6;border-color:#3b82f6;color:#fff}
+#stage{position:fixed;inset:0}
+</style></head><body>
+<div class="bar">
+  <b>启动动画测试台</b>
+  <button class="on" data-m="special">特殊视频</button>
+  <button data-m="starry">星轨茶会</button>
+  <button data-m="date">按日期</button>
+  <button data-m="normal">默认</button>
+  <label style="font-size:12px;color:#8b98a8">日期 <input type="date" id="dsel"></label><span id="skinInfo" style="font-size:12px;color:#f0b429;font-weight:600"></span>
+  <label style="font-size:12px;color:#8b98a8">语言 <select id="langSel"><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option><option value="en">English</option></select></label>
+  <label style="font-size:12px;color:#8b98a8">视频 <input type="text" id="vurl" value="/api/special/video" style="width:220px"></label>
+  <button id="go" style="background:#3ddc84;border-color:#3ddc84;color:#062b16;font-weight:700">▶ 播放</button>
+  <span class="sub" style="color:#6b7888;font-size:12px">点画面/播完自动回到这里</span>
+</div>
+<div id="stage"></div>
+<div class="bar" style="top:auto;bottom:0;border-top:1px solid #232a37;border-bottom:0;align-items:flex-start">
+  <b style="font-size:12px">彩蛋配置(测试用, 多条目 JSON)</b>
+  <textarea id="svList" rows="2" style="flex:1;min-width:400px;font:12px monospace" placeholder='[{"date":"09-06","video":"assets/videos/x.mp4","title":"周年庆"}]'></textarea>
+  <input type="file" id="svFileInput" accept="video/*" style="display:none">
+  <button id="svUploadBtn">导入视频</button><button id="svSave">保存到 config</button><button id="svClear">清空</button>
+  <span id="svMsg" style="font-size:12px;color:#3ddc84"></span>
+</div>
+<script src="/skin.js"></script>
+<script>
+var $=function(id){return document.getElementById(id)};var mode='special';
+document.querySelectorAll('.bar button[data-m]').forEach(function(b){b.onclick=function(){document.querySelectorAll('.bar button[data-m]').forEach(function(x){x.classList.remove('on');});b.classList.add('on');mode=b.dataset.m;};});
+var _specCache=[];
+function refreshInfo(){
+  var d=$('dsel').value||'2026-09-06';
+  var r=(window.VRCB_SKIN&&window.VRCB_SKIN.resolve)?window.VRCB_SKIN.resolve(d,_specCache,$('langSel').value):null;
+  var el=$('skinInfo'); var txt=d+' → ';
+  if(r&&r.type==='special')txt+='🎬 特殊彩蛋: '+(r.title||r.video||'');
+  else if(r&&r.type==='festival')txt+='🎉 节日: '+r.name+' ('+r.greet+')';
+  else if(r&&r.type==='season-term')txt+='🍃 季节·节气日: '+r.season+' '+r.greet;
+  else if(r&&r.type==='season')txt+='🍃 季节: '+r.season+' '+r.greet;
+  else txt+='默认/日常';
+  if(el)el.textContent=txt;
+  return r;
+}
+function simpleBoot(c1,c2,greet,deco,title,tag){
+  var ov=document.createElement('div');ov.style.cssText='position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(110% 110% at 50% 32%, '+c1+'40 0%, #0b0e13 72%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:opacity .55s';
+  ov.innerHTML='<img src="/api/icon" onerror="this.style.display=\'none\'" style="width:78px;height:78px;border-radius:20px;filter:drop-shadow(0 0 20px '+c1+'99)"><div style="font-size:30px;font-weight:800;background:linear-gradient(90deg,'+c1+','+c2+');-webkit-background-clip:text;background-clip:text;color:transparent">'+title+'</div><div style="color:#9aa7ba;font-size:13px;letter-spacing:3px">'+tag+'</div><div style="color:'+c2+';font-size:14px;font-weight:600">'+(greet?deco+' '+greet:'')+'</div>';
+  $('stage').appendChild(ov);setTimeout(function(){ov.style.opacity='0';},1900);setTimeout(function(){ov.remove();},2455);
+}
+function starryBoot(){
+  var st=document.createElement('style');st.textContent='.pl{position:absolute;left:16%;top:50%;transform:translateY(-50%);height:3px;width:0;background:linear-gradient(90deg,#7c5cf6,#c4b5fd,#7c5cf6);border-radius:2px;box-shadow:0 0 18px #7c5cf6aa;z-index:5}.plogo{position:absolute;left:0;right:0;bottom:50%;height:30%;display:flex;align-items:flex-end;justify-content:center;transform-origin:50% 100%;transform:scaleY(0);z-index:4}.plogo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}.plogo .pnew{visibility:hidden;z-index:1}.plogo .pold{z-index:2}.pwipe{position:absolute;top:-12%;bottom:-12%;left:0;width:80px;transform:skewX(-14deg);background:linear-gradient(90deg,transparent,rgba(255,255,255,.3),rgba(167,139,250,.42),transparent);mix-blend-mode:screen;z-index:3;opacity:0}.pword{position:absolute;left:0;right:0;top:50%;width:44%;margin:0 auto;transform-origin:50% 0%;transform:scaleY(0)}.pword img{width:100%;display:block}.ptag{position:absolute;left:0;right:0;bottom:13%;text-align:center;font-size:16px;color:#c4b5fd;opacity:0;letter-spacing:1px}';document.head.appendChild(st);
+  var ov=document.createElement('div');ov.style.cssText='position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(110% 110% at 50% 32%, #7c5cf62e 0%, #0b0e13 72%)';
+  ov.innerHTML='<div class="pl"></div><div class="plogo"><img class="pnew" src="/starry-new.png"><img class="pold" src="/starry-old.png"><div class="pwipe"></div></div><div class="pword"><img src="/starry-wordmark.png"></div><div class="ptag">凌晨三点的星光,落进你的聊天框</div>';
+  $('stage').appendChild(ov);
+  var pl=ov.querySelector('.pl'),plogo=ov.querySelector('.plogo'),pold=ov.querySelector('.pold'),pnew=ov.querySelector('.pnew'),pwipe=ov.querySelector('.pwipe'),pword=ov.querySelector('.pword'),ptag=ov.querySelector('.ptag');
+  var prog=0,iv=setInterval(function(){prog+=1.2;if(prog>66){prog=66;clearInterval(iv);}pl.style.width=prog+'%';},20);
+  setTimeout(function(){plogo.style.transition='transform .9s cubic-bezier(.2,.7,.3,1)';plogo.style.transform='scaleY(1)';pword.style.transition='transform .9s cubic-bezier(.2,.7,.3,1)';pword.style.transform='scaleY(1)';},1300);
+  setTimeout(function(){pwipe.style.opacity='1';pnew.style.visibility='visible';pnew.style.clipPath='inset(0 100% 0 0)';var p=0,iv2=setInterval(function(){p+=2;if(p>108){p=108;clearInterval(iv2);pwipe.style.opacity='0';}pwipe.style.left=p+'%';pold.style.clipPath='inset(0 0 0 '+p+'%)';pnew.style.clipPath='inset(0 '+(100-p)+'% 0 0)';},18);},2700);
+  setTimeout(function(){ptag.style.transition='opacity .5s';ptag.style.opacity='1';},3800);
+  setTimeout(function(){ov.style.transition='opacity .6s';ov.style.opacity='0';},5600);setTimeout(function(){ov.remove();},6300);
+}
+function videoBoot(url){
+  var ov=document.createElement('div');ov.style.cssText='position:fixed;inset:0;z-index:9998;background:#000;cursor:pointer';
+  ov.innerHTML='<video src="'+url+'" autoplay playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain"></video><div style="position:absolute;bottom:26px;left:0;right:0;text-align:center;color:rgba(255,255,255,.7);font-size:13px;pointer-events:none">点击任意处跳过</div>';
+  $('stage').appendChild(ov);
+  var skipped=false;var skip=function(){if(skipped)return;skipped=true;ov.remove();};
+  ov.addEventListener('click',skip);var v=ov.querySelector('video');if(v){v.addEventListener('ended',skip);v.addEventListener('error',skip);}setTimeout(skip,120000);
+}
+(async function(){try{var _c=await (await fetch('/api/config')).json();var _sv=_c.specialEvents;_specCache=Array.isArray(_sv)?_sv:[];if(_specCache.length){$('svList').value=JSON.stringify(_sv,null,2);}}catch(e){}})();
+$('svUploadBtn').onclick=function(){$('svFileInput').click();};
+$('svFileInput').onchange=function(ev){var f=ev.target.files&&ev.target.files[0];if(!f)return;var rd=new FileReader();rd.onload=function(){fetch('/api/special/upload',{method:'POST',headers:{'x-filename':f.name},body:rd.result}).then(function(r){return r.json();}).then(function(j){if(j&&j.ok){$('svMsg').textContent='已上传: '+j.file+' (复制进 JSON 的 video 字段)';}else{$('svMsg').textContent='失败 '+(j&&j.error||'');}});};rd.readAsArrayBuffer(f);};
+$('svSave').onclick=function(){var arr;try{arr=JSON.parse($('svList').value||'[]');}catch(e){$('svMsg').textContent='JSON 解析失败: '+e.message;return;}fetch('/api/config',{method:'POST',body:JSON.stringify({specialEvents:arr})}).then(function(){$('svMsg').textContent='已保存 '+(arr.length)+' 条 ✓';});};
+$('svClear').onclick=function(){$('svList').value='';fetch('/api/config',{method:'POST',body:JSON.stringify({specialEvents:[]})}).then(function(){$('svMsg').textContent='已清空';});};
+$('dsel').onchange=function(){refreshInfo();};
+$('go').onclick=function(){
+  $('stage').innerHTML='';
+  if(mode==='special'){ videoBoot($('vurl').value); return; }
+  if(mode==='starry'){ starryBoot(); return; }
+  if(mode==='date'){ var r=refreshInfo(); if(r&&r.type==='special'){ videoBoot('/api/special/video?file='+encodeURIComponent(r.video||'')); } else if(r&&(r.type==='festival'||r.type==='season'||r.type==='season-term')){ simpleBoot(r.c1,r.c2,r.greet,r.deco,'VRCLiveBoard','星光落进聊天框'); } else { simpleBoot('#3b82f6','#7dd3fc','','✦','VRCLiveBoard','星光落进聊天框'); } return; }
+  simpleBoot('#3b82f6','#7dd3fc','','✦','VRCLiveBoard','星光落进聊天框');
+};
+refreshInfo();
+</script></body></html>

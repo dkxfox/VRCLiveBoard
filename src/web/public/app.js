@@ -85,7 +85,7 @@ async function renderEnv(){var tb=$('envRows');if(!tb)return;tb.innerHTML='';
   var st=$('ltStatus');if(st){st.textContent=lt.found?('已配置 '+(lt.model||'')+' → '+lt.targetLang):'未配置';st.style.color=lt.found?'var(--ok)':'var(--warn)';}}
 async function loadTrans(){try{var c=await (await fetch('/api/config')).json();var o=c.ocrtl||{};var v=o.vision||{};if($('transMode'))$('transMode').value=o.mode||'auto';if($('transApiBase'))$('transApiBase').value=v.apiBase||'';if($('transDelay'))$('transDelay').value=o.delayMs||5000;}catch(e){}}
 if($('transVoice'))$('transVoice').onchange=async function(){try{await fetch('/api/sources',{method:'POST',body:JSON.stringify({id:'livetranslate',enabled:this.checked})});}catch(e){}pollStatus();};
-if($('transShot'))$('transShot').onclick=async function(){try{var r=await fetch('/api/ocrtl/run',{method:'POST',body:'{}'});var j=await r.json();alert(j.ok?'截图翻译已触发':'触发失败');}catch(e){alert('触发失败');}};
+if($('transShot'))$('transShot').onclick=async function(){try{var r=await fetch('/api/ocrtl',{method:'POST',body:'{}'});var j=await r.json();alert(j.ok?'截图翻译已触发':'触发失败');}catch(e){alert('触发失败');}};
 // 高级设置
 if($('advAuto')){(async function(){try{var c=await (await fetch('/api/config')).json();$('advAuto').checked=!!c.autostart;}catch(e){}})();$('advAuto').onchange=async function(){try{await fetch('/api/autostart',{method:'POST',body:JSON.stringify({enabled:this.checked})});}catch(e){}};}
 if($('advConsole')){(async function(){try{var c=await (await fetch('/api/config')).json();$('advConsole').checked=!((c.desktop||{}).showConsole===false);}catch(e){}})();$('advConsole').onchange=async function(){try{await fetch('/api/desktop/console',{method:'POST',body:JSON.stringify({show:this.checked})});}catch(e){}};}
@@ -97,7 +97,7 @@ async function loadLogs(){try{var r=await fetch('/api/logs?tail=200');var j=awai
 if($('logRefresh'))$('logRefresh').onclick=loadLogs;if($('logFilter'))$('logFilter').addEventListener('input',loadLogs);
 if($('oscTest'))$('oscTest').onclick=async function(){try{var s=await (await fetch('/api/status')).json();var v=s.vrc||{};var pc=await (await fetch('/api/ports/check')).json();var u=pc.udp9000||{};var m='【OSC 测试】'+new Date().toLocaleTimeString();var sr=await fetch('/v1/chatbox',{method:'POST',body:JSON.stringify({text:m})});var sj=await sr.json();alert('VRChat: '+(v.running?'运行中':'未运行')+'\nOSC: '+(v.oscEnabled?'已开启':'关闭')+'\nUDP 9000: '+(u.occupied?((u.name||'').indexOf('VRChat')>=0?'被 VRChat 占用(正常)':'被占用: '+(u.name||u.pid)):'空闲(正常)')+'\n测试消息: '+(sj.ok?('已发送「'+m+'」'):('发送失败: '+(sj.error||''))));}catch(e){alert('测试出错');}};
 // 动效
-function applyAnim(){var master=localStorage.getItem('vrcbAnimMaster')==='1';var auto=localStorage.getItem('vrcbAnimAutoOff')==='1'&&!!window._vrcRunning;document.body.classList.toggle('no-anim',master||auto);}
+function applyAnim(){var off=localStorage.getItem('vrcbAnimMaster')==='1'||(localStorage.getItem('vrcbAnimAutoOff')==='1'&&!!window._vrcRunning);document.body.classList.toggle('no-anim',off);if(!off&&window.__fxRestart)window.__fxRestart();}
 if($('animTop')){$('animTop').onclick=function(){var off=!document.body.classList.contains('no-anim');document.body.classList.toggle('no-anim',off);localStorage.setItem('vrcbAnimMaster',off?'1':'0');$('animTop').classList.toggle('on',!off);};$('animTop').classList.toggle('on',localStorage.getItem('vrcbAnimMaster')!=='1');}
 if($('animTgl')){$('animTgl').onclick=function(){var on=this.classList.contains('on');this.classList.toggle('on',!on);localStorage.setItem('vrcbAnimAutoOff',on?'0':'1');applyAnim();};$('animTgl').classList.toggle('on',localStorage.getItem('vrcbAnimAutoOff')==='1');}
 function starryBoot(){
@@ -114,8 +114,9 @@ function starryBoot(){
   setTimeout(function(){ov.remove();},6300);
 }
 function playSpecialVideo(sv){
+  var vurl='/api/special/video'+(sv&&sv.video?('?file='+encodeURIComponent(sv.video)):'');
   var ov=document.createElement('div');ov.style.cssText='position:fixed;inset:0;z-index:9999;background:#000;cursor:pointer';
-  ov.innerHTML='<video src="/api/special/video" autoplay playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain"></video>'+(sv&&sv.title?('<div style="position:absolute;bottom:26px;left:0;right:0;text-align:center;color:rgba(255,255,255,.7);font-size:13px;letter-spacing:2px;pointer-events:none">点击任意处跳过</div>'):'');
+  ov.innerHTML='<video src="'+vurl+'" autoplay playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain"></video>'+(sv&&sv.title?('<div style="position:absolute;bottom:26px;left:0;right:0;text-align:center;color:rgba(255,255,255,.7);font-size:13px;letter-spacing:2px;pointer-events:none">点击任意处跳过</div>'):'');
   document.body.appendChild(ov);
   var skipped=false; var skip=function(){if(skipped)return;skipped=true;ov.remove();};
   ov.addEventListener('click',skip);
@@ -123,9 +124,22 @@ function playSpecialVideo(sv){
   if(v){v.addEventListener('ended',skip);v.addEventListener('error',function(){if(!skipped)skip();});}
   setTimeout(skip,120000);
 }
+function simpleBoot(c1,c2,greet,deco,title,tag){
+  var ov=document.createElement('div');ov.style.cssText='position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(110% 110% at 50% 32%, '+c1+'40 0%, #0b0e13 72%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:opacity .55s';
+  ov.innerHTML='<img src="/api/icon" onerror="this.style.display=\'none\'" style="width:78px;height:78px;border-radius:20px;filter:drop-shadow(0 0 20px '+c1+'99)"><div style="font-size:30px;font-weight:800;background:linear-gradient(90deg,'+c1+','+c2+');-webkit-background-clip:text;background-clip:text;color:transparent">'+title+'</div><div style="color:#9aa7ba;font-size:13px;letter-spacing:3px">'+tag+'</div><div style="color:'+c2+';font-size:14px;font-weight:600">'+(greet?deco+' '+greet:'')+'</div>';
+  document.body.appendChild(ov);setTimeout(function(){ov.style.opacity='0';},1900);setTimeout(function(){ov.remove();},2455);
+}
 // 启动动画(品牌感知)
-(async function(){var brd='default';var bc=null;try{bc=await (await fetch('/api/config')).json();brd=bc.branding||'default';}catch(e){}
- if(bc&&bc.specialVideo&&bc.specialVideo.date){var _d0=new Date();var _today=('0'+(_d0.getMonth()+1)).slice(-2)+'-'+('0'+_d0.getDate()).slice(-2);if(bc.specialVideo.date===_today){playSpecialVideo(bc.specialVideo);return;}}
+(async function(){var bc=null;try{bc=await (await fetch('/api/config')).json();}catch(e){}
+ var _bs=document.getElementById('bootscrim');if(_bs)_bs.remove();
+ var _d0=new Date();var _ds=_d0.getFullYear()+'-'+('0'+(_d0.getMonth()+1)).slice(-2)+'-'+('0'+_d0.getDate()).slice(-2);
+ var _specs=(bc&&bc.specialEvents)||[];
+ var _r=(window.VRCB_SKIN&&window.VRCB_SKIN.resolve)?window.VRCB_SKIN.resolve(_ds,_specs,(bc&&bc.lang)||'zh-CN'):null;
+ if(_r&&_r.type==='special'){playSpecialVideo(_r);return;}
+ var brd=(bc&&bc.branding)||'default';
+ if(brd==='starry'){starryBoot();return;}
+ if(_r){simpleBoot(_r.c1,_r.c2,_r.greet,_r.deco,'VRCLiveBoard','星光落进聊天框');return;}
+ simpleBoot('#3b82f6','#7dd3fc','','✦','VRCLiveBoard','星光落进聊天框');return;
  var now=new Date(),m=now.getMonth()+1,d=now.getDate();
  var fest=[[1,1,'元旦快乐','#f59e0b','#60a5fa','🎆'],[9,15,'中秋快乐','#f5c518','#ff8c42','🥮'],[10,1,'国庆快乐','#ff5b5b','#f5c518','🎆'],[10,31,'万圣节快乐','#ff8c00','#c084fc','🎃'],[12,25,'圣诞快乐','#2fbf71','#e2405b','🎄']];
  var t=null;for(var i=0;i<fest.length;i++){var f=fest[i];if(f[0]===m&&f[1]===d){t=f;break;}}
@@ -215,7 +229,162 @@ window.__plgset_netease_lyrics=function(p,body){
 // 品牌选择: 变更即保存 + 回显已保存值
 if($('brandSel'))$('brandSel').onchange=function(){try{fetch('/api/config',{method:'POST',body:JSON.stringify({branding:this.value})});}catch(e){}};
 (async function(){try{var _c=await (await fetch('/api/config')).json();var _bs=$('brandSel');if(_bs&&_c.branding)_bs.value=_c.branding;}catch(e){}})();
+
 // init
-try{applyLang();}catch(e){}
+
 pollStatus();setInterval(pollStatus,5000);
 loadPages();loadPlugins();renderEnv();loadTrans();loadLogs();
+// ===== 安全与权限(旧版套皮) =====
+const T = window.VRCB_LANG || { 'zh-CN': {} };
+
+let lang = 'zh-CN';
+function t(k) { const d = T[lang] || T['zh-CN']; return (d[k] !== undefined) ? d[k] : (T['zh-CN'][k] !== undefined ? T['zh-CN'][k] : k); }
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-t]').forEach(function (el) { el.textContent = t(el.getAttribute('data-t')); });
+  document.querySelectorAll('[data-t-ph]').forEach(function (el) { el.placeholder = t(el.getAttribute('data-t-ph')); });
+}
+async function gateRender() {
+  try {
+    const st = await (await fetch('/api/devgate/status')).json();
+    const cfg = await (await fetch('/api/config')).json();
+    const box = document.getElementById('secBox');
+    const devSec = document.getElementById('devBoxSec');
+    const devSwf = document.getElementById('devBoxSwf');
+    if (box) box.style.display = st.level1 ? 'block' : 'none';
+    if (devSec) devSec.style.display = st.level2 ? 'block' : 'none';
+    if (devSwf) devSwf.style.display = st.level2 ? 'block' : 'none';
+    const sec = (cfg.ocrtl && cfg.ocrtl.security) || {};
+    const swf = cfg.swearFilter || {};
+    const se = document.getElementById('secExtra'); if (se) se.value = sec.extraPrompt || '';
+    const sd = document.getElementById('secDef'); if (sd) sd.checked = sec.promptDefense !== false;
+    const sj = document.getElementById('secJson'); if (sj) sj.checked = sec.jsonMode !== false;
+    const ss = document.getElementById('secSan'); if (ss) ss.checked = sec.outputSanitize !== false;
+    const so = document.getElementById('swfOn'); if (so) so.checked = swf.enabled !== false;
+    const bw = sec.blockWords || [];
+    const svv = document.getElementById('secWordsView'); if (svv) svv.value = bw.join('\n');
+    const sve = document.getElementById('secWordsEdit'); if (sve && st.level2) sve.value = bw.join('\n');
+    const ww = swf.words || [];
+    const swv = document.getElementById('swfWordsView'); if (swv) swv.value = ww.join('\n');
+    const sw = document.getElementById('swfWords'); if (sw && st.level2) sw.value = ww.join('\n');
+    const gm = document.getElementById('gateMsg');
+    if (gm) {
+      if (st.level2) gm.textContent = t('gateL2On');
+      else if (st.level1) gm.textContent = t('gateL1On');
+      else if (st.l1LockRemainingSec) { const m = Math.floor(st.l1LockRemainingSec / 60); const s2 = st.l1LockRemainingSec % 60; gm.textContent = (t('gateLocked') || '').replace('{m}', m).replace('{s}', s2); gm.style.color = 'var(--err)'; }
+      else gm.textContent = '';
+    }
+  } catch (e) {}
+}
+// 自动感知加密狗解锁: 每 3 秒查一次解锁状态, 变化即自动展开对应设置区(无需刷新/输密码)
+let lastGate = { l1: false, l2: false };
+setInterval(function () {
+  fetch('/api/devgate/status')
+    .then(function (r) { return r.json(); })
+    .then(function (st) {
+      if (!st) return;
+      if (st.level1 !== lastGate.l1 || st.level2 !== lastGate.l2) {
+        lastGate.l1 = st.level1;
+        lastGate.l2 = st.level2;
+        gateRender();
+      }
+    })
+    .catch(function () {});
+}, 3000);
+function gateVerify(level) {
+  const code = (document.getElementById('gateCode') || {}).value || '';
+  fetch('/api/devgate/verify', { method: 'POST', body: JSON.stringify({ level: level, code: code }) })
+    .then(function (r) { return r.json(); })
+    .then(function (j) {
+      const gm = document.getElementById('gateMsg');
+      if (j && j.ok) { if (gm) gm.textContent = level === 2 ? t('gateL2On') : t('gateL1On'); gateRender(); psLoad(); }
+      else if (j && j.lockRemainingSec) { const m = Math.floor(j.lockRemainingSec / 60); const s2 = j.lockRemainingSec % 60; if (gm) { gm.textContent = (t('gateLocked') || '').replace('{m}', m).replace('{s}', s2); gm.style.color = 'var(--err)'; } }
+      else { if (gm) { gm.textContent = t('gateBad'); gm.style.color = 'var(--err)'; } }
+    })
+    .catch(function (e) { const gm = document.getElementById('gateMsg'); if (gm) gm.textContent = t('gateFail') + e.message; });
+}
+document.getElementById('gateL1').onclick = function () { gateVerify(1); };
+document.getElementById('gateL2').onclick = function () { gateVerify(2); };
+function secSave() {
+  const args = {
+    promptDefense: !!(document.getElementById('secDef') && document.getElementById('secDef').checked),
+    jsonMode: !!(document.getElementById('secJson') && document.getElementById('secJson').checked),
+    outputSanitize: !!(document.getElementById('secSan') && document.getElementById('secSan').checked),
+    extraPrompt: (document.getElementById('secExtra') || {}).value || ''
+  };
+  fetch('/api/security', { method: 'POST', body: JSON.stringify(args) })
+    .then(function (r) { return r.json(); })
+    .then(function (j) { const gm = document.getElementById('gateMsg'); if (gm) { gm.textContent = (j && j.ok) ? 'AI 安全设置已保存 ✓' : ('保存失败: ' + ((j && j.error) || '')); gm.style.color = (j && j.ok) ? 'var(--ok)' : 'var(--err)'; } })
+    .catch(function (e) { const gm = document.getElementById('gateMsg'); if (gm) gm.textContent = '保存失败: ' + e.message; });
+}
+function psLoad() {
+  fetch('/api/config').then(function (r) { return r.json(); }).then(function (j) {
+    const s = j.pluginsSecurity || {};
+    const set = function (id, v) { const el = document.getElementById(id); if (el) el.value = v; };
+    set('psNet', s.networkPolicy || 'whitelist'); set('psProc', s.processPolicy || 'consent'); set('psFsW', s.fsWritePolicy || 'sandbox'); set('psFsR', s.fsReadPolicy || 'self'); set('psAi', s.aiPolicy || 'allow');
+  }).catch(function () {});
+}
+function psSave() {
+  const v = function (id) { const el = document.getElementById(id); return el ? el.value : ''; };
+  fetch('/api/security', { method: 'POST', body: JSON.stringify({ pluginsSecurity: { networkPolicy: v('psNet'), processPolicy: v('psProc'), fsWritePolicy: v('psFsW'), fsReadPolicy: v('psFsR'), aiPolicy: v('psAi') } }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok && j.ok !== false, j: j }; }).catch(function () { return { ok: r.ok, j: {} }; }); })
+    .then(function (o) { const m = document.getElementById('psMsg'); if (m) m.textContent = o.ok ? t('plgSecSaved') : ('失败: ' + ((o.j && o.j.error) || '')); });
+}
+function secAddWordFn() {
+  const w = ((document.getElementById('secAddWord') || {}).value || '').trim();
+  if (!w) return;
+  fetch('/api/security', { method: 'POST', body: JSON.stringify({ addWords: [w] }) })
+    .then(function (r) { return r.json(); })
+    .then(function (j) { const gm = document.getElementById('gateMsg'); if (gm) { gm.textContent = (j && j.ok) ? '安全词已添加 ✓' : ('失败: ' + ((j && j.error) || '')); gm.style.color = (j && j.ok) ? 'var(--ok)' : 'var(--err)'; } gateRender(); })
+    .catch(function (e) { const gm = document.getElementById('gateMsg'); if (gm) gm.textContent = '失败: ' + e.message; });
+}
+function secWordsSave() {
+  const words = ((document.getElementById('secWordsEdit') || {}).value || '').split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+  fetch('/api/security-words', { method: 'POST', body: JSON.stringify({ words: words }) })
+    .then(function (r) { return r.json(); })
+    .then(function (j) { const gm = document.getElementById('gateMsg'); if (gm) { gm.textContent = (j && j.ok) ? '安全词库已保存 ✓' : ('失败: ' + ((j && j.error) || '')); gm.style.color = (j && j.ok) ? 'var(--ok)' : 'var(--err)'; } gateRender(); })
+    .catch(function (e) { const gm = document.getElementById('gateMsg'); if (gm) gm.textContent = '失败: ' + e.message; });
+}
+function secWordsReset() {
+  fetch('/api/security-words', { method: 'POST', body: JSON.stringify({ resetDefaults: true }) })
+    .then(function (r) { return r.json(); })
+    .then(function (j) { const gm = document.getElementById('gateMsg'); if (gm) { gm.textContent = (j && j.ok) ? '已恢复默认安全词 ✓' : ('失败: ' + ((j && j.error) || '')); gm.style.color = (j && j.ok) ? 'var(--ok)' : 'var(--err)'; } gateRender(); })
+    .catch(function () {});
+}
+function swfAddWordFn() {
+  const w = ((document.getElementById('swfAddWord') || {}).value || '').trim();
+  if (!w) return;
+  fetch('/api/swearfilter', { method: 'POST', body: JSON.stringify({ addWords: [w] }) })
+    .then(function (r) { return r.json(); })
+    .then(function (j) { const gm = document.getElementById('gateMsg'); if (gm) { gm.textContent = (j && j.ok) ? '屏蔽词已添加 ✓' : ('失败: ' + ((j && j.error) || '')); gm.style.color = (j && j.ok) ? 'var(--ok)' : 'var(--err)'; } gateRender(); })
+    .catch(function (e) { const gm = document.getElementById('gateMsg'); if (gm) gm.textContent = '失败: ' + e.message; });
+}
+function swfSave() {
+  fetch('/api/swearfilter', { method: 'POST', body: JSON.stringify({ enabled: !!(document.getElementById('swfOn') && document.getElementById('swfOn').checked) }) })
+    .then(function (r) { return r.json(); })
+    .then(function (j) { const gm = document.getElementById('gateMsg'); if (gm) { gm.textContent = (j && j.ok) ? '过滤开关已保存 ✓' : ('保存失败: ' + ((j && j.error) || '')); gm.style.color = (j && j.ok) ? 'var(--ok)' : 'var(--err)'; } })
+    .catch(function (e) { const gm = document.getElementById('gateMsg'); if (gm) gm.textContent = '保存失败: ' + e.message; });
+}
+function swfWordsSave() {
+  const words = ((document.getElementById('swfWords') || {}).value || '').split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+  fetch('/api/swearfilter-words', { method: 'POST', body: JSON.stringify({ words: words }) })
+    .then(function (r) { return r.json(); })
+    .then(function (j) { const gm = document.getElementById('gateMsg'); if (gm) { gm.textContent = (j && j.ok) ? '词库已保存 ✓' : ('保存失败: ' + ((j && j.error) || '')); gm.style.color = (j && j.ok) ? 'var(--ok)' : 'var(--err)'; } })
+    .catch(function (e) { const gm = document.getElementById('gateMsg'); if (gm) gm.textContent = '保存失败: ' + e.message; });
+}
+function swfWordsReset() {
+  fetch('/api/swearfilter-words', { method: 'POST', body: JSON.stringify({ resetDefaults: true }) })
+    .then(function (r) { return r.json(); })
+    .then(function (j) { const gm = document.getElementById('gateMsg'); if (gm) { gm.textContent = (j && j.ok) ? '已恢复默认词库 ✓' : ('失败: ' + ((j && j.error) || '')); gm.style.color = (j && j.ok) ? 'var(--ok)' : 'var(--err)'; } gateRender(); })
+    .catch(function () {});
+}
+// 安全初始化(在 T/lang 声明后)
+try{applyLang();}catch(e){}
+try{gateRender();}catch(e){}
+try{psLoad();}catch(e){}
+
+// 语言切换
+if(langSel)langSel.onchange=function(){lang=this.value;try{fetch('/api/lang',{method:'POST',body:JSON.stringify({lang:lang})});}catch(e){}applyLang();};
+
+// 语言加载(读回保存的语言)
+(async function(){try{var _c=await (await fetch('/api/config')).json();lang=(_c&&_c.lang)||'zh-CN';var _ls=langSel;if(_ls)_ls.value=lang;applyLang();}catch(e){}})();

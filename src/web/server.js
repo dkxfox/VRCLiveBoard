@@ -140,9 +140,10 @@ function effPluginSec() {
     if (req.method === 'POST' && !originAllowed(req)) return json(res, 403, { ok: false, error: '已拒绝跨站请求' });
     if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) return serveFile(res, path.join(publicDir, 'index.html'));
     if (req.method === 'GET' && url.pathname.indexOf('/api/') !== 0 && url.pathname !== '/') {
-      // 静态资源(如 /lang.js): 只允许安全字符, 防目录穿越
-      const rel = url.pathname.slice(1);
-      if (/^[a-zA-Z0-9_.-]+$/.test(rel)) {
+      // 静态资源(如 /lang.js): URL 解码 + 防目录穿越(禁 .. 与 / 与 \), 兼容中文/空格等文件名
+      let rel;
+      try { rel = decodeURIComponent(url.pathname.slice(1)); } catch (e) { rel = url.pathname.slice(1); }
+      if (rel && rel.indexOf('..') < 0 && rel.indexOf('\\') < 0 && rel.indexOf('/') < 0) {
         const f = path.join(publicDir, rel);
         if (fs.existsSync(f)) return serveFile(res, f);
       }
@@ -172,7 +173,7 @@ function effPluginSec() {
       const cap = (rootConfig.ocrtl && rootConfig.ocrtl.capture) || {};
       const sec = (rootConfig.ocrtl && rootConfig.ocrtl.security) || {};
       const swf = (rootConfig.chatbox && rootConfig.chatbox.swearFilter) || {};
-      return json(res, 200, { pages: rootConfig.sources.pages.pages, rotationMs: rootConfig.sources.pages.rotationMs, sources: srcs, autostart: autostart, desktop: { showConsole: !((rootConfig.desktop || {}).showConsole === false) }, lang: (rootConfig.web && rootConfig.web.lang) || 'zh-CN', ocrtl: { delayMs: (rootConfig.ocrtl || {}).delayMs || 5000, displayMs: (rootConfig.ocrtl || {}).displayMs || 8000, loops: (rootConfig.ocrtl || {}).loops || 2, mode: (rootConfig.ocrtl || {}).mode || 'auto', vision: { apiBase: v.apiBase || '', model: v.model || 'deepseek-v4-flash-vision-exp', hasKey: !!v.apiKey, targetLang: v.targetLang || 'zh' }, capture: { mode: cap.mode || 'window', windowTitle: cap.windowTitle || 'VRChat', region: cap.region || { x: 0, y: 0, w: 0, h: 0 } }, security: { promptDefense: sec.promptDefense !== false, jsonMode: sec.jsonMode !== false, outputSanitize: sec.outputSanitize !== false, extraPrompt: sec.extraPrompt || '', blockWords: sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS } }, swearFilter: { enabled: swf.enabled !== false, words: swf.words && swf.words.length ? swf.words : swearfilter.DEFAULTS }, pluginsSecurity: effPluginSec(), branding: (rootConfig.branding || 'default'), specialVideo: (rootConfig.specialVideo || null) });
+      return json(res, 200, { pages: rootConfig.sources.pages.pages, rotationMs: rootConfig.sources.pages.rotationMs, sources: srcs, autostart: autostart, desktop: { showConsole: !((rootConfig.desktop || {}).showConsole === false) }, lang: (rootConfig.web && rootConfig.web.lang) || 'zh-CN', ocrtl: { delayMs: (rootConfig.ocrtl || {}).delayMs || 5000, displayMs: (rootConfig.ocrtl || {}).displayMs || 8000, loops: (rootConfig.ocrtl || {}).loops || 2, mode: (rootConfig.ocrtl || {}).mode || 'auto', vision: { apiBase: v.apiBase || '', model: v.model || 'deepseek-v4-flash-vision-exp', hasKey: !!v.apiKey, targetLang: v.targetLang || 'zh' }, capture: { mode: cap.mode || 'window', windowTitle: cap.windowTitle || 'VRChat', region: cap.region || { x: 0, y: 0, w: 0, h: 0 } }, security: { promptDefense: sec.promptDefense !== false, jsonMode: sec.jsonMode !== false, outputSanitize: sec.outputSanitize !== false, extraPrompt: sec.extraPrompt || '', blockWords: sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS } }, swearFilter: { enabled: swf.enabled !== false, words: swf.words && swf.words.length ? swf.words : swearfilter.DEFAULTS }, pluginsSecurity: effPluginSec(), branding: (rootConfig.branding || 'default'), specialEvents: (rootConfig.specialEvents || []) });
     }
     if (req.method === 'POST' && (url.pathname === '/v1/chatbox' || url.pathname === '/api/chatbox')) {
       return readBody(req, function (body) {
@@ -197,6 +198,7 @@ function effPluginSec() {
             if (rm >= 3000 && rm <= 300000) rootConfig.sources.pages.rotationMs = rm;
           }
           if (o.branding) rootConfig.branding = String(o.branding);
+          if (o.specialEvents !== undefined) rootConfig.specialEvents = Array.isArray(o.specialEvents) ? o.specialEvents : [];
           persist();
           return json(res, 200, { ok: true, pageCount: rootConfig.sources.pages.pages.length });
         } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
@@ -465,9 +467,22 @@ function effPluginSec() {
       runNext();
       return;
     }
+    if (req.method === 'POST' && url.pathname === '/api/special/upload') {
+      const name = String(req.headers['x-filename'] || ('video-' + Date.now() + '.mp4')).replace(/[\\/:*?"<>|]/g, '_');
+      const dir = path.join(__dirname, '..', '..', 'assets', 'videos');
+      try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {}
+      const chunks = []; let total = 0;
+      req.on('data', function (c) { chunks.push(c); total += c.length; if (total > 300 * 1024 * 1024) { json(res, 413, { ok: false, error: '视频超过 300MB 上限' }); req.destroy(); } });
+      req.on('end', function () {
+        const buf = Buffer.concat(chunks);
+        const f = path.join(dir, name);
+        try { fs.writeFileSync(f, buf); json(res, 200, { ok: true, file: 'assets/videos/' + name, size: buf.length }); }
+        catch (e) { json(res, 400, { ok: false, error: String(e.message) }); }
+      });
+      return;
+    }
     if (req.method === 'GET' && url.pathname === '/api/special/video') {
-      const sv = rootConfig.specialVideo;
-      const rel = sv && sv.file ? String(sv.file) : '';
+      const rel = (url.searchParams && url.searchParams.get('file')) || ((rootConfig.specialVideo && rootConfig.specialVideo.file) || '');
       if (!rel) return json(res, 404, { ok: false, error: '未配置特殊彩蛋视频' });
       const f = path.join(__dirname, '..', '..', rel);
       return fs.stat(f, function (err, stat) {
