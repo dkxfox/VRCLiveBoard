@@ -205,3 +205,4 @@
   - HTML 30 项: 公告板计数/页码(renderBoard)、环境表(renderEnv)、变量下拉 13 项(buildBdVar)、预览空态(renderBdEditor)、主题名(setTheme)、语言下拉自名、初始公告板示例内容、<title>。
   - JS 15 项: 启动动画死代码节日/季节问候(不可达)、Excel 导出"否"/文件名、【天气】配置默认值、Promise拒绝 内部错误串。
 - 已知预期 WARN: GI18NU 报 fwWelcomeDefault 的 {name} 无 .replace —— 该占位符由好友欢迎插件运行时替换, 非 UI 层替换。
+- 工具坑: tools.edit 改 run-gates.ps1(该文件是 UTF-8 带 BOM)时会丢 BOM → PowerShell 5.1 按 GBK 读、中文变乱码报解析错(实发过一次, 报 ParserError)。改这个 .ps1 必须用带 BOM 写回: pwsh [IO.File]::WriteAllText + (New-Object Text.UTF8Encoding($true)); 改完立刻跑门禁验证。
