@@ -62,6 +62,8 @@ Gate 'G1' '语法解析(改动文件)' {
 Gate 'G2'    '编码规范'        { node scripts\checks\encoding-lint.js }
 Gate 'GVER'  '版本一致性'      { node scripts\checks\version-sync.js }
 Gate 'GI18N' '三语键对齐'      { node scripts\checks\i18n-check.js }
+Gate 'GI18NU' 'i18n 引用完整性'  { node scripts\checks\i18n-usage.js }
+Gate 'GI18NH' '硬编码文案检测'   { node scripts\checks\i18n-hardcode.js }
 Gate 'GHTML' '控制台页面'      { node scripts\checks\html-inline-check.js }
 Gate 'GPLUG' '插件契约/单一源'   { node scripts\checks\plugin-check.js }
 Gate 'GCONF' '配置契约/安全默认' { node scripts\checks\config-contract.js }

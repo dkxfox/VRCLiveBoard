@@ -190,3 +190,18 @@
   1) applyLang() 在 const T/let lang 声明前执行 → TDZ 报错被 try/catch 吞 → data-t 文案全空; 初始化必须放 T/lang 声明之后;
   2) tools.write 对大文件(数百行)反复截断、丢尾部多段 → 改用 pwsh [IO.File]::WriteAllText 写大文件;
   3) 前端经典 script 顶层 await 会让浏览器整体拒绝执行(见 111)。
+## 114. 全文本三语文案标准流程 + 硬编码检测门禁(2026-09-06)
+- 背景: 用户要求"所有文本三语 + 实机全测"。本次把新 UI 全部文案(高级设置/公告板/状态条/翻译/环境/插件卡片+弹窗/4 个插件设置面板/主题名/变量下拉)补齐到 lang.js 579 键, 并固化成标准流程 + 回归门禁。
+- 三语文案标准流程(以后加任何 UI 文案照做):
+  1) 文案进 src/web/public/lang.js 三语(zh-CN/zh-TW/en), 键名三语一致;
+  2) 静态 HTML → data-t / data-t-ph(占位符)/ data-tt(title);
+  3) 动态字符串 → t('key'); 注意 t 是函数声明会提升, 但 const T/let lang 是 TDZ —— 动态函数里经 await 异步执行到 t() 时已安全, 初始化里的 applyLang 必须放 T/lang 声明之后;
+  4) 切语言必须重渲染动态内容: 走 reRenderAll()(= applyLang + renderBoard/renderSrcTable/renderEnv/renderPlgCards/pollStatus/buildBdVar/__reThemeLabels), 只 applyLang 不够;
+  5) 提交前跑 GI18N + GI18NU + GI18NH 三道。
+- 新增门禁(scripts/checks/):
+  - i18n-usage.js = GI18NU「i18n 引用完整性」: t('key')/data-t 引用的键必须存在于 lang.js(漏引用 = 界面冒英文键名); 附占位符 WARN(键值含 {x} 但 app.js 无 .replace)。
+  - i18n-hardcode.js = GI18NH「硬编码文案检测」: 扫 index.html/app.js 里"没接 data-t 的中文", 与 docs/I18N-BASELINE.json 白名单比对, 新增即 FAIL(仿 GSURF surface-scan 的基线模式; --update-baseline 更新)。
+- 白名单基线(刻意保留, 非漏翻):
+  - HTML 30 项: 公告板计数/页码(renderBoard)、环境表(renderEnv)、变量下拉 13 项(buildBdVar)、预览空态(renderBdEditor)、主题名(setTheme)、语言下拉自名、初始公告板示例内容、<title>。
+  - JS 15 项: 启动动画死代码节日/季节问候(不可达)、Excel 导出"否"/文件名、【天气】配置默认值、Promise拒绝 内部错误串。
+- 已知预期 WARN: GI18NU 报 fwWelcomeDefault 的 {name} 无 .replace —— 该占位符由好友欢迎插件运行时替换, 非 UI 层替换。
