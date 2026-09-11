@@ -25,13 +25,18 @@ module.exports = function (ctx) {
       if (!fr || fr.enabled === false) continue;
       const n = String(fr.name || '').trim();
       if (!n) continue;
-      if (String(pname).toLowerCase().indexOf(n.toLowerCase()) < 0) continue;
+      // 精确匹配(M-20260911-31): 旧写法用 indexOf 子串匹配, 好友名填"小"会命中所有名字含"小"的陌生人
+      if (String(pname).trim().toLowerCase() !== n.toLowerCase()) continue;
       busy = true;
-      const lines = (fr.lines || []).map(function (l) { return String(l).split('{name}').join(displayName || pname); });
-      if (!lines.length) { busy = false; continue; }
-      const eachMs = Math.max(2000, Number(fr.eachMs) || 6000);
-      const loops = Math.max(1, Number(fr.loops) || 2);
-      ctx.chatbox.showSequence(lines, { priority: 90, eachMs: eachMs, loops: loops }).then(function () { busy = false; });
+      try {
+        const lines = (Array.isArray(fr.lines) ? fr.lines : []).map(function (l) { return String(l).split('{name}').join(displayName || pname); });
+        if (!lines.length) { busy = false; continue; }
+        const eachMs = Math.max(2000, Number(fr.eachMs) || 6000);
+        const loops = Math.max(1, Number(fr.loops) || 2);
+        Promise.resolve(ctx.chatbox.showSequence(lines, { priority: 90, eachMs: eachMs, loops: loops }))
+          .then(function () { busy = false; })
+          .catch(function () { busy = false; });   // 失败也要解锁(M-20260911-31): 否则 busy 永久为 true, 插件表面正常实际失效
+      } catch (e) { busy = false; }
       break;
     }
   }

@@ -59,13 +59,16 @@ class CdpClient {
     this._pending = new Map();
     this._timer = null;
     this._retryTimer = null;
+    this._disposed = false;   // 停用标记(M-20260911-31): 停用后不得再重建任何定时器
   }
   get fresh() { return this.pos.ok && (Date.now() - this.pos.updatedAt) < 5000; }
   async start() {
     const ok = await this._connect();
     if (ok) this.log('[网易云CDP] 已连接 127.0.0.1:' + this.port + ' (精确进度+歌名同步)');
     else this.log('[网易云CDP] 未连接(客户端未带调试端口启动? 用同目录 启动网易云-CDP.bat 启动, 15 秒后自动重试)');
-    this._retryTimer = setInterval(() => { if (!this.fresh && !this.ws) this._connect().catch(() => {}); }, 15000);
+    if (this._disposed) return ok;   // await 期间已被停用 -> 不要再建重连定时器(M-20260911-31: 旧写法会在停用后每 15 秒重连且引用丢失, 无法回收)
+    if (this._retryTimer) clearInterval(this._retryTimer);
+    this._retryTimer = setInterval(() => { if (this._disposed) return; if (!this.fresh && !this.ws) this._connect().catch(() => {}); }, 15000);
     return ok;
   }
   async _connect() {
@@ -94,8 +97,11 @@ class CdpClient {
   _send(method, params) {
     const id = ++this._id;
     return new Promise((resolve, reject) => {
-      this._pending.set(id, { resolve, reject });
-      try { this.ws.send(JSON.stringify({ id: id, method: method, params: params || {} })); } catch (e) { this._pending.delete(id); reject(e); }
+      // 超时 + 上限(M-20260911-31): 旧写法无超时无上限, ws 卡住时每秒新增一个永不 settle 的 Promise/Map 条目
+      if (this._pending.size > 200) { reject(new Error('CDP 待应答过多, 已丢弃本次请求')); return; }
+      const timer = setTimeout(() => { if (this._pending.delete(id)) reject(new Error('CDP 请求超时: ' + method)); }, 8000);
+      this._pending.set(id, { resolve: resolve, reject: reject, timer: timer });
+      try { this.ws.send(JSON.stringify({ id: id, method: method, params: params || {} })); } catch (e) { clearTimeout(timer); this._pending.delete(id); reject(e); }
     });
   }
   async _poll() {
@@ -111,9 +117,12 @@ class CdpClient {
     }
   }
   dispose() {
+    this._disposed = true;
     if (this._timer) clearInterval(this._timer);
     if (this._retryTimer) clearInterval(this._retryTimer);
     this._timer = this._retryTimer = null;
+    // 未应答的请求全部结束掉(M-20260911-31): 否则调用方永远挂着
+    try { for (const p of this._pending.values()) { if (p && p.timer) clearTimeout(p.timer); p.reject(new Error('CDP 已停止')); } this._pending.clear(); } catch (e) {}
     try { if (this.ws) this.ws.close(); } catch (e) {}
     this.ws = null;
   }

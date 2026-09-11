@@ -551,3 +551,10 @@
 - 改动(2026-09-11): ① 新增 scripts/pack-exclude.json(目录/文件/目录名正则/禁入正则/docs 白名单); make-dist 读它并与历史字面量取并集, pack-audit 的 FORBIDDEN_NAME 直接由它生成(两边不再各写一套); docs 只发 DEV-NOTES/GLOSSARY/PLUGIN-DEV/LIVETRANSLATE/RESEARCH, FEATURES 目录与其余 docs 文件全部不进包; ② install-electron.js: 国内优先 npmmirror、失败自动回退官方 release; 下载后**用镜像公布的 SHASUMS256.txt 严格校验**(不一致直接中止), 镜像没提供时明确警告后继续(不因校验把国内用户挡住); ③ ensure-deps.js: 默认源失败后自动改用 registry.npmmirror.com 重试一次, 用户不必手工配 registry。
 - 拍板结论(2026-09-11, 用户授权按建议执行): **保留 `--no-sandbox`** —— 国内机器 GPU/驱动差异大, 去掉可能白屏而收益只是一个没有现成利用链的纵深防御缺口; 同时本轮已把 openExternal 收成"只放行 https"并加了 will-navigate 守卫, 实际暴露面已大幅下降。这一条与被否掉的"改官方源"一起记在此处, 避免以后被当成遗漏重复提。
 - 状态: CLOSED
+## M-20260911-31 插件代码级修复(批 1): friend-welcome 永久卡死 + 子串匹配, cdp 定时器/超时/上限(CLOSED)
+- 来源: 官方插件审计的中危项(用户"全修了吧")
+- 现象: ① friend-welcome 一旦某次播报抛错(例如手工改 config.json 让 lines 变成非数组), busy 永远为 true —— 此后所有好友进房被静默丢弃, 插件看起来正常但已永久失效; ② 好友名用 indexOf 子串匹配, 填"小"会命中所有名字含"小"的陌生人; ③ netease 的 cdp 客户端在 await 连接期间被停用时, 重连定时器会在停用之后才创建且引用丢失 → 停用后每 15 秒仍重连, 连上还会起 1 秒轮询, 永久不可回收; ④ cdp 的 _send 无超时无上限, ws 卡住时每秒新增一个永不 settle 的 Promise/Map 条目, dispose 也不结束它们。
+- 证据(2026-09-11): ① 改动后 node --check 通过、GPLUG 0 FAIL / 0 WARN(注: 授权哈希只覆盖 index.js —— 改 cdp.js 不会让既有授权失效, 这正是审计挂账里那条"哈希覆盖面"的另一面, 已列决策项); ② 全套门禁见提交记录。
+- 改动(2026-09-11): ① friend-welcome: 子串匹配改精确匹配(忽略大小写, 名称去空白), lines 加 Array 校验, showSequence 用 Promise.resolve 包住并补 .catch + try/catch —— **任何失败都解锁 busy**; ② netease cdp: 新增 _disposed 标记, start() 在 await 之后先检查再建定时器且先清旧的; _send 加 8 秒超时与 200 条上限; dispose() 标记停用 + 结束所有未应答请求并清空。
+- 说明: 插件行为没有门禁覆盖(现有插件门禁只查契约与单一源), 这批修复靠静态复核 + node --check; 要真正回归需要插件测试夹具(已列挂账)。
+- 状态: CLOSED
