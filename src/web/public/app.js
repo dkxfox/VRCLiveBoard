@@ -199,9 +199,10 @@ function playSpecialVideo(sv){
 }
 function simpleBoot(c1,c2,greet,deco,title,tag){
   var ov=document.createElement('div');ov.style.cssText='position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(110% 110% at 50% 32%, '+c1+'40 0%, #0b0e13 72%);display:flex;align-items:center;justify-content:center;transition:opacity .55s';
-  ov.innerHTML='<div class="bwrap" style="display:flex;flex-direction:column;align-items:center;gap:12px;opacity:0;transition:opacity .45s"><img src="/api/icon" onerror="this.style.display=\'none\'" style="width:78px;height:78px;border-radius:20px;filter:drop-shadow(0 0 20px '+c1+'99)"><div style="font-size:30px;font-weight:800;background:linear-gradient(90deg,'+c1+','+c2+');-webkit-background-clip:text;background-clip:text;color:transparent">'+title+'</div><div style="color:#9aa7ba;font-size:13px;letter-spacing:3px">'+tag+'</div><div style="color:'+c2+';font-size:14px;font-weight:600">'+(greet?deco+' '+greet:'')+'</div></div>';
+  ov.innerHTML='<div class="bwrap" style="display:flex;flex-direction:column;align-items:center;gap:12px;opacity:0;transition:opacity .45s"><img src="/icon-256.png" onerror="if(!this.dataset.fb){this.dataset.fb=1;this.src=\'/api/icon\';}else{this.style.display=\'none\';}" style="width:78px;height:78px;border-radius:20px;filter:drop-shadow(0 0 20px '+c1+'99)"><div style="font-size:30px;font-weight:800;background:linear-gradient(90deg,'+c1+','+c2+');-webkit-background-clip:text;background-clip:text;color:transparent">'+title+'</div><div style="color:#9aa7ba;font-size:13px;letter-spacing:3px">'+tag+'</div><div style="color:'+c2+';font-size:14px;font-weight:600">'+(greet?deco+' '+greet:'')+'</div></div>';
   document.body.appendChild(ov);
-  // 图标是异步取的(/api/icon 还带 no-store, 每次都要重新取), 不等它就会出现"文字先到、图标后蹦"的割裂感:
+  // 图标是异步取的; 原来源是 /api/icon(软件图标.png, 2.4MB / 1728x1728, 每次刷新都重下),
+  // 现改用 icon-256.png(107KB)并配合 head 里的 preload; 加载晚了仍是"文字先到、图标后蹦":
   // 背景立即盖上(否则会先闪一下控制台页面), 图标+文字整组等图标就绪后再一起淡入; 600ms 兜底, 图标再慢也不至于整段不显示(M-20260911-10)
   var bwrap=ov.querySelector?ov.querySelector('.bwrap'):null;var bimg=ov.querySelector?ov.querySelector('img'):null;var bshown=false;
   function bshow(){if(bshown)return;bshown=true;if(bwrap)bwrap.style.opacity='1';else ov.style.opacity='1';}

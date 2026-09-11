@@ -44,7 +44,7 @@ function refreshInfo(){
 }
 function simpleBoot(c1,c2,greet,deco,title,tag){
   var ov=document.createElement('div');ov.style.cssText='position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(110% 110% at 50% 32%, '+c1+'40 0%, #0b0e13 72%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:opacity .55s';
-  ov.innerHTML='<img src="/api/icon" onerror="this.style.display=\'none\'" style="width:78px;height:78px;border-radius:20px;filter:drop-shadow(0 0 20px '+c1+'99)"><div style="font-size:30px;font-weight:800;background:linear-gradient(90deg,'+c1+','+c2+');-webkit-background-clip:text;background-clip:text;color:transparent">'+title+'</div><div style="color:#9aa7ba;font-size:13px;letter-spacing:3px">'+tag+'</div><div style="color:'+c2+';font-size:14px;font-weight:600">'+(greet?deco+' '+greet:'')+'</div>';
+  ov.innerHTML='<img src="/icon-256.png" onerror="if(!this.dataset.fb){this.dataset.fb=1;this.src=\'/api/icon\';}else{this.style.display=\'none\';}" style="width:78px;height:78px;border-radius:20px;filter:drop-shadow(0 0 20px '+c1+'99)"><div style="font-size:30px;font-weight:800;background:linear-gradient(90deg,'+c1+','+c2+');-webkit-background-clip:text;background-clip:text;color:transparent">'+title+'</div><div style="color:#9aa7ba;font-size:13px;letter-spacing:3px">'+tag+'</div><div style="color:'+c2+';font-size:14px;font-weight:600">'+(greet?deco+' '+greet:'')+'</div>';
   $('stage').appendChild(ov);setTimeout(function(){ov.style.opacity='0';},1900);setTimeout(function(){ov.remove();},2455);
 }
 function starryBoot(){

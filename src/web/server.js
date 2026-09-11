@@ -104,6 +104,24 @@ function effPluginSec() {
   function persist() {
     try { require('../configio').writeConfigAtomic(configPath, rootConfig); return true; } catch (e) { logger.error('config 写入失败: ' + e.message); return false; }
   }
+  // 图片类静态资源: 用 ETag + no-cache 代替 no-store —— 每次仍向服务器校验(换图立刻生效),
+  // 但内容没变就回 304(几百字节), 不必重下几十 KB~几 MB(M-20260911-11)
+  const IMG_EXT = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.ico', '.svg'];
+  const IMG_CT = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.ico': 'image/x-icon', '.svg': 'image/svg+xml' };
+  function serveAsset(req, res, f) {
+    const ext = path.extname(f).toLowerCase();
+    if (IMG_EXT.indexOf(ext) < 0) return serveFile(res, f);
+    fs.stat(f, function (err, st) {
+      if (err) return json(res, 404, { ok: false });
+      const etag = 'W/"' + st.size.toString(16) + '-' + Math.round(st.mtimeMs).toString(16) + '"';
+      if (req.headers['if-none-match'] === etag) { res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' }); return res.end(); }
+      fs.readFile(f, function (e2, data) {
+        if (e2) return json(res, 404, { ok: false });
+        res.writeHead(200, { 'Content-Type': IMG_CT[ext] || 'application/octet-stream', 'Cache-Control': 'no-cache', ETag: etag, 'Content-Length': data.length });
+        res.end(data);
+      });
+    });
+  }
   function serveFile(res, f) {
     fs.readFile(f, function (err, data) {
       if (err) return json(res, 404, { ok: false });
@@ -148,7 +166,7 @@ function effPluginSec() {
       try { rel = decodeURIComponent(url.pathname.slice(1)); } catch (e) { rel = url.pathname.slice(1); }
       if (rel && rel.indexOf('..') < 0 && rel.indexOf('\\') < 0 && rel.indexOf('/') < 0) {
         const f = path.join(publicDir, rel);
-        if (fs.existsSync(f)) return serveFile(res, f);
+        if (fs.existsSync(f)) return serveAsset(req, res, f);
       }
     }
     if (req.method === 'GET' && url.pathname === '/api/version') {

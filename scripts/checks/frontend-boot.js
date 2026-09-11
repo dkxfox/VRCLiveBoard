@@ -62,8 +62,10 @@ function el(tag) {
         const tag = m[1].toLowerCase(), attrs = m[2];
         const cls = (attrs.match(/class="([^"]*)"/) || [])[1];
         const st = (attrs.match(/style="([^"]*)"/) || [])[1];
+        const srcAttr = (attrs.match(/src="([^"]*)"/) || [])[1];
         const child = el(tag);
         if (st) child.style.cssText = st;
+        if (srcAttr) child.src = srcAttr;
         if (cls) for (const c of cls.split(/\s+/)) if (c) e._qs['.' + c] = child;
         if (!e._qs[tag]) e._qs[tag] = child;
       }
@@ -180,6 +182,11 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
         if (!wrap) problems.push('simpleBoot 缺少内容容器 .bwrap(图标与文字无法整组出现)');
         else if (wrap.style.opacity !== '0') problems.push('simpleBoot 内容初始不是透明态: 图标会比文字晚出现(当前 opacity=' + JSON.stringify(wrap.style.opacity) + ')');
         const img = ov.querySelector('img');
+        // 图标必须走 107KB 的小图: 用回 /api/icon(2.4MB 大图)就会重新变滞后(M-20260911-11)
+        if (!img) problems.push('simpleBoot 里找不到图标元素');
+        else if (img.src === '/api/icon' || (img.src || '').indexOf('/api/icon') === 0) problems.push('启动动画又用回了 /api/icon 大图(2.4MB), 图标会滞后');
+        else if (img.src !== '/icon-256.png') problems.push('启动动画图标不是小图 icon-256.png(实际 ' + JSON.stringify(img.src) + ')');
+        if (html.indexOf('rel="preload"') < 0 || html.indexOf('/icon-256.png') < 0) problems.push('index.html 缺少 icon-256.png 的 preload(图标会晚到)');
         if (img && img._ev && img._ev.load) {
           img._ev.load();
           if (wrap && wrap.style.opacity !== '1') problems.push('图标就绪后启动动画内容没有淡入');
