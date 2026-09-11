@@ -16,14 +16,30 @@ const app = fs.readFileSync(path.join(PUB, 'app.js'), 'utf8');
 const ids = new Set();
 for (const mm of html.matchAll(/\bid="([^"]+)"/g)) ids.add(mm[1]);
 
+// 真实 DOM 会给 style.cssText 做 CSS 解析(内置样式随后可读), 桩件必须照做,
+// 否则"初始透明态"这类断言根本读不到(2026-09-11 踩过)
+function mkStyle() {
+  const st = { setProperty(k, v) { st[k] = v; }, removeProperty(k) { delete st[k]; } };
+  Object.defineProperty(st, 'cssText', {
+    get() { return st._t || ''; },
+    set(v) {
+      st._t = String(v);
+      String(v).split(';').forEach(function (d) {
+        const i = d.indexOf(':');
+        if (i > 0) { const k = d.slice(0, i).trim(); const val = d.slice(i + 1).trim(); if (k) st[k] = val; }
+      });
+    }
+  });
+  return st;
+}
 function el(tag) {
   const e = {
-    tagName: String(tag || 'div').toUpperCase(), style: { setProperty() {}, removeProperty() {} },
+    tagName: String(tag || 'div').toUpperCase(), style: mkStyle(),
     dataset: {}, children: [], _text: '', _html: '', _v: '', _c: false,
     options: [], selectedIndex: 0, files: [], naturalWidth: 100, naturalHeight: 100,
     classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
     appendChild(c) { e.children.push(c); return c; }, removeChild() {}, insertBefore() {}, remove() {},
-    addEventListener() {}, removeEventListener() {}, dispatchEvent() {},
+    addEventListener(type, fn) { if (!e._ev) e._ev = {}; e._ev[type] = fn; }, removeEventListener() {}, dispatchEvent() {},
     setAttribute() {}, getAttribute() { return null; }, removeAttribute() {},
     // 真实 DOM 里 innerHTML 之后 querySelector 是查得到的; 返回 null 会让 plgCard 之类误报(桩件噪声)
     querySelector(sel) { if (!e._qs) e._qs = {}; if (!e._qs[sel]) e._qs[sel] = el('div'); return e._qs[sel]; },
@@ -33,7 +49,26 @@ function el(tag) {
     getBoundingClientRect() { return { left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100 }; }
   };
   Object.defineProperty(e, 'textContent', { get() { return e._text; }, set(v) { e._text = String(v); } });
-  Object.defineProperty(e, 'innerHTML', { get() { return e._html; }, set(v) { e._html = String(v); } });
+  Object.defineProperty(e, 'innerHTML', {
+    get() { return e._html; },
+    set(v) {
+      e._html = String(v);
+      // 极简解析: 只认 class="x" 与 style="..." 的配对, 让门禁能断言 innerHTML 构建出来的内容
+      // (本项目的卡片/面板大量用 innerHTML 拼, 不解析就只能断言到"外层存在"这一层)
+      if (!e._qs) e._qs = {};
+      const re = /<([a-zA-Z][\w-]*)([^>]*)>/g;
+      let m;
+      while ((m = re.exec(e._html)) !== null) {
+        const tag = m[1].toLowerCase(), attrs = m[2];
+        const cls = (attrs.match(/class="([^"]*)"/) || [])[1];
+        const st = (attrs.match(/style="([^"]*)"/) || [])[1];
+        const child = el(tag);
+        if (st) child.style.cssText = st;
+        if (cls) for (const c of cls.split(/\s+/)) if (c) e._qs['.' + c] = child;
+        if (!e._qs[tag]) e._qs[tag] = child;
+      }
+    }
+  });
   Object.defineProperty(e, 'value', { get() { return e._v; }, set(v) { e._v = String(v); } });
   Object.defineProperty(e, 'checked', { get() { return e._c; }, set(v) { e._c = !!v; } });
   return e;
@@ -130,6 +165,28 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
   else if (!rowsEl.children.length) problems.push('数据源表格 #srcRows 渲染后仍为空(渲染函数可能被异常打断)');
   const plgEl = byId['plugCards'];
   if (plgEl && !plgEl.children.length) problems.push('插件卡片 #plugCards 渲染后仍为空');
+  // 启动动画(默认/皮肤路径走 simpleBoot): 图标是异步取的, 必须等它就绪再整体淡入,
+  // 否则会出现"文字先到、图标后蹦"(M-20260911-10)
+  try {
+    if (typeof sb.simpleBoot !== 'function') problems.push('未定义 simpleBoot');
+    else {
+      sb.simpleBoot('#3b82f6', '#7dd3fc', '', '*', 'VRCLiveBoard', 'tag');
+      const body = sb.document.body;
+      const ov = body.children[body.children.length - 1];
+      if (!ov) problems.push('simpleBoot 未向 body 挂载覆盖层');
+      else {
+        if (ov.style.opacity === '0') problems.push('simpleBoot 整体被隐藏: 会先闪出控制台页面再播动画');
+        const wrap = ov.querySelector('.bwrap');
+        if (!wrap) problems.push('simpleBoot 缺少内容容器 .bwrap(图标与文字无法整组出现)');
+        else if (wrap.style.opacity !== '0') problems.push('simpleBoot 内容初始不是透明态: 图标会比文字晚出现(当前 opacity=' + JSON.stringify(wrap.style.opacity) + ')');
+        const img = ov.querySelector('img');
+        if (img && img._ev && img._ev.load) {
+          img._ev.load();
+          if (wrap && wrap.style.opacity !== '1') problems.push('图标就绪后启动动画内容没有淡入');
+        } else problems.push('simpleBoot 未给图标注册 load 监听');
+      }
+    }
+  } catch (e) { problems.push('simpleBoot 断言异常: ' + e.message); }
   if (bootSrc) {
     const cases = [
       ['normal 无皮肤', 'normal', null, 'simpleBoot'],
