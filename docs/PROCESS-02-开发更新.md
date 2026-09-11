@@ -128,8 +128,8 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke
 | `server.js` 路由链 | 909 行, 55 条路由挤压在 L141~L866 的单条 if/else 链(约 725 行); 门禁与错误返回靠逐条手写 | 中优先级: 抽成路由表 + 统一 needL1/needL2 与错误包装器; 是漏门(M-20260911-02)与静默失败的共同解法 |
 | 跨文件隐式契约 | 13 个 window.* 全局无声明处: app.js 读 window.__fxRestart / __reThemeLabels(index.html 内联块写入), index.html 内联块读 window.t | 低优先级: 随内联块迁出一起收敛, 或集中为单一 window.VRCB 命名空间并在文件头写明契约 |
 | 主题命名三套并存 | 配置存 blue → KEYMAP 映射中文"海蓝" → THEME_LABELS 再映射 i18n 键 themeOcean; setTheme("海蓝") 以中文名作内部标识 | 低优先级: 内部一律用 key(blue), 显示名走 t(); 与内联块迁出合并做 |
-| 前后端静默失败 | **前端已还清**(2026-09-11 批 2): 56 处空 catch 接入 apiFail() —— 按位置去重只报一次, 统一走 feErr() 且上报失败即停(同时修掉 上报失败→unhandledrejection→再上报 的自激); 剩 2 处保留为空 = 上报链路自身。后端 server.js 另有 22 处空 catch 未处理 | 后端 22 处随批 3(抽路由表 + 统一错误包装)一并处理 |
-| 无 lint / 单测 / CI | 无 eslint / prettier / tsconfig / .github; package.json 只有 start 与 desktop 两个脚本; 24 个 checks 脚本靠 run-gates.ps1 手工串 | 低优先级: 把 checks 挂成 npm scripts(不引入新依赖), 便于编辑器与 CI 复用 |
+| ~~前后端静默失败~~ | **已还清**(2026-09-11): 前端 56 处空 catch 接入 apiFail()(批 2), 后端 server.js 22 处空 catch 接入 noteFail()(批 3b) —— 两端对称, 均按位置去重只报一次; 上报链路自身保留空 catch 以免自激 | 无需再排; 新增代码请沿用 apiFail / noteFail |
+| 无 lint / 单测 / CI | **部分还清**(2026-09-11): package.json 增加 gates / gates:fast / selftest 三个脚本(不引入任何依赖), 编辑器与 CI 可直接调用; 仍无 eslint / prettier / tsconfig / .github | 低优先级; 接入 CI 时注意两点: ① NS 会话下 npm 脚本的相对路径会落到 C:\\Windows(UNC 的 cwd 不可用), 故这三个脚本用 %npm_package_json% 拼绝对路径; ② gates 因 GSYNC(用户明令不推送)固定退出码 1, CI 应按 GATES SUMMARY 判定而不是退出码 |
 
 
 **待复验(2026-09-11 代码审核: 子代理报告, 本人未逐条复核, 勿直接当结论)**

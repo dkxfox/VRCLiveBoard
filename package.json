@@ -6,7 +6,10 @@
   "main": "src/main.js",
   "scripts": {
     "start": "node src/main.js",
-    "desktop": "electron electron/main.js"
+    "desktop": "electron electron/main.js",
+    "gates": "powershell -NoProfile -ExecutionPolicy Bypass -File \"%npm_package_json%\\..\\scripts\\checks\\run-gates.ps1\" -Smoke -AllowDirty",
+    "gates:fast": "node \"%npm_package_json%\\..\\scripts\\checks\\html-inline-check.js\" && node \"%npm_package_json%\\..\\scripts\\checks\\ui-wiring.js\" && node \"%npm_package_json%\\..\\scripts\\checks\\frontend-boot.js\"",
+    "selftest": "powershell -NoProfile -ExecutionPolicy Bypass -File \"%npm_package_json%\\..\\scripts\\checks\\gate-selftest.ps1\""
   },
   "engines": {
     "node": ">=18"
