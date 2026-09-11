@@ -7,7 +7,7 @@ const path = require('path');
 const zlib = require('zlib');
 
 const ROOT = path.resolve(__dirname, '..', '..');
-const FORBIDDEN_NAME = [/\.bak$/i, /^config\.json\.bak$/i, /继续开发命令\.txt$/, /dev-unlocker/i, /加密狗/, /发布公告/, /\.ocr-tmp\.png$/, /master\.key$/, /master-pass/i, /授权登记表/, /^\.git\//];  // .git 是 git init 之后新出现的根目录, 属于"新增根目录文件默认会进包"事故
+const FORBIDDEN_NAME = [/\.bak$/i, /^config\.json\.bak$/i, /继续开发命令\.txt$/, /dev-unlocker/i, /加密狗/, /发布公告/, /彩蛋/, /秘密开发/, /旧版控制台/, /^dev-dongle//i, /母狗/, /chain\.json$/i, /mini-dongle-/i, /mini-unlock/i, /\.ocr-preview\.png$/i, /^\.gitignore$/i, /startup-test/i, /打包与分发/, /\.ocr-tmp\.png$/, /master\.key$/, /master-pass/i, /授权登记表/, /^\.git\//];  // .git 是 git init 之后新出现的根目录, 属于"新增根目录文件默认会进包"事故
 const REQUIRED = ['package.json', 'config.json', '使用说明.txt', 'README.md', 'src/main.js', 'src/web/server.js', 'src/web/public/index.html', '启动.bat', '启动桌面版.bat'];
 // 真实凭据特征: 所有文本条目都扫
 const SECRET_RE = [/sk-[a-zA-Z0-9]{16,}/, /SESSDATA=[0-9a-fA-F]{8}/, /ghp_[A-Za-z0-9]{20,}/, /gho_[A-Za-z0-9]{20,}/, /github_pat_[A-Za-z0-9_]{20,}/];
@@ -50,7 +50,7 @@ function audit(zp) {
   const label = path.basename(zp);
   const fails = [], warns = [];
   const z = readZip(zp);
-  const names = z.entries.map((e) => e.name);
+  const names = z.entries.map((e) => e.name).filter((n) => n !== 'conflict-test');   // 开发自测夹具不进包, 也不要求它在包里(2026-09-11 审计 H2)
 
   // 1. 文件名层
   let nonAscii = 0, noFlag = 0, badUtf8 = 0, backslash = 0;
@@ -79,7 +79,7 @@ function audit(zp) {
   }
 
   // 4b. 官方插件恢复备份: 打包必须为 plugins\ 下每个插件生成 官方可选插件\<id>\ 副本(用户误删可拷回)
-  const officialDirs = fs.readdirSync(path.join(ROOT, 'plugins'), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+  const officialDirs = fs.readdirSync(path.join(ROOT, 'plugins'), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).filter((n) => n !== 'conflict-test');   // 开发自测夹具不进包, 也不要求它在包里(2026-09-11 审计 H2)
   for (const id of officialDirs) {
     if (!names.includes('plugins/' + id + '/manifest.json')) fails.push('包内缺少插件本体: plugins/' + id);
     if (!names.includes('官方可选插件/' + id + '/manifest.json')) fails.push('包内缺少误删恢复备份: 官方可选插件/' + id);

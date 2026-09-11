@@ -486,3 +486,52 @@
 - 改动(2026-09-11): ① server.js: POST /api/ocrtl-vision 扩展为 ocrtl 设置写入接口 —— 接受 mode(白名单 auto/vision/ocr)、delayMs(1000~60000)、displayMs(3000~120000)、loops(1~10), 一律夹取并回传生效值, 另加 rootConfig.ocrtl 空值守卫; ② app.js: 新增 saveOcrtl(), 识别方式与三个输入框接上 onchange(改完立刻落盘, 回传的生效值写回界面, 失败走 apiFail); ③ app.js: 触发体补上 mode(与旧版一致 —— 即使保存失败, 当次也按所选识别方式跑); ④ 修 #ocrDisplay 读的键 eachMs → displayMs; ⑤ 门禁: backend-flow 新增 7 条契约断言, G-BOOT 新增"改了必须发出保存请求 + 三个输入框必须接线"断言。
 - 说明: 三个参数沿用同一个写入接口而不是新开路由 —— 路由清单(GROUTE)与 docs/ROUTES-BASELINE.json 不用动。另外注意"识别方式"(auto/vision/ocr)与"截图区域"(window/region/screen, 走 /api/capture/set)是两个不同的 mode, 面板上前者不保存、后者一直正常 —— 移植时最容易被合并掉的正是这种"同名不同物"。
 - 状态: CLOSED
+
+## M-20260911-24 反馈方式统一: 15 处 alert 弹窗改页内提示(用户"全做了吧")(CLOSED)
+- 来源: 用户实机反馈"截图翻译弹对话框"之后, 本人自查发现同类写法还有 14 处; 用户指示"全做了吧"
+- 现象: 保存设置、导出/导入配置、复制日志/体检结果、插件开关失败、端口生效、OSC 测试…… 全部用 alert() 弹窗反馈 —— 挡住整个界面要点一下才能继续、内容回看不了, 且与旧版控制台"反馈落在页面上"完全不一致。
+- 影响面: 十几处日常操作被打断; 前端没有统一方式做"成功/失败"着色; 后续想加"重试/撤销"也没有落点。
+- 根因: 新版 UI 移植时逐处用 alert() 顶替了旧版的页内提示(按钮旁 / 结果块 / 消息元素), 既没有统一助手, 也没有门禁约束 —— 谁写谁弹。
+- 证据(2026-09-11): ① app.js 里 alert() 调用 **25 → 0**(用配对括号取完整实参再重写; 第一次用短锚点改写的做法把 3 处 "实参后还有字符串拼接" 的调用插坏, node --check 当场拦下); ② GHTML 新增静态规则"前端不得出现 alert()", A/B: 塞回一个 alert → 精确报 /app.js:23, 撤掉即通过; ③ G-BOOT 新增运行期断言(note() 必须让底部提示条显示并写入文字); ④ 全套门禁见 DEV-NOTES 140。
+- 改动(2026-09-11): ① index.html 加底部提示条 #note(样式 + 元素, 4 秒自动消失); ② app.js 新增 note(text,kind,target) —— 不传 target 上提示条(ok/warn 着色), 传 target 写进指定元素(如 #plgMsg); ③ 25 处调用全部改写: 成功 ok 色 / 失败 warn 色 / 三元(成功失败同一调用)保持中性色, 插件导入缺路径写进 #plgMsg; ④ html-inline-check.js 增加"不得出现 alert()"规则; ⑤ frontend-boot.js 增加提示条断言; ⑥ PROCESS-02 §0 增加约定。
+- 说明: 确认类弹窗(退出/重启/删页/装未授权插件)是 confirm(), 语义正确, 未动。
+- 状态: CLOSED
+
+## M-20260911-25 打包排除缺口: 彩蛋设计文件与旧版控制台会随包出厂(CLOSED)
+- 来源: 用户"全做了吧"(建议里 D 项的打包疑点)
+- 现象: make-dist.ps1 的排除表没有覆盖两样东西 —— ① 顶层开发文件 秘密开发-彩蛋设计.txt / 秘密开发-彩蛋设计演示.html(.gitignore 忽略, 但 robocopy 不认 .gitignore); ② 旧版控制台备份/(3 个文件 145.8KB)。两者都会被打进发布包。
+- 影响面: 彩蛋设计稿外流直接剧透玩法; 旧版控制台随包出厂既是体积也是维护困惑(用户会看到两份控制台)。GPACK(pack-audit.js)的 FORBIDDEN_NAME 里没有"彩蛋/秘密开发/旧版控制台", 所以发布包审计也拦不住。
+- 根因: 排除表按"已知文件名"逐个列举($xfFiles 里只有 秘密开发-新版UI计划.txt), 而 .gitignore 与打包排除表是两套互不相干的机制 —— 新增开发文件时容易只加进 .gitignore。
+- 证据(2026-09-11): 用与脚本相同的 /XD /XF 口径做 robocopy /L 预演(只列不拷): 新口径 128 个文件 / 去掉这两项排除 133 个 → **差值正好 5**(旧版控制台备份 3 个 + 彩蛋文件 2 个; 目录枚举复核为 3 个)。注: robocopy 输出的中文文件名按 OEM 代码页乱码, 所以用"文件数差值"而不是按名字匹配做证据。
+- 改动(2026-09-11): ① make-dist.ps1: $exclAbs 增加 旧版控制台备份; $xfFiles 增加 '秘密开发-彩蛋设计*'(通配, 覆盖 txt/html); ② pack-audit.js: FORBIDDEN_NAME 增加 /彩蛋/、/秘密开发/、/旧版控制台/ —— 即使排除表漏了, GPACK 也会在发布包审计里拦住。
+- 说明: 仓库里两份都保留(旧版控制台是移植对照物, 彩蛋稿是设计存档), 只是不进包。GPACK 需要真 zip 才能跑(未随本次门禁执行), 规则本身已就位。
+- 状态: CLOSED
+
+## M-20260911-26 OCR 截图链路审计: 高危"静默复用旧截图"及一批中低危项修复(CLOSED)
+- 来源: 子代理只读审计(用户"全做了吧"), 行动版落盘 docs/AUDIT-20260911-01-OCR链路.md
+- 现象(高): 截图失败时助手回的是 "CAPTURE-FAIL: 原因"(脚本自身仍 exit 0), 而 captureWindow 只判 NO-WINDOW / NO-REGION, 其它一律当成功 → 失败时会拿着**上一轮残留的 .ocr-tmp.png** 去 OCR / 上传视觉接口, 聊天框显示旧截图的译文, 用户完全无感。现场证据: 仓库根目录就留着那次的 1,670,111 字节 .ocr-tmp.png(2026-09-11 21:41)。
+- 影响面: 静默错误结果 + 旧截图被重复外发给第三方视觉接口(隐私); 另一个后果是本地 OCR 对不存在的路径报错, 排查困难。
+- 根因: 客户端只做"否定式"判断(认出两个已知失败串), 没有"白名单式"判断(只有 OK 才算成功); 临时文件又是固定路径且用完不删, 两个缺陷叠加才产生"旧图当新图"。
+- 证据(2026-09-11): ① 门禁新增 6 条用例(capture-host.js): OK 放行 / NO-WINDOW / NO-REGION / CAPTURE-FAIL / 空串 / 未知内容各自精确抛错, 跑出 20 PASS / 0 FAIL; ② 同时修掉同源的一批: 唯一临时文件 + 用完即删、mode=vision 未配置时不发注定 401 的请求并明确回退提示、分片上限给前缀留位(此前每片结尾被静默截 3~7 字)、worker 失败不再永久缓存、常驻进程加代次隔离与 stdin error 监听、超时立刻断开、回退错误信息提炼 stderr、cropW/cropH 非数字归一化、beep 加 error 监听。
+- 改动(2026-09-11): 见 docs/AUDIT-20260911-01-OCR链路.md 的"已修"表(9 条); 挂账 7 条已在同文件与 PROCESS-02 §8 列明。
+- 说明: 常驻助手本身经审计确认无进程泄漏、无注入面、UTF-8 双向正确、协议不会串行(详见审计"已核实无问题" 11 条)。
+- 状态: CLOSED
+
+## M-20260911-27 官方插件审计: netease 权限声明不实(高)已改正 + 其余挂账(CLOSED)
+- 来源: 子代理只读审计(用户"全做了吧"), 行动版落盘 docs/AUDIT-20260911-02-官方插件.md
+- 现象(高): netease-lyrics 的 manifest 写 permissions.process = false, 实际代码却 spawn/execFileSync PowerShell、读注册表卸载项、taskkill /F 强杀网易云、并 spawn 任意 cloudExe; 而审批红窗的高危提示只看 permissions.process —— 用户在"无害插件"的认知下完成了授权, 属**声明不实/告知失效**(宿主自述为契约式权限而非沙箱)。
+- 影响面: 授权提示的信息基础失真; 收紧 processPolicy=deny 的用户也会被该插件的行为惊到。
+- 根因: manifest 权限字段是"声明", 但没有任何门禁校验"声明与实现一致"; 插件的 require 钩子默认只审计不拦, 直连 require('child_process') 也不进审计日志。
+- 证据(2026-09-11): 改后 GPLUG 0 FAIL / 0 WARN(授权哈希 netease-lyrics@1.1.3|2.0.0|070b2c70... 与更新包 netease-lyrics-1.1.3-2.zip 版本一致)。
+- 改动(2026-09-11): manifest: process -> true; ports -> [9234]; description 补上"需要进程能力: 启动/结束网易云、写桌面快捷方式, 并占用本地调试端口 9234"。
+- 说明: 版本号未动, 所以老用户的既有授权继续有效(manifest 不在授权哈希内 —— 这正是审计挂账里"审批哈希只覆盖 index.js"那条的另一面)。
+- 挂账: 中危 8 条 + 低危 10 条已逐条列进 docs/AUDIT-20260911-02-官方插件.md 与 PROCESS-02 §8(其中 netease 的 fs/网络声明与 ctx.* 改造、cdp 定时器与 _send 超时、friend-welcome 的 busy 卡死与子串匹配、审批哈希覆盖面、weather 导入无上限等)。
+- 状态: CLOSED
+
+## M-20260911-28 审计收尾: 控制台差异 + 桌面壳/打包链路的高危项(用户"全做了吧")(CLOSED)
+- 来源: 子代理只读审计(4 份); 行动版落盘 docs/AUDIT-20260911-01/02/03/04
+- 现象与影响: ① "显示命令行窗口"开关**反着坏**(前端发 show, 服务端只认 visible → 取消勾选无效, 还会把已关的窗口重新打开); ② 打包链路: 开发自测插件 plugins/conflict-test(全权限)会随下一个包出厂, 而 pack-audit 反而强制要求它在包里; pack-audit 的禁入名单缺目录级规则(dev-dongle/ 里的 master.js、母狗使用说明、mini-template 等漏网); ③ **C1 级机密卫生**: 门禁自测把整仓复制到 %TEMP%, 排除表漏了 dev-dongle 与 config.json → 每次发布审计都会把 master.key / master-pass.txt / 授权登记表.xlsx / 含 devchain+level1Password 的真实配置复制到 %TEMP%(且只在脚本末尾删); ④ Electron 的 setWindowOpenHandler 把任意 URL 交给 shell.openExternal(file:/ms-settings:/smb: 都可能被执行), 无导航守卫; ⑤ .gitignore(私有文件名索引)、startup-test.html、开发者文档/04 随包出厂。
+- 证据(2026-09-11): ① 全部门禁复跑通过(见提交记录), GPLUG 0 FAIL / 0 WARN, G2 编码 0 violation; ② 折叠见 DEV-NOTES 144; ③ 四份审计文档含"已核实无问题"清单, 避免重复排查。
+- 改动(2026-09-11): ① app.js 的 {show:...} → {visible:...}; ② make-dist 插件复制跳过 conflict-test(两处), $xfFiles 增加 conflict-test/.gitignore/startup-test.html/打包与分发.md; ③ pack-audit 的 FORBIDDEN_NAME 补 9 条(dev-dongle 目录级/母狗/chain.json/mini-dongle/mini-unlock/.ocr-preview.png/.gitignore/startup-test/打包与分发)并让官方插件枚举跳过 conflict-test; ④ gate-selftest 的临时副本排除 dev-dongle/旧版控制台备份/测试素材目录 + /XF 机密文件, 并用 config.default.json 顶一份干净 config; ⑤ electron/main.js 的 openExternal 只放行 https + 加 will-navigate 守卫。
+- 说明: 未修项(控制台差异 15 条 + 打包/壳 14 条)已逐条列进四份审计文档与 PROCESS-02 §8; 其中"docs/ 出厂范围""排除表改清单文件""--no-sandbox""Electron 镜像哈希"属需你拍板的决策项。
+- 状态: CLOSED

@@ -36,8 +36,12 @@ function buildArgs(opt) {
 
 function oneShot(opt, timeoutMs) {
   return new Promise(function (resolve, reject) {
-    execFile(PS, buildArgs(opt), { timeout: timeoutMs || CMD_TIMEOUT_MS, windowsHide: true }, function (err, stdout) {
-      if (err) return reject(err);
+    execFile(PS, buildArgs(opt), { timeout: timeoutMs || CMD_TIMEOUT_MS, windowsHide: true }, function (err, stdout, stderr) {
+      if (err) {
+        // 用户看不懂 'Command failed: powershell.exe -NoProfile ...' 这种整条命令行: 提炼 stderr 尾部(M-20260911-26)
+        const tail = String(stderr || '').trim().split('\n').slice(-2).join(' ').slice(0, 160);
+        return reject(new Error('截图脚本执行失败: ' + (tail || err.message)));
+      }
       // 与常驻路径保持同一形状(去掉行尾空白), 调用方只做 indexOf 判断, 不受影响
       resolve(String(stdout || '').trim());
     });
@@ -47,6 +51,7 @@ function oneShot(opt, timeoutMs) {
 function createCaptureHost(logger) {
   let log = logger || { info: function () {}, warn: function () {} };
   let child = null, buf = '', ready = false, starting = null, stopped = false, startFails = 0;
+  let gen = 0;                          // 进程代次(M-20260911-26): 旧进程的 exit/数据不得影响新进程
   let readyCbs = [];
   let pending = null;                  // 当前在等结果的指令
   let chain = Promise.resolve();       // 串行化: PowerShell 单线程, 一次只发一条
@@ -92,15 +97,17 @@ function createCaptureHost(logger) {
       try {
         proc = spawn(PS, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', HOST_SCRIPT], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
       } catch (e) { log.warn('[capture] 常驻截图助手启动失败: ' + e.message); return done(false); }
+      const myGen = ++gen;
       child = proc; buf = ''; ready = false;
       const t = setTimeout(function () { log.warn('[capture] 常驻截图助手启动超时, 本次回退一次性调用'); try { proc.kill(); } catch (e) {} done(false); }, READY_TIMEOUT_MS);
       readyCbs.push(function (ok) { clearTimeout(t); done(ok); });
+      proc.stdin.on('error', function (e) { log.warn('[capture] 助手 stdin 写入失败: ' + e.message); });
       proc.stdout.setEncoding('utf8');
-      proc.stdout.on('data', handleData);
+      proc.stdout.on('data', function (d) { if (myGen === gen) handleData(d); });
       proc.stderr.setEncoding('utf8');
       proc.stderr.on('data', function (d) { const s = String(d).trim(); if (s) log.warn('[capture] 助手: ' + s.slice(0, 200)); });
-      proc.on('error', function (e) { log.warn('[capture] 常驻截图助手异常: ' + e.message); done(false); });
-      proc.on('exit', function (code) { handleExit('code=' + code); done(false); });
+      proc.on('error', function (e) { if (myGen !== gen) return; log.warn('[capture] 常驻截图助手异常: ' + e.message); done(false); });
+      proc.on('exit', function (code) { if (myGen !== gen) return; handleExit('code=' + code); done(false); });
     });
     return starting;
   }
@@ -108,8 +115,9 @@ function createCaptureHost(logger) {
   function send(opt, timeoutMs) {
     return new Promise(function (resolve, reject) {
       const timer = setTimeout(function () {
-        pending = null;
-        try { if (child) child.kill(); } catch (e) {}
+        const dead = child;
+        pending = null; ready = false; child = null;   // 立刻断开(M-20260911-26): 否则下一条指令会写进已死进程(EPIPE + 白等 20 秒)
+        try { if (dead) dead.kill(); } catch (e) {}
         reject(new Error('截图助手响应超时'));
       }, timeoutMs || CMD_TIMEOUT_MS);
       pending = { resolve: resolve, reject: reject, timer: timer };
@@ -125,7 +133,7 @@ function createCaptureHost(logger) {
   function capture(opt, timeoutMs) {
     const run = function () {
       return start().then(function (ok) {
-        if (!ok || !child) return oneShot(opt, timeoutMs);
+        if (!ok || !child || child.exitCode !== null) return oneShot(opt, timeoutMs);
         return send(opt, timeoutMs).catch(function (e) {
           log.warn('[capture] 常驻助手不可用, 回退一次性调用: ' + e.message);
           return oneShot(opt, timeoutMs);
@@ -138,7 +146,7 @@ function createCaptureHost(logger) {
   }
 
   function stop() {
-    stopped = true;
+    stopped = true; gen++;   // 作废在途 start(M-20260911-26): 否则 READY 迟到会让进程脱管
     flushReady(false);
     try { if (child && child.stdin) child.stdin.end('quit\n'); } catch (e) {}
     try { if (child) child.kill(); } catch (e) {}

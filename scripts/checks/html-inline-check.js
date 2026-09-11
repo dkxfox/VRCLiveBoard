@@ -68,4 +68,35 @@ const missing = [...new Set(refs)].filter((r) => !idSet.has(r));
 if (missing.length) console.log('  WARN getElementById 目标在 HTML 中不存在(可能是动态创建): ' + missing.slice(0, 10).join(', '));
 else console.log('  OK   getElementById 目标全部存在 (' + new Set(refs).size + ' 个)');
 
+// 反馈方式约定(M-20260911-24): 前端不得出现 alert() —— 弹窗会挡住整个界面、内容也回看不了。
+// 旧版控制台的反馈都落在页面上(按钮旁 / 结果块 / 底部提示条); 新版移植时有多处被改成 alert, 这里固化成门禁。
+const alertHits = [];
+for (const b of blocks) {
+  if (!b.src) continue;
+  const f2 = path.join(ROOT, 'src', 'web', 'public', b.src.replace(/^\//, '').split('/').join(path.sep));
+  if (!fs.existsSync(f2)) continue;
+  const code = fs.readFileSync(f2, 'utf8');
+  const re2 = /(^|[^\w.$])alert\s*\(/g;
+  let m2;
+  while ((m2 = re2.exec(code)) !== null) alertHits.push(b.src + ':' + code.slice(0, m2.index).split('\n').length);
+}
+if (alertHits.length) { console.log('  FAIL 前端出现 alert() 弹窗(约定: 用页内提示 note(), 确认类用 confirm): ' + alertHits.join(', ')); fail++; }
+else console.log('  OK   前端无 alert() 弹窗(反馈走页内提示)');
+
+// 下拉选项的 value 安全(M-20260911-25): <option data-t="..."> 被 applyLang 写进 textContent 后, 若没显式写 value=,
+// 元素的 value 就变成译文 —— 保存/触发时会把"视觉模型(更准,按量计费)"当成模式发给后端。
+// 规则: 只要 JS 里读过 $('X').value / getElementById('X').value, 这个 <select id="X"> 的每个 <option> 都必须显式带 value=。
+const jsAll = jsTexts.join('\n');
+const badSelects = [];
+for (const sm2 of html.matchAll(/<select([^>]*)>([\s\S]*?)<\/select>/gi)) {
+  const sid = (sm2[1].match(/\sid\s*=\s*["']([^"']+)["']/) || [])[1];
+  if (!sid) continue;
+  const readsValue = new RegExp("(getElementById\\(\\s*[\"']" + sid + "[\"']\\s*\\)|\\$\\(\\s*[\"']" + sid + "[\"']\\s*\\))[^\\n]{0,40}\\.value").test(jsAll);
+  if (!readsValue) continue;
+  for (const om of sm2[2].matchAll(/<option([^>]*)>/gi)) if (!/value\s*=/.test(om[1])) badSelects.push('#' + sid);
+}
+if (badSelects.length) { console.log('  FAIL 下拉选项缺显式 value=(JS 会读 .value, 文案翻译后会把译文当值发出去): ' + [...new Set(badSelects)].join(', ')); fail++; }
+else console.log('  OK   读了 .value 的下拉都有显式 value=(文案翻译不会污染取值)');
+
+
 process.exit(fail ? 1 : 0);

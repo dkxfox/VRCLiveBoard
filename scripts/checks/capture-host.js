@@ -117,6 +117,26 @@ function oneShot(argv) {
   }
   try { if (fs.existsSync(TMP)) fs.unlinkSync(TMP); } catch (e) {}
 
+  // ⑥ 截图回复必须严格校验(M-20260911-26): CAPTURE-FAIL / 空 / 未知内容都不得被当成成功
+  //    (改前只认 NO-WINDOW / NO-REGION, 失败时会静默复用上一轮的旧截图去 OCR / 上传视觉接口)
+  try {
+    const ocr = require(path.join(ROOT, 'src', 'ocrtranslate.js'));
+    const cases = [
+      ['OK', true, ''],
+      ['NO-WINDOW', false, '未找到窗口'],
+      ['NO-REGION', false, '截图区域未设置'],
+      ['CAPTURE-FAIL: GDI+ 出错了', false, '截图失败'],
+      ['', false, '无法识别'],
+      ['一条看不懂的输出', false, '无法识别']
+    ];
+    for (const c of cases) {
+      let good = false, detail = '';
+      try { ocr.checkCaptureReply(c[0], 'VRChat'); good = true; } catch (e) { detail = e.message; }
+      ok(good === c[1] && (!c[2] || detail.indexOf(c[2]) >= 0), '回复 ' + JSON.stringify(String(c[0]).slice(0, 22)) + ' -> ' + (good ? 'OK' : detail.slice(0, 44)));
+    }
+    ok(typeof ocr.captureWindow === 'function', 'ocrtranslate 导出 captureWindow(便于复用与门禁)');
+  } catch (e) { ok(false, '截图回复校验用例异常: ' + e.message); }
+
   console.log('[capture-host] pass=' + pass + ' fail=' + fail + (skip ? (' skip=' + skip) : ''));
   process.exitCode = fail ? 1 : 0;
 })().catch(function (e) { console.log('  FAIL 截图助手契约测试异常: ' + ((e && e.stack) || e)); process.exitCode = 1; });

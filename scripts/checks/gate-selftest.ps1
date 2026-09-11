@@ -7,8 +7,14 @@ $proj = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $tmp = Join-Path $env:TEMP 'vrcb-gate-selftest'
 Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $tmp | Out-Null
-$excl = @('node_modules','dist','logs','.git','.electron-cache','.pydist','.ocr-langs','.ocr-cache') | ForEach-Object { Join-Path $proj $_ }
-robocopy $proj $tmp /E /NFL /NDL /NJH /NJS /XD $excl | Out-Null
+# 临时副本**不得**带入机密与开发物料(2026-09-11 审计 H3): 此前每次发布审计都会把 dev-dongle\master\master.key、
+# master-pass.txt、授权登记表.xlsx 与含 devchain/level1Password 的真实 config.json 复制到 %TEMP%(且失败时不清)。
+$excl = @('node_modules','dev-dongle','旧版控制台备份','dist','logs','.git','.electron-cache','.pydist','.ocr-langs','.ocr-cache') | ForEach-Object { Join-Path $proj $_ }
+$excl += @(Get-ChildItem $proj -Directory | Where-Object { $_.Name -match '测试|OCR|截图' } | ForEach-Object { $_.FullName })
+$xf = @('config.json','config.json.bak','*.bak','秘密开发*','继续开发命令.txt','.gitignore','dev-unlocker*')
+robocopy $proj $tmp /E /NFL /NDL /NJH /NJS /XD $excl /XF $xf | Out-Null
+# 自测仍需一份 config.json: 用 config.default.json 顶上(不含任何机密)
+Copy-Item (Join-Path $proj 'config.default.json') (Join-Path $tmp 'config.json') -Force
 Write-Output ('[gate-selftest] 临时副本: ' + $tmp)
 $CRLF = [string][char]13 + [string][char]10
 $LF = [string][char]10

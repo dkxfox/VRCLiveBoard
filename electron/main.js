@@ -91,7 +91,16 @@ function createWindow() {
     win.loadURL(consoleErrorPage(desc + ' (' + code + ')')).catch(function () {});
   });
   whenCoreReady(loadConsole);
-  win.webContents.setWindowOpenHandler(function (details) { shell.openExternal(details.url); return { action: 'deny' }; });
+  // 只把 https 链接交给系统浏览器(2026-09-11 审计 M3): 任意协议(file:/ms-settings:/search-ms:/smb:)交给 ShellExecute
+  // 等于把网页层的链接变成本机执行面; 非 https 一律拒绝。
+  win.webContents.setWindowOpenHandler(function (details) {
+    try { const u = new URL(String(details.url || '')); if (u.protocol === 'https:') shell.openExternal(u.href); } catch (e) {}
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', function (e, url) {
+    try { const u = new URL(String(url)); if (u.hostname !== '127.0.0.1' && u.hostname !== 'localhost') e.preventDefault(); }
+    catch (err) { e.preventDefault(); }
+  });
   // Ctrl+R / Ctrl+Shift+R 刷新界面(桌面版没有地址栏和 F5)
   win.webContents.on('before-input-event', function (event, input) {
     if (input.type === 'keyDown' && input.control && String(input.key).toLowerCase() === 'r') {

@@ -351,6 +351,20 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
       if (el5 && typeof el5.onchange !== 'function') problems.push('#' + id5 + ' 未接线(改了不会落盘)');
     }
   } catch (e) { problems.push('识别方式落盘断言异常: ' + e.message); }
+  // 页内提示条(M-20260911-24): alert 全部换成 note(), 得真能显示出来
+  try {
+    const { uiJsOrder: order6 } = require('./_ui-files.js');
+    const s6 = makeSandbox();
+    for (const fp of order6(ROOT)) vm.runInNewContext(fs.readFileSync(fp, 'utf8'), s6, { filename: path.basename(fp) });
+    const el6 = s6.document.getElementById('note');
+    if (!el6) problems.push('index.html 缺少 #note(页内提示条)');
+    else if (typeof s6.note !== 'function') problems.push('app.js 未定义 note()(页内提示)');
+    else {
+      s6.note('测试提示内容', 'warn');
+      if (el6.hidden !== false) problems.push('note() 没有把提示条显示出来');
+      if (String(el6.textContent || '').indexOf('测试提示内容') < 0) problems.push('note() 没有把文字写进提示条');
+    }
+  } catch (e) { problems.push('页内提示断言异常: ' + e.message); }
   console.log('[G-BOOT frontend-boot] 前端启动: 顶层加载 ' + (problems.length ? '有异常' : '正常') + ' / 控件桩 ' + ids.size + ' 个 id');
   for (const p of problems) console.log('  -> FAIL ' + p);
   process.exitCode = problems.length ? 1 : 0; // 用 exitCode: process.exit 在管道下会丢掉未刷新的输出

@@ -99,6 +99,7 @@ async function visionTranslate(cfg, pngPath) {
   return translated;
 }
 let running = false;
+let lastCapturePath = null;   // 本次截图临时文件(用完即删, M-20260911-26)
 let workerPromise = null;
 
 function loadLiveTranslateSettings(cfg, logger) {
@@ -144,25 +145,37 @@ async function translateText(settings, text) {
 function captureWindow(cfg, logger) {
   const cap = (cfg && cfg.capture) || {};
   const mode = (cap.mode === 'region' || cap.mode === 'screen') ? cap.mode : 'window';
-  const outPath = path.join(__dirname, '..', '.ocr-tmp.png');
+  // 每次用独立临时文件(M-20260911-26): 固定路径会被 ocrregion 插件与上一轮残留互相覆盖;
+  // 更严重的是截图失败时旧文件还在, 会被当成本轮结果(静默拿旧图去 OCR / 上传视觉接口)。
+  const outPath = path.join(require('os').tmpdir(), 'vrcb-ocr-' + process.pid + '-' + Date.now() + '-' + ((Math.random() * 1e6) | 0) + '.png');
+  lastCapturePath = outPath;
   const winTitle = String(cap.windowTitle || cfg.windowTitle || 'VRChat');
   const opt = { mode: mode, out: outPath, scale: 2 };
   if (mode === 'window') {
     opt.title = winTitle;
     opt.foreground = true;
-    opt.fw = Number(cap.cropW || cfg.cropW || 0.6);
-    opt.fh = Number(cap.cropH || cfg.cropH || 0.4);
+    const cropN = function (v, dft) { const n = Number(v); return isFinite(n) ? n : dft; };   // 非数字不再变成 null(整窗口)
+    opt.fw = cropN(cap.cropW || cfg.cropW || 0.6, 0.6);
+    opt.fh = cropN(cap.cropH || cfg.cropH || 0.4, 0.4);
   } else if (mode === 'region') {
     const r = cap.region || cfg.region || {};
     opt.x = Math.round(Number(r.x) || 0); opt.y = Math.round(Number(r.y) || 0);
     opt.w = Math.round(Number(r.w) || 0); opt.h = Math.round(Number(r.h) || 0);
   }
   return getCaptureHost(logger).capture(opt).then(function (out) {
-    const so = String(out || '');
-    if (so.indexOf('NO-WINDOW') >= 0) throw new Error('未找到窗口: ' + winTitle);
-    if (so.indexOf('NO-REGION') >= 0) throw new Error('截图区域未设置, 请到高级设置里用可视化工具调整');
+    checkCaptureReply(out, winTitle);   // 只有 OK 才算成功(M-20260911-26), 失败一律抛错, 绝不复用上一轮旧图
     return outPath;
   });
+}
+// 截图回复白名单校验(M-20260911-26): 失败时助手/脚本回的是 'CAPTURE-FAIL: 原因'(脚本本身仍 exit 0),
+// 改前只认 NO-WINDOW / NO-REGION, 其它一律当成功 —— 于是失败会静默复用上一轮的旧截图。
+function checkCaptureReply(reply, winTitle) {
+  const t = String(reply == null ? '' : reply).trim();
+  if (t === 'OK') return true;
+  if (t.indexOf('NO-WINDOW') >= 0) throw new Error('未找到窗口: ' + (winTitle || 'VRChat'));
+  if (t.indexOf('NO-REGION') >= 0) throw new Error('截图区域未设置, 请到高级设置里用可视化工具调整');
+  if (t.indexOf('CAPTURE-FAIL') >= 0) throw new Error('截图失败: ' + t.replace(/^.*CAPTURE-FAIL:?\s*/, '').slice(0, 120));
+  throw new Error('截图助手返回了无法识别的内容: ' + (t.slice(0, 80) || '(空)'));
 }
 function foregroundGame(cfg, logger) {
   const cap = (cfg && cfg.capture) || {};
@@ -197,7 +210,7 @@ function getWorker() {
       const w = await createWorker('chi_sim+jpn', 1, { langPath: merged, cachePath: path.join(__dirname, '..', '.ocr-cache') });
       await w.setParameters({ tessedit_pageseg_mode: '11', preserve_interword_spaces: '1' });
       return w;
-    })();
+    })().catch(function (e) { workerPromise = null; throw e; });   // 失败不缓存(M-20260911-26): 否则本地 OCR 到重启前都不可用
   }
   return workerPromise;
 }
@@ -209,8 +222,11 @@ async function ocrImage(pngPath) {
   return text;
 }
 function beep(freq, ms) {
-  try { spawn('powershell.exe', ['-NoProfile', '-Command', '[console]::beep(' + freq + ',' + ms + ')'], { windowsHide: true, stdio: 'ignore' }); } catch (e) {}
+  try { const p = spawn('powershell.exe', ['-NoProfile', '-Command', '[console]::beep(' + freq + ',' + ms + ')'], { windowsHide: true, stdio: 'ignore' }); p.on('error', function () {}); } catch (e) {}
 }
+// 分片上限必须给前缀留位(M-20260911-26): composer 会把整条截到 maxChars, 而前缀 '[12/12 轮10/10] ' 有 15 个码点,
+// 之前固定 136 + 前缀 15 = 151 > 144 -> 每片结尾被静默截掉几个字。
+function chunkMax(composer) { const cap = Number(composer && composer.maxChars) || 144; return Math.max(40, cap - 16); }
 function chunkText(text, max) {
   const lines = String(text || '').split(/\n/);
   const chunks = [];
@@ -257,7 +273,13 @@ async function runOnce(cfg, composer, logger, overrides) {
     state.phase = 'capture';
     beep(1200, 400);
     const png = await captureWindow(cfg, logger);
-    const useVision = cfg.mode === 'vision' || (cfg.mode === 'auto' && visionConfigured(cfg));
+    const visionOk = visionConfigured(cfg);
+    // mode=vision 但接口没配好时不要发注定 401 的请求(M-20260911-26): 明确回退本地 OCR 并告诉用户
+    if (cfg.mode === 'vision' && !visionOk) {
+      try { composer.pushTransient('视觉接口未配置, 已用本地 OCR', 85, 8000); } catch (e) {}
+      logger.warn('[ocrtl] mode=vision 但视觉接口未配置, 已回退本地 OCR');
+    }
+    const useVision = visionOk && (cfg.mode === 'vision' || cfg.mode === 'auto');
     if (useVision) {
       state.phase = 'translate';
       try {
@@ -265,7 +287,7 @@ async function runOnce(cfg, composer, logger, overrides) {
         state.phase = 'done';
         const result = { ocr: '(视觉模型直接识别)', translated: translated, model: cfg.vision.model, vision: true, elapsedMs: Date.now() - t0, at: Date.now() };
         composer.ocrResult = result;
-        const chunks = chunkText(translated, 136);
+        const chunks = chunkText(translated, chunkMax(composer));
         const displayMs = Math.max(3000, Number(cfg.displayMs) || 8000);
         const loops = Math.max(1, Number(cfg.loops) || 2);
         if (chunks.length <= 1) {
@@ -304,7 +326,7 @@ async function runOnce(cfg, composer, logger, overrides) {
     const result = { ocr: ocrText, translated: translated, model: settings ? settings.model : null, elapsedMs: Date.now() - t0, at: Date.now() };
     composer.ocrResult = result;
     const outText = translated || ocrText;
-    const chunks = chunkText(outText, 136);
+    const chunks = chunkText(outText, chunkMax(composer));
     const displayMs = Math.max(3000, Number(cfg.displayMs) || 8000);
     const loops = Math.max(1, Number(cfg.loops) || 2);
     if (chunks.length <= 1) {
@@ -329,6 +351,7 @@ async function runOnce(cfg, composer, logger, overrides) {
     return { ok: false, error: String(e.message) };
   } finally {
     running = false;
+    if (lastCapturePath) { try { fs.unlinkSync(lastCapturePath); } catch (e) {} lastCapturePath = null; }   // 截图含用户桌面内容, 不留档
   }
 }
 function getLtStatus(cfg) {
@@ -340,4 +363,4 @@ function getLtStatus(cfg) {
     return { found: true, model: s.model, apiBaseHost: host, targetLang: s.targetLang };
   } catch (e) { return { found: false }; }
 }
-module.exports = { runOnce, getLtStatus, DEFAULT_BLOCK_WORDS, sanitizeTranslation };
+module.exports = { runOnce, getLtStatus, DEFAULT_BLOCK_WORDS, sanitizeTranslation, checkCaptureReply, captureWindow };
