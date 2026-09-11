@@ -238,7 +238,10 @@
 - 改动: `i18n-check.js` 把"空值"从 FAIL 降级为 WARN
 - 验证: GI18N PASS + WARN 一行
 - 关联: DEV-NOTES 条目 89
-## M-20260906-01 新 UI 多语言补齐(OPEN)
+## M-20260906-01 新 UI 多语言补齐(CLOSED)
 - 现象: 新版控制台(仪表盘)界面文案为硬编码简体中文; 无语言选择器; lang.js 只有旧版键。
 - 影响: 繁体/英文用户看不到对应语言; 与旧版三语能力不对等。
 - 计划: ①新 UI 各 Tab/卡片/按钮文案录入 lang.js 三语; ②index.html 硬编码改 data-t; ③头部加语言选择器 + 切换重渲染。
+- 改动(2026-09-06/07): ①lang.js 357→579 键×三语, 覆盖高级设置/公告板/状态条/翻译/环境/插件卡片+授权弹窗/4 个插件设置面板/主题名/变量下拉/启动文案; ②index.html 162 处 data-t / data-t-ph / data-tt + 主题名三语映射; ③头部 #langSel 三选项 + reRenderAll() 切语言重渲染动态内容(仅 applyLang 不够); ④顺带补齐插件授权链路(弹窗被吞进隐藏 tab、approve 调用丢失、高危二次确认)。
+- 验证(2026-09-07): run-gates -Smoke 11 PASS / 1 FAIL(GSYNC 未推送 —— 用户明令不推送, 属预期例外); GI18N 579 键三语对齐; GI18NU 0 缺失; GI18NH 与白名单基线一致; GHTML + 隔离冒烟 8/8 全过。
+- 关联: DEV-NOTES 条目 113/114/115; commits 705c5d1 / 4ec8a1e / 3259ee6 / 07c9cff / 51e8596 / b25d35c / f8fa7fa / 0bf94a7 / 79eed0b / d10bf7c
