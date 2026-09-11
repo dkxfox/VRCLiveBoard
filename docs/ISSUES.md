@@ -340,3 +340,13 @@
 - 改动(批 3, 2026-09-11): ① src/main.js 在 web.start() 后写 process.env.VRCB_CONSOLE_PORT 并 emit 进程事件 vrcb:console-ready; ② 壳侧 consoleUrl() 取实际端口(缺省回落 19190), whenCoreReady() 等就绪(最多 15 秒)后再 loadURL, 托盘"在浏览器打开"同源; ③ did-fail-load 自动重试 3 次(忽略 -3 中断), 仍失败则加载一页中文错误页 —— 写明尝试的地址、去 logs/app.log 搜"网页控制台"看实际端口, 不再白屏。
 - 验证(批 3, 2026-09-11): 从 electron/main.js 提取真实 consoleUrl 与 whenCoreReady 执行 7 项断言全过(缺省回落 19190 / 用实际端口 19193 / 就绪即回调 / 未就绪则挂等待 / 事件后回调一次 / 重复事件不重复加载)。**边界**: 桌面壳全量启动会拉起用户实例(读用户 config、占 19190), 故"端口被占时窗口仍能连上"这条未在本机实机验证, 需用户实机确认。
 - 状态: CLOSED(核心逻辑已验证; 实机表现待用户确认)
+## M-20260911-09 t→tr 改名与局部变量 tr 碰撞: 数据源卡片表体为空 + 插件设置表格删除列失效(CLOSED)
+- 来源: 用户实机反馈"检查数据源卡片，内部内容缺失"(2026-09-11); 根因是 **M-20260911-04 批 1 改名的回归**
+- 现象: 「数据源」标签页的表格只有表头, 表体一行都没有; 另有三处插件设置面板表格的删除按钮列同样失效。
+- 复现: 打开控制台 → 数据源标签 → 表格无任何行(数据源名称/说明/优先级/开关全都不显示)。
+- 影响面: 数据源卡片完全不可用(看不到也调不了任何数据源的启用与优先级); 三个插件设置表格的删除列失效。
+- 根因: 批 1 把 i18n 取词函数 t 改名为 tr 时, 撞上了 app.js 里早已存在的局部变量 tr(表格行 var tr=document.createElement('tr'))。renderSrcTable 在同一行内先 var tr= 再 tr(NM(x.id)) → 把行元素当函数调用 → TypeError 被 pollStatus 自身的 try/catch 吞掉(只留下一条 [api] 上报), forEach 中断 → 表体为空。tblRows 里的 tr('delBtn') 同因。
+- 证据: ① 升级后的 G-BOOT 对 HEAD 版本(含碰撞) **exit=1**, 精确报「数据源表格 #srcRows 渲染后仍为空」并在日志给出 tr is not a function at app.js:120; 对修复版 exit=0 —— 证明该门禁升级后确实能拦住这类回归; ② 全量扫描: app.js 中局部 tr 绑定共 4 处(renderSrcTable / renderEnv 内的 add / tblRows), 其中 2 处内部确实调用了取词函数; ③ 真实 /api/status 的 sources 字段(id/enabled/priority/intervalMs)与门禁桩件数据一致, 故桩件断言能代表真实渲染路径。
+- 改动(2026-09-11): ① app.js 三处局部 var tr 改名 rowEl(共 7 处替换); ② 把首个标签页回调参数 t 改名 tab, 让"无遮蔽"成为绝对不变量; ③ i18n-usage 门禁规则从"禁止局部绑定 t"扩展到"禁止局部绑定或参数名为 t / tr"; ④ G-BOOT 升级: 元素桩按 id 缓存同一实例、appendChild 记录子节点、打桩数据改为真实形状(/api/status、/api/config、/api/plugins、/api/logs、/api/env、/api/version)、等 25 个 tick 让 await 链跑完, 并新增两条**渲染内容断言**(#srcRows 与 #plugCards 必须有子节点); ⑤ 修掉两个门禁自身缺陷: byId 作用域写错(异常被门禁自己的 unhandledRejection 监听吞掉 → 什么都不打印且退出码 0)、appendChild 空实现(内容断言永远不可能通过); 三个 checks 的 process.exit() 改为 process.exitCode(管道下 process.exit 会丢弃未刷新的输出)。
+- 教训: ① **改名重构必须扫"新名字与既有局部标识符的冲突"** —— 我批 1 只扫了旧名 t 的残留, 没扫新名 tr 的占用; ② **门禁断言必须落在产物上**(渲染结果), 只断言"没抛异常"是无效的 —— 这类错误会被应用自身的 try/catch 吃掉, 连 Promise 拒绝都看不到; ③ 门禁自身也要有"异常必须报 FAIL"的兜底, 否则作用域写错会让门禁静默通过(本轮实测: 升级后的门禁第一版正是这样假通过的)。
+- 状态: CLOSED

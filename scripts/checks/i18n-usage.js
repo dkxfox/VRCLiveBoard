@@ -29,8 +29,15 @@ const used = new Set();
 for (const m of app.matchAll(/\btr?\('([^']+)'\)/g)) used.add(m[1]);
 for (const k of used) if (!keys.has(k)) problems.push('app.js tr() 引用不存在的键: ' + k);
 // 禁止局部绑定 t: i18n 取词函数历史上叫 t, 被 var t= 遮蔽过两次(启动动画 M-20260911-01 / 公告板编辑器 M-20260911-04)
-const localT = app.match(/\b(?:var|let|const)\s+t\s*=/g) || [];
-if (localT.length) problems.push('app.js 出现局部绑定 t(' + localT.length + ' 处): 请改用其他变量名, 它会遮蔽取词链路的历史命名');
+// 遮蔽检查覆盖 t 与 tr 两种历史命名, 且不只看 var/let/const, 也看函数参数 ——
+// 2026-09-11 事故: t 改名 tr 后与局部 var tr(表格行) 碰撞, 数据源表体整片为空(M-20260911-09)
+const localShadow = app.match(/\b(?:var|let|const)\s+(?:t|tr)\s*=/g) || [];
+if (localShadow.length) problems.push('app.js 出现局部绑定 ' + localShadow.join(' / ') + ': 会遮蔽取词函数, 请改用其他变量名');
+const paramShadow = [];
+for (const mm of app.matchAll(/function\s*\(([^)]*)\)/g)) {
+  for (const nm of mm[1].split(',')) { const v = nm.trim(); if (v === 't' || v === 'tr') paramShadow.push(v); }
+}
+if (paramShadow.length) problems.push('app.js 函数参数出现 ' + [...new Set(paramShadow)].join('/') + ': 会遮蔽取词函数');
 // 占位符 WARN: 被 t() 使用的键, 值里有 {x} 但 app.js 里没有任何 .replace('{x}'
 for (const k of used) {
   const val = L[baseLang][k];
@@ -43,4 +50,4 @@ for (const k of used) {
 console.log('[G-I18NU i18n-usage] 引用完整性: tr() 键 ' + used.size + ' / data-t 引用 ' + htmlRefs + ' / 字典 ' + keys.size + ' 键');
 for (const p of problems) console.log('  -> FAIL ' + p);
 for (const w of warns) console.log('  -> WARN ' + w);
-process.exit(problems.length ? 1 : 0);
+process.exitCode = problems.length ? 1 : 0;

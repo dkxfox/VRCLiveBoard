@@ -26,4 +26,4 @@ while ((m = tagRe.exec(html)) !== null) {
 }
 console.log('[G-UWIRE ui-wiring] 控件接线: 受检 ' + total + ' 个带 id 控件 / 死控件 ' + dead.length);
 for (const d of dead) console.log('  -> FAIL 无任何 JS 引用(点了不会有反应): ' + d);
-process.exit(dead.length ? 1 : 0);
+process.exitCode = dead.length ? 1 : 0;
