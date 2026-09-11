@@ -246,7 +246,7 @@
 - 验证(2026-09-07): run-gates -Smoke 11 PASS / 1 FAIL(GSYNC 未推送 —— 用户明令不推送, 属预期例外); GI18N 579 键三语对齐; GI18NU 0 缺失; GI18NH 与白名单基线一致; GHTML + 隔离冒烟 8/8 全过。
 - 关联: DEV-NOTES 条目 113/114/115; commits 705c5d1 / 4ec8a1e / 3259ee6 / 07c9cff / 51e8596 / b25d35c / f8fa7fa / 0bf94a7 / 79eed0b / d10bf7c
 
-## M-20260907-01 新版 UI 功能接线缺失(死按键 / 失效输入框 / 缺失面板)(OPEN)
+## M-20260907-01 新版 UI 功能接线缺失(死按键 / 失效输入框 / 缺失面板)(CLOSED)
 - 来源: 用户"进行实机测试, 完整检测现有软件 UI 中和旧版不一致的内容"
 - 现象: 新版控制台(单屏仪表盘)存在大量"有控件无功能": 20 个按钮点击无反应; 12 个输入框改了不生效; 若干旧版面板整块丢失; 同一动作两条路径交互不一致。
 - 复现: ①打开控制台; ②点公告板「编辑」/ 翻译「截图翻译」/ 高级「端口体检」等任意死按键 → 无任何反应; ③在日志「过滤关键字」输入内容 → 列表不过滤; ④用「常用」标签的插件快捷开关启用未授权插件 → 开关闪回且无提示(而「插件」标签的卡片开关会正常弹授权窗)。
@@ -256,5 +256,6 @@
 - 分级: 批 A = 接线类(20 按钮 + 12 输入框, M 档同质批量); 批 B = 缺失面板类(插件安全策略 / 截图区域 / 插件导入 / 版本显示, H 档, 另行排期)。
 - 改动(批 A, 2026-09-07): ①index.html 补 15 处控件 id(prioReset/ltCheckBtn/ltDownloadBtn/visSave/btnShot/capAdjBtn/capFullBtn/transApiModel/ocrDelay/ocrDisplay/ocrLoops/webPort/webSave/portsCheckBtn/portsOut/logFilter/logCopy/bdRot/envMsg), 修正日志行 id 归属(可见复选框才该有 logAuto), 移除公告板 2 只装饰按钮(批量导入/导出 —— 新版新增且从无实现)与 env 静态占位行; ②app.js 新增"批 A 补接线"块 + 公告板 6 项 + renderEnv 改用 /api/env 并支持 winsdk/Python 一键安装; ③lang.js 增 delPageConfirm / needL1 两键×三语。
 - 验证(批 A, 2026-09-07): run-gates -Smoke 11 PASS/1 FAIL(GSYNC 未推送属预期); smoke.ps1 -Port 19260 专项断言 28 PASS/0 FAIL; 死按键复扫 20 → 0。
-- 剩余(批 B, H 档, 待排期): 插件安全策略面板(5)、截图区域可视化覆盖层(4)、插件 zip 导入/刷新/优先级(4)、版本号显示、诊断结果面板、健康复制、日志只看错误、公告板折叠展开。
-- 状态: OPEN(批 A 已修完, 批 B 待排期)
+- 改动(批 B, 2026-09-07, 用户"全做(8 项一次补完)"): ①index.html 补齐 8 项面板 —— 插件安全策略(psNet/psProc/psFsW/psFsR/psAi + psSave + psMsg)、截图区域可视化覆盖层(#capOverlay 含 capImg/capRect/capSel/capRefresh/capSave/capCancel, z-index 10000 压过启动动画)、插件导入工具条(plgZip/plgImport/plgRefresh/plgPrioReset/plgMsg)、版本号 #ver + #updateHint、诊断结果 #diagOut + #diagCopy、#healthCopy、#logErrOnly、公告板折叠 #collapseAll/#expandAll, 并加 .edlist.compact .snip{display:none} 紧凑样式; ②app.js 新增"批 B 补缺失面板"块 —— 截图覆盖层拖拽选区(按 naturalWidth/rect.width 换算真实像素, 保存走 /api/capture/set region 并回写模式下拉)、插件 zip 导入(空路径复用既有 importNeedPath 键)、插件优先级重置、版本号+更新检查(/api/version、/api/version/check)、健康信息复制、诊断复制、日志只看错误(/\[(WARN|ERROR|ERR)\]/i 过滤)、折叠展开(bdSetCompact)。
+- 验证(批 B, 2026-09-07): run-gates -Smoke 11 PASS/1 FAIL(GSYNC 未推送属预期例外); GI18NU 0 缺失(修正 1 处新引用键名 plgImportPath → 复用既有 importNeedPath, 未新增重复键); smoke.ps1 -Port 19260 专项断言 44 PASS/0 FAIL(17 项新面板控件 + 7 项批 B app.js 接线 + 12 项批 A 回归 + 8 项基线); 死按键复扫保持 0; 8 项面板 HTML/app.js 双向引用核对 100%。
+- 状态: CLOSED(批 A + 批 B 全部完成, 无遗留项)

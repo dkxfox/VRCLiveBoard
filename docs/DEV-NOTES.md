@@ -238,3 +238,13 @@
   ③ lang.js: 新增 delPageConfirm / needL1 两键 × 三语。
 - 证据: run-gates -Smoke = 11 PASS / 1 FAIL(GSYNC 未推送属预期); smoke.ps1 -Port 19260 专项断言 **28 PASS / 0 FAIL**(10 项 UI 新 id + 7 项 app.js 接线 + 3 项 API 实测); 死按键复扫 **20 → 0**(唯一"无逻辑"输入为 langSel, 经核实是浏览器 ID 命名访问的正常用法, 非缺陷)。
 - 遗留 / 教训: ①批 B 待排期: 插件安全策略面板(5 控件)、截图区域可视化覆盖层(4)、插件 zip 导入/刷新/优先级(4)、版本号显示、诊断结果面板、健康复制、日志只看错误、公告板折叠展开; ②**"控件没 id"是静默失效的头号原因** —— "控件 × app.js 引用"静态扫描能低成本抓出, 建议纳入门禁候选; ③顺手消除旧版隐患: 旧版 visSave 在已配置密钥时留空保存会清空 Key, 新版改为"空则不发送 apiKey"。
+
+## 118. 新版 UI 缺失面板补齐(批 B: 8 项一次补完)(2026-09-07, 用户"全做(8 项一次补完)")
+- 解读与边界: 承接条目 117, 用户选择"全做"批 B 的 8 项缺失面板。解读 = 把旧版控制台里存在、新版单屏仪表盘漏移植的整块面板按旧版交互原样接回, 并接到新版既有后端路由。边界: 只加前端面板与接线, **不改任何后端路由/配置键**; 不碰用户实例与 19190 端口; 面板文案一律走 t() 键, 不新增硬编码中文。
+- 现象: 旧版有而新版整块消失的面板 8 处 —— ①插件安全策略(网络/进程/写文件/读文件/AI 五档); ②截图区域只能手填数字, 没有可视化框选; ③插件 zip 导入/刷新列表/优先级重置工具条; ④界面不显示版本号, 也不提示有新版; ⑤诊断按钮点了没结果面板, 无处看也复制不了; ⑥健康信息无法一键复制; ⑦日志只能全量看, 不能只看错误; ⑧公告板页数一多列表冗长, 不能收起摘要。
+- 根因: 与批 A 同源 —— 新版 UI 重构时只保留"常用"路径的控件, 低频整块面板未随行迁移; 个别控件(如 psMsg)在批 A 期间已被遗留引用, 缺面板导致 GHTML 的目标缺失告警一直挂着。旧版实现可作对照: 截图覆盖层在旧 app.js L316-389, 环境面板 L390-427, 端口体检 L1262-1284。
+- 改动(批 B):
+  ① index.html: 补齐 8 项面板 —— 插件安全策略 5 下拉 + psSave() + #psMsg; 截图区域覆盖层 #capOverlay(capImg/capRect/capSel/capRefresh/capSave/capCancel, z-index 10000); 插件工具条(plgZip/plgImport/plgRefresh/plgPrioReset/plgMsg); 版本区 #ver + #updateHint; 诊断 #diagOut + #diagCopy; #healthCopy; #logErrOnly; 公告板 #collapseAll/#expandAll, 并加 .edlist.compact .snip{display:none} 紧凑样式。
+  ② app.js: 新增"批 B 补缺失面板"块 —— capLoad/capSave/capRefresh/capCancel + 覆盖层拖拽选区 IIFE(按 naturalWidth / getBoundingClientRect().width 求 capRatio 换算真实像素, 保存走 /api/capture/set region 并回写截图模式下拉); 插件 zip 导入(空路径提示复用既有 importNeedPath 键)/刷新/优先级置空; 版本号与更新检查(/api/version + /api/version/check, 有新版本才渲染链接); healthCopy(复制 /api/ports/check 结果)/diagCopy; logErrOnly 接入既有 loadLogs 的 /\[(WARN|ERROR|ERR)\]/i 过滤; bdSetCompact 折叠展开。
+- 证据: run-gates -Smoke = **11 PASS / 1 FAIL**(GSYNC 未推送属预期例外); GI18NU 引用完整性 0 缺失(期间抓到并修正 1 处新引用键名写错: plgImportPath → 复用字典既有 importNeedPath, 未新增重复键); GHTML 目标存在 + id 唯一 157 无重复; smoke.ps1 -Port 19260 专项断言 **44 PASS / 0 FAIL**(17 项批 B 面板控件 + 7 项批 B app.js 接线 + 12 项批 A 回归 + 8 项基线, 端口释放与临时目录清理均 True); 死按键复扫保持 **0**; 8 项面板 HTML × app.js 双向引用核对 8/8 全 OK。
+- 遗留 / 教训: ①公告板"折叠/展开"在新版无卡片式手风琴, 按等效语义实现为列表摘要收起(.compact 隐藏 .snip), 若日后要真手风琴需另立特性卡; ②批 A/批 B 的两处"移植漏接"共因相同 —— **控件搬了、事件没搬**, "控件 id × app.js 引用"静态扫描两次都低成本全量命中, 建议正式纳入门禁(现为一次性脚本); ③公告板 Excel 批量导入/导出仍是"新版新增且从无实现", 已在批 A 移除按钮, 若需要应按 PROCESS-02 立特性卡新增; ④剩余未处理的技术债卡片: M-20260901-04(厂商重新打包)、M-20260904-01(weather-board xlsx 0.18.5 → 0.20.3 版本统一, 需与打包一并做回归)。

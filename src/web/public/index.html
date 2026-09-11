@@ -33,7 +33,7 @@ td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border2)}
 .healthpill{display:flex;align-items:center;gap:8px;font-size:13px;background:var(--deep);border:1px solid var(--border2);border-radius:8px;padding:6px 10px}
 .stripe .stat{display:flex;align-items:center;gap:6px;font-size:13px}.stripe .stat .k{color:var(--muted)}
 .legend{display:flex;gap:12px;font-size:12px;color:var(--faint);margin-left:auto}.legend span{display:flex;align-items:center;gap:4px}
-.edlist{display:flex;flex-direction:column;gap:8px;overflow:auto}
+.edlist{display:flex;flex-direction:column;gap:8px;overflow:auto}.edlist.compact .snip{display:none}
 .edlist::-webkit-scrollbar{width:8px;height:8px}.edlist::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
 .edrow{display:flex;align-items:center;gap:10px;background:var(--inset);border:1px solid var(--border2);border-radius:8px;padding:8px 10px}
 .edrow .drag{color:var(--faint);cursor:grab}.edrow .snip{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.edrow .ops{display:flex;gap:4px}
@@ -104,7 +104,7 @@ body.no-anim *{animation:none!important;transition:none!important}
 </style></head><body><div id="bootscrim" style="position:fixed;inset:0;z-index:9997;background:#0b0e13;display:flex;align-items:center;justify-content:center"><div style="color:#3b82f6;font-size:15px;letter-spacing:4px;opacity:.75">VRCLiveBoard</div></div><canvas id="fxbg"></canvas><div id="layout"><div class="headrow" style="margin-bottom:14px"><div><h1 data-t="appTitle">VRCLiveBoard 控制台</h1><div class="sub" data-t="bootTagline">星光落进聊天框</div><div class="mono" style="color:#5b8def;margin-top:4px">http://127.0.0.1:19190/</div></div><div class="row"><span class="sub" style="font-size:12px;color:var(--muted)" data-t="animMaster">动效</span><span class="sw on" id="animTop" data-tt="animTitle" title="游戏时关闭动效"></span><select id="langSel"><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option><option value="en">English</option></select></div></div>
 <!-- ① 状态总览 -->
 <div class="card">
-  <div class="card-head"><b class="card-title" data-t="secStatus"></b><span class="row"><button class="small gray" id="diagBtn" data-t="btnDiag"></button><button class="small gray" id="healthRefresh" data-t="btnRefresh"></button><button class="small gray" id="oscTest" data-t="btnTestOsc"></button></span></div>
+  <div class="card-head"><b class="card-title" data-t="secStatus"></b><span class="row"><button class="small gray" id="diagBtn" data-t="btnDiag"></button><button class="small gray" id="diagCopy" style="display:none" data-t="diagCopy"></button><button class="small gray" id="healthRefresh" data-t="btnRefresh"></button><button class="small gray" id="healthCopy" data-t="healthCopy"></button><button class="small gray" id="oscTest" data-t="btnTestOsc"></button></span></div>
   <div class="stripe">
     <div class="healthpill"><span class="dot on" id="hpDot"></span><b id="hpText" data-t="hpNormal">状态正常</b></div>
     <div class="stat"><span class="dot" id="vrcDot"></span><span class="k">VRChat</span><b id="vrcText" data-t="notRunning">未运行</b></div>
@@ -113,6 +113,7 @@ body.no-anim *{animation:none!important;transition:none!important}
     <div class="stat"><span class="dot on breathe"></span><span class="k" data-t="console">控制台</span><b data-t="running">运行中</b></div>
     <div class="legend"><span><i class="dot on" style="width:8px;height:8px"></i><span data-t="lgNormal">正常</span></span><span><i class="dot" style="width:8px;height:8px"></i><span data-t="lgNotRun">未运行(正常)</span></span><span><i class="dot warn" style="width:8px;height:8px"></i><span data-t="lgPending">待检</span></span><span><i class="dot off" style="width:8px;height:8px"></i><span data-t="lgError">异常</span></span></div>
   </div>
+  <pre id="diagOut" style="display:none;max-height:260px;overflow:auto;font-size:12px;white-space:pre-wrap;word-break:break-all;background:var(--deep);border:1px solid var(--border2);border-radius:6px;padding:8px;margin-top:10px"></pre>
 </div>
 <!-- ② 发送卡(含 当前聊天框内容) -->
 <div class="card" style="position:sticky;top:0;z-index:30">
@@ -175,7 +176,7 @@ body.no-anim *{animation:none!important;transition:none!important}
       <div class="col">
         <div class="sub" style="margin-bottom:6px" data-t="pageList">页面列表</div>
         <div class="edlist" id="bdList" style="max-height:360px;flex:1"></div>
-        <div class="row" style="margin-top:10px"><button class="small" id="bdAdd" data-t="btnAddPage">+ 添加页面</button></div>
+        <div class="row" style="margin-top:10px"><button class="small" id="bdAdd" data-t="btnAddPage">+ 添加页面</button><button class="small gray" id="collapseAll" data-t="collapseAll"></button><button class="small gray" id="expandAll" data-t="expandAll"></button></div>
       </div>
       <div class="col">
         <div class="row" style="margin-bottom:4px"><span class="sub" data-t="lblContent144">内容(一页最多 144 字符)</span><span class="row" style="margin-left:auto;gap:4px"><select id="bdVar" style="max-width:200px"><option value="{cpu_util}">{cpu_util} · CPU 使用率 %</option><option value="{cpu_temp}">{cpu_temp} · CPU 温度 ℃</option><option value="{gpu_util}">{gpu_util} · GPU 使用率 %</option><option value="{gpu_temp}">{gpu_temp} · GPU 温度 ℃</option><option value="{mem_used}">{mem_used} · 内存已用 GB</option><option value="{mem_total}">{mem_total} · 内存总量 GB</option><option value="{net_down}">{net_down} · 下载 KB/s</option><option value="{net_up}">{net_up} · 上传 KB/s</option><option value="{song}">{song} · 歌名</option><option value="{artist}">{artist} · 歌手</option><option value="{album}">{album} · 专辑</option><option value="{date}">{date} · 日期</option><option value="{time}">{time} · 时间</option></select><button class="small gray" id="bdVarBtn" data-t="btnInsertVar">插入变量</button></span></div>
@@ -188,7 +189,7 @@ body.no-anim *{animation:none!important;transition:none!important}
   </div>
 </div>
 <!-- 插件 -->
-<div id="tab-plugins" hidden><div id="plugCards"></div></div>
+<div id="tab-plugins" hidden><div class="card" style="margin-bottom:12px"><div class="row" style="flex-wrap:wrap;gap:8px"><input id="plgZip" data-t-ph="plgZipPh" style="flex:1;min-width:200px"><button id="plgImport" class="small" data-t="plgImport"></button><button id="plgRefresh" class="small" data-t="plgRefresh"></button><button id="plgPrioReset" class="small gray" data-t="prioReset"></button><span class="sub" id="plgMsg" style="font-size:12px"></span></div><div class="sub" style="margin:6px 0 0" data-t="plgPrioExplain"></div></div><div id="plugCards"></div></div>
 <div id="tab-src" hidden>
   <div class="card">
     <div class="card-title" style="margin-bottom:8px" data-t="secSrc"></div>
@@ -269,6 +270,24 @@ body.no-anim *{animation:none!important;transition:none!important}
           <button class="small gray" onclick="secWordsReset()" data-t="secWordsReset"></button>
         </div>
       </div>
+      <div class="sub" style="margin-top:12px">🛡 <span data-t="plgSecTitle"></span></div>
+      <div class="sub" style="margin-top:2px;color:var(--muted)" data-t="plgSecDesc"></div>
+      <div class="row" style="margin-top:6px;flex-wrap:wrap;gap:8px">
+        <span style="font-size:13px" data-t="plgSecNet"></span>
+        <select id="psNet"><option value="whitelist" data-t="polWhitelist"></option><option value="localOnly" data-t="polLocalOnly"></option><option value="off" data-t="polOff"></option></select>
+        <span style="font-size:13px" data-t="plgSecProc"></span>
+        <select id="psProc"><option value="consent" data-t="polConsent"></option><option value="deny" data-t="polDeny"></option></select>
+      </div>
+      <div class="row" style="margin-top:6px;flex-wrap:wrap;gap:8px">
+        <span style="font-size:13px" data-t="plgSecFsW"></span>
+        <select id="psFsW"><option value="sandbox" data-t="polSandbox"></option><option value="declared" data-t="polDeclared"></option><option value="deny" data-t="polDeny"></option></select>
+        <span style="font-size:13px" data-t="plgSecFsR"></span>
+        <select id="psFsR"><option value="self" data-t="polSelf"></option><option value="declared" data-t="polDeclared"></option><option value="deny" data-t="polDeny"></option></select>
+        <span style="font-size:13px" data-t="plgSecAi"></span>
+        <select id="psAi"><option value="allow" data-t="polAllow"></option><option value="localOnly" data-t="polLocalOnly"></option><option value="off" data-t="polOff"></option></select>
+        <button class="small" onclick="psSave()" data-t="plgSecSave"></button>
+        <span id="psMsg" style="font-size:12px;color:var(--ok)"></span>
+      </div>
       <div class="sub" style="margin-top:6px">🔒1 <span data-t="swfWords"></span></div>
       <textarea id="swfWordsView" rows="4" style="width:100%" readonly></textarea>
       <div class="row" style="margin-top:6px">
@@ -289,8 +308,9 @@ body.no-anim *{animation:none!important;transition:none!important}
     <div class="row" style="margin-top:8px"><span class="sub" data-t="secAnim"></span><span class="sw on" id="animTgl" data-tt="lblDetectGame" title="检测到游戏在运行就自动关闭动效"></span><span class="sub" style="font-size:11px" data-t="lblDetectGame"></span></div>
     <div class="row" style="margin-top:8px"><span class="sub" data-t="startupBrand">启动动画 · 品牌</span><select id="brandSel"><option value="auto" data-t="brandAuto">自动(按社区身份)</option><option value="starry" data-t="brandStarry">星轨茶会(社区)</option><option value="normal" data-t="brandDefault">默认</option></select><span class="sub" style="font-size:11px" data-t="brandHint">优先检测: 加密狗授权名 / config 品牌标记; 插件名单含"星轨茶会"仅作弱提示; 可手动覆盖</span></div>
     <div class="sub" style="margin:12px 0 4px" data-t="secLog"></div>
-    <div class="row"><button class="small gray" id="logRefresh" data-t="logRefresh">刷新</button><label style="font-size:13px"><input type="checkbox" id="logAuto"> <span data-t="logAuto">自动刷新</span></label><input type="text" id="logFilter" data-t-ph="logFilterPh" placeholder="过滤关键字" style="flex:1"><button class="small gray" id="logCopy" data-t="logCopy">复制</button></div>
+    <div class="row"><button class="small gray" id="logRefresh" data-t="logRefresh">刷新</button><label style="font-size:13px"><input type="checkbox" id="logAuto"> <span data-t="logAuto">自动刷新</span></label><label style="font-size:13px"><input type="checkbox" id="logErrOnly"> <span data-t="logErrOnly"></span></label><input type="text" id="logFilter" data-t-ph="logFilterPh" placeholder="过滤关键字" style="flex:1"><button class="small gray" id="logCopy" data-t="logCopy">复制</button></div>
     <pre id="logView" style="max-height:180px;overflow:auto;background:var(--deep);border:1px solid var(--border2);border-radius:6px;padding:8px;font-size:12px;white-space:pre-wrap"></pre>
+    <div class="sub" style="margin-top:10px;line-height:1.7"><span id="ver"></span><span id="updateHint" style="margin-left:12px"></span></div>
   </div>
 </div>
 </div>
@@ -310,6 +330,7 @@ body.no-anim *{animation:none!important;transition:none!important}
     </div>
   </div>
 </div>
+<div id="capOverlay" style="display:none;position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,.78);z-index:10000;align-items:center;justify-content:center"><div style="background:var(--bg);border:1px solid var(--border2);border-radius:10px;padding:14px;max-width:94vw;max-height:94vh;display:flex;flex-direction:column"><div class="row" style="margin-bottom:8px"><b style="flex:1" id="capSelT" data-t="capAdjTitle"></b><button class="small gray" id="capRefresh" data-t="capRefreshBtn"></button><button class="small" id="capSave" data-t="capSaveBtn"></button><button class="small gray" id="capCancel" data-t="capCancelBtn"></button></div><div id="capWrap" style="position:relative;display:inline-block;overflow:auto;max-width:100%;max-height:76vh;background:#000"><img id="capImg" style="display:block;user-select:none;-webkit-user-drag:none;max-width:none" draggable="false"><div id="capRect" style="display:none;position:absolute;border:2px solid var(--ok);background:rgba(61,220,132,.16);pointer-events:none"></div></div><div class="sub" style="margin-top:8px;line-height:1.6" data-t="capHint"></div><div class="sub" style="margin-top:4px;color:var(--ok);font-size:13px" id="capSel"></div></div></div>
 <div class="scrim" id="scrim"></div><div class="drawer" id="drawer"><div class="row" style="justify-content:space-between;margin-bottom:14px"><b id="dT" data-t="plgSettingsTitle">插件设置</b><button class="small gray" id="dC">✕</button></div><div id="drBody" class="sub"></div></div><script src="/lang.js"></script>
 <script src="/skin.js"></script>
 <script src="/app.js"></script><script>
