@@ -1,7 +1,8 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { execFile, spawn } = require('child_process');
+const { spawn } = require('child_process');
+const { getCaptureHost } = require('./capturehost');
 
 // 游戏截图翻译: 倒计时 -> 截图 VRChat 窗口 -> tesseract OCR -> 调用 LiveTranslate 已配置的 LLM 翻译 -> 聊天框输出
 // 路线 B: 不修改 LiveTranslate, 只读取它的 user_settings.json 复用模型配置。
@@ -140,37 +141,35 @@ async function translateText(settings, text) {
   if (!out) throw new Error('翻译接口返回为空');
   return sanitizeTranslation(String(out).trim(), settings.blockWords);
 }
-function captureWindow(cfg) {
-  return new Promise(function (resolve, reject) {
-    const script = path.join(__dirname, 'helpers', 'screen_capture.ps1');
-    const outPath = path.join(__dirname, '..', '.ocr-tmp.png');
-    const cap = (cfg && cfg.capture) || {};
-    const mode = (cap.mode === 'region' || cap.mode === 'screen') ? cap.mode : 'window';
-    const args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-mode', mode, '-out', outPath, '-scale', '2'];
-    const winTitle = String(cap.windowTitle || cfg.windowTitle || 'VRChat');
-    if (mode === 'window') {
-      args.push('-title', winTitle, '-foreground');
-      args.push('-fw', String(cap.cropW || cfg.cropW || 0.6), '-fh', String(cap.cropH || cfg.cropH || 0.4));
-    } else if (mode === 'region') {
-      const r = cap.region || cfg.region || {};
-      args.push('-x', String(Math.round(Number(r.x) || 0)), '-y', String(Math.round(Number(r.y) || 0)), '-w', String(Math.round(Number(r.w) || 0)), '-h', String(Math.round(Number(r.h) || 0)));
-    }
-    execFile('powershell.exe', args, { timeout: 20000, windowsHide: true }, function (err, stdout) {
-      const so = String(stdout || '');
-      if (so.indexOf('NO-WINDOW') >= 0) return reject(new Error('未找到窗口: ' + winTitle));
-      if (so.indexOf('NO-REGION') >= 0) return reject(new Error('截图区域未设置, 请到高级设置里用可视化工具调整'));
-      if (err) return reject(err);
-      resolve(outPath);
-    });
+function captureWindow(cfg, logger) {
+  const cap = (cfg && cfg.capture) || {};
+  const mode = (cap.mode === 'region' || cap.mode === 'screen') ? cap.mode : 'window';
+  const outPath = path.join(__dirname, '..', '.ocr-tmp.png');
+  const winTitle = String(cap.windowTitle || cfg.windowTitle || 'VRChat');
+  const opt = { mode: mode, out: outPath, scale: 2 };
+  if (mode === 'window') {
+    opt.title = winTitle;
+    opt.foreground = true;
+    opt.fw = Number(cap.cropW || cfg.cropW || 0.6);
+    opt.fh = Number(cap.cropH || cfg.cropH || 0.4);
+  } else if (mode === 'region') {
+    const r = cap.region || cfg.region || {};
+    opt.x = Math.round(Number(r.x) || 0); opt.y = Math.round(Number(r.y) || 0);
+    opt.w = Math.round(Number(r.w) || 0); opt.h = Math.round(Number(r.h) || 0);
+  }
+  return getCaptureHost(logger).capture(opt).then(function (out) {
+    const so = String(out || '');
+    if (so.indexOf('NO-WINDOW') >= 0) throw new Error('未找到窗口: ' + winTitle);
+    if (so.indexOf('NO-REGION') >= 0) throw new Error('截图区域未设置, 请到高级设置里用可视化工具调整');
+    return outPath;
   });
 }
-function foregroundGame(cfg) {
+function foregroundGame(cfg, logger) {
   const cap = (cfg && cfg.capture) || {};
   const mode = (cap.mode === 'region' || cap.mode === 'screen') ? cap.mode : 'window';
   if (mode !== 'window') return;
-  const script = path.join(__dirname, 'helpers', 'screen_capture.ps1');
   const winTitle = String(cap.windowTitle || cfg.windowTitle || 'VRChat');
-  execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-mode', 'fg', '-title', winTitle], { timeout: 8000, windowsHide: true }, function () {});
+  getCaptureHost(logger).capture({ mode: 'fg', title: winTitle }, 8000).catch(function () {});
 }
 function getWorker() {
   if (!workerPromise) {
@@ -251,13 +250,13 @@ async function runOnce(cfg, composer, logger, overrides) {
       state.countdown = i;
       try { composer.osc.sendChatbox('截图翻译 ' + i + '...'); } catch (e) {}
       beep(i === 1 ? 900 : 600, i === 1 ? 300 : 120);
-      if (i === Math.min(3, delaySec)) foregroundGame(cfg);
+      if (i === Math.min(3, delaySec)) foregroundGame(cfg, logger);
       await new Promise(function (r) { setTimeout(r, 1000); });
     }
     state.countdown = 0;
     state.phase = 'capture';
     beep(1200, 400);
-    const png = await captureWindow(cfg);
+    const png = await captureWindow(cfg, logger);
     const useVision = cfg.mode === 'vision' || (cfg.mode === 'auto' && visionConfigured(cfg));
     if (useVision) {
       state.phase = 'translate';

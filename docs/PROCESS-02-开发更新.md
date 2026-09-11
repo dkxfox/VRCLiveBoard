@@ -130,6 +130,7 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke
 | ~~主题命名三套并存~~ | **已还清**(2026-09-11): 内部标识统一为 ASCII key(blue/teal/violet/green/amber/neon), 显示名走 t(themeXxx), 删掉恒等 KEYMAP 层, URL ?t=xxx 直接按 key 校验 | 无需再排 |
 | ~~前后端静默失败~~ | **已还清**(2026-09-11): 前端 56 处空 catch 接入 apiFail()(批 2), 后端 server.js 22 处空 catch 接入 noteFail()(批 3b) —— 两端对称, 均按位置去重只报一次; 上报链路自身保留空 catch 以免自激 | 无需再排; 新增代码请沿用 apiFail / noteFail |
 | 无 lint / 单测 / CI | **部分还清**(2026-09-11): package.json 增加 gates / gates:fast / selftest 三个脚本(不引入任何依赖), 编辑器与 CI 可直接调用; 仍无 eslint / prettier / tsconfig / .github | 低优先级; 接入 CI 时注意两点: ① NS 会话下 npm 脚本的相对路径会落到 C:\\Windows(UNC 的 cwd 不可用), 故这三个脚本用 %npm_package_json% 拼绝对路径; ② gates 因 GSYNC(用户明令不推送)固定退出码 1, CI 应按 GATES SUMMARY 判定而不是退出码 |
+| ~~截图每次冷启动 PowerShell~~ | **已还清**(2026-09-11): 抽出拍摄核心 + 常驻助手(新门禁 `capture-host.js` 13 项挂进 G4), 常驻后第二次拍摄 **38~56ms**(改前 1.1~1.2 秒); 常驻起不来时自动退回一次性调用 | 无需再排 |
 
 
 **待复验(2026-09-11 代码审核: 子代理报告, 本人未逐条复核, 勿直接当结论)**

@@ -453,3 +453,14 @@
 - 证据: ① 代码路径 —— pollStatus 每 5s(app.js:309) → renderSrcTable(app.js:133) → 无条件重建(app.js:129); ② 门禁 A/B —— 撤掉"数据没变不重建"守卫后, G-BOOT 报「数据没变时数据源表格仍被整表重建(正在输入的优先级会被打断)」, 复原后通过。
 - 改动(2026-09-11): ① renderSrcTable(force) 加两道守卫 —— 数据签名(JSON.stringify)未变则不重建; 表格内有焦点(正在编辑)则不重建, 等下一次轮询; 只有真正重建时才更新签名; ② reRenderAll(切语言)改为 renderSrcTable(true) 强制重建, 否则表格会留在旧语言; ③ G-BOOT 新增断言: 数据没变不得重建 / 数据变了必须重建 / 重建后行数正确; ④ 顺带修门禁桩件保真度: innerHTML 赋值现在会清空 children(真实 DOM 行为), 否则"重建后旧节点应消失"这类断言永远失败。
 - 状态: CLOSED
+
+## M-20260911-21 每次截图都冷启动一个 PowerShell: 抽核心 + 常驻助手(CLOSED)
+- 来源: 「截图开销」项(M-20260911-20 已量化: 每次截图 1.1~1.2 秒, 其中冷启动约 0.5 秒); 用户"从第二项开始"→"继续"(常驻进程属新增组件, 已单独确认)
+- 现象: 拍摄本身只要几十毫秒, 但每次截图都要新起一个 powershell.exe; 一次截图翻译(OCR 默认 loops=2)至少付两次, 控制台「截图预览」按钮也付一次。
+- 复现: 计时 `powershell -File src\helpers\screen_capture.ps1 -mode screen -scale 1 -maxdim 800 -out x.png` → 约 1.1~1.2 秒; 同一个 PowerShell 进程里连着拍第二张只要几十毫秒。
+- 影响面: 截图翻译的固定开销约 1 秒/次, 与屏幕内容无关, 用户感知为"点了要等"。
+- 根因: powershell.exe 冷启动 + Add-Type(Roslyn 编译 CapWin32、加载 UIAutomation)每个进程都要重付一遍。
+- 证据(2026-09-11): ① 常驻后同一进程内第二次拍摄实测 **38~56ms**(改前每次 1.1~1.2 秒); ② 与 HEAD 版一次性脚本同机、同参数、同标题逐条比对 PNG(尺寸+字节数): 不存在的窗口 / 中文标题 / 空标题 / 英文标题四条**完全一致**(如 "VRCLiveBoard 控制台" 1128x608 / 48298 字节); 有一次不一致, 复跑 3 轮后逐字节一致 —— 那扇窗口当时正从小尺寸切到大尺寸, 与本次改动无关; ③ 新门禁 capture-host.js **13 PASS / 0 FAIL**, 含"常驻起不来时自动回退一次性调用"(把 spawn 打成抛错, 仍回 NO-REGION 且留下告警); ④ 门禁 A/B 见 DEV-NOTES 137。
+- 改动(2026-09-11): ① 新增 src/helpers/capture_core.ps1 —— 拍摄核心(Add-Type 只做一次; Find-WindowByTitle 抽成函数; Invoke-Capture 返回协议串而不是 exit); ② src/helpers/screen_capture.ps1 变 14 行薄壳(参数与 stdout 协议一字不改); ③ 新增 src/helpers/capture_host.ps1 —— 常驻进程(stdin 逐行 JSON 指令 → 一行结果, 用 UTF-8 StreamReader 读); ④ 新增 src/capturehost.js —— 客户端(懒启动 / 串行化 / 超时 / 自愈 / 回退 / 退出); ⑤ 接线三处: ocrtranslate.js(captureWindow/foregroundGame)、web/server.js 截图预览、main.js 统一退出; ⑥ 新增门禁 scripts/checks/capture-host.js(13 项, 由 smoke.ps1 -Flow 在隔离实例上跑); ⑦ make-dist 必备文件清单补 3 个新文件。
+- 说明: 回退是硬约定 —— 常驻起不来/响应超时/进程异常退出, 一律自动退回改造前的一次性调用, 最坏情况等于改造前; 因此本次不引入新的失败模式(代价是极端情况下白等一次启动超时)。
+- 状态: CLOSED

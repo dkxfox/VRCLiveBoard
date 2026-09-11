@@ -582,23 +582,23 @@ function effPluginSec() {
     return json(res, 200, getLtStatus(rootConfig.ocrtl || {}));
   });
   on('GET', '/api/capture/preview', function (req, res, url) {
-    const script = path.join(__dirname, '..', 'helpers', 'screen_capture.ps1');
+    const { getCaptureHost } = require('../capturehost');
     const tmp = path.join(projectRoot, '.ocr-preview.png');
-    execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-mode', 'screen', '-scale', '1', '-maxdim', '1600', '-out', tmp], { timeout: 20000, windowsHide: true }, function (err, stdout) {
-      if (String(stdout || '').indexOf('CAPTURE-FAIL') >= 0) {
-        try { fs.unlinkSync(tmp); } catch(e2){noteFail('/api/capture/preview',e2);}
+    getCaptureHost(logger).capture({ mode: 'screen', scale: 1, maxdim: 1600, out: tmp }).then(function (out) {
+      if (String(out || '').indexOf('CAPTURE-FAIL') >= 0) {
+        try { fs.unlinkSync(tmp); } catch (e2) { noteFail('/api/capture/preview', e2); }
         return json(res, 500, { ok: false, error: '截图失败(沙箱或权限限制), 可稍后重试' });
       }
-      if (err || !fs.existsSync(tmp)) {
-        try { fs.unlinkSync(tmp); } catch(e2){noteFail('端口体检',e2);}
-        return json(res, 500, { ok: false, error: '截图失败: ' + (err ? err.message : '无输出') });
-      }
+      if (!fs.existsSync(tmp)) return json(res, 500, { ok: false, error: '截图失败: 无输出' });
       fs.readFile(tmp, function (e3, data) {
-        try { fs.unlinkSync(tmp); } catch(e4){noteFail('端口体检',e4);}
+        try { fs.unlinkSync(tmp); } catch (e4) { noteFail('端口体检', e4); }
         if (e3) return json(res, 500, { ok: false, error: '读取截图失败' });
         res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' });
         return res.end(data);
       });
+    }, function (err) {
+      try { fs.unlinkSync(tmp); } catch (e2) { noteFail('端口体检', e2); }
+      return json(res, 500, { ok: false, error: '截图失败: ' + (err ? err.message : '无输出') });
     });
     return;
   });

@@ -99,6 +99,12 @@ if ($Flow) {
     node $flowJs --port $Port --root $tmp
     if ($LASTEXITCODE -ne 0) { $script:fail++ } else { $script:pass++ }
   } else { Write-Output '  FAIL 缺少 backend-flow.js'; $script:fail++ }
+  # 截图助手契约(常驻协议 / UTF-8 往返 / 回退路径): 每次截图起一个 powershell 的冷启动太贵, 改常驻后由这条守住
+  $capJs = Join-Path $PSScriptRoot 'capture-host.js'
+  if (Test-Path $capJs) {
+    node $capJs --root $tmp
+    if ($LASTEXITCODE -ne 0) { $script:fail++ } else { $script:pass++ }
+  } else { Write-Output '  FAIL 缺少 capture-host.js'; $script:fail++ }
 }
 Write-Output ('SMOKE RESULT: pass=' + $script:pass + ' fail=' + $script:fail)
 

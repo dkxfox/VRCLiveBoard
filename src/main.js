@@ -119,6 +119,7 @@ async function main() {
     try { clearInterval(ivVars); } catch (e) {}
     try { composer.stop(); } catch (e) {}
     try { if (mediaSource && mediaSource.stop) mediaSource.stop(); } catch (e) {}
+    try { require('./capturehost').stopCaptureHost(); } catch (e) {}
     try { if (web && web.stop) await Promise.race([web.stop(), new Promise(function (r) { setTimeout(r, 1500); })]); } catch (e) {}
     try { osc.close(); } catch (e) {}
     if (typeof proceed === 'function') { try { proceed(); } catch (e) { logger.error('退出后续失败: ' + e.message); } return; }
