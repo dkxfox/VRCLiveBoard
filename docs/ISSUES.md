@@ -434,3 +434,13 @@
 - 证据(沙箱复现, 带可用的 classList 与有状态 localStorage): 修复前 —— 关→开后 __fxRestart 调用次数 **0**(FAIL); 加载时预设 master=1 → body **没有** no-anim(FAIL)。修复后两项均通过。门禁 A/B: 分别撤掉两处修复, G-BOOT 精确报出「动效重新打开时没有重启星空画布(__fxRestart 未被调用)」与「已保存的"关闭动效"在页面加载时没有被应用(主开关只存不读)」, 复原后通过。
 - 改动(2026-09-11): ① #animTop 处理器改为"写 localStorage + 走 applyAnim()"(由 applyAnim 统一切类并重启画布); ② 动效分区末尾新增加载时的 applyAnim()(应用已保存设置); ③ pollStatus 里 _vrcRunning 变化后重判 applyAnim() —— 否则"检测到游戏在运行就自动停用动效"只在手动切换那一刻生效; ④ 顺手改正主开关的提示文案(animTitle 原为"游戏时关闭动效", 那其实是自动开关的描述; 三语改为"关闭 / 开启动效(含粒子与过渡)"); ⑤ G-BOOT 沙箱把 classList 与 localStorage 从空壳换成可用实现, 并新增三条动效断言(关得掉 / 开得回 / 加载时应用已保存设置)。
 - 状态: CLOSED
+## M-20260911-19 主题重启后不保留: theme.js 从不持久化(CLOSED)
+- 来源: 用户"主题重启后不保存设置的主题样式"(2026-09-11)
+- 现象: 在控制台用色板选好主题, 重启软件或刷新页面后回到默认的"海蓝"(blue)。
+- 复现: 点色板换成"霓虹" → 重启/刷新 → 仍是"海蓝"。
+- 影响面: 主题选择只在当次会话有效, 等于设置项不生效。
+- 根因: theme.js(2026-09-11 从 index.html 内联块**逐字**迁出)从来没有持久化逻辑 —— 启动时无条件 setTheme('blue'), 色板点击只改内存与 CSS 变量, 既不写 localStorage 也不进 config。内部标识当天虽已统一为 ASCII key, 但"保存用户选择"这一步从未做过。
+- 证据(A/B, 隔离沙箱带可用 localStorage): **HEAD 版** —— 点选后 localStorage 里没有 vrcbTheme、重开页面 --bg 回到默认(2 项 FAIL); **修复版** —— 点选写盘 ✓ / 重开恢复 ✓ / URL 参数优先 ✓ / 未保存时回落 blue ✓。门禁 A/B: 分别撤掉"写盘"与"启动恢复", G-BOOT 精确报出「点选主题后没有写入 localStorage(vrcbTheme)」与「重开页面没有恢复上次选的主题(主题不持久化)」。
+- 改动(2026-09-11): ① setTheme 增加第二参数 save(默认保存): 用户点选即写入 localStorage['vrcbTheme'], 带 try/catch(隐私模式/禁用存储时不炸); ② 启动改用 pickTheme() 按优先级选主题 —— URL ?t=xxx(分享与测试) > localStorage 上次选择 > 默认 blue, 首次应用传 save=false(只有用户显式选择才记录); ③ 头部注释写明口径与优先级; ④ G-BOOT 新增主题持久化断言(点选要写盘 / 重开要恢复)。
+- 说明: 选择存 localStorage 而不是 config —— 与动效开关(vrcbAnimMaster)及旧版控制台(vrcbBoardsOpen / vrcbGuideDone)同一层, 属"本机界面偏好"; 主题是纯客户端 CSS 变量, 服务端不需要知道, 因此不动 config 契约与 GCONF/GROUTE 基线。
+- 状态: CLOSED

@@ -256,6 +256,21 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
     for (const fp of order2(ROOT)) vm.runInNewContext(fs.readFileSync(fp, 'utf8'), sb2, { filename: path.basename(fp) });
     if (!sb2.document.body.classList.contains('no-anim')) problems.push('已保存的"关闭动效"在页面加载时没有被应用(主开关只存不读)');
   } catch (e) { problems.push('动效开关断言异常: ' + e.message); }
+  // 主题持久化(M-20260911-19): 点选要写盘, 重开要恢复(此前 theme.js 无条件 setTheme('blue'), 重启即回默认)
+  try {
+    const { uiJsOrder: order3 } = require('./_ui-files.js');
+    const loadInto = function (sbx) { for (const fp of order3(ROOT)) vm.runInNewContext(fs.readFileSync(fp, 'utf8'), sbx, { filename: path.basename(fp) }); return sbx; };
+    const base = loadInto(makeSandbox());
+    if (typeof base.setTheme !== 'function') problems.push('theme.js 未导出 setTheme');
+    else {
+      base.setTheme('neon');
+      if (base.localStorage.getItem('vrcbTheme') !== 'neon') problems.push('点选主题后没有写入 localStorage(vrcbTheme)');
+      const again = makeSandbox();
+      again.localStorage.setItem('vrcbTheme', 'neon');
+      loadInto(again);
+      if (again.document.documentElement.style['--bg'] !== base.document.documentElement.style['--bg']) problems.push('重开页面没有恢复上次选的主题(主题不持久化)');
+    }
+  } catch (e) { problems.push('主题持久化断言异常: ' + e.message); }
   console.log('[G-BOOT frontend-boot] 前端启动: 顶层加载 ' + (problems.length ? '有异常' : '正常') + ' / 控件桩 ' + ids.size + ' 个 id');
   for (const p of problems) console.log('  -> FAIL ' + p);
   process.exitCode = problems.length ? 1 : 0; // 用 exitCode: process.exit 在管道下会丢掉未刷新的输出
