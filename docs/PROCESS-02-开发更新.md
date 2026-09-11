@@ -159,3 +159,9 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke
 - 控制台差异 15 条(引导层整块、截图实时倒计时、LT 安装引导、插件删除/打开页/重扫、地址与端口信息、健康总览、更新按钮、来源元信息、capInfo、说明文字整段等): `docs/AUDIT-20260911-03-新旧控制台差异.md`
 - 打包/壳 14 条(排除表清单文件化、时序绑定与 BUILD-INFO、Electron 镜像哈希、插件更新包审计、docs 出厂白名单、config.json 裸名、调试开关、托盘失败无出口、shutdown 早注册、母狗打印密码、web.stop 排空、审计报告中止路径等): `docs/AUDIT-20260911-04-桌面壳与打包.md`
 - 已修: 开关参数名、conflict-test 不进包(两处)、pack-audit 禁入名单 9 条、gate-selftest 机密排除、openExternal 白名单 + 导航守卫、.gitignore/startup-test/开发者文档-04 不进包(见 M-20260911-28 / DEV-NOTES 144)
+
+### 8.2 收尾(2026-09-11)
+
+- 提交 `f229acd` 已推送(origin/main); 推送后复跑全套门禁 **15 PASS / 0 FAIL**(GSYNC 转绿) —— 本会话首次全绿。
+- 待用户实机验证: 截图翻译全链路(按钮旁提示/结果块/耗时)+ 识别方式重启保留 + 设置命令行窗口开关。
+- 待拍板: docs/ 出厂白名单; 打包排除表清单文件化; `--no-sandbox` 是否去掉; Electron 镜像哈希/官方源; 插件代码级修复(8 中 + 10 低); 控制台丢失项 15 条。
