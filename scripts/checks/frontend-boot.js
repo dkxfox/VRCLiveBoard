@@ -291,6 +291,43 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
       if (again.document.documentElement.style['--bg'] !== base.document.documentElement.style['--bg']) problems.push('重开页面没有恢复上次选的主题(主题不持久化)');
     }
   } catch (e) { problems.push('主题持久化断言异常: ' + e.message); }
+  // 截图翻译的提示方式(M-20260911-22): 旧版是按钮旁的内联提示 + 结果块, 新版移植成了 alert() 弹窗
+  // (而且弹在整轮跑完之后)。这里用桩件真点一次: 既不许弹窗, 也要看到提示与结果落在页面上。
+  try {
+    const { uiJsOrder: order4 } = require('./_ui-files.js');
+    let alerts = 0;
+    const mk = function (payload) {
+      const s = makeSandbox();
+      const defFetch = s.fetch;
+      s.alert = function () { alerts++; };
+      s.fetch = async function (u, o) {
+        if (String(u).indexOf('/api/ocrtl') >= 0) return { ok: true, status: 200, json: async () => payload, text: async () => JSON.stringify(payload) };
+        return defFetch(u, o);
+      };
+      for (const fp of order4(ROOT)) vm.runInNewContext(fs.readFileSync(fp, 'utf8'), s, { filename: path.basename(fp) });
+      return s;
+    };
+    const okSb = mk({ ok: true, result: { ocr: 'OCR原文内容', translated: '译文内容', model: 'test-model' } });
+    const okBtn = okSb.document.getElementById('btnShot'), okMsg = okSb.document.getElementById('shotMsg'), okOut = okSb.document.getElementById('shotOut');
+    if (!okMsg) problems.push('index.html 缺少 #shotMsg(截图翻译的按钮旁提示)');
+    else if (!okOut) problems.push('index.html 缺少 #shotOut(截图翻译的结果块)');
+    else if (!okBtn || typeof okBtn.onclick !== 'function') problems.push('#btnShot 未接线(截图翻译)');
+    else {
+      await okBtn.onclick();
+      const txt = String(okOut.textContent || '');
+      if (txt.indexOf('OCR原文内容') < 0) problems.push('截图翻译结束后没有把 OCR 原文写进 #shotOut');
+      if (txt.indexOf('译文内容') < 0) problems.push('截图翻译结束后没有把译文写进 #shotOut');
+      if (String(okOut.style.display) !== 'block') problems.push('#shotOut 结果块没有显示出来');
+      if (okBtn.disabled) problems.push('截图翻译结束后按钮没有恢复可点');
+    }
+    const badSb = mk({ ok: false, error: '已有一次截图翻译正在进行' });
+    const badBtn = badSb.document.getElementById('btnShot'), badMsg = badSb.document.getElementById('shotMsg');
+    if (badBtn && typeof badBtn.onclick === 'function' && badMsg) {
+      await badBtn.onclick();
+      if (String(badMsg.textContent || '').indexOf('已有一次截图翻译正在进行') < 0) problems.push('截图翻译失败时按钮旁没有提示失败原因');
+    }
+    if (alerts) problems.push('截图翻译仍然弹对话框(alert ' + alerts + ' 次), 旧版是按钮旁的内联提示');
+  } catch (e) { problems.push('截图翻译提示断言异常: ' + e.message); }
   console.log('[G-BOOT frontend-boot] 前端启动: 顶层加载 ' + (problems.length ? '有异常' : '正常') + ' / 控件桩 ' + ids.size + ' 个 id');
   for (const p of problems) console.log('  -> FAIL ' + p);
   process.exitCode = problems.length ? 1 : 0; // 用 exitCode: process.exit 在管道下会丢掉未刷新的输出

@@ -464,3 +464,14 @@
 - 改动(2026-09-11): ① 新增 src/helpers/capture_core.ps1 —— 拍摄核心(Add-Type 只做一次; Find-WindowByTitle 抽成函数; Invoke-Capture 返回协议串而不是 exit); ② src/helpers/screen_capture.ps1 变 14 行薄壳(参数与 stdout 协议一字不改); ③ 新增 src/helpers/capture_host.ps1 —— 常驻进程(stdin 逐行 JSON 指令 → 一行结果, 用 UTF-8 StreamReader 读); ④ 新增 src/capturehost.js —— 客户端(懒启动 / 串行化 / 超时 / 自愈 / 回退 / 退出); ⑤ 接线三处: ocrtranslate.js(captureWindow/foregroundGame)、web/server.js 截图预览、main.js 统一退出; ⑥ 新增门禁 scripts/checks/capture-host.js(13 项, 由 smoke.ps1 -Flow 在隔离实例上跑); ⑦ make-dist 必备文件清单补 3 个新文件。
 - 说明: 回退是硬约定 —— 常驻起不来/响应超时/进程异常退出, 一律自动退回改造前的一次性调用, 最坏情况等于改造前; 因此本次不引入新的失败模式(代价是极端情况下白等一次启动超时)。
 - 状态: CLOSED
+
+## M-20260911-22 截图翻译改成弹对话框: 旧版是按钮旁的内联提示(用户实机反馈)(CLOSED)
+- 来源: 用户实机反馈"改版后的会在截图之后弹出来一个对话框。原版是在按下截图按钮后就在按钮旁边提示"
+- 现象: 点「截图翻译」后, 要等整轮跑完才弹出一个 alert 弹窗, 内容只有一句"进行中,请对准游戏里的文字..." —— 进度与结果都没有落在界面上; 旧版控制台是在按钮旁显示进度(#ocrtlState)+ 在下方块里显示 OCR 原文与译文(#ocrtlOut)。
+- 复现: 控制台 → 翻译 → 截图翻译 → 点按钮 → 5 秒倒计时 + 整条流水线跑完 → 弹窗才出现(此时"进行中"已经没意义)。
+- 影响面: 用户既拿不到进度(跑的时候界面没动静), 也拿不到结果(识别/译文只进聊天框, 控制台里看不到); 弹窗还打断操作。
+- 根因: ① 新版 UI 移植这块时把旧版的 #ocrtlState/#ocrtlOut 换成了 alert(); 而 /api/ocrtl 是**同步等完整条流水线**才回响应(server.js:631), 所以弹窗必然出现在所有动作之后 —— 提示与动作在时间上完全错位。② 顺带查出: 3 个参数输入(倒计时/显示/循环)在移植时丢了 overrides 传递, 成了摆设; 且「显示(秒)」读的配置键写错(eachMs), 配置里其实是 displayMs, 于是永远显示默认 8 秒。
+- 证据(2026-09-11): ① G-BOOT 新增 5 条断言(在桩件里真点一次按钮): 成功路径把 OCR 原文+译文写进 #shotOut 且结果块显示、按钮恢复可点; 失败路径把失败原因写进按钮旁 #shotMsg; **alert 次数必须为 0**; ② A/B 两个变体各自被精确拦下 —— 把 alert 加回去 → "截图翻译仍然弹对话框(alert 1 次)"; 让结果块不写内容 → "没有把 OCR 原文写进 #shotOut / 没有把译文写进 #shotOut / #shotOut 结果块没有显示出来" 三条; 恢复后复跑全绿; ③ 全套门禁 14 PASS / 1 FAIL(唯一 FAIL: GSYNC 报本地提交未推送)。
+- 改动(2026-09-11): ① index.html: 按钮后加 <span id="shotMsg">(按钮旁提示), 卡片底部加 <pre id="shotOut">(结果块); ② app.js: 新增 shotHint(text,warn) 助手(写 #shotMsg 并按成败着色 var(--warn)/var(--ok)); #btnShot 重写为 —— 置灰按钮 → 立即显示"进行中,请对准游戏里的文字..." → 带 {delayMs,displayMs,loops} 触发 → 成功清提示并把"OCR 原文 / 译文(模型)"写进结果块, 失败在按钮旁显示 请求失败 + 原因 → 恢复按钮可点; ③ 删掉移植遗留的死处理器 #transShot(新版 index.html 无此 id, 且同样用 alert); ④ #ocrDisplay 读的配置键 eachMs → displayMs。
+- 说明: 提示与结果复用了旧版已有的三语键(ocrRunning / ocrSrcLabel / ocrTrLabel / ocrTrLabel2 / loadFail) —— 这些键在新版 lang.js 里一直都在却没人引用, 说明"内联提示"本就是原设计, 是移植时丢掉的。
+- 状态: CLOSED
