@@ -125,7 +125,7 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke
 | 三插件 vendor xlsx 版本漂移 | weather-board 0.18.5 vs 另两个 0.20.3 | M-20260904-01: 统一 0.20.3 + 回归 Excel 导入/导出, 与 M-20260901-04 一并重打包 |
 | `lang.js` 单文件 579 键 72.7KB | 三语混排, 体积随新 UI 增长(原 285 键 40KB) | 低优先级; 若继续增长再评估按 Tab 拆多文件 |
 | `app.js` 单文件密度 | 66.5KB / 440 行 / 平均 154 字符每行 / 24 行超 500 字符 / 最长 1,507; 分区: "数据源/状态" 180 行、"安全与权限(旧版套皮)" 155 行 | 低优先级: 按功能拆多文件(保持无构建步骤, 顺序 script 或 ESM), 至少把"安全与权限(旧版套皮)"整块独立出去 |
-| `server.js` 路由链 | 985 行, 55 条路由仍在单条 if/else 链里(门禁与错误返回靠逐条手写); **2026-09-11 已加 GROUTE 口径清单门禁**(55 条 method+path+等级基线, 漏门/新增/降级即 FAIL)作为重构安全网 | 中优先级: 抽成路由表 —— 有了 GROUTE 基线, 重构可用"一条都没丢、等级一个都没变"做机器判据 |
+| ~~`server.js` 路由链~~ | **已还清**(2026-09-11): 54 个路由块抽成 55 条 `on(method, path, fn(req,res,url))` 注册, 请求处理器只剩 守卫→首页→静态→插件前缀→表分发→404; 附 GROUTE 口径清单门禁 + 运行时 GET 路由可达性扫描; 处理器内部长行风格未动(见 M-20260911-15) | 无需再排 |
 | 跨文件隐式契约 | 13 个 window.* 全局无声明处: app.js 读 window.__fxRestart / __reThemeLabels(index.html 内联块写入), index.html 内联块读 window.t | 低优先级: 随内联块迁出一起收敛, 或集中为单一 window.VRCB 命名空间并在文件头写明契约 |
 | 主题命名三套并存 | 配置存 blue → KEYMAP 映射中文"海蓝" → THEME_LABELS 再映射 i18n 键 themeOcean; setTheme("海蓝") 以中文名作内部标识 | 低优先级: 内部一律用 key(blue), 显示名走 t(); 与内联块迁出合并做 |
 | ~~前后端静默失败~~ | **已还清**(2026-09-11): 前端 56 处空 catch 接入 apiFail()(批 2), 后端 server.js 22 处空 catch 接入 noteFail()(批 3b) —— 两端对称, 均按位置去重只报一次; 上报链路自身保留空 catch 以免自激 | 无需再排; 新增代码请沿用 apiFail / noteFail |

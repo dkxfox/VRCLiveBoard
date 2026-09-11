@@ -4,6 +4,7 @@
 //         没有人知道"到底有多少条、哪一条本该要密码"; 后续改动把 needL1 拿掉也没人会发现。
 //   与 GSURF 攻击面基线同一思路: 不是防漏洞, 而是防"我不知道它变了"。
 //   门禁等级以 403 响应为锚: needL1(res) / !unlockState.level1 + 403 -> L1; !unlockState.level2 + 403 -> L2
+//   支持两种路由形态: ① 路由表 on('GET', '/api/x', function (req, res, url) {...}) ② 抽表前的 if 链(便于对照旧版本)
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -14,10 +15,22 @@ const L = src.split(/\r?\n/);
 
 const raw = [];
 L.forEach((l, i) => {
-  if (/url\.pathname\s*===\s*'/.test(l) && /req\.method\s*===\s*'/.test(l)) {
-    const m = (l.match(/req\.method\s*===\s*'(\w+)'/) || [])[1];
-    const ps = [...l.matchAll(/url\.pathname\s*===\s*'([^']+)'/g)].map((x) => x[1]);
-    raw.push({ line: i + 1, m: m, ps: ps });
+  let m = /^  on\('(GET|POST)', '([^']+)', function \(req, res, url\) \{/.exec(l);
+  if (m) { raw.push({ line: i + 1, m: m[1], ps: [m[2]] }); return; }
+  m = /^  on\('(GET|POST)', '([^']+)', ([A-Za-z_$][\w$]*)\);/.exec(l);
+  if (m) {
+    // 具名处理器: 门禁判定要覆盖它的函数体, 所以块从 const NAME = function 那一行算起
+    const def = L.findIndex((x) => new RegExp('^  const ' + m[3] + ' = function \\(req, res, url\\) \\{$').test(x));
+    raw.push({ line: def >= 0 ? def + 1 : i + 1, m: m[1], ps: [m[2]] });
+    return;
+  }
+  if (/^    if \(req\.method === '(GET|POST)' && url\.pathname === '([^']+)'\) \{$/.test(l)) {
+    m = /^    if \(req\.method === '(GET|POST)' && url\.pathname === '([^']+)'\) \{$/.exec(l);
+    raw.push({ line: i + 1, m: m[1], ps: [m[2]] }); return;
+  }
+  if (/^    if \(req\.method === '(GET|POST)' && \(url\.pathname === '([^']+)' \|\| url\.pathname === '([^']+)'\)\) \{$/.test(l)) {
+    m = /^    if \(req\.method === '(GET|POST)' && \(url\.pathname === '([^']+)' \|\| url\.pathname === '([^']+)'\)\) \{$/.exec(l);
+    raw.push({ line: i + 1, m: m[1], ps: [m[2], m[3]] }); return;
   }
 });
 function levelOf(k) {
@@ -51,12 +64,13 @@ for (const k of Object.keys(curMap)) {
 for (const k of Object.keys(baseMap)) {
   if (!(k in curMap)) problems.push('基线里的路由已不存在: ' + k + ' —— 删路由也要同步更新基线');
 }
-// 特殊分支(静态/首页/插件静态/兜底 404)必须仍在, 防重构时静默丢失
+// 特殊分支(首页/静态/插件静态/兜底 404)必须仍在, 防重构时静默丢失
 const specials = [
   ["首页分支", /url\.pathname === '\/' \|\| url\.pathname === '\/index\.html'/],
   ["静态资源分支", /url\.pathname\.indexOf\('\/api\/'\) !== 0/],
   ["插件静态分支", /url\.pathname\.startsWith\('\/plugin\/'\)/],
-  ["兜底 404", /json\(res, 404, \{ ok: false \}\);/]
+  ["兜底 404", /json\(res, 404, \{ ok: false \}\);/],
+  ["路由分发", /const hit = tbl && tbl\[url\.pathname\];/]
 ];
 for (const [name, re] of specials) if (!re.test(src)) problems.push('特殊分支丢失: ' + name);
 

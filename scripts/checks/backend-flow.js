@@ -67,6 +67,23 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
   if (c.ms < 300) note('端口体检仅 ' + c.ms + 'ms, 不足以判定阻塞(跳过)');
   else ok(v.ms < 400, '体检( ' + c.ms + 'ms)期间其他请求未被阻塞(' + v.ms + 'ms)');
 
+  // ⑥ 路由可达性: 清单里的 GET 路由一条都不能丢(重构/抽表后最容易出的问题)
+  //    区分"落空 404"(分发器没匹配到, 响应体恰好是 {"ok":false})与"业务 404"(处理器返回, 带 error)
+  try {
+    const base = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'ROUTES-BASELINE.json'), 'utf8'));
+    const SKIP = ['/api/version/check', '/api/capture/preview', '/api/icon']; // 外网/截图/大图: 慢或重, 不适合每次门禁跑
+    const gets = (base.routes || []).filter((r) => r.m === 'GET' && r.p.indexOf('/api/') === 0 && SKIP.indexOf(r.p) < 0);
+    const missing = [];
+    for (const r of gets) {
+      let rr;
+      try { rr = await req(r.p); } catch (e) { missing.push(r.p + '(请求异常)'); continue; }
+      const body = rr.body.toString('utf8');
+      if (rr.status === 404 && body.replace(/\s/g, '') === '{"ok":false}') missing.push(r.p);
+    }
+    if (missing.length) ok(false, '有 ' + missing.length + ' 条 GET 路由落空(分发器没匹配到): ' + missing.join(', '));
+    else ok(true, '清单内 ' + gets.length + ' 条 GET 路由全部可达(无落空 404)');
+  } catch (e) { note('路由可达性检查跳过: ' + e.message); }
+
   console.log('[backend-flow] pass=' + pass + ' fail=' + fail + (skip ? (' skip=' + skip) : ''));
   process.exitCode = fail ? 1 : 0;
 })().catch(function (e) { console.log('  FAIL 流程测试异常: ' + ((e && e.stack) || e)); process.exitCode = 1; });
