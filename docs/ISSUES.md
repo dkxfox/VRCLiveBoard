@@ -587,3 +587,10 @@
 - 改动(2026-09-11): ① plgCard 内新增"删除插件"(二次确认 → /api/plugins/remove → 刷新列表)与"打开插件页面"(仅插件声明了页面时出现, 走 /plugin/<id>); ② index.html 新增 #capInfo(截图区域行内)与 #portsInfo(网络/端口段内) + advHttpHint 说明; ③ capInfoShow() 读 config 渲染模式与区域坐标, 未设置时显示 capNoRegion; ④ pollStatus 里顺带填 portsInfo(Web 实际端口 · OSC 目标); ⑤ 4 段说明文字挂回它们各自的卡片; ⑥ 保存类成功回执走 savedOk, 自启开关走 autoOn/autoOff。
 - 说明: 新增的 3 个键用 lang.js 既有的追加块写法(三语齐备, GI18N 对齐检查通过); 其余全部复用"有键无家"的旧键, 零新增翻译。
 - 状态: CLOSED
+## M-20260911-36 打包/壳机械项(批 A): 退出排空连接、托盘失败不再无出口、机密卫生(CLOSED)
+- 来源: 桌面壳与打包审计挂账(用户"继续")
+- 现象: ① web.stop() 只 server.close, 桌面壳持有的 keep-alive 连接会让回调迟迟不触发 —— 每次退出都靠 main.js 的 1.5s 竞态兜底(白等一秒半); ② 托盘创建失败被静默 catch, 而"关窗即隐藏"仍然生效 —— 用户关掉窗口后既没有窗口也没有托盘, 只能去任务管理器结束进程; ③ 母狗生成授权包时把该用户的一级密码明文打到 stdout(与 auth-state-check.js 自定的"永不打印一级密码"规则冲突), 还留了一行 [debug] 路径输出; ④ 用户可见的 版本说明.txt 里写着内部术语(母狗/迷你狗管理/登记表)。
+- 证据(2026-09-11): ① 三个 JS 文件 node --check 通过; ② 残留核对: master.js 不再有"一级密码("字样, 版本说明.txt 不再出现 母狗/迷你狗; ③ G2 编码 0 violation; ④ 全套门禁见提交记录。
+- 改动(2026-09-11): ① server.js: stop() 先 closeAllConnections() 再 close()(可选调用, 老 Node 无此 API 也不报错); ② electron/main.js: 新增 trayOk 标记, 托盘创建成功才"关窗=收进托盘", 否则"关窗=退出"; ③ master.js: 授权包输出改口径(一级密码写入该用户 config.json 但不打印), 删掉 [debug] 行; ④ 版本说明.txt 的授权体系条目去掉内部术语。
+- 说明(两处按实际运行环境判断后**不做**, 理由记档): ① **不用 app.isPackaged 关调试开关** —— 本项目的桌面版是 `electron.exe electron/main.js` 启动, app.isPackaged 恒为 false, 用它区分发行/开发没有效果(审计建议在此不适用); 两个开关都需要显式环境变量才触发, 风险低, 维持现状。② **shutdown 早注册暂不做** —— 属于启动窗口期的窄竞态(核心还没注册监听时退出), 改动要动 main.js 的启动结构, 单列一轮评估。
+- 状态: CLOSED

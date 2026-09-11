@@ -45,6 +45,7 @@ app.setAppUserModelId('com.vrcliveboard.app');
 if (process.env.VRCB_USER_DATA) { try { app.setPath('userData', process.env.VRCB_USER_DATA); } catch (e) {} }
 let win = null;
 let tray = null;
+let trayOk = false;   // 托盘是否创建成功(M-20260911-36): 失败时不能再"关窗即隐藏", 否则用户既没窗口也没托盘
 let quitting = false;
 let coreStopped = false; // 桌面壳退出时, 是否已等核心清理完(M-20260911-07)
 
@@ -108,7 +109,11 @@ function createWindow() {
       win.webContents.reloadIgnoringCache();
     }
   });
-  win.on('close', function (e) { if (!quitting) { e.preventDefault(); win.hide(); } });
+  win.on('close', function (e) {
+    if (quitting) return;
+    if (trayOk) { e.preventDefault(); win.hide(); return; }   // 有托盘: 关窗=收进托盘
+    app.quit();                                              // 没托盘: 关窗就是退出(否则变成无出口的隐藏进程)
+  });
 }
 function startCore() {
   // 内嵌模式: 核心(网页服务/OSC/数据源)跑在本进程里
@@ -146,6 +151,7 @@ if (!app.requestSingleInstanceLock()) {
     createWindow();
     try {
       tray = new Tray(loadIcon());
+      trayOk = true;
       tray.setToolTip('VRCLiveBoard');
       tray.setContextMenu(Menu.buildFromTemplate([
         { label: '显示控制台', click: function () { win.show(); win.focus(); } },

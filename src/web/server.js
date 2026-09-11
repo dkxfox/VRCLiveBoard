@@ -1002,7 +1002,9 @@ function effPluginSec() {
         tryListen();
       });
     },
-    stop: function () { return new Promise(function (r) { server.close(r); }); }
+    // 退出时排空 keep-alive 连接(M-20260911-36): 只 close 的话, 桌面壳持有的 keep-alive 连接会让回调迟迟不触发,
+    // 每次退出都要靠 main.js 的 1.5s 竞态兜底(白等一秒半)
+    stop: function () { return new Promise(function (r) { try { if (server.closeAllConnections) server.closeAllConnections(); } catch (e) {} server.close(r); }); }
   };
 }
 module.exports = { createServer };
