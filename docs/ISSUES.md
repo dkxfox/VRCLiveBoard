@@ -271,3 +271,42 @@
 - 验证(2026-09-11): harness 四场景复跑全部无异常且调用链正确 —— normal+皮肤 → simpleBoot(#f59e0b,#f87171,秋意渐浓,🍂); normal+无皮肤 → simpleBoot(#3b82f6,#7dd3fc,'','✦'); auto+皮肤 → simpleBoot(节日配色); starry → starryBoot; run-gates -Smoke = 11 PASS / 1 FAIL(GSYNC 未推送属预期例外); smoke.ps1 -Port 19260 专项断言 20 PASS / 0 FAIL(8 基线 + 8 启动动画相关 + 4 批 B 回归); node --check 通过。
 - 遗留: ①同文件另有两处同类遮蔽待用户定夺 —— renderBdEditor() 第 25 行 `var t=$('bdText')` 之后的 t('emptyPage')(#bdList / #bdPrev 在 index.html 均存在, 故当页面文本为空或公告板被删空时**可达**, 会抛同类 TypeError); 以及第 23/38 行 `var t=pages[i-1]`(仅用于数组交换, 内部无 t() 调用, 实测无害)。②"节日/季节/问候语"内联动画自 a2b937f 起即不可达, 现由 skin.js 皮肤判定 + simpleBoot 承担; 如日后想恢复问候语动画, 可从 a2b937f^ 取回旧实现。
 - 状态: CLOSED(动画已恢复; 两处同类遮蔽经用户确认后再另行处理)
+
+## M-20260911-02 本机任意文件读: /api/special/video 路径穿越(OPEN)
+- 来源: 2026-09-11 新版代码审核(用户"审核一下新版代码")
+- 现象: GET /api/special/video?file=<任意路径> 可读取本机任意文件; file=config.json 即可取走工程根下的配置文件。
+- 复现: 浏览器或 curl 访问 http://127.0.0.1:19190/api/special/video?file=config.json → 返回 config.json 原文(含 level1Password、devchain.anchor); file=../../../../Windows/win.ini 可越出工程根。
+- 影响面: 本机任意进程/脚本可读取任意文件, 并据此拿到一级密码 → 该密码保护的配置导出/导入等门禁全部失效。web.host 默认 127.0.0.1(仅回环), 故暂未暴露到局域网; 但不影响本机提权性质。
+- 根因: server.js 第 487 行 `const f = path.join(__dirname, '..', '..', rel)` 对 rel 零校验(既未拒 '..', 也未做 resolve 后的目录前缀比对)。对照: 同一文件第 142-144 行的静态资源分支**已**显式做了 URL 解码与 '..' / '\\' 拒绝 —— 同类防护只做了一半。
+- 证据(本人复验): 读 src/web/server.js:484-495 确认; config.default.json 与 config.json 的 web.host 均为 127.0.0.1; 静态资源分支 L142-144 有防穿越代码。
+- 计划: 批 1(2026-09-11)修复 —— path.resolve 后与工程根做前缀比对 + 拒 '..'; 隔离冒烟加越界读断言。
+- 状态: OPEN(批 1 修复中)
+
+## M-20260911-03 前端门禁盲区: 控件接线与启动可执行性无任何门禁(OPEN)
+- 来源: 2026-09-11 新版代码审核
+- 现象: 近两次前端事故(M-20260907-01 的 20 个死按键、M-20260911-01 的启动动画不播)在提交时全部门禁为绿, 事故类型没有任何闸能拦。
+- 复现: ①删掉 index.html 里某个按钮的 app.js 引用 → run-gates 仍 11 PASS; ②在启动 IIFE 里写一句必然抛错的代码 → 门禁仍全绿, 只有运行时日志里多一行 unhandled rejection。
+- 影响面: 前端"静默失效"类缺陷全靠人工实机发现, 回归成本高。
+- 根因: GHTML(html-inline-check.js)只做 JS → HTML 单向检查(getElementById 目标是否存在、id 是否唯一、脚本语法), **不做 HTML → JS 反向检查**(控件是否有任何 JS 引用), 也不执行任何前端代码(无"能不能跑起来"的断言)。
+- 计划: 批 1(2026-09-11)新增两个门禁 —— ① ui-wiring.js: 遍历 index.html 中带 id 的 button/input/select/textarea, 断言每个都能在 app.js 里找到引用(quoted / $(id) / 浏览器命名访问三种形态), 消除 langSel 类误报; ② frontend-boot.js: 用 DOM 桩件在 node vm 里加载 app.js, 断言顶层无异常, 并抽取启动动画 IIFE 断言各品牌分支能正确调用 simpleBoot / starryBoot。
+- 证据(本人原型已跑通): ui-wiring 原型在 87 个控件上得 0 死控件; frontend-boot 原型三场景(normal / normal+皮肤 / starry)调用链全部正确。
+- 状态: OPEN(批 1 实施中)
+
+## M-20260911-04 i18n 取词函数单字母 t 的遮蔽风险 + 2 处无守卫 DOM 赋值(OPEN)
+- 来源: 2026-09-11 新版代码审核(承接 M-20260911-01 的根因)
+- 现象: ①i18n 取词函数名为单字母 t, 与最常见的临时变量名冲突, 已被 `var t=null` 咬过两次(启动动画事故 + 公告板编辑器潜伏用例); ②app.js 第 355-356 行 `document.getElementById('gateL1'/'gateL2').onclick = ...` 无空值守卫。
+- 复现: ①在任意函数作用域内写 `var t=<任意值>` 并在其后调用 t('key') → TypeError; ②用 DOM 桩件加载 app.js(元素缺失) → 顶层即抛 `TypeError: Cannot set properties of null (setting 'onclick')` 并中断, 其后所有代码(含语言切换与初始化)全部失效。
+- 影响面: ①类事故会复发且症状隐蔽(async IIFE 场景下只剩一行 unhandled rejection); ②只要 gateL1 / gateL2 任一 id 被改名或所在区块被裁, 整个控制台脚本从该行起失效。
+- 根因: ①取词函数采用单字母全局名(第 304 行 function t(k)), 而 app.js 全文件 257 处 var 声明, 无块级作用域纪律; ②旧版套皮代码直接对 getElementById 结果取属性, 未沿用新版 `if($('x'))` 的守卫写法。
+- 证据(本人复验): ①M-20260911-01 的提取式 harness 与线上日志; ②DOM 桩件加载 app.js 实测抛错行即 L355; ③全文件扫描: 局部 `var t=` 现存 3 处(L23 数组交换无害、L25 可达、L38 数组交换无害)。
+- 计划: 批 1(2026-09-11)—— 取词函数改名 t → tr(保留 window.t 兼容 index.html 内联块), 同步更新 i18n-usage / i18n-hardcode 门禁对 tr( 的识别, 并在 i18n-usage 中新增"禁止局部绑定 t"检查; 两处无守卫赋值补 if 守卫。
+- 状态: OPEN(批 1 实施中)
+
+## M-20260911-05 更新链接注入路径: 白名单未锚尾 + 前端 innerHTML 未转义(OPEN)
+- 来源: 2026-09-11 新版代码审核
+- 现象: 版本更新提示把服务端返回的 releaseUrl 直接拼进 innerHTML 的 href, 未转义; 而服务端白名单正则只锚定前缀、未锚定结尾。
+- 复现: 构造 version.json: {"version":"9.9.9","releaseUrl":"https://github.com/dkxfox/VRCLiveBoard\"><img src=x onerror=alert(1)>"} → versioncheck.validate() 放行(前缀匹配成功), 前端 app.js 将其拼入 `<a href="...">` → 注入的 img/onerror 进入控制台页面。
+- 影响面: 需要攻击者控制更新源。config.update.mirror 是**用户可配置的第一优先源**(versioncheck.js:52-53), 所以威胁模型下可达; 也可通过劫持 jsDelivr/GitHub 响应实现。
+- 根因: 双半格防线 —— 服务端 versioncheck.js:26 正则 `^https://(github.com/dkxfox/VRCLiveBoard|cdn.jsdelivr.net/gh/dkxfox/VRCLiveBoard)` 无 `$` 与字符集约束; 前端 app.js:85(批 B 新增代码)直接 innerHTML 拼接。
+- 计划: 批 2 —— 服务端正则锚尾 + 限制路径字符集; 前端改 esc() 或 DOM API 赋值(纵深防御)。
+- 状态: OPEN(批 2)

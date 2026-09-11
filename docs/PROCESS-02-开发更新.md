@@ -120,7 +120,22 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke
 
 | 债 | 现状 | 计划 |
 | --- | --- | --- |
-| ~~`index.html` 巨型内联脚本~~ | **已还清**(2026-09-07 复核): F-20260902-01 拆分 + 新版 UI 重写后, index.html 38,067 字节, 内联脚本仅 6,355 字符(原 73,966) | 无需再排; 后续新逻辑一律进 app.js / 独立 .js, 不再往内联堆 |
+| `index.html` 内联脚本残留(**改判**, 2026-09-11 审核) | 原判"已还清"不准确: 剩余 6,355 字符**是真实功能逻辑** —— 主题系统 3,553 字符(THEMES 六套配色 + 色板 + KEYMAP)与星空背景 2,802 字符(canvas fx, 对外暴露 window.__fxRestart), 均与 PROCESS-02 §0 #5"前端逻辑只进 app.js"的约定冲突 | 低优先级: 迁到 theme.js / fx.js, HTML 只留 script 外链 |
 | ~~插件 vendor 重复~~ | **已还清**: 三插件各裁到 4 文件(约 2.2MB/插件, 原 7.1MB); 剩重打包与体积基线更新见 M-20260901-04 | 重打包收尾(待用户指令) |
 | 三插件 vendor xlsx 版本漂移 | weather-board 0.18.5 vs 另两个 0.20.3 | M-20260904-01: 统一 0.20.3 + 回归 Excel 导入/导出, 与 M-20260901-04 一并重打包 |
 | `lang.js` 单文件 579 键 72.7KB | 三语混排, 体积随新 UI 增长(原 285 键 40KB) | 低优先级; 若继续增长再评估按 Tab 拆多文件 |
+| `app.js` 单文件密度 | 66.5KB / 440 行 / 平均 154 字符每行 / 24 行超 500 字符 / 最长 1,507; 分区: "数据源/状态" 180 行、"安全与权限(旧版套皮)" 155 行 | 低优先级: 按功能拆多文件(保持无构建步骤, 顺序 script 或 ESM), 至少把"安全与权限(旧版套皮)"整块独立出去 |
+| `server.js` 路由链 | 909 行, 55 条路由挤压在 L141~L866 的单条 if/else 链(约 725 行); 门禁与错误返回靠逐条手写 | 中优先级: 抽成路由表 + 统一 needL1/needL2 与错误包装器; 是漏门(M-20260911-02)与静默失败的共同解法 |
+| 跨文件隐式契约 | 13 个 window.* 全局无声明处: app.js 读 window.__fxRestart / __reThemeLabels(index.html 内联块写入), index.html 内联块读 window.t | 低优先级: 随内联块迁出一起收敛, 或集中为单一 window.VRCB 命名空间并在文件头写明契约 |
+| 主题命名三套并存 | 配置存 blue → KEYMAP 映射中文"海蓝" → THEME_LABELS 再映射 i18n 键 themeOcean; setTheme("海蓝") 以中文名作内部标识 | 低优先级: 内部一律用 key(blue), 显示名走 t(); 与内联块迁出合并做 |
+| 前后端静默失败 | 前端 80 个 catch 中 58 个完全空吞(73%), server.js 另 22 处; 项目已有 /api/fe-err 上报通道, 但仅 window.onerror / unhandledrejection 两处在用 | 批 2: 统一 api() 包装, 非 2xx 或 {ok:false} 至少上报一次; 与 M-20260911-05 同批 |
+| 无 lint / 单测 / CI | 无 eslint / prettier / tsconfig / .github; package.json 只有 start 与 desktop 两个脚本; 24 个 checks 脚本靠 run-gates.ps1 手工串 | 低优先级: 把 checks 挂成 npm scripts(不引入新依赖), 便于编辑器与 CI 复用 |
+
+
+**待复验(2026-09-11 代码审核: 子代理报告, 本人未逐条复核, 勿直接当结论)**
+- H3 配置导入只写 config.json 不动 rootConfig, 后续 persist() 会以旧内存覆盖导入结果(server.js:801-811 对 101-103)
+- H4 electron/main.js:21 CONSOLE_URL 写死 19190, 而服务端端口被占会 port++ 回退(server.js:891-903)、改端口仅置 needRestart → 端口被占或改端口后桌面窗口白屏且无提示
+- H5 无统一 shutdown: main.js:32/44/55 的 setInterval 句柄未保存; web.stop()(server.js:906)与 media.stop() 从未调用; quit/restart 直接 process.exit → python 助手 5 秒自愈重拉 + 端口残留
+- M1 readBody 无 error/aborted 处理, 超 256KB 时 req.destroy() 不回响应; /api/health 触发多次 netstat/tasklist 阻塞事件循环
+- M5 pluginsys/manager.js 定时器只增不减, disable 不清插件 interval, 反复 restart 会累积
+- L1 logger.js 与 autostart.js 双写同一 app.log 且按 1MB 截断(会交错半行); L3 /api/special/video 的 Range 处理在 bytes=5000-100 时会算出负 Content-Length
