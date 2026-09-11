@@ -535,3 +535,10 @@
 - 改动(2026-09-11): ① app.js 的 {show:...} → {visible:...}; ② make-dist 插件复制跳过 conflict-test(两处), $xfFiles 增加 conflict-test/.gitignore/startup-test.html/打包与分发.md; ③ pack-audit 的 FORBIDDEN_NAME 补 9 条(dev-dongle 目录级/母狗/chain.json/mini-dongle/mini-unlock/.ocr-preview.png/.gitignore/startup-test/打包与分发)并让官方插件枚举跳过 conflict-test; ④ gate-selftest 的临时副本排除 dev-dongle/旧版控制台备份/测试素材目录 + /XF 机密文件, 并用 config.default.json 顶一份干净 config; ⑤ electron/main.js 的 openExternal 只放行 https + 加 will-navigate 守卫。
 - 说明: 未修项(控制台差异 15 条 + 打包/壳 14 条)已逐条列进四份审计文档与 PROCESS-02 §8; 其中"docs/ 出厂范围""排除表改清单文件""--no-sandbox""Electron 镜像哈希"属需你拍板的决策项。
 - 状态: CLOSED
+## M-20260911-29 控制台恢复移植丢失(批 1): 新手引导 / 截图倒计时 / 当前来源 / 控制台地址 / 数据源状态(CLOSED)
+- 来源: 新旧控制台差异审计(用户"全修了吧")的"建议优先修"清单
+- 现象: ① 新手引导整块丢失(旧版首访自动弹 + 可勾"不再自动" + 页头常驻按钮), 键 guideTitle/guideText/guideNoAuto/guideBtn 三语都在却零引用; ② 截图翻译点完只有一句"进行中", 几十秒里界面毫无进度(后端 ocrState 一直在给 phase/countdown); ③ 聊天框预览看不出当前是谁在占、还剩多久(current/priority/ttlUntil 后端一直在给); ④ 页头写死 http://127.0.0.1:19190/, 端口被占自动 +1 时显示的是**错地址**; ⑤ 数据源"说明"列不再显示 helper 运行状态与 lastError(后端字段一直在)。
+- 证据(2026-09-11): ① 666 个 id(160 → 166): 新增 #curMeta / #consoleUrl / #guideBtn / #guideOverlay / #guideNoAuto / #guideOk; ② G-BOOT 顶层加载正常 + GHTML 通过(id 唯一 / getElementById 目标全在 / 无 alert / 下拉 value 安全); ③ 全套门禁见提交记录。
+- 改动(2026-09-11): ① index.html: 引导层(遮罩 + 标题/正文/不再自动/按钮, 三语键全是现成的) + 页头常驻引导按钮 + 当前来源行 #curMeta + 控制台实际地址 #consoleUrl; ② app.js: guideShow/guideHide + 首访自动弹一次(写 localStorage vrcbGuideDone) + 常驻按钮打开; pollStatus 里补三件事 —— 当前来源/优先级/剩余秒数、截图倒计时(phase==='countdown' 时把秒数写进按钮旁提示)、控制台实际地址(读 /api/ports 的 web.host/actual); 数据源说明列补 (SMTC 进程: 运行中/未运行) 与 lastError 前 60 字(用现成的 smtcRun/smtcDown 三语键)。
+- 说明: 本批只做"键齐全、无产品口径争议"的 5 项; 其余控制台挂账(插件三件套: 删除/打开页/重扫、健康总览接回 /api/health、更新按钮回页头、capInfo、portsInfo、13 段说明文字、成功回执、日志行为)仍列在 docs/AUDIT-20260911-03-新旧控制台差异.md。
+- 状态: CLOSED
