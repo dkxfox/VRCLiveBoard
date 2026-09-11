@@ -358,6 +358,7 @@
 - 根因: simpleBoot 的覆盖层挂到 body 后**立即完全不透明**, 而图标是 <img src="/api/icon"> 异步取回, 且该接口响应头是 no-store(每次页面加载都要重新取) → 首帧只有文字, 图标随后才到。
 - 证据: ① 代码路径: app.js 的 simpleBoot 里 cssText 没有初始 opacity, 图标是异步资源; server.js 的 /api/icon 走 serveFile(no-store); ② 门禁对照: 未优化版(HEAD)在升级后的 G-BOOT 上 exit=1, 报「simpleBoot 内容初始不是透明态: 图标会比文字晚出现」+「simpleBoot 未给图标注册 load 监听」; 优化版 exit=0。
 - 改动(2026-09-11): ① simpleBoot 把内容(图标+标题+副标题+问候语)包进 .bwrap 容器并置 opacity:0 + transition; **覆盖层背景保持立即不透明**(否则会先闪一下控制台页面再播动画); 图标 load/error 后整组一起淡入, 并留 600ms 兜底(图标再慢也会显示, 出错也不会整段空白); 淡出 1900→2100ms、移除 2455→2700ms, 让"看清"的时长基本不变。② G-BOOT 升级: 元素桩记录事件监听、按 id/选择器缓存实例、style.cssText 做真正的声明解析、innerHTML 做极简解析(识别 class 与 style), 并新增三条断言 —— 启动动画内容必须初始透明、图标就绪后整组淡入、覆盖层本身不得隐藏。
+- 用户实机确认(2026-09-11): **通过**
 - 状态: CLOSED
 ## M-20260911-11 启动动画图标滞后: 2.4MB 大图 + 每次刷新重下(CLOSED)
 - 来源: 用户"看起来还是滞后, 我注意到图标是有圆角的, 这个是实时渲染的吗? 要不改成死图片试试?"(2026-09-11)
@@ -367,4 +368,5 @@
 - 根因(逐条回答用户的两个疑问): ① **图标不是实时渲染的** —— /api/icon 只是把工程根下的"软件图标.png"原样发出去(server.js:509-511 → serveFile), 用户看到的圆角是 CSS(border-radius:20px)在浏览器端做的; ② 那张图是 **2,477,976 字节 / 1728x1728**, 而动画里只显示 78px; ③ 更关键: serveFile 对所有静态资源都发 Cache-Control: no-store(这是为界面热更新服务的), 于是**每次刷新都要重新下载 2.4MB 并解码一张 1728² 的图**, 动画自然等不及。
 - 证据: ① 文件实测 2,477,976 字节 / 1728x1728(读 PNG 头得到); ② 项目自带的 scripts/make-icon.ps1 早就在用 System.Drawing 做多尺寸降采样, electron/app.ico 里 256x256 那档只有 109,677 字节; ③ 隔离实例实测: /icon-256.png → 200 / 109,677 字节 / 带 ETag / 二次带 If-None-Match → **304 且 0 字节**, 而 /api/icon 仍是 2419.9 KB, /app.js 仍是 no-store(热更新未受影响)。
 - 改动(2026-09-11): ① 从 electron/app.ico 中抽出 256x256 那一档(纯字节操作, 不引入任何依赖)存为 src/web/public/icon-256.png(107KB, **小 22.6 倍**); ② simpleBoot 与 startup-test.html 改用它, 并保留 /api/icon 作为 onerror 兜底(小图缺失时仍能显示), 再失败才隐藏; ③ index.html 的 head 增加 <link rel="preload" as="image" href="/icon-256.png">, 让下载在页面解析时就并行开始, 而不是等 /api/config 返回后才发起; ④ server.js 新增 serveAsset(): 图片类静态资源改用 ETag + no-cache(内容没变回 304), 其它文件保持 no-store 以免影响界面热更新; ⑤ G-BOOT 增加三条守卫断言: 启动动画必须使用 icon-256.png(用回 /api/icon 大图即 FAIL)、index.html 必须含 preload、图标必须注册 load 监听。
+- 用户实机确认(2026-09-11): **通过**
 - 状态: CLOSED
