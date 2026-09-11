@@ -63,7 +63,19 @@ for (const b of blocks) if (b.src) {
   if (fs.existsSync(f)) jsTexts.push(fs.readFileSync(f, 'utf8'));
 }
 const refs = [];
-for (const t of jsTexts) refs.push(...[...t.matchAll(/getElementById\(\s*["']([^"']+)["']\s*\)/g)].map((x) => x[1]));
+// 取用方式两种都要算(M-20260911-42): app.js 里大量用 $('id')(它就是 getElementById 的别名) ——
+// 只统计字面量 getElementById( 会漏掉真正出问题的那些元素。
+for (const t of jsTexts) refs.push(...[...t.matchAll(/(?:getElementById|\$)\(\s*["']([^"']+)["']\s*\)/g)].map((x) => x[1]));
+// 元素声明顺序(M-20260911-42): 前端脚本同步执行, 写在 <script> 之后的元素在加载期根本不存在 ——
+// 静态检查看不出"取不到元素", 只能靠位置约束: 凡是被 JS 取用的 id, 必须在第一个 <script> 之前声明。
+// 基准取 app.js 自己的 <script> 位置(它才是同步执行 DOM 取用的那个脚本; head 里的 lang.js/skin.js 更早但不碰这些元素)
+let anchorAt = html.indexOf('<script src="/app.js"');
+if (anchorAt < 0) anchorAt = html.search(/<script/i);
+const earlyIds = new Set([...html.slice(0, anchorAt < 0 ? html.length : anchorAt).matchAll(/\sid\s*=\s*["']([^"']+)["']/g)].map((x) => x[1]));
+const lateIds = [...new Set(refs)].filter((r) => idSet.has(r) && !earlyIds.has(r));
+if (lateIds.length) { console.log('  FAIL 这些元素声明在 <script> 之后(app.js 加载期取不到, 事件挂不上/初始化被跳过): ' + lateIds.slice(0, 10).join(', ')); fail++; }
+else console.log('  OK   被 JS 取用的元素都在 <script> 之前声明');
+
 const missing = [...new Set(refs)].filter((r) => !idSet.has(r));
 if (missing.length) console.log('  WARN getElementById 目标在 HTML 中不存在(可能是动态创建): ' + missing.slice(0, 10).join(', '));
 else console.log('  OK   getElementById 目标全部存在 (' + new Set(refs).size + ' 个)');

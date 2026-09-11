@@ -804,8 +804,10 @@ function effPluginSec() {
         rootConfig.desktop = rootConfig.desktop || {};
         rootConfig.desktop.showConsole = o.visible !== false;
         persist();
-        setConsoleVisible(rootConfig.desktop.showConsole);
-        return json(res, 200, { ok: true, showConsole: rootConfig.desktop.showConsole });
+        const cwRes = setConsoleVisible(rootConfig.desktop.showConsole);
+        const done = function (info) { return json(res, 200, { ok: true, showConsole: rootConfig.desktop.showConsole, note: (info && (info.note || info.error)) || '' }); };
+        if (cwRes && typeof cwRes.then === 'function') return cwRes.then(done, function (e) { return json(res, 200, { ok: true, showConsole: rootConfig.desktop.showConsole, note: '窗口操作失败: ' + e.message }); });
+        return done(null);
       } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
     });
   });
