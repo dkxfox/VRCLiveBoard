@@ -84,6 +84,28 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     else ok(true, '清单内 ' + gets.length + ' 条 GET 路由全部可达(无落空 404)');
   } catch (e) { note('路由可达性检查跳过: ' + e.message); }
 
+  // ⑦ 截图翻译设置落盘(M-20260911-23): 面板上的识别方式与参数都读自 config, 必须能写回去(否则重启回默认)
+  try {
+    const cfgPath = path.join(ROOT, 'config.json');
+    const readCfg = async function () { return JSON.parse((await req('/api/config')).body.toString('utf8')); };
+    const r7 = await req('/api/ocrtl-vision', { method: 'POST', body: JSON.stringify({ mode: 'vision', loops: 99, delayMs: 1 }) });
+    const j7 = JSON.parse(r7.body.toString('utf8'));
+    ok(r7.status === 200 && j7.ok === true, '保存截图翻译设置接口 200');
+    ok(j7.ocrtl && j7.ocrtl.mode === 'vision', '回传生效值(识别方式 vision)');
+    ok(j7.ocrtl && j7.ocrtl.loops === 10 && j7.ocrtl.delayMs === 1000, '越界参数被夹回合法范围(loops 99->10, delayMs 1->1000)');
+    const c7 = await readCfg();
+    ok(c7.ocrtl && c7.ocrtl.mode === 'vision', '识别方式进入运行中的配置(重启读的就是它)');
+    ok(c7.ocrtl && c7.ocrtl.vision && typeof c7.ocrtl.vision.apiBase === 'string', '保存识别方式没有顺手清掉 vision 段');
+    if (fs.existsSync(cfgPath)) {
+      const disk = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+      ok(disk.ocrtl && disk.ocrtl.mode === 'vision', '识别方式已落盘到 config.json(真持久化)');
+    } else note('未找到 config.json, 跳过落盘断言');
+    await req('/api/ocrtl-vision', { method: 'POST', body: JSON.stringify({ mode: 'bogus' }) });
+    ok((await readCfg()).ocrtl.mode === 'vision', '非法识别方式被忽略(仍是 vision)');
+    await req('/api/ocrtl-vision', { method: 'POST', body: JSON.stringify({ mode: 'auto', loops: 2, delayMs: 5000, displayMs: 8000 }) });
+    ok((await readCfg()).ocrtl.mode === 'auto', '用例结束后恢复默认 auto');
+  } catch (e) { ok(false, '截图翻译设置落盘用例异常: ' + e.message); }
+
   console.log('[backend-flow] pass=' + pass + ' fail=' + fail + (skip ? (' skip=' + skip) : ''));
   process.exitCode = fail ? 1 : 0;
 })().catch(function (e) { console.log('  FAIL 流程测试异常: ' + ((e && e.stack) || e)); process.exitCode = 1; });

@@ -444,13 +444,22 @@ function effPluginSec() {
     return readBody(req, function (body) {
       try {
         const o = JSON.parse(body || '{}');
-        const v = rootConfig.ocrtl.vision = rootConfig.ocrtl.vision || {};
+        const c = rootConfig.ocrtl = rootConfig.ocrtl || {};
+        const v = c.vision = c.vision || {};
         if (o.apiBase !== undefined) v.apiBase = String(o.apiBase || '');
         if (o.apiKey !== undefined) v.apiKey = String(o.apiKey || '');
         if (o.model !== undefined) v.model = String(o.model || '');
         if (o.targetLang !== undefined) v.targetLang = String(o.targetLang || 'zh');
+        // 识别方式与三个参数同样落盘(M-20260911-23): 面板上这些值都读自 config, 只读不写
+        // 就是"改了等于没改", 重启回默认(用户报"识别方式不会随着重启保存")。
+        const clampN = function (n, lo, hi, dft) { const x = Number(n); return isFinite(x) ? Math.min(hi, Math.max(lo, x)) : dft; };
+        if (o.mode !== undefined && ['auto', 'vision', 'ocr'].indexOf(String(o.mode)) >= 0) c.mode = String(o.mode);
+        if (o.delayMs !== undefined) c.delayMs = clampN(o.delayMs, 1000, 60000, c.delayMs || 5000);
+        if (o.displayMs !== undefined) c.displayMs = clampN(o.displayMs, 3000, 120000, c.displayMs || 8000);
+        if (o.loops !== undefined) c.loops = Math.round(clampN(o.loops, 1, 10, c.loops || 2));
         persist();
-        return json(res, 200, { ok: true });
+        // 回传生效值, 让界面显示的就是真正存下来的(越界会被夹回来)
+        return json(res, 200, { ok: true, ocrtl: { mode: c.mode || 'auto', delayMs: c.delayMs || 5000, displayMs: c.displayMs || 8000, loops: c.loops || 2 } });
       } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
     });
   });

@@ -328,6 +328,29 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
     }
     if (alerts) problems.push('截图翻译仍然弹对话框(alert ' + alerts + ' 次), 旧版是按钮旁的内联提示');
   } catch (e) { problems.push('截图翻译提示断言异常: ' + e.message); }
+  // 识别方式与三个参数必须"改了立刻落盘"(M-20260911-23): 面板上的值读自 config, 只读不写 = 改了等于没改
+  try {
+    const { uiJsOrder: order5 } = require('./_ui-files.js');
+    const s5 = makeSandbox();
+    const calls = [];
+    const def5 = s5.fetch;
+    s5.fetch = async function (u, o) { calls.push({ url: String(u), opt: o || {} }); return def5(u, o); };
+    for (const fp of order5(ROOT)) vm.runInNewContext(fs.readFileSync(fp, 'utf8'), s5, { filename: path.basename(fp) });
+    const modeSel = s5.document.getElementById('transMode');
+    if (!modeSel) problems.push('index.html 缺少 #transMode(识别方式)');
+    else if (typeof modeSel.onchange !== 'function') problems.push('#transMode 未接线(改了识别方式不会落盘, 重启回默认)');
+    else {
+      modeSel.value = 'vision';
+      modeSel.onchange();
+      await new Promise(function (r) { setTimeout(r, 0); });
+      const hit = calls.filter(function (c) { return c.url.indexOf('/api/ocrtl-vision') >= 0 && String(c.opt.body || '').indexOf('vision') >= 0; })[0];
+      if (!hit) problems.push('改识别方式没有把 mode 发到 /api/ocrtl-vision(重启不会保存)');
+    }
+    for (const id5 of ['ocrDelay', 'ocrDisplay', 'ocrLoops']) {
+      const el5 = s5.document.getElementById(id5);
+      if (el5 && typeof el5.onchange !== 'function') problems.push('#' + id5 + ' 未接线(改了不会落盘)');
+    }
+  } catch (e) { problems.push('识别方式落盘断言异常: ' + e.message); }
   console.log('[G-BOOT frontend-boot] 前端启动: 顶层加载 ' + (problems.length ? '有异常' : '正常') + ' / 控件桩 ' + ids.size + ' 个 id');
   for (const p of problems) console.log('  -> FAIL ' + p);
   process.exitCode = problems.length ? 1 : 0; // 用 exitCode: process.exit 在管道下会丢掉未刷新的输出

@@ -475,3 +475,14 @@
 - 改动(2026-09-11): ① index.html: 按钮后加 <span id="shotMsg">(按钮旁提示), 卡片底部加 <pre id="shotOut">(结果块); ② app.js: 新增 shotHint(text,warn) 助手(写 #shotMsg 并按成败着色 var(--warn)/var(--ok)); #btnShot 重写为 —— 置灰按钮 → 立即显示"进行中,请对准游戏里的文字..." → 带 {delayMs,displayMs,loops} 触发 → 成功清提示并把"OCR 原文 / 译文(模型)"写进结果块, 失败在按钮旁显示 请求失败 + 原因 → 恢复按钮可点; ③ 删掉移植遗留的死处理器 #transShot(新版 index.html 无此 id, 且同样用 alert); ④ #ocrDisplay 读的配置键 eachMs → displayMs。
 - 说明: 提示与结果复用了旧版已有的三语键(ocrRunning / ocrSrcLabel / ocrTrLabel / ocrTrLabel2 / loadFail) —— 这些键在新版 lang.js 里一直都在却没人引用, 说明"内联提示"本就是原设计, 是移植时丢掉的。
 - 状态: CLOSED
+
+## M-20260911-23 识别方式(以及三个参数)改了不落盘: 重启回默认(用户实机反馈)(CLOSED)
+- 来源: 用户实机反馈"识别方式不会随着重启保存"
+- 现象: 在「翻译 → 截图翻译」把识别方式从 auto 改成 vision/ocr, 重启或刷新后回到 auto; 倒计时/显示/循环三个输入框改了同样不保留。
+- 复现: 翻译标签 → 识别方式选 vision → 重启软件(或刷新页面再看这项) → 又是 auto。
+- 影响面: 这一项在**新版里完全没有作用** —— 既不落盘, 也没随触发发出去(移植后的触发体只带 delayMs/displayMs/loops, 这正是上一张卡 M-20260911-22 里改的那一处)。也就是说选了 vision 仍按 auto 跑, 用户以为换了识别方式, 实际什么都没变。
+- 根因: ① 新版 UI 只在 loadTrans() 里把 config 读进下拉框, 没有任何保存路径(旧版虽然也不落盘, 但至少把 mode 当 overrides 随触发发出去, 当次生效); ② 服务端唯一能写 ocrtl 的接口 POST /api/ocrtl-vision 只认 vision 段四个字段(apiBase/apiKey/model/targetLang), mode 与三个参数没有入口 —— 合起来就是"改了等于没改"的完整闭环; ③ 同一面板另有一处同类: #ocrDisplay 读的键写错(eachMs), 配置里其实是 displayMs, 于是永远显示默认 8 秒。
+- 证据(2026-09-11): ① 契约测试(隔离实例 backend-flow ⑦): 保存接口 200 → 回传生效值 → 运行中配置 → **落盘到 config.json** → 非法值被忽略 → 恢复默认, 共 7 条; ② A/B 两个方向都精确可分 —— 把服务端的 mode 处理改成不生效: 4 条 FAIL(回传/内存配置/落盘/非法值)而"越界夹取"那两条照旧通过; 撤掉 #transMode 的 onchange: G-BOOT 报 "#transMode 未接线(改了识别方式不会落盘, 重启回默认)"; ③ 修复后: 契约测试 17 PASS / 0 FAIL, G-BOOT 全绿, 全套门禁 14 PASS / 1 FAIL(唯一 FAIL: GSYNC 报本地提交未推送)。
+- 改动(2026-09-11): ① server.js: POST /api/ocrtl-vision 扩展为 ocrtl 设置写入接口 —— 接受 mode(白名单 auto/vision/ocr)、delayMs(1000~60000)、displayMs(3000~120000)、loops(1~10), 一律夹取并回传生效值, 另加 rootConfig.ocrtl 空值守卫; ② app.js: 新增 saveOcrtl(), 识别方式与三个输入框接上 onchange(改完立刻落盘, 回传的生效值写回界面, 失败走 apiFail); ③ app.js: 触发体补上 mode(与旧版一致 —— 即使保存失败, 当次也按所选识别方式跑); ④ 修 #ocrDisplay 读的键 eachMs → displayMs; ⑤ 门禁: backend-flow 新增 7 条契约断言, G-BOOT 新增"改了必须发出保存请求 + 三个输入框必须接线"断言。
+- 说明: 三个参数沿用同一个写入接口而不是新开路由 —— 路由清单(GROUTE)与 docs/ROUTES-BASELINE.json 不用动。另外注意"识别方式"(auto/vision/ocr)与"截图区域"(window/region/screen, 走 /api/capture/set)是两个不同的 mode, 面板上前者不保存、后者一直正常 —— 移植时最容易被合并掉的正是这种"同名不同物"。
+- 状态: CLOSED
