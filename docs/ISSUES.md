@@ -601,3 +601,10 @@
 - 改动(2026-09-11): ① make-dist: 修旧包清理(公开版/申请版 的 zip 与 SHA256SUMS 一并清), 开跑先清历史 stage 残留, 两个 stage 各写 BUILD-INFO.json(version/commit/builtAt/kind), **打包末尾自动跑 pack-audit** 并把失败当构建失败; ② 新增 scripts/checks/pack-script-check.js(make-dist 的 BOM + PS5.1 解析自检), release-audit 新增 0a 步调用它; ③ release-audit 第 7 步: 增加"包比源码旧"新鲜度断言, 并把 exit 1 改成 `$script:exit = 1; return`(不再跳过报告); ④ surface-scan: 端口扫描排除 CSS z-index 假阳性; ⑤ 安全基线复核更新: child_process/execFile/spawn( 各加 src/capturehost.js(常驻助手设计如此), execFile 去掉已改走助手的 src/ocrtranslate.js。
 - 教训(写给下一次): **RunStep 是用 $LASTEXITCODE 判定成败的** —— 我第一版 0a 只有 PowerShell 语句、没有原生命令, 于是 $LASTEXITCODE 为 null, `null -ne 0` 成立, 步骤被误判 FAIL。结论: 这类检查要落成一个可执行脚本(node ✓)让退出码说话, 而不是塞一段纯 PS 逻辑。
 - 状态: CLOSED
+## M-20260911-38 OCR 链路低危收尾(7 项)(CLOSED)
+- 来源: OCR 链路审计挂账(用户"继续")
+- 现象: ① maxdim 与 scale 互斥 —— 给 4K 全屏设上限就必须放弃 2 倍放大(所以一直没设, 一次全屏截图≈133MB 位图 + 巨型 PNG); ② GDI+ 对象只在正常路径 Dispose, 常驻进程长期存活时反复失败会短时累积句柄; ③ 提示音每响一声 spawn 一个 powershell(冷启动约 0.5 秒, 5 秒倒计时=5 个进程) —— 与"常驻助手"的初衷相悖; ④ 视觉接口 400/422 换 payload 重试时把响应体丢了, 两个都失败只报"视觉模型返回为空"; ⑤ tesseract 的 recognize 无超时, worker 挂住时 running 永远为 true(界面永远提示"已有一次截图翻译正在进行"); ⑥ ocrregion 插件与主流程共用固定的 .ocr-tmp.png, 同时跑会互相覆盖(tesseract 是异步读文件的); ⑦ (跳过) 协议加序号: 发包端 JSON 会转义换行 + 客户端已取"最后一个非空字符串", 残余风险极低, 记档不改。
+- 证据(2026-09-11): ① 两个 JS 文件 node --check 通过, capture_core.ps1 被 PS5.1 解析 0 错; ② 常驻助手契约测试 **20 PASS / 0 FAIL**(含截图回复校验 6 条, 说明改了核心后协议未变); ③ G2 编码: 新加的中文注释让 capture_core.ps1 违反"ASCII 或带 BOM"约定, 已改回英文注释(保持该文件 ASCII 口径); ④ 全套门禁见提交记录。
+- 改动(2026-09-11): ① capture_core.ps1: 先压后放大(maxdim 与 scale 同时生效)并为最终尺寸加 4096 硬上限; Copy-Screen / Resize-Bmp 补 try/finally(失败也不漏 GDI+ 句柄); 新增 beep 模式(提示音走常驻进程); ② ocrtranslate.js: 全屏模式传 maxdim=1920(先压再 2 倍放大, 上限内); 视觉 400/422 保留响应体并在最终错误里回显; recognize 加 90 秒超时 + 超时后 terminate 并清 workerPromise(下次自动重建); beep 优先走常驻助手、失败退回一次性 spawn; ③ ocrregion.js: 改用独立临时文件并在识别后删除。
+- 说明: 提示音走常驻进程后, 5 秒倒计时不再产生 5 个 powershell 进程; 一次性路径仍保留(助手不可用时行为不退化)。
+- 状态: CLOSED

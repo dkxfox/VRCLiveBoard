@@ -38,18 +38,23 @@ function Crop-Center($bmp, [double]$cfw, [double]$cfh) {
 
 function Copy-Screen([int]$sx, [int]$sy, [int]$sw, [int]$sh) {
   $bmp = New-Bmp $sw $sh
-  $g = [System.Drawing.Graphics]::FromImage($bmp)
-  $g.CopyFromScreen($sx, $sy, 0, 0, (New-Object System.Drawing.Size $sw, $sh))
-  $g.Dispose()
+  # try/finally (M-20260911-38): the resident host lives for the whole session, so a GDI+ failure must not leak handles
+  try {
+    $g = [System.Drawing.Graphics]::FromImage($bmp)
+    try { $g.CopyFromScreen($sx, $sy, 0, 0, (New-Object System.Drawing.Size $sw, $sh)) } finally { $g.Dispose() }
+  } catch { $bmp.Dispose(); throw }
   return $bmp
 }
 
 function Resize-Bmp($bmp, [int]$nw, [int]$nh) {
   $big = New-Bmp $nw $nh
-  $g = [System.Drawing.Graphics]::FromImage($big)
-  $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-  $g.DrawImage($bmp, 0, 0, $nw, $nh)
-  $g.Dispose()
+  try {
+    $g = [System.Drawing.Graphics]::FromImage($big)
+    try {
+      $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+      $g.DrawImage($bmp, 0, 0, $nw, $nh)
+    } finally { $g.Dispose() }
+  } catch { $big.Dispose(); throw }
   $bmp.Dispose()
   return $big
 }
@@ -88,6 +93,11 @@ function Invoke-Capture($opt) {
 
   $bmp = $null
   try {
+    if ($mode -eq 'beep') {
+      # Beep from the resident host too (M-20260911-38): each beep used to spawn a fresh powershell (~0.5s cold start).
+      try { [console]::beep([int]$x0, [int]$y0) } catch {}
+      return 'OK'
+    }
     if ($mode -eq 'fg') {
       $hwnd = Find-WindowByTitle $title
       if ($hwnd -eq [IntPtr]::Zero) { return 'NO-WINDOW' }
@@ -141,6 +151,8 @@ function Invoke-Capture($opt) {
       $bmp = Copy-Screen $b.X $b.Y $b.Width $b.Height
     }
 
+    # Cap-then-upscale (M-20260911-38): maxdim and scale used to be mutually exclusive, so bounding a 4K
+    # full-screen capture meant giving up the 2x OCR upscale. Now both apply, plus a hard cap on the result.
     if ($maxdim -gt 0) {
       $mx = [math]::Max($bmp.Width, $bmp.Height)
       if ($mx -gt $maxdim) {
@@ -150,8 +162,12 @@ function Invoke-Capture($opt) {
         $bmp = Resize-Bmp $bmp $nw $nh
       }
     }
-    elseif ($scale -ge 2) {
-      $bmp = Resize-Bmp $bmp ($bmp.Width * $scale) ($bmp.Height * $scale)
+    if ($scale -ge 2) {
+      $nw = $bmp.Width * $scale; $nh = $bmp.Height * $scale
+      $hardCap = 4096
+      $mx2 = [math]::Max($nw, $nh)
+      if ($mx2 -gt $hardCap) { $k2 = $hardCap / [double]$mx2; $nw = [int][math]::Round($nw * $k2); $nh = [int][math]::Round($nh * $k2) }
+      if ($nw -ge 1 -and $nh -ge 1) { $bmp = Resize-Bmp $bmp $nw $nh }
     }
 
     $bmp.Save($out, [System.Drawing.Imaging.ImageFormat]::Png)

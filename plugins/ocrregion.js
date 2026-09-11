@@ -45,11 +45,13 @@ function createSource(config, logger) {
   }
   s.getText = async function (ctx) {
     try {
-      const pngPath = path.join(__dirname, '..', '..', '.ocr-tmp.png');
+      // 独立临时文件(M-20260911-38): 以前和主流程共用 .ocr-tmp.png, 同时跑会互相覆盖(tesseract 是异步读文件的)
+      const pngPath = path.join(require('os').tmpdir(), 'vrcb-ocrregion-' + process.pid + '-' + Date.now() + '.png');
       await capture(pngPath);
       if (s.lastError === 'NO-WINDOW') return null;
       const w = await getWorker();
       const r = await w.recognize(pngPath);
+      try { fs.unlinkSync(pngPath); } catch (e) {}
       const text = String(r.data.text || '').trim();
       if (!text) return null;
       const arr = text.split(/\r?\n/).map(function (t) { return t.trim(); }).filter(Boolean);

@@ -69,12 +69,12 @@ async function visionTranslate(cfg, pngPath) {
     { model: v.model, messages: messages, max_tokens: 4096, stream: false }
   ];
   if (sec.jsonMode === false) payloads.splice(0, 1); // 关闭 JSON 结构化 → 只走自由文本
-  let out = '';
+  let out = '', lastErr = '';
   for (const body of payloads) {
     const r = await fetch(base, { method: 'POST', headers: headers, body: JSON.stringify(body), signal: timeout });
     const t = await r.text();
     if (!r.ok) {
-      if (r.status === 400 || r.status === 422) continue; // 换下一个 payload
+      if (r.status === 400 || r.status === 422) { lastErr = 'HTTP ' + r.status + ' ' + t.slice(0, 160); continue; } // 换下一个 payload(保留响应体, M-20260911-38)
       throw new Error('视觉模型接口 HTTP ' + r.status + ' ' + t.slice(0, 120));
     }
     try {
@@ -83,7 +83,7 @@ async function visionTranslate(cfg, pngPath) {
     } catch (e) { throw new Error('视觉模型返回格式异常'); }
     if (out) break;
   }
-  if (!out) throw new Error('视觉模型返回为空');
+  if (!out) throw new Error('视觉模型返回为空' + (lastErr ? ' (最后一次: ' + lastErr + ')' : ''));
   let translated = '';
   const m = String(out).match(/\{[\s\S]*\}/);
   if (sec.jsonMode === false) translated = String(out).trim();
@@ -151,6 +151,7 @@ function captureWindow(cfg, logger) {
   lastCapturePath = outPath;
   const winTitle = String(cap.windowTitle || cfg.windowTitle || 'VRChat');
   const opt = { mode: mode, out: outPath, scale: 2 };
+  if (mode === 'screen') { opt.maxdim = 1920; }   // 全屏也设上限(M-20260911-38): 4K×2 曾是 133MB 位图, 现在先压到 1920 再 2 倍放大
   if (mode === 'window') {
     opt.title = winTitle;
     opt.foreground = true;
@@ -216,13 +217,29 @@ function getWorker() {
 }
 async function ocrImage(pngPath) {
   const w = await getWorker();
-  const r = await w.recognize(pngPath);
+  // 识别超时 + 重建(M-20260911-38): worker 挂住时 running 会永远是 true(界面永远提示"已有一次截图翻译正在进行")
+  let to = null;
+  const r = await Promise.race([
+    w.recognize(pngPath),
+    new Promise(function (_, rej) { to = setTimeout(function () { rej(new Error('本地 OCR 超时(90 秒), 已重建识别引擎')); }, 90000); if (to && to.unref) to.unref(); })
+  ]).catch(async function (e) {
+    workerPromise = null;
+    try { await w.terminate(); } catch (e2) {}
+    throw e;
+  });
+  if (to) clearTimeout(to);
   let text = String(r.data.text || '').replace(/[ \t]+/g, ' ').trim();
   text = text.split(/\n/).map(function (l) { return l.trim(); }).filter(Boolean).join('\n');
   return text;
 }
-function beep(freq, ms) {
+function beepDirect(freq, ms) {
   try { const p = spawn('powershell.exe', ['-NoProfile', '-Command', '[console]::beep(' + freq + ',' + ms + ')'], { windowsHide: true, stdio: 'ignore' }); p.on('error', function () {}); } catch (e) {}
+}
+function beep(freq, ms) {
+  // 优先让常驻助手发声(M-20260911-38); 助手不可用再退回一次性 spawn(行为不退化)
+  try {
+    getCaptureHost(null).capture({ mode: 'beep', freq: freq, ms: ms }, 5000).then(function () {}, function () { beepDirect(freq, ms); });
+  } catch (e) { beepDirect(freq, ms); }
 }
 // 分片上限必须给前缀留位(M-20260911-26): composer 会把整条截到 maxChars, 而前缀 '[12/12 轮10/10] ' 有 15 个码点,
 // 之前固定 136 + 前缀 15 = 151 > 144 -> 每片结尾被静默截掉几个字。
