@@ -27,6 +27,8 @@ module.exports = function (ctx) {
       ['新德里', 28.61, 77.21], ['伊斯坦布尔', 41.01, 28.98]
     ]
   };
+  // 一次性定时器句柄(M-20260911-32): 旧写法直接 setTimeout 且不登记, 停用后仍会发一条, 反复导入还会叠加
+  let pendingNext = null;
   const WMO = {
     0: ['晴', '☀️'], 1: ['基本晴', '🌤️'], 2: ['多云', '⛅'], 3: ['阴', '☁️'],
     45: ['雾', '🌫️'], 48: ['雾凇', '🌫️'],
@@ -145,7 +147,9 @@ module.exports = function (ctx) {
     const n = normalizeRows(input);
     const result = [];
     const failed = [];
-    for (const row of n.out) {
+    const CAP = 200;   // 单次导入上限(M-20260911-32): 旧写法逐行串行 geocode(每行 15s 超时), 大表会把控制台请求挂很久
+    const rowsIn = n.out.slice(0, CAP);
+    for (const row of rowsIn) {
       const old = (ctx.config.cities || []).find(function (c) { return String(c.name || '').toLowerCase() === row.name.toLowerCase(); });
       if (old && old.lat != null) { result.push({ name: old.name, lat: old.lat, lon: old.lon, enabled: row.enabled }); continue; }
       try {
@@ -154,8 +158,9 @@ module.exports = function (ctx) {
       } catch (e) { failed.push(row.name); }
     }
     ctx.config.cities = result;
-    if (result.some(function (c) { return c.enabled !== false; })) setTimeout(function () { showNext(false); }, 1200);
-    return { ok: true, count: result.length, deduped: n.deduped, failed: failed };
+    if (pendingNext) { try { clearTimeout(pendingNext); } catch (e) {} pendingNext = null; }
+    if (result.some(function (c) { return c.enabled !== false; })) pendingNext = setTimeout(function () { pendingNext = null; showNext(false); }, 1200);
+    return { ok: true, count: result.length, deduped: n.deduped, failed: failed, truncated: n.out.length - rowsIn.length };
   }
   function getRows() {
     return cities().map(function (c) { return { name: c.name, enabled: c.enabled !== false }; });

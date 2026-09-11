@@ -14,7 +14,8 @@
     "scripts\\checks",
     "秘密开发项目素材",
     "旧版控制台备份",
-    "docs\\FEATURES"
+    "docs\\FEATURES",
+    "dev-fixtures"
   ],
   "files": [
     "config.json",

@@ -134,7 +134,8 @@ module.exports = function (ctx) {
   }
   function status() {
     const c = cdp ? { ok: cdp.fresh, posMs: cdp.pos.posMs, durMs: cdp.pos.durMs, title: cdp.pos.title || '', port: cdp.port } : { ok: false, port: ctx.config.cdpPort || 9234 };
-    return { songKey: songKey, lines: timeline.length, playing: mediaState() ? !!((mediaState().data || {}).title) : false, cdp: c };
+    // 面板要回显设置(M-20260911-32): 旧写法不返回 cfg, 前端读 j.cfg 永远拿不到, 设置面板回显失效
+    return { songKey: songKey, lines: timeline.length, playing: mediaState() ? !!((mediaState().data || {}).title) : false, cdp: c, cfg: ctx.config };
   }
   function saveConfig(input) {
     if (input && typeof input === 'object' && input.args) input = input.args;
@@ -169,10 +170,11 @@ module.exports = function (ctx) {
       if (!lnk || fs.existsSync(lnk)) return;
       const { spawn } = require('child_process');
       const ps = "$w=New-Object -ComObject WScript.Shell; $l=$w.CreateShortcut($env:VRCB_LNK); $l.TargetPath=$env:VRCB_BAT; $l.WorkingDirectory=$env:VRCB_DIR; $l.Description='VRCLiveBoard netease lyrics CDP launcher'; $l.Save()";
-      spawn('powershell', ['-NoProfile', '-Command', ps], {
+      const sp = spawn('powershell', ['-NoProfile', '-Command', ps], {
         env: Object.assign({}, process.env, { VRCB_LNK: lnk, VRCB_BAT: bat, VRCB_DIR: __dirname }),
         stdio: 'ignore', windowsHide: true
       });
+      if (sp && sp.on) sp.on('error', function (e) { try { ctx.logger.warn('[网易云歌词] 创建快捷方式失败: ' + e.message); } catch (e2) {} });
       ctx.logger.info('[网易云歌词] 首次使用: 已在桌面创建"网易云音乐-歌词同步"快捷方式, 用它启动网易云即可精确同步');
     } catch (e) {}
   }
@@ -203,9 +205,13 @@ module.exports = function (ctx) {
     if (!exe) return { ok: false, error: "未找到网易云安装(cloudmusic.exe)。若装在自定义目录: 在插件面板填写安装路径, 或保持网易云正在运行再点此按钮" };
     const port = ctx.config.cdpPort || 9234;
     if (await cdpPortUp()) return { ok: true, note: "网易云已带调试端口运行, 无需操作 ✓" };
-    try { require("child_process").execFileSync("taskkill", ["/IM", "cloudmusic.exe", "/F"], { windowsHide: true }); await sleepMs(1500); } catch (e) {}
+    try { require("child_process").execFileSync("taskkill", ["/IM", "cloudmusic.exe", "/F"], { windowsHide: true }); await sleepMs(1500); } catch (e) { try { ctx.logger.warn('[网易云歌词] taskkill 未成功(可能本来就没在运行): ' + e.message); } catch (e2) {} }
     const { spawn } = require("child_process");
-    try { spawn(exe, ["--remote-debugging-port=" + port], { detached: true, stdio: "ignore", windowsHide: true }).unref(); } catch (e) { return { ok: false, error: "启动失败: " + e.message }; }
+    try {
+      const cp = spawn(exe, ["--remote-debugging-port=" + port], { detached: true, stdio: "ignore", windowsHide: true });
+      if (cp && cp.on) cp.on('error', function () {});   // 无 error 监听会变成未捕获异常(M-20260911-32)
+      cp.unref();
+    } catch (e) { return { ok: false, error: "启动失败: " + e.message }; }
     for (let i = 0; i < 20; i++) {
       await sleepMs(1000);
       if (await cdpPortUp()) {

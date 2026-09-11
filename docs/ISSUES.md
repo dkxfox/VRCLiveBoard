@@ -558,3 +558,10 @@
 - 改动(2026-09-11): ① friend-welcome: 子串匹配改精确匹配(忽略大小写, 名称去空白), lines 加 Array 校验, showSequence 用 Promise.resolve 包住并补 .catch + try/catch —— **任何失败都解锁 busy**; ② netease cdp: 新增 _disposed 标记, start() 在 await 之后先检查再建定时器且先清旧的; _send 加 8 秒超时与 200 条上限; dispose() 标记停用 + 结束所有未应答请求并清空。
 - 说明: 插件行为没有门禁覆盖(现有插件门禁只查契约与单一源), 这批修复靠静态复核 + node --check; 要真正回归需要插件测试夹具(已列挂账)。
 - 状态: CLOSED
+## M-20260911-32 插件代码级修复(批 2): weather 导入上限 / scheduled 测试按钮 / netease 回显与日志 / 自测夹具移出(CLOSED)
+- 来源: 官方插件审计的挂账(用户"继续")
+- 现象: ① weather-board 导入逐行串行 geocode(每行 15 秒超时)且无行数上限, 大表会把控制台请求挂很久; 一次性 setTimeout 未登记, 停用后仍会发一条, 反复导入还会叠加; ② scheduled-board 的"立即测试播报"永远报"未知测试类型"(前端传 regular, 插件只认 hour/special); ③ netease 的 status() 不返回 cfg, 而前端读 j.cfg → 设置面板回显永久失效; ④ netease 有两处 spawn 无 'error' 监听(靠主进程全局兜底才没崩), taskkill 失败被空 catch 吞掉; ⑤ 开发自测夹具 conflict-test(全权限)留在 plugins/ 里, 会被复制进包并让用户看到高危授权弹窗。
+- 证据(2026-09-11): ① 三个插件 node --check 通过; ② GPLUG 0 FAIL / 0 WARN(plugins/ 现为 4 个, conflict-test 已移到 dev-fixtures/ 并从打包清单排除); ③ 全套门禁见提交记录。
+- 改动(2026-09-11): ① weather-board: 单次导入上限 200 行(超出在返回值里给 truncated), 一次性定时器用句柄登记 + 重新导入先清旧的; ② scheduled-board: testFire 支持 regular(播第一条常规公告, 没有则明确报错), saveRows 补入参保护; ③ netease: status() 返回 cfg, 两处 spawn 补 'error' 监听, taskkill 失败改为记日志(不再静默); ④ friend-welcome: exclusive 声明 chatbox-timeline(此前占用独占资源却没声明, 静态冲突检测看不见); ⑤ conflict-test 移出 plugins/ → dev-fixtures/(git mv, 打包清单已加 dev-fixtures)。
+- 说明: weather-board 的授权哈希随 index.js 变化(0991d931...), 已授权的用户会被要求重新授权一次 —— 这是设计如此(index.js 是哈希对象)。
+- 状态: CLOSED

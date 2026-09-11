@@ -16,6 +16,8 @@
   },
   "dependencies": {},
   "conflicts": [],
-  "exclusive": [],
+  "exclusive": [
+    "chatbox-timeline"
+  ],
   "loadOrder": 100
 }

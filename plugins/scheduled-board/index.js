@@ -91,6 +91,7 @@ module.exports = function (ctx) {
   }
   function saveRows(input) {
     if (input && typeof input === 'object' && Array.isArray(input.rows)) input = input.rows;
+    if (!Array.isArray(input)) input = [];   // 入参保护(M-20260911-32): POST {rows:"abc"} 时不能把字符串逐字符当行
     const n = normalizeSpecials(input);
     ctx.config.specials = n.out;
     return { ok: true, count: n.out.length, deduped: n.deduped };
@@ -123,6 +124,13 @@ module.exports = function (ctx) {
     if (input && typeof input === 'object' && input.type) {
       const cfg = ctx.config;
       if (input.type === 'hour') return { ok: fireLines(cfg.hourlyText || [], cfg.interruptHourly, '整点播报测试') };
+      // 前端"立即测试播报"传的是 regular(M-20260911-32): 旧写法只认 hour/special, 这个按钮永远报"未知测试类型"
+      if (input.type === 'regular') {
+        const items = Array.isArray(cfg.items) ? cfg.items : [];
+        if (!items.length) return { ok: false, error: '没有常规公告可测' };
+        const it = items[0];
+        return { ok: fireLines(it.text || it.lines || [], false, '常规公告测试') };
+      }
       if (input.type === 'special' && input.index !== undefined) {
         const s = (ctx.config.specials || [])[Number(input.index)];
         if (s) return { ok: fireLines(s.text, !!s.interrupt, '特殊公告测试') };
