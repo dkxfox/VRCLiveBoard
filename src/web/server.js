@@ -31,6 +31,9 @@ function effPluginSec() {
   let gateFails = []; // 密码门失败时间戳(防爆破节流)
   const pluginManager = opts.pluginManager || null;
   const oscSender = opts.osc || null;
+ // 统一退出/重启钩子: 由 src/main.js 负责停服务、杀 python 助手、释放端口后再退出(M-20260911-07)
+ const onQuit = opts.onQuit || null;
+ const onRestart = opts.onRestart || null;
   let actualWebPort = webCfg.port;
 
   // ===== 端口体检 =====
@@ -173,7 +176,9 @@ function effPluginSec() {
       const cap = (rootConfig.ocrtl && rootConfig.ocrtl.capture) || {};
       const sec = (rootConfig.ocrtl && rootConfig.ocrtl.security) || {};
       const swf = (rootConfig.chatbox && rootConfig.chatbox.swearFilter) || {};
-      return json(res, 200, { pages: rootConfig.sources.pages.pages, rotationMs: rootConfig.sources.pages.rotationMs, sources: srcs, autostart: autostart, desktop: { showConsole: !((rootConfig.desktop || {}).showConsole === false) }, lang: (rootConfig.web && rootConfig.web.lang) || 'zh-CN', ocrtl: { delayMs: (rootConfig.ocrtl || {}).delayMs || 5000, displayMs: (rootConfig.ocrtl || {}).displayMs || 8000, loops: (rootConfig.ocrtl || {}).loops || 2, mode: (rootConfig.ocrtl || {}).mode || 'auto', vision: { apiBase: v.apiBase || '', model: v.model || 'deepseek-v4-flash-vision-exp', hasKey: !!v.apiKey, targetLang: v.targetLang || 'zh' }, capture: { mode: cap.mode || 'window', windowTitle: cap.windowTitle || 'VRChat', region: cap.region || { x: 0, y: 0, w: 0, h: 0 } }, security: { promptDefense: sec.promptDefense !== false, jsonMode: sec.jsonMode !== false, outputSanitize: sec.outputSanitize !== false, extraPrompt: sec.extraPrompt || '', blockWords: sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS } }, swearFilter: { enabled: swf.enabled !== false, words: swf.words && swf.words.length ? swf.words : swearfilter.DEFAULTS }, pluginsSecurity: effPluginSec(), branding: (rootConfig.branding || 'default'), specialEvents: (rootConfig.specialEvents || []) });
+      // 空安全: 配置段缺失时宁可给空值, 也不能让这个高频接口抛未捕获异常(整个服务会因此不回包)
+      const pgCfg = (rootConfig.sources && rootConfig.sources.pages) || {};
+      return json(res, 200, { pages: pgCfg.pages || [], rotationMs: pgCfg.rotationMs, sources: srcs, autostart: autostart, desktop: { showConsole: !((rootConfig.desktop || {}).showConsole === false) }, lang: (rootConfig.web && rootConfig.web.lang) || 'zh-CN', ocrtl: { delayMs: (rootConfig.ocrtl || {}).delayMs || 5000, displayMs: (rootConfig.ocrtl || {}).displayMs || 8000, loops: (rootConfig.ocrtl || {}).loops || 2, mode: (rootConfig.ocrtl || {}).mode || 'auto', vision: { apiBase: v.apiBase || '', model: v.model || 'deepseek-v4-flash-vision-exp', hasKey: !!v.apiKey, targetLang: v.targetLang || 'zh' }, capture: { mode: cap.mode || 'window', windowTitle: cap.windowTitle || 'VRChat', region: cap.region || { x: 0, y: 0, w: 0, h: 0 } }, security: { promptDefense: sec.promptDefense !== false, jsonMode: sec.jsonMode !== false, outputSanitize: sec.outputSanitize !== false, extraPrompt: sec.extraPrompt || '', blockWords: sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS } }, swearFilter: { enabled: swf.enabled !== false, words: swf.words && swf.words.length ? swf.words : swearfilter.DEFAULTS }, pluginsSecurity: effPluginSec(), branding: (rootConfig.branding || 'default'), specialEvents: (rootConfig.specialEvents || []) });
     }
     if (req.method === 'POST' && (url.pathname === '/v1/chatbox' || url.pathname === '/api/chatbox')) {
       return readBody(req, function (body) {
@@ -190,17 +195,19 @@ function effPluginSec() {
       return readBody(req, function (body) {
         try {
           const o = JSON.parse(body || '{}');
+          const pg = (rootConfig.sources && rootConfig.sources.pages && typeof rootConfig.sources.pages === 'object') ? rootConfig.sources.pages : null;
           if (Array.isArray(o.pages)) {
-            rootConfig.sources.pages.pages = o.pages.map(function (p) { return { text: String(p && p.text !== undefined ? p.text : p) }; });
+            if (!pg) return json(res, 400, { ok: false, error: '配置缺少 sources.pages 段, 请检查 config.json' });
+            pg.pages = o.pages.map(function (p) { return { text: String(p && p.text !== undefined ? p.text : p) }; });
           }
           if (o.rotationMs) {
             const rm = Number(o.rotationMs);
-            if (rm >= 3000 && rm <= 300000) rootConfig.sources.pages.rotationMs = rm;
+            if (rm >= 3000 && rm <= 300000) { if (!pg) return json(res, 400, { ok: false, error: '配置缺少 sources.pages 段' }); pg.rotationMs = rm; }
           }
           if (o.branding) rootConfig.branding = String(o.branding);
           if (o.specialEvents !== undefined) rootConfig.specialEvents = Array.isArray(o.specialEvents) ? o.specialEvents : [];
           persist();
-          return json(res, 200, { ok: true, pageCount: rootConfig.sources.pages.pages.length });
+          return json(res, 200, { ok: true, pageCount: (pg && pg.pages ? pg.pages.length : 0) });
         } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
       });
     }
@@ -726,6 +733,7 @@ function effPluginSec() {
     }
     if (req.method === 'POST' && url.pathname === '/api/desktop/quit') {
       json(res, 200, { ok: true });
+      if (onQuit) return setTimeout(function () { try { onQuit(); } catch (e) { logger.error('退出失败: ' + e.message); process.exit(0); } }, 300);
       return setTimeout(function () {
         try {
           if (process.env.VRCB_EMBEDDED === '1') require('electron').app.quit();
@@ -735,7 +743,9 @@ function effPluginSec() {
     }
     if (req.method === 'POST' && url.pathname === '/api/desktop/restart') {
       json(res, 200, { ok: true });
-      return setTimeout(function () {
+      // 重启前先走统一退出: 否则新进程可能抢不到端口, 被端口回退推到别的端口,
+      // 而桌面壳还指向旧端口 → 白屏(M-20260911-07 与 M-20260911-08 的组合问题)
+      const relaunch = function () {
         try {
           if (process.env.VRCB_EMBEDDED === '1') {
             require('electron').app.relaunch();
@@ -745,7 +755,9 @@ function effPluginSec() {
             process.exit(0);
           }
         } catch (e) { process.exit(0); }
-      }, 300);
+      };
+      if (onRestart) return setTimeout(function () { try { onRestart(relaunch); } catch (e) { logger.error('重启失败: ' + e.message); relaunch(); } }, 300);
+      return setTimeout(relaunch, 300);
     }
     if (req.method === 'POST' && url.pathname === '/api/devdocs/open') {
       try {
@@ -805,14 +817,19 @@ function effPluginSec() {
       return readBody(req, function (body) {
         try {
           const o = require('../configio').safeParse(body || '{}');
-          const cfg = o.config;
+          // 兼容两种形状: 控制台导出的信封 {ok,filename,config} 与用户直接拖进来的裸 config.json
+          const cfg = (o && typeof o === 'object' && o.config && typeof o.config === 'object') ? o.config : o;
           if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) return json(res, 400, { ok: false, error: '无效配置' });
-          // 必须长得像真配置(至少含一个核心段), 防误传空对象把配置清空
-          if (!cfg.web && !cfg.osc && !cfg.sources && !cfg.chatbox) return json(res, 400, { ok: false, error: '无效配置(缺少核心字段)' });
+          // 必须长得像真配置: 至少一个核心段, 且它必须是**对象**(数组不算)。
+          // 控制台 GET /api/config 返回的是扁平视图(sources 是数组), 拿它当导入源会顶掉配置段(M-20260911-06)
+          const coreObj = ['web', 'osc', 'chatbox', 'sources'].some(function (k) { return cfg[k] && typeof cfg[k] === 'object' && !Array.isArray(cfg[k]); });
+          if (!coreObj) return json(res, 400, { ok: false, error: '无效配置(缺少核心字段)' });
           // 导入前先把当前配置留档 config.json.bak, 防止编码损坏后无回滚
           try { fs.writeFileSync(configPath + '.bak', fs.readFileSync(configPath)); } catch (e) {}
-          fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2), 'utf8');
-          logger.info('配置已从控制台导入, 重启后生效');
+          // 必须同时更新内存: 只写文件的话, 之后任何一次 persist() 都会用旧内存把导入结果覆盖掉(M-20260911-06)
+          require('../configio').applyInPlace(rootConfig, cfg);
+          if (!persist()) return json(res, 500, { ok: false, error: '配置写入失败' });
+          logger.info('配置已从控制台导入并应用(重启后完全生效)');
           return json(res, 200, { ok: true, needRestart: true });
         } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
       });

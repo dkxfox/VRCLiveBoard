@@ -36,4 +36,21 @@ function writeConfigAtomic(configPath, obj) {
   return true;
 }
 
-module.exports = { loadConfig: loadConfig, writeConfigAtomic: writeConfigAtomic, safeParse: safeParse };
+// 原地深合并(M-20260911-06): 导入配置时让改动立即作用到持有子对象引用的组件(webCfg / composer.swearFilter 等),
+// 并且**不删除**内存里已有而导入文件里没有的键 —— 避免把运行中的整段配置抹掉。
+function applyInPlace(target, src) {
+  if (!target || typeof target !== 'object' || !src || typeof src !== 'object') return target;
+  for (const k of Object.keys(src)) {
+    if (k === '__proto__' || k === 'constructor') continue;
+    const sv = src[k], tv = target[k];
+    const sIsObj = sv && typeof sv === 'object' && !Array.isArray(sv);
+    const tIsObj = tv && typeof tv === 'object' && !Array.isArray(tv);
+    if (sIsObj && tIsObj) { applyInPlace(tv, sv); continue; }
+    // 类型不符(例如拿数组去顶替一个对象段): 跳过而不是覆盖 —— 坏导入不能把运行中的配置打成残废
+    if (tIsObj && !sIsObj) continue;
+    target[k] = sv;
+  }
+  return target;
+}
+
+module.exports = { loadConfig: loadConfig, writeConfigAtomic: writeConfigAtomic, safeParse: safeParse, applyInPlace: applyInPlace };

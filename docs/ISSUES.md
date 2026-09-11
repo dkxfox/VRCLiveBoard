@@ -313,3 +313,30 @@
 - 改动(批 2, 2026-09-11): ① 服务端 versioncheck.js 白名单正则**锚尾 + 限定路径字符集**(^https://官方域名(/[A-Za-z0-9._~%/-]*)?$), 原正则只锚前缀, 形如 .../VRCLiveBoard"><img onerror=...> 的载荷能通过校验; ② 前端 app.js 的更新提示由 innerHTML 拼接改为 **DOM API**(a.href 属性赋值 + a.textContent + a.rel=noopener), 并加 https 前缀校验 —— 该路径从此不参与 HTML 解析, 对注入结构性免疫; ③ 顺带修掉上报链路的**递归隐患**: fetch(/api/fe-err) 自身失败会触发 unhandledrejection, 而该处理器又去 POST fe-err → 自激; 现统一走 feErr(), 上报失败即永久关闭(_feErrOff)。
 - 验证(批 2, 2026-09-11): 用真实 checkUpdate() 喂 4 档载荷 —— 恶意(引号+标签) → remote=null 拒绝; 合法(带路径 /releases/tag/v1.3.3) → 接受; 合法(裸链接) → 接受; 第三方域名 → 拒绝。前端在恶意 releaseUrl 下: createElement 未产生 img/script/iframe/svg 任何注入载体, #updateHint 仅 1 个子节点(A 元素), URL 仅作属性赋值、文案走 textContent; 专项冒烟 18 PASS / 0 FAIL; run-gates -Smoke = 13 PASS / 1 FAIL(GSYNC 属预期)。
 - 状态: CLOSED
+## M-20260911-06 配置导入: 只写文件不更新内存 + 接口只认导出信封 + 坏导入可打残配置(CLOSED)
+- 来源: 2026-09-11 代码审核子代理报 H3(标注未复验) → 本人复核确认为真; 修复过程中实测又发现两项同源问题
+- 现象: ①导入配置后, 只要在控制台再改任何设置, 导入结果就被内存里的旧配置整体覆盖(静默丢失); ②导入接口只接受控制台导出的信封(ok/filename/config 三段), 把 config.json 直接拖进去只会得到"无效配置"; ③(实测新发现)传入控制台 GET /api/config 的**扁平视图**(它的 sources 是数组)会把内存里的 sources 段顶成数组, 之后所有读 sources.pages 的接口抛未捕获异常且**不回包**(客户端表现为卡死), 并且这个坏结构还会被 persist() 写进 config.json。
+- 影响面: 配置导入功能实质不可用(导入即丢); 一次错误导入可把运行中的配置结构与磁盘文件同时打残。
+- 根因: 导入处理器只 fs.writeFileSync 文件、完全不更新 rootConfig, 而 persist() 写的是内存; 形状校验只判断"有没有核心段"不判断类型; 合并函数遇到类型不符直接整体覆盖。
+- 证据(隔离实例 :19260, 全新配置, 端到端): ①扁平载荷 → 400 且磁盘配置完好(sources 仍是对象); ②导出信封导入 → 200; ③随后 POST /api/config → 内存与磁盘 branding 均为 starry、sources.pages.rotationMs=9999、level1Password 未被删、sources.pages.pages 仍是数组; ④修复前同一序列会把 sources 写成数组, 日志留下 [未捕获异常] TypeError: Cannot read properties of undefined (reading 'pages')。
+- 改动(批 3, 2026-09-11): ① configio 新增 applyInPlace(): 原地深合并 —— 保持子对象引用(webCfg / composer.swearFilter 等持有者立即生效)、不删除内存里已有而导入文件没有的键、类型不符(用数组或标量顶替对象段)时跳过而不覆盖; ② 导入处理器: 合并进内存后走 persist() 原子落盘(不再只写文件), 解析兼容"导出信封"与"裸 config.json"两种形状, 失败返回 500; ③ 形状校验改为"至少一个核心段, 且它必须是对象(数组不算)"; ④ GET/POST /api/config 对 sources.pages 的读取加空安全, 缺失时给空值而不是抛未捕获异常。
+- 验证(批 3, 2026-09-11): configio 单元测试 7 项全过(引用保持 / 不删键 / 数组整体替换 / __proto__ 跳过 / 落盘回读); 端到端 15 项中 14 项自动通过, 第 15 项为**测试脚本自身读错路径**(磁盘上 rotationMs 位于 sources.pages.rotationMs, 已人工核实为 9999, 实际通过); run-gates -Smoke = 13 PASS / 1 FAIL(GSYNC 属预期)。
+- 状态: CLOSED
+
+## M-20260911-07 无统一退出: python 助手与端口残留(CLOSED)
+- 来源: 2026-09-11 代码审核子代理报 H5(标注未复验) → 本人复核确认为真
+- 现象: 退出路径只调 composer.stop() + osc.close(); web.stop() 与 media.stop() 虽然都存在却**从未被调用**; /api/desktop/quit 与 /api/desktop/restart 直接 process.exit(0)。
+- 影响面: Windows 上 python(SMTC 媒体助手)不随父进程退出 → 残留进程; 重启时端口未优雅释放 → 新进程可能抢不到端口被回退到别的端口, 与 M-20260911-08 叠加即"白屏"。
+- 根因: 退出逻辑散在三处且每处只做半套; 三个 setInterval 句柄未保存, 想清也清不掉。
+- 改动(批 3, 2026-09-11): src/main.js 新增 shutdown(reason, proceed): 清三个定时器 → composer.stop() → mediaSource.stop()(杀 python 子进程) → await web.stop()(释放端口, 上限 1.5 秒) → osc.close() → exitNow()(桌面内嵌模式走 app.quit, 否则 process.exit); 挂 SIGINT / SIGTERM / 进程事件 vrcb:shutdown; /api/desktop/quit 与 restart 改走 onQuit/onRestart 钩子(重启在清理完成后才 relaunch); electron/main.js 在 before-quit 里先请核心清理、完成后再真正退出(3 秒兜底, 核心卡住也不会退不掉窗口)。
+- 验证(批 3, 2026-09-11): 静态与逻辑核对 11 项全过(web.stop / mediaSource.stop / 三个 clearInterval / SIGTERM / vrcb:shutdown / 端口上报 / 壳侧握手); 隔离实例正常启停、端口 19260 释放 True; run-gates -Smoke = 13 PASS / 1 FAIL(预期)。
+- 状态: CLOSED
+
+## M-20260911-08 桌面壳端口写死 19190 → 端口被占即白屏(CLOSED)
+- 来源: 2026-09-11 代码审核子代理报 H4(标注未复验) → 本人复核确认为真
+- 现象: electron/main.js 的 CONSOLE_URL 写死 http://127.0.0.1:19190; 而核心在端口被占时会自动回退(src/web/server.js 的 start() 最多 +10), 控制台里改端口也只置 needRestart。于是"19190 被占"或"改过端口"之后, 窗口加载的是一个不存在的地址 → **白屏且无任何提示**, 托盘"在浏览器打开"同样打开错地址。
+- 影响面: 桌面版用户在端口冲突或改端口场景下看到空白窗口, 无自助排查线索。
+- 根因: 核心的实际端口只在 src/main.js 内部使用(consolePort), 没有任何通道告诉桌面壳; 壳与核心之间缺少就绪/端口契约。
+- 改动(批 3, 2026-09-11): ① src/main.js 在 web.start() 后写 process.env.VRCB_CONSOLE_PORT 并 emit 进程事件 vrcb:console-ready; ② 壳侧 consoleUrl() 取实际端口(缺省回落 19190), whenCoreReady() 等就绪(最多 15 秒)后再 loadURL, 托盘"在浏览器打开"同源; ③ did-fail-load 自动重试 3 次(忽略 -3 中断), 仍失败则加载一页中文错误页 —— 写明尝试的地址、去 logs/app.log 搜"网页控制台"看实际端口, 不再白屏。
+- 验证(批 3, 2026-09-11): 从 electron/main.js 提取真实 consoleUrl 与 whenCoreReady 执行 7 项断言全过(缺省回落 19190 / 用实际端口 19193 / 就绪即回调 / 未就绪则挂等待 / 事件后回调一次 / 重复事件不重复加载)。**边界**: 桌面壳全量启动会拉起用户实例(读用户 config、占 19190), 故"端口被占时窗口仍能连上"这条未在本机实机验证, 需用户实机确认。
+- 状态: CLOSED(核心逻辑已验证; 实机表现待用户确认)

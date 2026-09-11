@@ -133,9 +133,7 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke
 
 
 **待复验(2026-09-11 代码审核: 子代理报告, 本人未逐条复核, 勿直接当结论)**
-- H3 配置导入只写 config.json 不动 rootConfig, 后续 persist() 会以旧内存覆盖导入结果(server.js:801-811 对 101-103)
-- H4 electron/main.js:21 CONSOLE_URL 写死 19190, 而服务端端口被占会 port++ 回退(server.js:891-903)、改端口仅置 needRestart → 端口被占或改端口后桌面窗口白屏且无提示
-- H5 无统一 shutdown: main.js:32/44/55 的 setInterval 句柄未保存; web.stop()(server.js:906)与 media.stop() 从未调用; quit/restart 直接 process.exit → python 助手 5 秒自愈重拉 + 端口残留
+- H3 / H4 / H5 三条 **2026-09-11 批 3 已复验为真并修复**, 见 M-20260911-06 / -07 / -08; 其中 H3 修复过程中还实测出两项同源问题(导入接口只认导出信封、坏导入可把配置打残并落盘)
 - M1 readBody 无 error/aborted 处理, 超 256KB 时 req.destroy() 不回响应; /api/health 触发多次 netstat/tasklist 阻塞事件循环
 - M5 pluginsys/manager.js 定时器只增不减, disable 不清插件 interval, 反复 restart 会累积
 - L1 logger.js 与 autostart.js 双写同一 app.log 且按 1MB 截断(会交错半行); L3 /api/special/video 的 Range 处理在 bytes=5000-100 时会算出负 Content-Length

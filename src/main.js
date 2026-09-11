@@ -29,7 +29,7 @@ async function main() {
   logger.info('OSC 已就绪, 目标 ' + config.osc.host + ':' + config.osc.port);
 
   runHousekeeping(config, logger);
-  setInterval(function () { runHousekeeping(config, logger); }, 6 * 3600 * 1000); // 周期化: 长期挂机也受管(M-20260903-01)
+  const ivHousekeep = setInterval(function () { runHousekeeping(config, logger); }, 6 * 3600 * 1000); // 周期化: 长期挂机也受管(M-20260903-01)
 
   const projectDir = path.join(__dirname, '..');
   if (config.autostart) {
@@ -41,7 +41,7 @@ async function main() {
   config.chatbox.swearFilter = config.chatbox.swearFilter || { enabled: true, words: null };
   const composer = new Composer({ osc: osc, logger: logger, swearFilter: config.chatbox.swearFilter, maxChars: config.chatbox.maxChars, minSendIntervalMs: config.osc.minSendIntervalMs });
 
-  setInterval(function () {
+  const ivVrc = setInterval(function () {
     const st = getVrcStatus();
     composer.vrcOn = !!(st.running && st.oscEnabled);
     composer.vrcInfo = st;
@@ -52,11 +52,12 @@ async function main() {
     try { Object.assign(composer.vars, await collectHardware()); } catch (e) {}
   }
   refreshVars();
-  setInterval(refreshVars, 5000);
+  const ivVars = setInterval(refreshVars, 5000);
 
   composer.registerSource(createPages(config.sources.pages));
   composer.registerSource(createHardware(config.sources.hardware));
-  composer.registerSource(createMedia(config.sources.media, logger));
+  const mediaSource = createMedia(config.sources.media, logger); // 持有引用: 退出时要杀掉 python 助手(否则 Windows 上会残留)
+  composer.registerSource(mediaSource);
 
   // 插件目录: plugins/*.js, 每个插件导出 { id, version, createSource(config, logger) }
   const pluginsDir = path.join(__dirname, '..', 'plugins');
@@ -87,8 +88,11 @@ async function main() {
     if (!r.ok) logger.warn('[插件] 自动启用失败 ' + id + ': ' + r.error);
   }
 
-  const web = createServer({ web: config.web, config: config, configPath: configPath, composer: composer, logger: logger, projectDir: projectDir, pluginManager: pluginManager, osc: osc });
+  const web = createServer({ web: config.web, config: config, configPath: configPath, composer: composer, logger: logger, projectDir: projectDir, pluginManager: pluginManager, osc: osc, onQuit: function () { shutdown('控制台退出'); }, onRestart: function (proceed) { shutdown('控制台重启', proceed); } });
   const consolePort = await web.start();
+  // 桌面壳必须知道**实际**端口: 19190 被占时上面会回退, 写死 URL 就会白屏(M-20260911-08)
+  process.env.VRCB_CONSOLE_PORT = String(consolePort);
+  try { process.emit('vrcb:console-ready', consolePort); } catch (e) {}
 
   if (config.web.openBrowser && process.env.VRCLIVEBOARD_AUTOSTART !== '1' && process.env.VRCB_EMBEDDED !== '1') {
     // 安全: 不拼 shell 字符串(防 config 注入命令), host 白名单
@@ -99,7 +103,31 @@ async function main() {
     } catch (e) {}
   }
 
-  process.on('SIGINT', function () { logger.info('退出'); composer.stop(); osc.close(); process.exit(0); });
+  // 统一退出(M-20260911-07): 修复前退出路径只调 composer.stop() + osc.close(),
+  // web.stop() 与 media.stop() 从未被调用, python 助手在 Windows 上不随父进程退出 → 残留; 端口也不优雅释放
+  let shuttingDown = false;
+  function exitNow() {
+    if (process.env.VRCB_EMBEDDED === '1') { try { require('electron').app.quit(); return; } catch (e) { /* 非 Electron 环境 */ } }
+    process.exit(0);
+  }
+  async function shutdown(reason, proceed) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    try { logger.info('正在退出(' + reason + ')'); } catch (e) {}
+    try { clearInterval(ivHousekeep); } catch (e) {}
+    try { clearInterval(ivVrc); } catch (e) {}
+    try { clearInterval(ivVars); } catch (e) {}
+    try { composer.stop(); } catch (e) {}
+    try { if (mediaSource && mediaSource.stop) mediaSource.stop(); } catch (e) {}
+    try { if (web && web.stop) await Promise.race([web.stop(), new Promise(function (r) { setTimeout(r, 1500); })]); } catch (e) {}
+    try { osc.close(); } catch (e) {}
+    if (typeof proceed === 'function') { try { proceed(); } catch (e) { logger.error('退出后续失败: ' + e.message); } return; }
+    setTimeout(exitNow, 150);
+  }
+  process.on('SIGINT', function () { shutdown('SIGINT'); });
+  process.on('SIGTERM', function () { shutdown('SIGTERM'); });
+  // 桌面壳托盘退出: electron/main.js 在 before-quit 里触发, 等清理完再真正退出
+  process.on('vrcb:shutdown', function (done) { shutdown('桌面壳退出', done); });
   // 全局异常兜底: 插件/异步回调的异常不再杀死整个程序(记日志继续跑)
   process.on('uncaughtException', function (e) { try { logger.error('[未捕获异常] ' + ((e && e.stack) || e)); } catch (e2) {} });
   process.on('unhandledRejection', function (r) { try { logger.error('[未处理的 Promise 拒绝] ' + ((r && r.stack) || r)); } catch (e2) {} });

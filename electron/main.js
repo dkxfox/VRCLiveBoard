@@ -18,13 +18,35 @@ function applyConsoleSetting() {
 // 桌面版: 核心服务直接内嵌在本进程运行(单进程 = 退出即完整关闭, 无残留)
 // 打包分发时用户不需要安装 Node/npm。
 
-const CONSOLE_URL = 'http://127.0.0.1:19190';
+// 控制台地址必须用**实际**端口: 19190 被占时核心会自动回退(src/web/server.js 的 start() 最多 +10),
+// 写死 URL 会让窗口指向一个不存在的端口 → 白屏且无任何提示(M-20260911-08)
+function consoleUrl() { return 'http://127.0.0.1:' + (process.env.VRCB_CONSOLE_PORT || 19190); }
+// 等核心把真实端口报出来(最多 15 秒), 到点还没有就按默认端口试
+function whenCoreReady(cb) {
+  if (process.env.VRCB_CONSOLE_PORT) return cb();
+  let done = false;
+  const fire = function () { if (done) return; done = true; cb(); };
+  process.once('vrcb:console-ready', fire);
+  setTimeout(fire, 15000);
+}
+function consoleErrorPage(detail) {
+  const css = 'background:#10141a;color:#e8edf3;font:14px/1.7 "Microsoft YaHei",sans-serif;padding:40px';
+  const html = '<!doctype html><meta charset="utf-8"><body style="' + css + '">'
+    + '<h2 style="color:#f0b429;margin:0 0 12px">控制台页面打不开</h2>'
+    + '<p>尝试的地址: <b style="color:#7dd3fc">' + consoleUrl() + '</b></p>'
+    + '<p>常见原因: 该端口被别的程序占用, 或核心服务启动失败。</p>'
+    + '<p style="color:#8b98a8">排查办法: 打开程序目录 logs\\app.log, 搜 "网页控制台", 那一行会写明实际端口;</p>'
+    + '<p style="color:#8b98a8">也可以在控制台设置里把 Web 端口改回 19190 后重启。</p>'
+    + '<p style="color:#6b7888;font-size:12px">' + String(detail || '') + '</p></body>';
+  return 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
+}
 app.setAppUserModelId('com.vrcliveboard.app');
 // 测试/多实例场景: 允许用环境变量覆盖 userData 目录(单实例锁随之独立)
 if (process.env.VRCB_USER_DATA) { try { app.setPath('userData', process.env.VRCB_USER_DATA); } catch (e) {} }
 let win = null;
 let tray = null;
 let quitting = false;
+let coreStopped = false; // 桌面壳退出时, 是否已等核心清理完(M-20260911-07)
 
 function loadIcon() {
   try {
@@ -60,7 +82,15 @@ function createWindow() {
   win.once('ready-to-show', function () { if (win && !win.isDestroyed()) { win.show(); win.focus(); } });
   // 兜底: 页面加载异常时也要显示窗口(3 秒后仍未显示则强制)
   setTimeout(function () { try { if (win && !win.isDestroyed() && !win.isVisible()) win.show(); } catch (e) {} }, 3000);
-  win.loadURL(CONSOLE_URL);
+  // 端口要等核心报出来(可能回退); 加载失败自动重试, 三次仍失败就给一页可读的错误提示而不是白屏
+  let loadTries = 0;
+  const loadConsole = function () { win.loadURL(consoleUrl()).catch(function () {}); };
+  win.webContents.on('did-fail-load', function (e, code, desc, url, isMainFrame) {
+    if (!isMainFrame || code === -3) return; // -3 = ERR_ABORTED(刷新/跳转导致), 不算故障
+    if (loadTries < 3) { loadTries++; setTimeout(loadConsole, 1200); return; }
+    win.loadURL(consoleErrorPage(desc + ' (' + code + ')')).catch(function () {});
+  });
+  whenCoreReady(loadConsole);
   win.webContents.setWindowOpenHandler(function (details) { shell.openExternal(details.url); return { action: 'deny' }; });
   // Ctrl+R / Ctrl+Shift+R 刷新界面(桌面版没有地址栏和 F5)
   win.webContents.on('before-input-event', function (event, input) {
@@ -84,7 +114,17 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', function () { if (win) { win.show(); win.focus(); } });
-  app.on('before-quit', function () { quitting = true; });
+  app.on('before-quit', function (e) {
+    quitting = true;
+    if (coreStopped) return;
+    // 先让核心清理(停服务 / 杀 python 助手 / 释放端口)再退, 否则会残留子进程与端口占用(M-20260911-07)
+    e.preventDefault();
+    const done = function () { if (coreStopped) return; coreStopped = true; app.quit(); };
+    let handled = false;
+    try { handled = process.emit('vrcb:shutdown', done); } catch (err) { handled = false; }
+    if (!handled) { done(); return; }
+    setTimeout(done, 3000); // 核心卡住也不要把用户锁在退不掉的窗口里
+  });
   app.whenReady().then(function () {
     applyConsoleSetting();
     try {
@@ -100,7 +140,7 @@ if (!app.requestSingleInstanceLock()) {
       tray.setToolTip('VRCLiveBoard');
       tray.setContextMenu(Menu.buildFromTemplate([
         { label: '显示控制台', click: function () { win.show(); win.focus(); } },
-        { label: '在浏览器打开', click: function () { shell.openExternal(CONSOLE_URL); } },
+        { label: '在浏览器打开', click: function () { shell.openExternal(consoleUrl()); } },
         { type: 'separator' },
         { label: '退出(完全关闭)', click: function () { app.quit(); } }
       ]));
