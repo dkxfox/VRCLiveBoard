@@ -37,7 +37,7 @@ function el(tag) {
     tagName: String(tag || 'div').toUpperCase(), style: mkStyle(),
     dataset: {}, children: [], _text: '', _html: '', _v: '', _c: false,
     options: [], selectedIndex: 0, files: [], naturalWidth: 100, naturalHeight: 100,
-    classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
+    classList: (function () { const set = new Set(); return { add(c) { set.add(c); }, remove(c) { set.delete(c); }, contains(c) { return set.has(c); }, toggle(c, force) { const want = force === undefined ? !set.has(c) : !!force; if (want) set.add(c); else set.delete(c); return want; } }; })(),
     appendChild(c) { e.children.push(c); return c; }, removeChild() {}, insertBefore() {}, remove() {},
     addEventListener(type, fn) { if (!e._ev) e._ev = {}; e._ev[type] = fn; }, removeEventListener() {}, dispatchEvent() {},
     setAttribute() {}, getAttribute() { return null; }, removeAttribute() {},
@@ -82,11 +82,12 @@ function el(tag) {
 }
 const byId = {}; // 同一 id 的桩件实例缓存(要在断言里检查渲染结果, 所以必须模块级)
 function makeSandbox() {
+  for (const k of Object.keys(byId)) delete byId[k]; // 每个沙箱独立的元素实例
   const sb = {
     console, setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
     requestAnimationFrame: () => 0, cancelAnimationFrame() {},
     addEventListener() {}, removeEventListener() {}, dispatchEvent() {},
-    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    localStorage: (function () { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => { m.set(k, String(v)); }, removeItem: (k) => { m.delete(k); } }; })(),
     navigator: { clipboard: { writeText: async () => {} }, userAgent: 'gate' },
     location: { search: '', href: 'http://127.0.0.1/', hash: '' },
     innerWidth: 1280, innerHeight: 800, outerWidth: 1280, outerHeight: 800, devicePixelRatio: 1, // fx.js 会读这几个浏览器全局
@@ -235,6 +236,26 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
     // 结果是"什么都不打印 + 退出码 0", 门禁形同虚设(2026-09-11)
     problems.push('门禁自身执行异常(请修门禁): ' + ((e && e.stack) || e));
   }
+  // 动效开关(M-20260911-18): 关掉再打开必须重启星空画布; 已保存的设置必须在加载时生效
+  try {
+    const top = byId['animTop'], body = sb.document.body;
+    let fxN = 0;
+    if (typeof sb.__fxRestart === 'function') { const o = sb.__fxRestart; sb.__fxRestart = function () { fxN++; return o.apply(this, arguments); }; }
+    if (!top || typeof top.onclick !== 'function') problems.push('#animTop 未接线(动效主开关)');
+    else if (typeof sb.__fxRestart !== 'function') problems.push('fx.js 未导出 __fxRestart, 无法验证动效重启');
+    else {
+      top.onclick();
+      if (!body.classList.contains('no-anim')) problems.push('动效主开关点击后没有关闭动效');
+      top.onclick();
+      if (body.classList.contains('no-anim')) problems.push('动效主开关再次点击没有恢复动效');
+      if (!fxN) problems.push('动效重新打开时没有重启星空画布(__fxRestart 未被调用)');
+    }
+    const { uiJsOrder: order2 } = require('./_ui-files.js'); // 上面那个在 try 块作用域里, 这里重新取
+    const sb2 = makeSandbox();
+    sb2.localStorage.setItem('vrcbAnimMaster', '1');
+    for (const fp of order2(ROOT)) vm.runInNewContext(fs.readFileSync(fp, 'utf8'), sb2, { filename: path.basename(fp) });
+    if (!sb2.document.body.classList.contains('no-anim')) problems.push('已保存的"关闭动效"在页面加载时没有被应用(主开关只存不读)');
+  } catch (e) { problems.push('动效开关断言异常: ' + e.message); }
   console.log('[G-BOOT frontend-boot] 前端启动: 顶层加载 ' + (problems.length ? '有异常' : '正常') + ' / 控件桩 ' + ids.size + ' 个 id');
   for (const p of problems) console.log('  -> FAIL ' + p);
   process.exitCode = problems.length ? 1 : 0; // 用 exitCode: process.exit 在管道下会丢掉未刷新的输出
