@@ -312,7 +312,8 @@ function effPluginSec() {
         const entry = pluginManager.entries.find(function (e) { return e.id === o.id; });
         if (!entry) return json(res, 404, { ok: false, error: '插件不存在(请先把插件文件夹放进 plugins 目录后刷新)' });
         rootConfig.pluginApprovals = rootConfig.pluginApprovals || {};
-        rootConfig.pluginApprovals[o.id] = { hash: pluginManager.hash(entry), at: Date.now() };
+        // 审批记录用全目录哈希(M-20260911-34): 插件里任何文件被改都会使授权失效
+        rootConfig.pluginApprovals[o.id] = { hash: pluginManager.hashFull(entry), at: Date.now() };
         entry.approved = true;
         persist();
         return json(res, 200, { ok: true });

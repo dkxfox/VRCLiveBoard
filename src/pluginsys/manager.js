@@ -64,7 +64,9 @@ class PluginManager {
           if (RESERVED_IDS.has(manifest.id)) { this.logger.warn('[插件] ' + name + ' 使用了保留 id(plugins.security 配置块), 跳过'); continue; }
           const entry = {
             id: manifest.id, dir: dir, manifest: manifest,
-            approved: !!(this.approvals[manifest.id] && this.approvals[manifest.id].hash === this.hash({ manifest: manifest, dir: dir })),
+            // 双口径容忍(M-20260911-34): 老授权存的是 index.js 哈希(继续有效, 用户不必重新授权),
+            // 新授权存的是全目录哈希(改 cdp.js/bat/ps1 也会失效)。
+            approved: !!(this.approvals[manifest.id] && (this.approvals[manifest.id].hash === this.hash({ manifest: manifest, dir: dir }) || this.approvals[manifest.id].hash === this.hashFull({ manifest: manifest, dir: dir }))),
             _lastAiAt: 0,
             enabled: false, plugin: null, error: null, runtimeSources: [], runtimeErrors: [],
             settings: {}
@@ -87,7 +89,14 @@ class PluginManager {
     vrclog.start();
     return this.entries.length;
   }
-  // 审批哈希 = id@version|api|sha256(index.js 前 16 位): 代码内容变化但版本不升也会使审批失效, 必须重新红窗
+  // 全目录哈希(M-20260911-34): 审批时用这个 —— 覆盖整个插件目录, 而不只是 index.js
+  hashFull(entry) {
+    const m = entry.manifest || entry;
+    let bodyHash = '';
+    try { if (entry.dir) bodyHash = require('./hash').hashDir(entry.dir); } catch (e) {}
+    return String(m.id + '@' + m.version + '|' + (m.api || '') + '|' + bodyHash);
+  }
+  // 旧口径(兼容用): id@version|api|sha256(index.js 前 16 位)
   hash(entry) {
     const m = entry.manifest || entry;
     let bodyHash = '';

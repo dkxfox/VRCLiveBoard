@@ -572,3 +572,11 @@
 - 改动(2026-09-11): ① plgRefresh 改为先 POST /api/plugins/scan 再 loadPlugins; ② 更新检查抽成 window.__checkUpdate 并 setInterval 6 小时复查一次(保持只在有新版本且 releaseUrl 是 https 时才渲染链接); ③ healthCopy 改为优先取 /api/health 并用通用格式化器逐字段排版(取不到时回退 /api/ports/check 的 JSON); ④ 日志改成"缓存 + 本地渲染": fetch 只在加载/刷新时发生, 过滤与错误筛选在本地做, 渲染前判断是否贴底并自动跟随, 错误正则放宽为 warn|error|err|fail。
 - 说明: 日志的错误过滤正则只用 ASCII 关键词(新 UI 的门禁禁止 JS 里硬编码中文 —— 旧版写的 错误|失败 在现行口径下不能直接照搬)。
 - 状态: CLOSED
+## M-20260911-34 审批哈希覆盖整个插件目录(双口径平滑升级)(CLOSED)
+- 来源: 官方插件审计挂账 M7(用户"继续"); 我在上一轮承诺"单独说明影响"
+- 现象: 授权哈希只算 index.js —— 插件里的 cdp.js / *.bat / *.ps1 / 面板 HTML 被替换不会让既有授权失效, 用户看到"已授权"但跑的已经是另一份代码; 而 manifest 的权限声明同样不在哈希里(netease 声明不实那条也正是钻了这个空子)。
+- 影响面(为什么不能直接改): 直接把哈希口径换成全目录, 会让**所有老授权一次性失效** —— 每个用户升级后都要重新授权一次, 高危插件还要在红窗里输入插件名。对国内用户是明显打扰, 而且会让"授权弹窗"变成噪音。
+- 证据(2026-09-11): ① 新门禁断言(plugin-check 第 0 步): 把某插件目录复制到临时目录 → 只新增一个非 index.js 文件 → **全目录哈希必须变化**且旧口径哈希必须不变; ② A/B: 把全目录哈希退回 index.js 口径 → 该断言精确 FAIL, 恢复后 OK; ③ GPLUG 0 FAIL / 0 WARN(plugins/ 4 个插件哈希已按新口径重新计算)。
+- 改动(2026-09-11): ① 新增 src/pluginsys/hash.js —— hashIndex()(旧口径)与 hashDir()(全目录: 相对路径 + 内容, 目录项排序; 跳过 node_modules 与 data/); ② manager.js: 新增 hashFull(), approved 判断改为**双口径容忍**(老授权继续有效, 新授权一律存全目录哈希); ③ web/server.js 的 /api/plugins/approve 改写 hashFull; ④ plugin-check 的展示哈希与自检改用同一个模块 + 新增覆盖面断言; ⑤ 开发者文档/02-插件开发规范.md 的哈希说明同步更新。
+- 说明: 第三方 vendor 目录也在哈希范围内(它就是被批准的东西的一部分); data/ 是插件运行时数据, 不算代码, 故意排除。
+- 状态: CLOSED

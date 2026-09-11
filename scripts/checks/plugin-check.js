@@ -22,6 +22,25 @@ else say('OK', '插件单一源: 官方可选插件\\ 无重复代码');
 const dirs = fs.readdirSync(PLUGINS, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
 console.log('[GPLUG plugin-check] 目录插件 ' + dirs.length + ' 个: ' + dirs.join(', '));
 const manifests = {};
+// 0. 授权哈希覆盖面自检(M-20260911-34): 全目录口径下, 只改非 index.js 文件也必须让哈希变化
+(function () {
+  const H = require(path.join(ROOT, 'src', 'pluginsys', 'hash.js'));
+  const src = path.join(PLUGINS, 'friend-welcome');
+  const tmp = fs.mkdtempSync(path.join(require('os').tmpdir(), 'vrcb-hash-'));
+  (function copy(a, b) {
+    for (const it of fs.readdirSync(a, { withFileTypes: true })) {
+      const s = path.join(a, it.name), d = path.join(b, it.name);
+      if (it.isDirectory()) { fs.mkdirSync(d, { recursive: true }); copy(s, d); } else fs.copyFileSync(s, d);
+    }
+  })(src, tmp);
+  const i1 = H.hashIndex(tmp), d1 = H.hashDir(tmp);
+  fs.writeFileSync(path.join(tmp, 'cdp-other.js'), '// 只改这个文件, index.js 不动\n');
+  const i2 = H.hashIndex(tmp), d2 = H.hashDir(tmp);
+  if (i1 !== i2) say('FAIL', '授权哈希自检异常: 没动 index.js 却让旧口径哈希变了');
+  else if (d1 === d2) say('FAIL', '授权哈希覆盖面不足: 改了非 index.js 文件, 全目录哈希没有变化');
+  else say('OK', '授权哈希覆盖整个插件目录(改非 index.js 也会失效), 旧口径仍被兼容接受');
+  fs.rmSync(tmp, { recursive: true, force: true });
+})();
 for (const id of dirs) {
   const dir = path.join(PLUGINS, id);
   const mp = path.join(dir, 'manifest.json');
@@ -30,7 +49,7 @@ for (const id of dirs) {
   try { m = JSON.parse(fs.readFileSync(mp, 'utf8').replace(/^\uFEFF/, '')); }
   catch (e) { say('FAIL', id + ': manifest.json 解析失败 ' + e.message); continue; }
   let bodyHash = '';
-  try { bodyHash = crypto.createHash('sha256').update(fs.readFileSync(path.join(dir, 'index.js'))).digest('hex').slice(0, 16); } catch (e) {}
+  try { bodyHash = require(path.join(ROOT, 'src', 'pluginsys', 'hash.js')).hashDir(dir); } catch (e) {}
   manifests[id] = { m: m, bodyHash: bodyHash };
   const problems = [];
   if (m.id !== id) problems.push('manifest.id(' + m.id + ') 与目录名不符');
