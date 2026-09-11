@@ -594,3 +594,10 @@
 - 改动(2026-09-11): ① server.js: stop() 先 closeAllConnections() 再 close()(可选调用, 老 Node 无此 API 也不报错); ② electron/main.js: 新增 trayOk 标记, 托盘创建成功才"关窗=收进托盘", 否则"关窗=退出"; ③ master.js: 授权包输出改口径(一级密码写入该用户 config.json 但不打印), 删掉 [debug] 行; ④ 版本说明.txt 的授权体系条目去掉内部术语。
 - 说明(两处按实际运行环境判断后**不做**, 理由记档): ① **不用 app.isPackaged 关调试开关** —— 本项目的桌面版是 `electron.exe electron/main.js` 启动, app.isPackaged 恒为 false, 用它区分发行/开发没有效果(审计建议在此不适用); 两个开关都需要显式环境变量才触发, 风险低, 维持现状。② **shutdown 早注册暂不做** —— 属于启动窗口期的窄竞态(核心还没注册监听时退出), 改动要动 main.js 的启动结构, 单列一轮评估。
 - 状态: CLOSED
+## M-20260911-37 打包机械项(批 B): 打包自审 + BUILD-INFO + 前置断言 + 安全基线漂移(CLOSED)
+- 来源: 桌面壳与打包审计挂账(用户"继续")
+- 现象: ① 打包与审计没有时序绑定: release-audit 只审计"已经躺在 dist 里的"包, make-dist 自己只做窄扩展名的 stage 检查 —— 存在"审计 PASS → 又改代码 → 重新打包"的漏洞; ② make-dist 第 19 行的旧包清理过滤的是 dist 根, 而 zip 实际写在 公开版\ 里 = **死代码**, 旧版本 zip 与旧 SHA256SUMS 会一直留着(发布时极易挑错包); ③ 打包中途失败会留下 200MB+ 的 stage 副本; ④ release-audit 步骤里的 exit 1 会跳过报告写入(审计不通过却不留报告); ⑤ **实跑 release-audit 才发现的两处漂移**: 我的新文件 src/capturehost.js 带来新的进程调用面, 而 surface-scan 把 CSS 的 z-index:9999 当成"端口 9999"。
+- 证据(2026-09-11): ① pack-script-check.js 实跑: make-dist BOM 通过 + PS5.1 解析通过; ② 安全基线更新后 surface-scan **全绿**(域名 12 / 端口 5 / child_process 13 / spawn( 7 / execFile 11 / fs.rmSync 2 全部与基线一致), 基线 diff 仅 3 增 1 删; ③ release-audit 实跑把 0a 从 FAIL 修到通过, 并验证了"步骤失败也会写报告"; ④ 全套门禁见提交记录。
+- 改动(2026-09-11): ① make-dist: 修旧包清理(公开版/申请版 的 zip 与 SHA256SUMS 一并清), 开跑先清历史 stage 残留, 两个 stage 各写 BUILD-INFO.json(version/commit/builtAt/kind), **打包末尾自动跑 pack-audit** 并把失败当构建失败; ② 新增 scripts/checks/pack-script-check.js(make-dist 的 BOM + PS5.1 解析自检), release-audit 新增 0a 步调用它; ③ release-audit 第 7 步: 增加"包比源码旧"新鲜度断言, 并把 exit 1 改成 `$script:exit = 1; return`(不再跳过报告); ④ surface-scan: 端口扫描排除 CSS z-index 假阳性; ⑤ 安全基线复核更新: child_process/execFile/spawn( 各加 src/capturehost.js(常驻助手设计如此), execFile 去掉已改走助手的 src/ocrtranslate.js。
+- 教训(写给下一次): **RunStep 是用 $LASTEXITCODE 判定成败的** —— 我第一版 0a 只有 PowerShell 语句、没有原生命令, 于是 $LASTEXITCODE 为 null, `null -ne 0` 成立, 步骤被误判 FAIL。结论: 这类检查要落成一个可执行脚本(node ✓)让退出码说话, 而不是塞一段纯 PS 逻辑。
+- 状态: CLOSED

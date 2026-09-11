@@ -16,7 +16,13 @@ New-Item -ItemType Directory -Force -Path $pubDir | Out-Null
 New-Item -ItemType Directory -Force -Path $appDir | Out-Null
 $appNote = (-join @([char]0x7533,[char]0x8BF7,[char]0x8BF4,[char]0x660E)) + '.txt'
 Copy-Item (Join-Path $p 'scripts\dev-apply-note.txt') (Join-Path $appDir $appNote) -Force
-Get-ChildItem $dist -Filter 'VRCLiveBoard-*.zip' -File | Remove-Item -Force
+# 旧包清理(M-20260911-37): 原写法只过滤 dist 根, 而 zip 实际写在 公开版\ 里 = 死代码, 旧版本 zip 与旧校验和会一直留着
+Get-ChildItem $dist -Filter 'VRCLiveBoard-*.zip' -File -ErrorAction SilentlyContinue | Remove-Item -Force
+Get-ChildItem $pubDir -Filter '*.zip' -File -ErrorAction SilentlyContinue | Remove-Item -Force
+Get-ChildItem $pubDir -Filter 'SHA256SUMS-*.txt' -File -ErrorAction SilentlyContinue | Remove-Item -Force
+Get-ChildItem $appDir -Filter '*.zip' -File -ErrorAction SilentlyContinue | Remove-Item -Force
+# 打包中途失败会留下完整 stage 副本(dist\stage-*): 每次开跑先清历史残留(审计 M1)
+Get-ChildItem $dist -Directory -Filter 'stage-*' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 # exclude dirs whose names match test/OCR material (Unicode-safe: via variables, not literals)
 $userDirs = @(Get-ChildItem $p -Directory | Where-Object { $_.Name -match '测试|OCR|截图' } | ForEach-Object { $_.Name })
 $exclDirs = @('node_modules','logs','.electron-cache','.ocr-cache','.ocr-langs','.pydist','.git') + $userDirs
@@ -129,6 +135,11 @@ robocopy (Join-Path $p 'node_modules') (Join-Path $stage 'node_modules') /E /NFL
 Copy-Item (Join-Path $p 'config.default.json') (Join-Path $stage 'config.json') -Force
 Scrub-Secrets (Join-Path $stage 'config.json')
 Copy-OfficialPlugins $stage
+      # BUILD-INFO(M-20260911-37): 包内记录构建来源; 让"审计后又改代码/重新打包"的时序漂移可被发现
+      $gitHead = ''
+      try { $gitHead = (git rev-parse HEAD).Trim() } catch {}
+      $bi = [ordered]@{ version = $ver; commit = $gitHead; builtAt = (Get-Date).ToString('s'); kind = 'self-contained' }
+      [System.IO.File]::WriteAllText((Join-Path $stage 'BUILD-INFO.json'), ($bi | ConvertTo-Json -Depth 4), (New-Object System.Text.UTF8Encoding($false)))
 Check-Stage $stage
 Write-Output '==== 3. zip self-contained (big, wait) ===='
 $zipSc = Join-Path $pubDir ('VRCLiveBoard-Desktop-SelfContained-v' + $ver + '.zip')
@@ -149,6 +160,11 @@ if (-not $SkipLight) {
   Copy-Item (Join-Path $p 'config.default.json') (Join-Path $stageL 'config.json') -Force
   Scrub-Secrets (Join-Path $stageL 'config.json')
   Copy-OfficialPlugins $stageL
+      # BUILD-INFO(M-20260911-37): 包内记录构建来源; 让"审计后又改代码/重新打包"的时序漂移可被发现
+      $gitHead = ''
+      try { $gitHead = (git rev-parse HEAD).Trim() } catch {}
+      $bi = [ordered]@{ version = $ver; commit = $gitHead; builtAt = (Get-Date).ToString('s'); kind = 'lite' }
+      [System.IO.File]::WriteAllText((Join-Path $stageL 'BUILD-INFO.json'), ($bi | ConvertTo-Json -Depth 4), (New-Object System.Text.UTF8Encoding($false)))
   Check-Stage $stageL
   Write-Output '==== 5. zip lite ===='
   $zipL = Join-Path $pubDir ('VRCLiveBoard-Lite-RequiresNode-v' + $ver + '.zip')
@@ -170,4 +186,10 @@ if (-not $SkipLight) {
 }
 Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
 if (-not $SkipLight) { Remove-Item $stageL -Recurse -Force -ErrorAction SilentlyContinue }
+# 打完包立刻自审(M-20260911-37): 以前只有 release-audit 审计"已经躺在 dist 里的"包, 存在"审计 PASS -> 又改代码 -> 重新打包"的时序漏洞
+$zipsToAudit = @($zipSc)
+if (-not $SkipLight) { $zipsToAudit += $zipL }
+node scripts\checks\pack-audit.js @zipsToAudit
+if ($LASTEXITCODE -ne 0) { Write-Output '[PROBLEM] 发布包自审未通过(scripts\checks\pack-audit.js)'; exit 1 }
+Write-Output 'pack-audit: OK (刚打的两个包已自审)'
 Write-Output '==== done ===='

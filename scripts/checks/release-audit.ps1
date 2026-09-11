@@ -29,6 +29,10 @@ function RunStep($name, $block) {
   Log ''
 }
 
+# 0a. 打包脚本自身健康(2026-09-11 审计 H1): make-dist 是"什么能出厂"的唯一执行者 —— 它一旦丢 BOM 或解析失败,
+#     中文排除项(秘密开发*/旧版控制台/测试素材)会静默失效, 而脚本仍会打印 integrity OK。
+RunStep '0a. 打包脚本自身检查(BOM + PS5.1 解析)' { node scripts\checks\pack-script-check.js }
+
 # 0. 检查器自测(审计之前先审审计器)
 if (-not $NoSelftest) {
   RunStep '0. 门禁有效性自测(红队夹具)' { powershell -NoProfile -ExecutionPolicy Bypass -File scripts\checks\gate-selftest.ps1 }
@@ -58,7 +62,12 @@ if (-not $SkipSmoke) {
 RunStep '7. 发布包审计 + SHA256 清单' {
   $pub = Join-Path $proj 'dist\公开版'
   $zips = @(Get-ChildItem $pub -Filter ('*v' + $ver + '.zip') | ForEach-Object { $_.FullName })
-  if ($zips.Count -eq 0) { Log 'FAIL dist\公开版 没有当前版本号的 zip(先跑 make-dist)'; exit 1 }
+  if ($zips.Count -eq 0) { Log 'FAIL dist\公开版 没有当前版本号的 zip(先跑 make-dist)'; $script:exit = 1; return }
+  # 新鲜度(M-20260911-37): 包比源码旧 = 有人改完代码没重新打包 —— 以前审计发现不了这类漂移, 报告还会被 exit 跳过
+  $srcDirs = @((Join-Path $proj 'src'), (Join-Path $proj 'electron'), (Join-Path $proj 'plugins'))
+  $newest = Get-ChildItem $srcDirs -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch '\\(node_modules|vendor|dist)\\' } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+  $zipTime = (Get-Item $zips[0]).LastWriteTime
+  if ($newest -and $newest.LastWriteTime -gt $zipTime) { Log ('FAIL 包比源码旧: ' + (Split-Path $newest.FullName -Leaf) + ' (' + $newest.LastWriteTime + ') 晚于 zip (' + $zipTime + ') -> 先重新跑 make-dist'); $script:exit = 1; return }
   node scripts\checks\pack-audit.js $zips
   $sums = Join-Path $pub ('SHA256SUMS-v' + $ver + '.txt')
   Get-FileHash $zips -Algorithm SHA256 | ForEach-Object { '{0}  {1}' -f $_.Hash.ToLower(), (Split-Path $_.Path -Leaf) } | Set-Content -Path $sums -Encoding ascii

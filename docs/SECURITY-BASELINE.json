@@ -25,6 +25,7 @@
       "child_process": [
         "plugins/netease-lyrics/index.js",
         "plugins/ocrregion.js",
+        "src/capturehost.js",
         "src/consolewin.js",
         "src/diagnose.js",
         "src/main.js",
@@ -39,9 +40,9 @@
       "execFile": [
         "plugins/netease-lyrics/index.js",
         "plugins/ocrregion.js",
+        "src/capturehost.js",
         "src/consolewin.js",
         "src/diagnose.js",
-        "src/ocrtranslate.js",
         "src/pluginsys/manager.js",
         "src/portablepy.js",
         "src/pyhelper.js",
@@ -51,6 +52,7 @@
       ],
       "spawn(": [
         "plugins/netease-lyrics/index.js",
+        "src/capturehost.js",
         "src/main.js",
         "src/ocrtranslate.js",
         "src/pluginsys/manager.js",

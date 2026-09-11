@@ -33,7 +33,12 @@ function collect() {
     for (const m of t.matchAll(/https?:\/\/([a-zA-Z0-9._-]+)/g)) { const h = m[1]; if (!/^(127\.0\.0\.1|localhost)$/.test(h)) domains.add(h); }
     // 只在"端口语境"里取数字: port: 1234 / port=1234 / :1234(URL) / listen(1234
     for (const re of [/port["'\s:=]+(\d{4,5})/gi, /:(\d{4,5})(?:\/|\b)/g, /listen\(\s*(\d{4,5})/gi]) {
-      for (const m of t.matchAll(re)) { const p = Number(m[1]); if (p >= 1024 && p <= 65535) ports.add(String(p)); }
+      for (const m of t.matchAll(re)) {
+  // 排除 CSS z-index 之类的假端口(M-20260911-37): z-index:9999 被当成"端口 9999"会让安全基线无意义地漂移
+  const numAt = m.index + m[0].indexOf(m[1]);
+  if (/z-index\s*:\s*$/.test(t.slice(Math.max(0, numAt - 12), numAt))) continue;
+  const p = Number(m[1]); if (p >= 1024 && p <= 65535) ports.add(String(p));
+}
     }
     for (const pat of DANGEROUS) if (t.includes(pat)) (dangerous[pat] = dangerous[pat] || []).push(rel);
   }
