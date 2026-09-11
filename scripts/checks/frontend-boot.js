@@ -125,13 +125,15 @@ const rejections = [];
 process.on('unhandledRejection', function (e) { rejections.push(e && e.message ? e.message : String(e)); });
 try {
   vm.runInNewContext(fs.readFileSync(path.join(PUB, 'lang.js'), 'utf8'), sb, { filename: 'lang.js' });
-  vm.runInNewContext(app, sb, { filename: 'app.js' });
-  // 主题与星空背景 2026-09-11 从 index.html 内联块迁出(M-20260911-16): 必须仍能被加载
-  for (const f of ['theme.js', 'fx.js']) {
-    const fp = path.join(PUB, f);
-    if (!fs.existsSync(fp)) problems.push('缺少 ' + f + '(可能从 index.html 外链里掉了)');
-    else vm.runInNewContext(fs.readFileSync(fp, 'utf8'), sb, { filename: f });
+  // 执行顺序 = index.html 里 script src 的真实顺序(app.js 先定义 $/feErr, 主题与动效在其后)
+  const { uiJsOrder } = require('./_ui-files.js');
+  for (const fp of uiJsOrder(ROOT)) {
+    vm.runInNewContext(fs.readFileSync(fp, 'utf8'), sb, { filename: path.basename(fp) });
   }
+  // 主题与星空背景(2026-09-11 从 index.html 内联块迁出)必须仍挂在 index.html 的外链里 ——
+  // 已经由上面的 uiJsOrder 统一加载, 这里只做"有没有被漏挂"的断言
+  const orderNames = uiJsOrder(ROOT).map((f) => path.basename(f));
+  for (const f of ['theme.js', 'fx.js']) if (orderNames.indexOf(f) < 0) problems.push('index.html 外链里缺少 ' + f);
 } catch (e) {
   let msg = e.message;
   const mm = /^([A-Za-z_$][\w$]*) is not defined$/.exec(msg);

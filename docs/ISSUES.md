@@ -415,3 +415,11 @@
 - 改动(2026-09-11): ① 两个内联块**逐字**迁出为 src/web/public/theme.js(3,937 字节)与 fx.js(2,990 字节), index.html 现为 5 个外链脚本、**0 内联块**; ② 主题内部标识统一为 ASCII key(blue/teal/violet/green/amber/neon), 显示名仍走 window.t(themeXxx), 删掉恒等的 KEYMAP 映射层, URL 参数 ?t=xxx 直接用 key 校验 —— theme.js 代码区中文归零; ③ 门禁覆盖同步扩展(关键: 不能因为搬家而让检查范围缩水): GBOOT 加载 theme.js/fx.js 并断言两个跨文件契约(window.__reThemeLabels 可调用 / window.__fxRestart 存在)**外加主题真的应用了**(documentElement 上有 --bg 变量、#themeName 是文案而不是 i18n 键); GI18NH 扫描范围从 app.js 扩到 app.js + theme.js + fx.js; GHTML 新增「index.html 不得出现内联脚本块」的约定检查; ④ G-BOOT 沙箱补 canvas 2D 上下文桩与 innerWidth/innerHeight 等浏览器全局
 - 验证(2026-09-11): ① GHTML: 5 外链 / 0 内联, 且**反向实测**塞回一个内联块立即 FAIL; ② GBOOT: 三个脚本全部加载通过, 两个契约存在且可调用, 主题变量已应用; ③ GI18NH: 扩展扫描后仍与基线一致(JS 6 项), **无需放宽基线**; ④ 全套门禁 **14 PASS / 1 FAIL**(GSYNC 未推送属预期)
 - 状态: CLOSED
+## M-20260911-17 app.js 拆模块: 安全与权限整块独立 + 门禁改为自动发现(CLOSED)
+- 来源: 台账「app.js 单文件密度」(低优先级: 至少把"安全与权限(旧版套皮)"整块独立出去); 用户"继续优化"
+- 现象: app.js 单文件 71.7KB / 440 行, 平均 154 字符每行; 其中"安全与权限(旧版套皮)"整块(约 12.5KB)与界面主体混在一起
+- 影响面: 文件持续膨胀; 每次改动都在一个 70KB 的文件里定位
+- 根因: 新版 UI 移植时把旧版的安全设置整块贴进 app.js, 之后一直没拆
+- 改动(2026-09-11): ① 按「安全与权限(旧版套皮)」分区标记切成两个经典脚本 —— app.js(59.5KB, 界面主体: 工具/标签页/公告板/插件/数据源/环境/动效/初始化)与 app-security.js(12.8KB, 安全设置 + i18n 取词 + 语言切换); index.html 按顺序外链(app.js → app-security.js → theme.js → fx.js); ② **拆分前先让门禁具备自动发现能力**: 新增 scripts/checks/_ui-files.js(自动发现 public/*.js, 排除 lang.js 词库与 skin.js 品牌数据; uiJsOrder 直接读 index.html 的 script 标签决定执行顺序), 四个前端门禁(i18n-usage / i18n-hardcode / ui-wiring / frontend-boot)全部改用它 —— 否则新文件会掉出门禁视野
+- 验证(2026-09-11): ① **覆盖零缩水**(拆分前后对比): GI18NU 均 202 键、GUWIRE 均 87 控件 / 0 死控件、GI18NH 均与基线一致(HTML 21 / JS 6), 现在扫 4 个前端文件; ② GBOOT 按 index.html 的真实顺序加载 4 个文件: 顶层正常、两个跨文件契约可调用、主题变量已应用; ③ GHTML: 6 个外链全部存在且语法通过、0 内联块、157 个 id 无重复; ④ 全套门禁 **14 PASS / 1 FAIL**(GSYNC 未推送属预期)
+- 状态: CLOSED

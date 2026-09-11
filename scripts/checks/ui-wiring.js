@@ -8,7 +8,10 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..', '..');
 const PUB = path.join(ROOT, 'src', 'web', 'public');
 const html = fs.readFileSync(path.join(PUB, 'index.html'), 'utf8');
-const app = fs.readFileSync(path.join(PUB, 'app.js'), 'utf8');
+const { uiJsText, uiJsFiles } = require('./_ui-files.js');
+// 控件可以在任一前端文件里被接线(拆模块后 app.js 不再是唯一的接线处)
+const app = uiJsText(ROOT);
+const uiFileCount = uiJsFiles(ROOT).length;
 const esc = function (s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); };
 const dead = [];
 let total = 0;
@@ -24,6 +27,6 @@ while ((m = tagRe.exec(html)) !== null) {
   const byId = new RegExp("\\$\\('" + e + "'\\)|getElementById\\('" + e + "'\\)").test(app);
   if (!quoted && !byId) dead.push(m[1].toLowerCase() + '#' + id);
 }
-console.log('[G-UWIRE ui-wiring] 控件接线: 受检 ' + total + ' 个带 id 控件 / 死控件 ' + dead.length);
+console.log('[G-UWIRE ui-wiring] 控件接线: 受检 ' + total + ' 个带 id 控件 / 死控件 ' + dead.length + ' / 扫 ' + uiFileCount + ' 个前端文件');
 for (const d of dead) console.log('  -> FAIL 无任何 JS 引用(点了不会有反应): ' + d);
 process.exitCode = dead.length ? 1 : 0;

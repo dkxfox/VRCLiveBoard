@@ -24,7 +24,10 @@ const html = fs.readFileSync(path.join(ROOT, 'src', 'web', 'public', 'index.html
 let htmlRefs = 0;
 for (const m of html.matchAll(/data-t(?:-ph|-tt)?="([^"]+)"/g)) { htmlRefs++; if (!keys.has(m[1])) problems.push('index.html 引用不存在的键: ' + m[1]); }
 // app.js: tr('key')(兼容旧写法 t('key'))
-const app = fs.readFileSync(path.join(ROOT, 'src', 'web', 'public', 'app.js'), 'utf8');
+const { uiJsText, uiJsFiles } = require('./_ui-files.js');
+// 扫全部前端逻辑文件(app.js 拆模块后不能只看 app.js, 见 _ui-files.js 注释)
+const app = uiJsText(ROOT);
+const uiFiles = uiJsFiles(ROOT).map((f) => path.basename(f));
 const used = new Set();
 for (const m of app.matchAll(/\btr?\('([^']+)'\)/g)) used.add(m[1]);
 for (const k of used) if (!keys.has(k)) problems.push('app.js tr() 引用不存在的键: ' + k);
@@ -47,7 +50,7 @@ for (const k of used) {
     if (!app.includes(".replace('" + ph + "'")) warns.push('键 ' + k + ' 占位符 ' + ph + ' 在 app.js 无对应 .replace(可能原样显示): ' + val);
   }
 }
-console.log('[G-I18NU i18n-usage] 引用完整性: tr() 键 ' + used.size + ' / data-t 引用 ' + htmlRefs + ' / 字典 ' + keys.size + ' 键');
+console.log('[G-I18NU i18n-usage] 引用完整性: tr() 键 ' + used.size + ' / 扫 ' + uiFiles.length + ' 个前端文件' + ' / data-t 引用 ' + htmlRefs + ' / 字典 ' + keys.size + ' 键');
 for (const p of problems) console.log('  -> FAIL ' + p);
 for (const w of warns) console.log('  -> WARN ' + w);
 process.exitCode = problems.length ? 1 : 0;
