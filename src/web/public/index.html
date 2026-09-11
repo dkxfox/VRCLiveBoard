@@ -195,6 +195,7 @@ body.no-anim *{animation:none!important;transition:none!important}
   <div class="card">
     <div class="card-title" style="margin-bottom:8px" data-t="secSrc"></div>
     <div class="sub" style="margin:0 0 8px" data-t="lblPriorityHint">值越大越先显示; 调整后保存</div>
+    <div class="sub" data-t="prioExplain" style="margin-bottom:6px;line-height:1.7"></div>
     <table><thead><tr><th data-t="thEnable">启用</th><th data-t="thName">名称</th><th data-t="thDesc">说明</th><th data-t="thPriority">优先级</th></tr></thead><tbody id="srcRows"></tbody></table>
     <div class="row" style="margin-top:8px"><button class="small gray" id="prioReset" data-t="prioReset">优先级重置</button></div>
   </div>
@@ -207,10 +208,11 @@ body.no-anim *{animation:none!important;transition:none!important}
     <div class="sub" style="margin:10px 0 4px;font-size:15px;font-weight:600" data-t="transVoice">🎙️ 语音字幕</div>
     <div class="row"><input type="checkbox" id="transVoice"><span class="sub" data-t="transVoiceHint">启用(需 LiveTranslate 转录)</span></div>
     <div class="sub" style="margin:10px 0 4px;font-size:15px;font-weight:600" data-t="transShot">📷 截图翻译</div>
+    <div class="sub" data-t="ocrDesc" style="margin:2px 0 6px;line-height:1.7"></div>
     <div class="row"><span style="font-size:13px" data-t="visModeLabel">模式</span><select id="transMode"><option value="auto" data-t="visModeAuto">auto</option><option value="vision" data-t="visModeVision">vision</option><option value="ocr" data-t="visModeOcr">ocr</option></select></div>
     <div class="row" style="margin-top:8px"><input type="text" id="transApiBase" data-t-ph="visBasePh" placeholder="接口地址" style="flex:2"><input type="password" id="transApiKey" placeholder="API Key" style="flex:1"><input type="text" id="transApiModel" data-t-ph="visModelPh" placeholder="模型" style="flex:1"><button class="small" id="visSave" data-t="visSave">保存</button></div>
     <div class="row" style="margin-top:8px"><button id="btnShot" data-t="btnShot">截图翻译</button><span id="shotMsg" style="font-size:13px;margin-left:6px;margin-right:8px"></span><span style="font-size:13px" data-t="lblCountdownSec">倒计时(秒)</span><input type="number" id="ocrDelay" value="5" style="width:56px"><span style="font-size:13px" data-t="lblDisplaySec">显示(秒)</span><input type="number" id="ocrDisplay" value="8" style="width:56px"><span style="font-size:13px" data-t="lblLoop">循环</span><input type="number" id="ocrLoops" value="2" style="width:48px"></div>
-    <div class="row" style="margin-top:8px"><span style="font-size:13px" data-t="capTitle">截图区域</span><select id="transRegion"><option data-t="capModeWin">窗口</option><option data-t="capModeReg">区域</option><option data-t="capModeScr">全屏</option></select><button class="small gray" id="capAdjBtn" data-t="capAdjBtn">调整区域</button><button class="small gray" id="capFullBtn" data-t="capFullBtn">设为全屏</button></div>
+    <div class="row" style="margin-top:8px"><span style="font-size:13px" data-t="capTitle">截图区域</span><select id="transRegion"><option data-t="capModeWin">窗口</option><option data-t="capModeReg">区域</option><option data-t="capModeScr">全屏</option></select><button class="small gray" id="capAdjBtn" data-t="capAdjBtn">调整区域</button><button class="small gray" id="capFullBtn" data-t="capFullBtn">设为全屏</button><span id="capInfo" style="font-size:12px;color:var(--muted);margin-left:6px"></span></div>
     <pre id="shotOut" style="display:none;max-height:200px;overflow:auto;font-size:13px;margin-top:8px"></pre>
   </div>
 </div>
@@ -218,6 +220,7 @@ body.no-anim *{animation:none!important;transition:none!important}
 <div id="tab-env" hidden>
   <div class="card">
     <div class="card-title" style="margin-bottom:8px" data-t="secEnv"></div>
+    <div class="sub" data-t="envDesc" style="margin-bottom:6px;line-height:1.7"></div>
     <table><thead><tr><th data-t="thDep">依赖</th><th data-t="thUse">用途</th><th data-t="thState">状态</th><th data-t="thAct">操作</th></tr></thead><tbody id="envRows">
     </tbody></table>
     <div class="sub" id="envMsg" style="margin-top:8px"></div>
@@ -232,6 +235,8 @@ body.no-anim *{animation:none!important;transition:none!important}
     <div class="sub" style="margin:12px 0 4px">🔒1 <span data-t="cfgBackupTitle">配置备用</span></div>
     <div class="row"><button class="small gray" id="expCfg" data-t="btnExportCfg"></button><button class="small gray" id="impCfg" data-t="btnImportCfg"></button></div>
     <div class="sub" style="margin:12px 0 4px" data-t="advNetwork">网络 / 端口</div>
+    <div class="sub" id="portsInfo" style="font-size:12px;margin-bottom:4px"></div>
+    <div class="sub" data-t="advHttpHint" style="font-size:12px;margin-bottom:4px"></div>
     <div class="row"><span style="font-size:13px">OSC</span><input type="number" id="oscPort" value="9000" style="width:80px"><button class="small" id="oscApply" data-t="btnApply"></button><span style="font-size:13px">Web</span><input type="number" id="webPort" value="19190" style="width:80px"><button class="small" id="webSave" data-t="portsSaveRestart">保存并重启</button><button class="small gray" style="margin-left:6px" id="portsCheckBtn" data-t="portsCheckBtn">端口体检</button><span class="sub" id="portsOut" style="font-size:12px"></span></div>
     <div class="sub" style="margin:12px 0 4px" data-t="secSecurity"></div>
   <div style="margin-top:12px">

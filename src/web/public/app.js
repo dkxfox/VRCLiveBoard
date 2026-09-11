@@ -60,7 +60,7 @@ if($('pgPrev'))$('pgPrev').onclick=function(){if(pages.length)curIdx=(curIdx-1+p
 if($('pgNext'))$('pgNext').onclick=function(){if(pages.length)curIdx=(curIdx+1)%pages.length;renderBoard();};
 if($('addPage'))$('addPage').onclick=function(){pages.push({text:tr('newPageText')});curIdx=pages.length-1;renderBoard();};
 if($('bdAdd'))$('bdAdd').onclick=function(){pages.push({text:tr('newPageText')});curIdx=pages.length-1;renderBoard();};
-if($('bdSave'))$('bdSave').onclick=async function(){pages[curIdx].text=$('bdText').value;try{var r=await fetch('/api/config',{method:'POST',body:JSON.stringify({pages:pages})});var j=await r.json();if(!j.ok)note(tr('saveFail'),'warn');}catch(e){note(tr('saveFail'),'warn');}renderBoard();};
+if($('bdSave'))$('bdSave').onclick=async function(){pages[curIdx].text=$('bdText').value;try{var r=await fetch('/api/config',{method:'POST',body:JSON.stringify({pages:pages})});var j=await r.json();if(!j.ok)note(tr('saveFail'),'warn');else note(tr('savedOk'),'ok');}catch(e){note(tr('saveFail'),'warn');}renderBoard();};
 // ===== 公告板补接线(M-20260907-01 批 A) =====
 function applyBdPrevWidth(){var w=$('bdWidth'),p=$('bdPrev');if(!w||!p)return;var n=Math.max(8,Math.min(144,Math.round(Number(w.value)||28)));w.value=n;p.style.width=n+'ch';p.style.maxWidth='100%';}
 if($('boardEdit'))$('boardEdit').onclick=function(){var em=$('editMode');if(!em)return;var show=em.hidden;em.hidden=!show;this.classList.toggle('on',show);if(show)renderBoard();};
@@ -128,6 +128,24 @@ function plgCard(p){var en=!!(p.enabled||p.run),ap=!!p.approved;var d=document.c
  d.innerHTML='<div class="plgcard-head"><b class="plgcard-name">'+esc(plgName(p))+'</b><span class="tag">v'+(p.version||'')+'</span><span class="plgstat">'+(ap?'<span class="pill ok">'+tr('stApproved')+'</span>':'<span class="pill warn">'+tr('stUnapproved')+'</span>')+(en?'<span class="pill ok">'+tr('stEnabled')+'</span>':'<span class="pill gray">'+tr('stDisabled')+'</span>')+'</span><span class="plgcard-ctrl"><span class="sw'+(en?' on':'')+'" data-en="'+esc(p.id)+'"></span><button class="small gray" data-set="'+esc(p.id)+'">'+tr('btnSettings')+'</button></span></div><div class="plgcard-desc">'+esc(p.description||tr('plgNoDesc'))+'</div><div class="plgcard-meta">'+esc(p.id||'')+' · '+tr('plgPerms')+': '+esc(plgPermsDesc(p))+(p.error?(' · <span style="color:var(--err)">⚠ '+esc(p.error)+'</span>'):'')+((p.conflicts&&p.conflicts.length)?(' · <span style="color:var(--warn)">⚠ '+tr('plgConflict')+': '+esc(p.conflicts.map(function(c){return c.with;}).join(', '))+'</span>'):'')+'</div><div class="plgcard-body" style="display:none"></div>';
  d.querySelector('[data-en]').onclick=function(){var sw=this;var doEnable=function(){sw.classList.add('on');fetch('/api/plugins/approve',{method:'POST',body:JSON.stringify({id:p.id})}).then(function(r){return r.json();}).then(function(j){if(j&&j.ok===false){note(tr('opFail')+': '+(j.error||''),'warn');return;}plgToggle('/api/plugins/enable',p.id);});};if(!ap){plgWarn(p,doEnable);}else{var wantOn=!sw.classList.contains('on');sw.classList.toggle('on',wantOn);var url=wantOn?'/api/plugins/enable':'/api/plugins/disable';plgToggle(url,p.id);}};
  d.querySelector('[data-set]').onclick=function(){var body=d.querySelector('.plgcard-body');if(body.style.display==='none'){body.style.display='block';loadPlgSettings(p,body);}else{body.style.display='none';}};
+  // 删除与打开插件页面(M-20260911-35): 旧版有, 移植时丢了入口(后端 /api/plugins/remove 与 /plugin/<id> 一直都在)
+  var pbody = d.querySelector('.plgcard-body');
+  if (pbody) {
+    if (p.hasPage || p.page) {
+      var ob = document.createElement('button'); ob.className = 'small gray'; ob.textContent = tr('btnOpenPage');
+      ob.onclick = function () { window.open('/plugin/' + encodeURIComponent(p.id), '_blank'); };
+      pbody.appendChild(ob);
+    }
+    var db = document.createElement('button'); db.className = 'small gray'; db.style.marginLeft = '6px'; db.textContent = tr('btnRemove');
+    db.onclick = function () {
+      if (!confirm(tr('removeConfirm'))) return;
+      fetch('/api/plugins/remove', { method: 'POST', body: JSON.stringify({ id: p.id }) })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { if (j && j.ok === false) note(tr('opFail') + ': ' + (j.error || ''), 'warn'); else note(tr('savedOk'), 'ok'); loadPlugins(); })
+        .catch(function (e) { apiFail('#plgRefresh', e); });
+    };
+    pbody.appendChild(db);
+  }
  return d;}
 function renderPlgCards(){var el=$('plugCards');if(!el)return;el.innerHTML='';if(!plgArr.length){el.innerHTML='<div class="sub">'+tr('plgNoPlugins')+'</div>';return;}plgArr.forEach(function(p){el.appendChild(plgCard(p));});}
 async function loadPlugins(){try{var r=await fetch('/api/plugins');var list=await r.json();plgArr=Array.isArray(list)?list:(list.plugins||list.entries||[]);renderPlgCards();if(typeof syncQuickPlg==='function')syncQuickPlg();}catch(e){apiFail('loadPlugins',e);}}
@@ -156,7 +174,7 @@ async function pollStatus(){try{
   if(u.occupied){var nm=u.name||'';var isV=nm.indexOf('VRChat')>=0;setDot('udpDot',isV?'on':'off');$('udpText').textContent=isV?tr('udpVrc'):(tr('udpBusy')+': '+nm);}else{setDot('udpDot','');$('udpText').textContent=tr('udpFree');}
 }catch(e){var cm=$('curMeta');if(cm){var cc=s.current||{};cm.textContent=cc.sourceId?(String(NM(cc.sourceId))+' · '+(cc.priority!=null?cc.priority:'-')+(cc.ttlUntil?(' · '+Math.max(0,Math.round((cc.ttlUntil-Date.now())/1000))+'s'):'')):'';}
   var oc=s.ocrState;if(oc&&oc.phase==='countdown'&&oc.countdown>0)shotHint(tr('ocrRunning')+' '+oc.countdown,true);
-  try{var pp=await (await fetch('/api/ports')).json();var cu=$('consoleUrl');if(cu){var w=pp.web||{};cu.textContent='http://'+(w.host||'127.0.0.1')+':'+(w.actual||w.port||'');}}catch(e2){apiFail('#consoleUrl',e2);}
+  try{var pp=await (await fetch('/api/ports')).json();var w=pp.web||{};var cu=$('consoleUrl');if(cu)cu.textContent='http://'+(w.host||'127.0.0.1')+':'+(w.actual||w.port||'');var pi2=$('portsInfo');if(pi2)pi2.textContent=(tr('portsWeb')||'Web')+' '+(w.actual||w.port||'-')+' · '+(tr('portsOsc')||'OSC')+' '+(((pp.osc||{}).port)||'-');}catch(e2){apiFail('#consoleUrl',e2);}
   apiFail('#udpText',e);}}
 document.querySelectorAll('.sw[data-src]').forEach(function(sw){sw.addEventListener('click',async function(){sw.classList.toggle('on');try{await fetch('/api/sources',{method:'POST',body:JSON.stringify({id:sw.dataset.src,enabled:sw.classList.contains('on')})});}catch(e){apiFail('#udpText',e);}pollStatus();});});
 if($('diagBtn'))$('diagBtn').onclick=async function(){var out=$('diagOut'),cp=$('diagCopy');if(out){out.style.display='block';out.textContent='…';}try{var j=await (await fetch('/api/diagnose')).json();if(out)out.textContent=JSON.stringify(j,null,2);if(cp)cp.style.display='inline-block';}catch(e){if(out)out.textContent=tr('diagFail')+e.message;}};
@@ -188,7 +206,7 @@ async function loadTrans(){try{var c=await (await fetch('/api/config')).json();v
 if($('transVoice'))$('transVoice').onchange=async function(){try{await fetch('/api/sources',{method:'POST',body:JSON.stringify({id:'livetranslate',enabled:this.checked})});}catch(e){apiFail('#transVoice',e);}pollStatus();};
 
 // 高级设置
-if($('advAuto')){(async function(){try{var c=await (await fetch('/api/config')).json();$('advAuto').checked=!!c.autostart;}catch(e){apiFail('#advAuto',e);}})();$('advAuto').onchange=async function(){try{await fetch('/api/autostart',{method:'POST',body:JSON.stringify({enabled:this.checked})});}catch(e){apiFail('#advAuto',e);}};}
+if($('advAuto')){(async function(){try{var c=await (await fetch('/api/config')).json();$('advAuto').checked=!!c.autostart;}catch(e){apiFail('#advAuto',e);}})();$('advAuto').onchange=async function(){try{await fetch('/api/autostart',{method:'POST',body:JSON.stringify({enabled:this.checked})});note(this.checked?tr('autoOn'):tr('autoOff'),'ok');}catch(e){apiFail('#advAuto',e);}};}
 if($('advConsole')){(async function(){try{var c=await (await fetch('/api/config')).json();$('advConsole').checked=!((c.desktop||{}).showConsole===false);}catch(e){apiFail('#advConsole',e);}})();$('advConsole').onchange=async function(){try{await fetch('/api/desktop/console',{method:'POST',body:JSON.stringify({visible:this.checked})});}catch(e){apiFail('#advConsole',e);}};}
 if($('oscPort')){(async function(){try{var c2=await (await fetch('/api/config')).json();$('oscPort').value=(c2.osc&&c2.osc.port)||9000;}catch(e){apiFail('#oscPort',e);}})();$('oscApply').onclick=async function(){try{await fetch('/api/ports/osc',{method:'POST',body:JSON.stringify({port:Number($('oscPort').value)||9000})});note(tr('portApplied'),'ok');}catch(e){note(tr('applyFail'),'warn');}};}
 if($('devdocsBtn'))$('devdocsBtn').onclick=function(){fetch('/api/devdocs/open',{method:'POST',body:'{}'});};
@@ -342,6 +360,9 @@ function guideHide(){var ov=$('guideOverlay');if(ov)ov.hidden=true;try{var no=$(
   if(!done)setTimeout(guideShow,700);
 })();
 
+// 截图区域信息(M-20260911-35): 旧版 capInfo 显示当前模式与自定义区域坐标, 区域没设置也在这里提示
+function capInfoShow(){fetch('/api/config').then(function(r){return r.json();}).then(function(c){var cap=((c.ocrtl||{}).capture)||{};var el=$('capInfo');if(!el)return;var md=cap.mode||'window';var key=md==='region'?'capModeReg':(md==='screen'?'capModeScr':'capModeWin');var s=tr(key);if(md==='region'){var rg=cap.region||{};s+=' '+(rg.w>0?((rg.x||0)+','+(rg.y||0)+' '+(rg.w||0)+'x'+(rg.h||0)):tr('capNoRegion'));}el.textContent=s;}).catch(function(e){apiFail('#capInfo',e);});}
+capInfoShow();
 // init
 
 pollStatus();setInterval(pollStatus,5000);

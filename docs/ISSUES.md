@@ -580,3 +580,10 @@
 - 改动(2026-09-11): ① 新增 src/pluginsys/hash.js —— hashIndex()(旧口径)与 hashDir()(全目录: 相对路径 + 内容, 目录项排序; 跳过 node_modules 与 data/); ② manager.js: 新增 hashFull(), approved 判断改为**双口径容忍**(老授权继续有效, 新授权一律存全目录哈希); ③ web/server.js 的 /api/plugins/approve 改写 hashFull; ④ plugin-check 的展示哈希与自检改用同一个模块 + 新增覆盖面断言; ⑤ 开发者文档/02-插件开发规范.md 的哈希说明同步更新。
 - 说明: 第三方 vendor 目录也在哈希范围内(它就是被批准的东西的一部分); data/ 是插件运行时数据, 不算代码, 故意排除。
 - 状态: CLOSED
+## M-20260911-35 控制台恢复移植丢失(批 3): 插件删除/打开页面、capInfo、portsInfo、说明文字、成功回执(CLOSED)
+- 来源: 新旧控制台差异审计挂账(用户"继续")
+- 现象: ① 插件"删除"入口丢失(后端 /api/plugins/remove 一直在), 装错了插件只能手动去删目录; ② "打开插件页面"(带页面的插件 /plugin/<id>)入口丢失; ③ capInfo(当前截图模式 + 自定义区域坐标/未设置提示)丢失 —— 用户不知道当前截的是哪块; ④ 高级设置里看不到"当前实际监听端口 / OSC 目标"; ⑤ 4 段说明文字(ocrDesc/envDesc/prioExplain/advHttpHint)有键无家; ⑥ 保存配置与开机自启成功时没有任何回执(失败才有提示)。
+- 证据(2026-09-11): ① id 166 → 168(capInfo/portsInfo); ② G-BOOT 顶层加载正常; ③ GUWIRE 受检 90 控件 / **死控件 0**; ④ GHTML/GI18N/GI18NU/GI18NH 全通过(新增 3 个三语键: btnRemove/removeConfirm/btnOpenPage, 字典 581 → 584); ⑤ 全套门禁见提交记录。
+- 改动(2026-09-11): ① plgCard 内新增"删除插件"(二次确认 → /api/plugins/remove → 刷新列表)与"打开插件页面"(仅插件声明了页面时出现, 走 /plugin/<id>); ② index.html 新增 #capInfo(截图区域行内)与 #portsInfo(网络/端口段内) + advHttpHint 说明; ③ capInfoShow() 读 config 渲染模式与区域坐标, 未设置时显示 capNoRegion; ④ pollStatus 里顺带填 portsInfo(Web 实际端口 · OSC 目标); ⑤ 4 段说明文字挂回它们各自的卡片; ⑥ 保存类成功回执走 savedOk, 自启开关走 autoOn/autoOff。
+- 说明: 新增的 3 个键用 lang.js 既有的追加块写法(三语齐备, GI18N 对齐检查通过); 其余全部复用"有键无家"的旧键, 零新增翻译。
+- 状态: CLOSED
