@@ -1,0 +1,300 @@
+{
+  "note": "后端口径清单(GROUTE): method + path + 门禁等级。新增/删除路由、或改变门禁等级, 都必须显式更新本文件并说明理由 —— 与 GSURF 攻击面基线同一思路: 不是防漏洞, 而是防\"我不知道它变了\"。",
+  "levelLegend": {
+    "0": "零级(无需密码; POST 仍受顶部跨站守卫约束)",
+    "1": "一级密码(needL1(res) 或 !unlockState.level1 且回 403)",
+    "2": "开发者密码(!unlockState.level2 且回 403)"
+  },
+  "updated": "2026-09-11",
+  "notes": {
+    "POST /api/security": "插件安全策略段零级可\"单向收紧/恢复默认\"; 提示词防线等其余字段一级(条目 98 用户拍板)",
+    "POST /api/swearfilter": "开关零级; addWords 一级",
+    "GET /api/special/video": "只服务工程内 assets/ 下的文件(路径围栏, 见 M-20260911-02)",
+    "POST /api/plugins/remove": "递归删除插件目录; 按 F-20260903-01 §1.7 属零级(威胁模型明确不防本机所有者)",
+    "POST /api/fe-err": "前端错误上报入口(只写日志), 零级",
+    "POST /v1/chatbox": "外部推送文本入口(本地), 与 /api/chatbox 同一处理器"
+  },
+  "specialBranches": [
+    "GET / 与 /index.html: 首页",
+    "GET 非 /api 前缀: 静态资源(URL 解码 + 禁 .. / \\\\)",
+    "GET /plugin/*: 插件静态资源(需插件已启用)",
+    "兜底: 未匹配一律 404 JSON"
+  ],
+  "routes": [
+    {
+      "m": "POST",
+      "p": "/api/autostart",
+      "level": 0
+    },
+    {
+      "m": "GET",
+      "p": "/api/capture/preview",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/capture/set",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/chatbox",
+      "level": 0
+    },
+    {
+      "m": "GET",
+      "p": "/api/config",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/config",
+      "level": 0
+    },
+    {
+      "m": "GET",
+      "p": "/api/config/export",
+      "level": 1
+    },
+    {
+      "m": "POST",
+      "p": "/api/config/import",
+      "level": 1
+    },
+    {
+      "m": "POST",
+      "p": "/api/desktop/console",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/desktop/quit",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/desktop/restart",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/devdocs/open",
+      "level": 0
+    },
+    {
+      "m": "GET",
+      "p": "/api/devgate/status",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/devgate/verify",
+      "level": 0
+    },
+    {
+      "m": "GET",
+      "p": "/api/diagnose",
+      "level": 0
+    },
+    {
+      "m": "GET",
+      "p": "/api/env",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/env/install-python",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/env/install-winsdk",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/fe-err",
+      "level": 0
+    },
+    {
+      "m": "GET",
+      "p": "/api/health",
+      "level": 0
+    },
+    {
+      "m": "GET",
+      "p": "/api/icon",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/lang",
+      "level": 0
+    },
+    {
+      "m": "GET",
+      "p": "/api/logs",
+      "level": 0
+    },
+    {
+      "m": "GET",
+      "p": "/api/market",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/ocrtl",
+      "level": 0
+    },
+    {
+      "m": "GET",
+      "p": "/api/ocrtl-lt",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/ocrtl-vision",
+      "level": 0
+    },
+    {
+      "m": "GET",
+      "p": "/api/plugins",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/plugins/approve",
+      "level": 0
+    },
+    {
+      "m": "GET",
+      "p": "/api/plugins/asset",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/plugins/call",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/plugins/config",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/plugins/disable",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/plugins/enable",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/plugins/import",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/plugins/import-config",
+      "level": 0
+    },
+    {
+      "m": "GET",
+      "p": "/api/plugins/panel",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/plugins/remove",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/plugins/restart",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/plugins/scan",
+      "level": 0
+    },
+    {
+      "m": "GET",
+      "p": "/api/ports",
+      "level": 0
+    },
+    {
+      "m": "GET",
+      "p": "/api/ports/check",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/ports/osc",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/ports/web",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/security",
+      "level": 1
+    },
+    {
+      "m": "POST",
+      "p": "/api/security-words",
+      "level": 2
+    },
+    {
+      "m": "POST",
+      "p": "/api/sources",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/special/upload",
+      "level": 0
+    },
+    {
+      "m": "GET",
+      "p": "/api/special/video",
+      "level": 0
+    },
+    {
+      "m": "GET",
+      "p": "/api/status",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/swearfilter",
+      "level": 1
+    },
+    {
+      "m": "POST",
+      "p": "/api/swearfilter-words",
+      "level": 2
+    },
+    {
+      "m": "GET",
+      "p": "/api/version",
+      "level": 0
+    },
+    {
+      "m": "GET",
+      "p": "/api/version/check",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/v1/chatbox",
+      "level": 0
+    }
+  ]
+}

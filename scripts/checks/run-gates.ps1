@@ -69,6 +69,7 @@ Gate 'GUWIRE' '控件接线'       { node scripts\checks\ui-wiring.js }
 Gate 'GBOOT' '前端启动可执行性' { node scripts\checks\frontend-boot.js }
 Gate 'GPLUG' '插件契约/单一源'   { node scripts\checks\plugin-check.js }
 Gate 'GCONF' '配置契约/安全默认' { node scripts\checks\config-contract.js }
+Gate 'GROUTE' '后端口径清单'    { node scripts\checks\route-inventory.js }
 Gate 'GDOC'  '说明文件一致性'    { node scripts\checks\doc-consistency.js }
 }
 if ($Smoke) {
