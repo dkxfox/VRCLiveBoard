@@ -95,8 +95,9 @@ function Invoke-Capture($opt) {
   try {
     if ($mode -eq 'beep') {
       # Beep from the resident host too (M-20260911-38): each beep used to spawn a fresh powershell (~0.5s cold start).
-      try { [console]::beep([int]$x0, [int]$y0) } catch {}
-      return 'OK'
+      # NOTE: frequency/duration come in through the JSON command object -- an earlier revision read two undefined
+      # variables here, so the host answered OK while staying silent (M-20260911-41). Fail loudly so the caller can fall back.
+      try { [console]::beep([int]$opt.freq, [int]$opt.ms); return 'OK' } catch { return ('CAPTURE-FAIL: beep ' + $_.Exception.Message) }
     }
     if ($mode -eq 'fg') {
       $hwnd = Find-WindowByTitle $title

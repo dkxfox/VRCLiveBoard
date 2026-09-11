@@ -238,7 +238,10 @@ function beepDirect(freq, ms) {
 function beep(freq, ms) {
   // 优先让常驻助手发声(M-20260911-38); 助手不可用再退回一次性 spawn(行为不退化)
   try {
-    getCaptureHost(null).capture({ mode: 'beep', freq: freq, ms: ms }, 5000).then(function () {}, function () { beepDirect(freq, ms); });
+    getCaptureHost(null).capture({ mode: 'beep', freq: freq, ms: ms }, 5000).then(function (r) {
+      // 宿主回了非 OK(比如 beep 抛错)时也要退回一次性播放(M-20260911-41): 之前只看 resolve/reject, 于是"宿主静默无声"被当成功
+      if (String(r || '').indexOf('OK') !== 0) beepDirect(freq, ms);
+    }, function () { beepDirect(freq, ms); });
   } catch (e) { beepDirect(freq, ms); }
 }
 // 分片上限必须给前缀留位(M-20260911-26): composer 会把整条截到 maxChars, 而前缀 '[12/12 轮10/10] ' 有 15 个码点,
