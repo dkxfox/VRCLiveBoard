@@ -74,8 +74,8 @@ Gate 'GDOC'  '说明文件一致性'    { node scripts\checks\doc-consistency.js
 if ($Smoke) {
   Gate 'G4' ('隔离冒烟 :' + $Port) {
     $joined = $Assert -join [string][char]31
-    if ($joined) { powershell -NoProfile -ExecutionPolicy Bypass -File scripts\checks\smoke.ps1 -Port $Port -Assert $joined }
-    else { powershell -NoProfile -ExecutionPolicy Bypass -File scripts\checks\smoke.ps1 -Port $Port }
+    if ($joined) { powershell -NoProfile -ExecutionPolicy Bypass -File scripts\checks\smoke.ps1 -Port $Port -Flow -Assert $joined }
+    else { powershell -NoProfile -ExecutionPolicy Bypass -File scripts\checks\smoke.ps1 -Port $Port -Flow }
   }
 }
 if (-not $SmokeOnly) {

@@ -10,7 +10,8 @@ param(
   [string]$Zip = '',
   [int]$Port = 19250,
   [string[]]$Assert = @(),
-  [switch]$KeepTemp
+  [switch]$KeepTemp,
+  [switch]$Flow
 )
 $ErrorActionPreference = 'Stop'
 $Assert = @($Assert | ForEach-Object { $_ -split ([string][char]31) } | Where-Object { $_ })
@@ -78,6 +79,10 @@ T 'plugins'        '/api/plugins'        'friend-welcome|scheduled-board|\[\]'
 T 'console page'   '/'                   'VRCLiveBoard'
 T 'lang.js'        '/lang.js'            'VRCB_LANG'
 T 'devgate status' '/api/devgate/status' '"level1"'
+T 'config 读取拦截' '/api/special/video?file=config.json' '"ok":false' 403
+T '目录穿越拦截'    '/api/special/video?file=..%2F..%2F..%2F..%2FWindows%2Fwin.ini' '"ok":false' 403
+T '小图可服务'      '/icon-256.png' 'PNG'
+T '环境检测接口'    '/api/env' 'systemPython|portablePython'
 foreach ($a in $Assert) {
   $parts = $a -split '\|', 4
   if ($parts.Count -ge 3) {
@@ -86,6 +91,14 @@ foreach ($a in $Assert) {
     T ('[专项] ' + $parts[0]) $parts[1] $parts[2] $want
   }
   else { Write-Output ('  FAIL 断言格式错误(应为 name|urlPath|regex[|期望状态码]): ' + $a); $script:fail++ }
+}
+if ($Flow) {
+  # 后端契约流程测试(自定义头/ POST 大 body / 事件循环阻塞): 冒烟断言机制做不到的部分
+  $flowJs = Join-Path $PSScriptRoot 'backend-flow.js'
+  if (Test-Path $flowJs) {
+    node $flowJs --port $Port --root $tmp
+    if ($LASTEXITCODE -ne 0) { $script:fail++ } else { $script:pass++ }
+  } else { Write-Output '  FAIL 缺少 backend-flow.js'; $script:fail++ }
 }
 Write-Output ('SMOKE RESULT: pass=' + $script:pass + ' fail=' + $script:fail)
 
