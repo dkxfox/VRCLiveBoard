@@ -370,3 +370,16 @@
 - 改动(2026-09-11): ① 从 electron/app.ico 中抽出 256x256 那一档(纯字节操作, 不引入任何依赖)存为 src/web/public/icon-256.png(107KB, **小 22.6 倍**); ② simpleBoot 与 startup-test.html 改用它, 并保留 /api/icon 作为 onerror 兜底(小图缺失时仍能显示), 再失败才隐藏; ③ index.html 的 head 增加 <link rel="preload" as="image" href="/icon-256.png">, 让下载在页面解析时就并行开始, 而不是等 /api/config 返回后才发起; ④ server.js 新增 serveAsset(): 图片类静态资源改用 ETag + no-cache(内容没变回 304), 其它文件保持 no-store 以免影响界面热更新; ⑤ G-BOOT 增加三条守卫断言: 启动动画必须使用 icon-256.png(用回 /api/icon 大图即 FAIL)、index.html 必须含 preload、图标必须注册 load 监听。
 - 用户实机确认(2026-09-11): **通过**
 - 状态: CLOSED
+## M-20260911-12 后端未复验四项(M1/M5/L1/L3)复核并修复 + 端口体检不再卡死事件循环 + 22 处空 catch 接入上报(CLOSED)
+- 来源: 2026-09-11 代码审核子代理报告的未复验清单 → 本次逐条复核: **四条全部属实**; 另更正一处子项
+- 现象与复现:
+  - **M1 readBody**: POST 超大 body(>256KB) 时直接 req.destroy() 且不回包 → 客户端只能看到"卡死"; 连接出错/中断时回调也永不触发, 请求同样挂住。
+  - **L3 视频 Range**: Range: bytes=5000-100 → start=5000/end=100 → Content-Length = 100-5000+1 = 负数, createReadStream({start:5000,end:100}) 同步抛 ERR_OUT_OF_RANGE → 响应永不结束, 服务端只留一条未捕获异常。
+  - **M5 插件定时器**: ctx.events.every() 产生的 interval 只进管理器总表, disable() 从不清 → 反复启用/停用会累积定时器。
+  - **L1 日志双写**: autostart 生成的 bat 把 node src\\main.js 的 stdout 重定向进 logs\\app.log, 而 logger.js 同时 console.log + appendFileSync 写同一文件 → **每行日志写两遍**(实际症状比报告的"交错半行"更重)。
+  - **M1 附带**: 端口体检在请求路径里同步跑 netstat/tasklist, 期间**整个事件循环停摆**(composer/OSC 一起停)。
+- 更正: 子代理称 M5 还包含"scan() 在构造与 main.js 各调一次会重复启动 vrclog 监听" —— 复核 vrclog.js:93-95 为 if (watcher) return; 自带幂等, **该子项不成立**, 未做改动。
+- 改动(批 3b, 2026-09-11): ① readBody 统一 finish() 出口: 超限清空并 destroy 后仍回调一次, error/aborted 也回调(零改调用点, 调用方总能走到自己的校验分支); ② Range: 支持后缀区间 bytes=-N, 不可满足区间按规范回 416 + Content-Range: bytes */total, 未解析出合法区间则忽略 Range 头回 200; ③ manager.js: every() 把定时器同时记在插件名下, 返回的清除函数从两处移除, disable() 先清插件名下定时器再 dispose; ④ autostart 生成的 bat 改把 stdout 写 logs\\stdout.log, housekeeping 截断清单同步加入 stdout.log; ⑤ server.js 22 处空 catch 全部接入 noteFail(where, err) —— 与前端 apiFail 对称, 按位置去重只报一次; ⑥ **netstatTable()/pidNames() 改为异步 execFile**, portCheck 内部改 await, 并把两次进程调用并行化。
+- 验证(批 3b, 2026-09-11): ① Range 六个用例全过: 完整 200(1000 字节) / bytes=0-99 → 206+100 字节 / bytes=100- → 206 / bytes=-100 → 206(后缀 900-999) / **bytes=5000-100 → 416 且 1ms 返回**(修复前卡死) / 非法 Range 头 → 200; ② 300KB POST → **HTTP 200 且 7ms 返回**(修复前不回包), 之后服务正常; ③ 插件定时器: 启用后 1 个 → 停用后 0 个 → 反复启停 5 轮仍为 0(修复前每轮 +1); ④ **事件循环 A/B 实测**(隔离实例, 并发发 /api/ports/check 与 /api/version): 旧版(execFileSync) 体检 1700ms 期间另一个请求要等 **1661ms**; 新版(异步) 体检 1386ms 期间另一个请求仅 **5ms**; ⑤ run-gates -Smoke = 13 PASS / 1 FAIL(GSYNC 未推送属预期)。
+- 遗留(低影响, 未处理): server.js 环境检测里两处 execFileSync('python', ...) 仍是同步(python 启动百毫秒级, 且仅在用户点"环境检测"时触发); 本机 netstat 实测 1.4~2.2 秒, 已异步化。
+- 状态: CLOSED

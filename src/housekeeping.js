@@ -8,7 +8,7 @@ function runHousekeeping(config, logger) {
   try {
     // 1) 日志截断: 超过 1MB 只保留尾部 100KB(F-01 起插件审计日志同样落盘, 一并管理)
     const logsDir = path.join(root, 'logs');
-    for (const f of ['boot.log', 'app.log', 'autostart.log', 'plugin-audit.log']) {
+    for (const f of ['boot.log', 'app.log', 'autostart.log', 'plugin-audit.log', 'stdout.log']) {
       const p = path.join(logsDir, f);
       try {
         const st = fs.statSync(p);

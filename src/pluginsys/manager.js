@@ -126,7 +126,13 @@ class PluginManager {
           const safe = function () { try { fn(); } catch (e) { self.logger.warn('[插件定时回调异常 ' + entry.id + '] ' + ((e && e.message) || e)); } };
           const t = setInterval(safe, ms);
           self.timers.push(t);
-          return function () { clearInterval(t); };
+          entry.timers = entry.timers || [];
+          entry.timers.push(t); // 记在插件自己名下: 停用时统一清理, 否则反复启用/停用会累积定时器(M-20260911-12)
+          return function () {
+            clearInterval(t);
+            const i = self.timers.indexOf(t); if (i >= 0) self.timers.splice(i, 1);
+            const j = (entry.timers || []).indexOf(t); if (j >= 0) entry.timers.splice(j, 1);
+          };
         }
       },
       media: {
@@ -264,6 +270,9 @@ class PluginManager {
     const entry = this.entries.find(function (e) { return e.id === id; });
     if (!entry || !entry.enabled) return { ok: true };
     try {
+      // 先清插件自己注册的定时器(插件忘了清也不能漏, 否则插件重启用会累积)(M-20260911-12)
+      for (const t of (entry.timers || [])) { try { clearInterval(t); } catch (e) {} const i = this.timers.indexOf(t); if (i >= 0) this.timers.splice(i, 1); }
+      entry.timers = [];
       if (entry.plugin && entry.plugin.dispose) entry.plugin.dispose();
       for (const s of entry.runtimeSources) { this.composer.unregisterSource(s.id); }
       entry.runtimeSources = [];

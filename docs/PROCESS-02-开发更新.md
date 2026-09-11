@@ -134,6 +134,5 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke
 
 **待复验(2026-09-11 代码审核: 子代理报告, 本人未逐条复核, 勿直接当结论)**
 - H3 / H4 / H5 三条 **2026-09-11 批 3 已复验为真并修复**, 见 M-20260911-06 / -07 / -08; 其中 H3 修复过程中还实测出两项同源问题(导入接口只认导出信封、坏导入可把配置打残并落盘)
-- M1 readBody 无 error/aborted 处理, 超 256KB 时 req.destroy() 不回响应; /api/health 触发多次 netstat/tasklist 阻塞事件循环
-- M5 pluginsys/manager.js 定时器只增不减, disable 不清插件 interval, 反复 restart 会累积
-- L1 logger.js 与 autostart.js 双写同一 app.log 且按 1MB 截断(会交错半行); L3 /api/special/video 的 Range 处理在 bytes=5000-100 时会算出负 Content-Length
+- ~~M1 / M5 / L1 / L3~~ —— **2026-09-11 批 3b 已逐条复核(四条均属实)并修复**, 见 M-20260911-12; 其中 M5 的"scan() 重复启动 vrclog"子项经复核**不成立**(vrclog.start 自带 if (watcher) return 幂等), 而 L1 的实际症状比报告更重(不是交错半行, 而是**每行写两遍**)
+- 剩余未处理(低影响, 按需): server.js 环境检测里两处 execFileSync(python) 仍是同步调用(百毫秒级, 仅"环境检测"时触发); 本机 netstat 实测 1.4~2.2 秒, 已异步化(见 M-20260911-12)

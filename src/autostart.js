@@ -20,7 +20,7 @@ function setAutostart(on, projectDir, logger) {
     }
     fs.mkdirSync(dir, { recursive: true });
     const batPath = path.join(projectDir, 'autostart.bat');
-    const bat = '@echo off\r\nchcp 65001 >nul\r\ncd /d "%~dp0"\r\nif not exist logs mkdir logs\r\nset VRCLIVEBOARD_AUTOSTART=1\r\nnode scripts\\ensure-deps.js >> logs\\autostart.log 2>&1\r\nnode src\\main.js >> logs\\app.log 2>&1\r\n';
+    const bat = '@echo off\r\nchcp 65001 >nul\r\ncd /d "%~dp0"\r\nif not exist logs mkdir logs\r\nset VRCLIVEBOARD_AUTOSTART=1\r\nnode scripts\\ensure-deps.js >> logs\\autostart.log 2>&1\r\nnode src\\main.js >> logs\\stdout.log 2>&1\r\n';
     fs.writeFileSync(batPath, bat, 'utf8');
     try {
       const vbsPath = path.join(dir, 'VRCLiveBoard.vbs');

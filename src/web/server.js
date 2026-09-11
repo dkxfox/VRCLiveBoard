@@ -37,53 +37,64 @@ function effPluginSec() {
   let actualWebPort = webCfg.port;
 
   // ===== 端口体检 =====
+  // 异步执行 netstat: 原实现用 execFileSync, 端口体检期间会**卡住整个事件循环**(composer/OSC 一起停摆),
+  // 而 netstat 在 Windows 上要几百毫秒(M-20260911-12)
   function netstatTable() {
-    const raw = execFileSync('netstat', ['-ano'], { encoding: 'utf8', windowsHide: true, timeout: 8000 });
-    const rows = [];
-    for (const line of String(raw).split(/\r?\n/)) {
-      const m = /^\s*(TCP|UDP)\s+(\S+)\s+(\S+)\s*(LISTENING|ESTABLISHED|\S*)?\s+(\d+)\s*$/.exec(line);
-      if (m) rows.push({ proto: m[1], local: m[2], foreign: m[3], state: m[4] || '', pid: Number(m[5]) });
-    }
-    return rows;
+    return new Promise(function (resolve, reject) {
+      execFile('netstat', ['-ano'], { encoding: 'utf8', windowsHide: true, timeout: 8000 }, function (err, raw) {
+        if (err) return reject(err);
+        const rows = [];
+        for (const line of String(raw).split(/\r?\n/)) {
+          const m = /^\s*(TCP|UDP)\s+(\S+)\s+(\S+)\s*(LISTENING|ESTABLISHED|\S*)?\s+(\d+)\s*$/.exec(line);
+          if (m) rows.push({ proto: m[1], local: m[2], foreign: m[3], state: m[4] || '', pid: Number(m[5]) });
+        }
+        resolve(rows);
+      });
+    });
   }
   function pidNames() {
-    const map = {};
-    try {
-      const raw = execFileSync('tasklist', ['/FO', 'CSV', '/NH'], { encoding: 'utf8', windowsHide: true, timeout: 8000 });
-      for (const line of String(raw).split(/\r?\n/)) {
-        const m = /^"([^"]+)","(\d+)"/.exec(line.trim());
-        if (m) map[m[2]] = m[1];
-      }
-    } catch (e) {}
-    return map;
+    return new Promise(function (resolve) {
+      const map = {};
+      execFile('tasklist', ['/FO', 'CSV', '/NH'], { encoding: 'utf8', windowsHide: true, timeout: 8000 }, function (err, raw) {
+        if (err) noteFail('pidNames', err);
+        else {
+          for (const line of String(raw).split(/\r?\n/)) {
+            const m = /^"([^"]+)","(\d+)"/.exec(line.trim());
+            if (m) map[m[2]] = m[1];
+          }
+        }
+        resolve(map);
+      });
+    });
   }
-  function udpProbe(port) {
+  async function udpProbe(port) {
     // 2026-09-03 修正(M-20260903-02): bind 探测在 Windows 上不可靠 —— Node UDP 默认 SO_REUSEADDR,
     // VRChat 已持 0.0.0.0:9000 时我们对 127.0.0.1:9000 的 bind 仍会成功 → 永远报"空闲"。
     // 改为查 netstat UDP 端点表: 有进程持续绑定该端口才算占用。
     try {
-      const rows = netstatTable();
+      const rows = await netstatTable();
       const hit = rows.find(function (r) { return r.proto === 'UDP' && new RegExp(':' + port + '$').test(r.local); });
-      return Promise.resolve({ occupied: !!hit });
-    } catch (e) { return Promise.resolve({ occupied: null, note: String(e.message) }); }
+      return { occupied: !!hit };
+    } catch (e) { return { occupied: null, note: String(e.message) }; }
   }
   async function portCheck() {
     const out = { udp9000: null, tcpAround: [], vrc: null };
     out.udp9000 = await udpProbe(9000);
     if (out.udp9000 && out.udp9000.occupied) {
       try {
-        const rows = netstatTable();
+        const rows = await netstatTable();
         const hit = rows.find(function (r) { return r.proto === 'UDP' && /:9000$/.test(r.local); });
         if (hit) {
-          const names = pidNames();
+          const names = await pidNames();
           out.udp9000.pid = hit.pid;
           out.udp9000.name = names[hit.pid] || ('PID ' + hit.pid);
         }
-      } catch (e) {}
+      } catch(e){noteFail('portCheck',e);}
     }
     try {
-      const rows = netstatTable();
-      const names = pidNames();
+      const both = await Promise.all([netstatTable(), pidNames()]); // 并行: 两次进程调用不再串行等待
+      const rows = both[0];
+      const names = both[1];
       for (const r of rows) {
         if (r.proto === 'TCP' && r.state === 'LISTENING') {
           const m = /:(\d+)$/.exec(r.local);
@@ -93,11 +104,11 @@ function effPluginSec() {
           }
         }
       }
-    } catch (e) {}
+    } catch(e){noteFail('端口体检',e);}
     try {
       const vrc = require('../vrcstatus').getVrcStatus();
       out.vrc = { running: !!vrc.running, oscEnabled: !!vrc.oscEnabled, oscPort: vrc.oscPort || null };
-    } catch (e) {}
+    } catch(e){noteFail('端口体检',e);}
     return out;
   }
 
@@ -132,6 +143,13 @@ function effPluginSec() {
       res.end(data);
     });
   }
+  // 统一的失败上报(与前端 apiFail 对称): 空 catch 会让故障彻底静默, 排查时只剩一句"没反应"。
+  // 按位置去重, 同一处只报一次, 避免高频接口刷屏(M-20260911-12)
+  const _failSeen = {};
+  function noteFail(where, err) {
+    try { const k = String(where); if (_failSeen[k]) return; _failSeen[k] = 1; } catch (e) { return; }
+    try { logger.warn('[静默失败] ' + where + ': ' + String((err && err.message) || err)); } catch (e) {}
+  }
   function json(res, code, o) {
     const b = JSON.stringify(o);
     res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -151,9 +169,17 @@ function effPluginSec() {
     } catch (e) { return false; }
   }
   function readBody(req, cb) {
-    let b = '';
-    req.on('data', function (d) { b += d; if (b.length > 262144) req.destroy(); });
-    req.on('end', function () { cb(b); });
+    let b = '', done = false;
+    function finish(body) { if (done) return; done = true; cb(body); }
+    req.on('data', function (d) {
+      if (done) return;
+      b += d;
+      // 超限: 清空并断开。必须仍然回调一次 —— 否则调用方永远等不到 body, 请求挂死(客户端只看到卡住)(M-20260911-12)
+      if (b.length > 262144) { b = ''; try { req.destroy(); } catch(e){noteFail('finish',e);} finish(''); }
+    });
+    req.on('end', function () { finish(b); });
+    req.on('error', function () { finish(''); });
+    req.on('aborted', function () { finish(''); });
   }
   const server = http.createServer(function (req, res) {
     const url = new URL(req.url, 'http://127.0.0.1');
@@ -177,7 +203,7 @@ function effPluginSec() {
       const force = url.searchParams.get('force') === '1';
       checkUpdate(rootConfig, force).then(function (r) {
         let cur = '0.0.0';
-        try { cur = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')).version || cur; } catch (e) {}
+        try { cur = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')).version || cur; } catch(e){noteFail('/api/version/check',e);}
         const newer = r.remote ? compareVersions(r.remote.version, cur) > 0 : false;
         return json(res, 200, { ok: r.ok, current: cur, newer: newer, remote: r.remote, source: r.source });
       }).catch(function (e) { return json(res, 200, { ok: false, error: String(e.message) }); });
@@ -189,7 +215,7 @@ function effPluginSec() {
     if (req.method === 'GET' && url.pathname === '/api/config') {
       const srcs = composer.sources.map(function (s) { return { id: s.id, enabled: s.enabled, priority: s.priority, intervalMs: s.intervalMs }; });
       let autostart = !!rootConfig.autostart;
-      try { autostart = isEnabled(); } catch (e) {}
+      try { autostart = isEnabled(); } catch(e){noteFail('/api/config',e);}
       const v = (rootConfig.ocrtl && rootConfig.ocrtl.vision) || {};
       const cap = (rootConfig.ocrtl && rootConfig.ocrtl.capture) || {};
       const sec = (rootConfig.ocrtl && rootConfig.ocrtl.security) || {};
@@ -428,7 +454,7 @@ function effPluginSec() {
     }
     if (req.method === 'GET' && url.pathname === '/api/env') {
       let systemPy = { found: false, version: null };
-      try { systemPy = { found: true, version: String(execFileSync('python', ['-V'], { timeout: 15000, windowsHide: true, encoding: 'utf8' })).trim() }; } catch (e) {}
+      try { systemPy = { found: true, version: String(execFileSync('python', ['-V'], { timeout: 15000, windowsHide: true, encoding: 'utf8' })).trim() }; } catch(e){noteFail('/api/env',e);}
       const pyCmd = resolvePython(projectRoot);
       return json(res, 200, {
         node: { ok: true, version: process.version },
@@ -448,7 +474,7 @@ function effPluginSec() {
         envState.msg = r.ok ? '安装完成, 正在重启听歌功能...' : ('安装失败: ' + r.error);
         if (r.ok) {
           const media = composer.sources.find(function (s) { return s.id === 'media'; });
-          if (media && media.restart) { try { media.restart(); envState.msg = '安装完成, 听歌功能已启用'; } catch (e) {} }
+          if (media && media.restart) { try { media.restart(); envState.msg = '安装完成, 听歌功能已启用'; } catch(e){noteFail('端口体检',e);} }
         }
       });
       return json(res, 200, { ok: true, started: true });
@@ -461,7 +487,7 @@ function effPluginSec() {
         try {
           const chk = execFileSync('python', ['-c', 'import sys; print(sys.version.split()[0])'], { timeout: 20000, windowsHide: true, encoding: 'utf8' });
           if (String(chk).trim()) py = 'python';
-        } catch (e) {}
+        } catch(e){noteFail('/api/env/install-winsdk',e);}
       }
       if (!py) return json(res, 500, { ok: false, error: '未找到可用 Python: 请先点环境检测里的 Python 一键安装按钮(便携版), 完成后再装 winsdk' });
       const steps = [
@@ -474,7 +500,7 @@ function effPluginSec() {
           execFile(py, ['-c', 'import winsdk; print("winsdk-ok")'], { timeout: 30000, windowsHide: true }, function (e2, so) {
             if (e2 || String(so).indexOf('winsdk-ok') < 0) return json(res, 500, { ok: false, error: 'winsdk 安装后验证失败, 请重试; 仍失败可先装便携版 Python(自带 winsdk)' });
             const media = composer.sources.find(function (s) { return s.id === 'media'; });
-            if (media && media.restart) { try { media.restart(); } catch (e3) {} }
+            if (media && media.restart) { try { media.restart(); } catch(e3){noteFail('端口体检',e3);} }
             json(res, 200, { ok: true });
           });
           return;
@@ -495,7 +521,7 @@ function effPluginSec() {
     if (req.method === 'POST' && url.pathname === '/api/special/upload') {
       const name = String(req.headers['x-filename'] || ('video-' + Date.now() + '.mp4')).replace(/[\\/:*?"<>|]/g, '_');
       const dir = path.join(__dirname, '..', '..', 'assets', 'videos');
-      try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {}
+      try { fs.mkdirSync(dir, { recursive: true }); } catch(e){noteFail('/api/special/upload',e);}
       const chunks = []; let total = 0;
       req.on('data', function (c) { chunks.push(c); total += c.length; if (total > 300 * 1024 * 1024) { json(res, 413, { ok: false, error: '视频超过 300MB 上限' }); req.destroy(); } });
       req.on('end', function () {
@@ -517,10 +543,20 @@ function effPluginSec() {
       if (f !== assetsDir && f.indexOf(assetsDir + path.sep) !== 0) return json(res, 403, { ok: false, error: '路径非法' });
       return fs.stat(f, function (err, stat) {
         if (err) return json(res, 404, { ok: false });
-        const total = stat.size; const range = req.headers.range; let start = 0, end = total - 1;
-        if (range) { const m = /bytes=(\d*)-(\d*)/.exec(range); if (m) { if (m[1]) start = parseInt(m[1], 10); if (m[2]) end = parseInt(m[2], 10); if (end >= total) end = total - 1; } }
+        const total = stat.size; const range = req.headers.range; let start = 0, end = total - 1; let ranged = false;
+        if (range) {
+          const m = /bytes=(\d*)-(\d*)/.exec(range);
+          if (m) {
+            if (m[1] === '' && m[2] !== '') { const n = parseInt(m[2], 10) || 0; start = Math.max(0, total - n); end = total - 1; } // 后缀区间 bytes=-N
+            else { if (m[1]) start = parseInt(m[1], 10) || 0; end = m[2] ? (parseInt(m[2], 10) || 0) : total - 1; }
+            // 区间不可满足(如 bytes=5000-100)按 HTTP 规范回 416; 原实现会算出负 Content-Length, createReadStream 直接抛错且响应永不结束(M-20260911-12)
+            if (start < 0 || start >= total || end < start) { res.writeHead(416, { 'Content-Range': 'bytes */' + total, 'Accept-Ranges': 'bytes' }); return res.end(); }
+            if (end >= total) end = total - 1;
+            ranged = true; // 只有真正解析出合法区间才回 206; 非法 Range 头按规范忽略
+          }
+        }
         const ct = path.extname(f).toLowerCase() === '.webm' ? 'video/webm' : 'video/mp4';
-        if (range) { res.writeHead(206, { 'Content-Range': 'bytes ' + start + '-' + end + '/' + total, 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1, 'Content-Type': ct }); fs.createReadStream(f, { start: start, end: end }).pipe(res); }
+        if (ranged) { res.writeHead(206, { 'Content-Range': 'bytes ' + start + '-' + end + '/' + total, 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1, 'Content-Type': ct }); fs.createReadStream(f, { start: start, end: end }).pipe(res); }
         else { res.writeHead(200, { 'Content-Length': total, 'Content-Type': ct, 'Accept-Ranges': 'bytes' }); fs.createReadStream(f).pipe(res); }
       });
     }
@@ -536,15 +572,15 @@ function effPluginSec() {
       const tmp = path.join(projectRoot, '.ocr-preview.png');
       execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-mode', 'screen', '-scale', '1', '-maxdim', '1600', '-out', tmp], { timeout: 20000, windowsHide: true }, function (err, stdout) {
         if (String(stdout || '').indexOf('CAPTURE-FAIL') >= 0) {
-          try { fs.unlinkSync(tmp); } catch (e2) {}
+          try { fs.unlinkSync(tmp); } catch(e2){noteFail('/api/capture/preview',e2);}
           return json(res, 500, { ok: false, error: '截图失败(沙箱或权限限制), 可稍后重试' });
         }
         if (err || !fs.existsSync(tmp)) {
-          try { fs.unlinkSync(tmp); } catch (e2) {}
+          try { fs.unlinkSync(tmp); } catch(e2){noteFail('端口体检',e2);}
           return json(res, 500, { ok: false, error: '截图失败: ' + (err ? err.message : '无输出') });
         }
         fs.readFile(tmp, function (e3, data) {
-          try { fs.unlinkSync(tmp); } catch (e4) {}
+          try { fs.unlinkSync(tmp); } catch(e4){noteFail('端口体检',e4);}
           if (e3) return json(res, 500, { ok: false, error: '读取截图失败' });
           res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' });
           return res.end(data);
@@ -577,7 +613,7 @@ function effPluginSec() {
     if (req.method === 'POST' && url.pathname === '/api/ocrtl') {
       return readBody(req, function (body) {
         let overrides = {};
-        try { overrides = JSON.parse(body || '{}'); } catch (e) {}
+        try { overrides = JSON.parse(body || '{}'); } catch(e){noteFail('/api/ocrtl',e);}
         runOcrTranslate(rootConfig.ocrtl || {}, composer, logger, overrides).then(function (r) { json(res, 200, r); });
       });
     }
@@ -607,7 +643,7 @@ function effPluginSec() {
               try {
                 const cur = JSON.parse(fs.readFileSync(configPath, 'utf8').replace(/^\uFEFF/, ''));
                 if (cur && cur.devchain) rootConfig.devchain = cur.devchain;
-              } catch (e) {}
+              } catch(e){noteFail('端口体检',e);}
             }
             const r = devgate.verifyDev(o.code, rootConfig.devchain);
             if (!r.ok) { gateFails.push(Date.now()); return json(res, 400, { ok: false, error: r.reason }); }
@@ -782,7 +818,7 @@ function effPluginSec() {
         const dir = path.join(projectRoot, '开发者文档');
         if (process.env.VRCB_EMBEDDED === '1') {
           // 桌面版: 用 Electron 原生 API 打开资源管理器(可靠, 窗口会前置)
-          try { require('electron').shell.openPath(dir); } catch (e2) {}
+          try { require('electron').shell.openPath(dir); } catch(e2){noteFail('/api/devdocs/open',e2);}
         } else {
           // 纯 Node 版: cmd /c start 打开文件夹
           spawn('cmd.exe', ['/c', 'start', '', dir], { windowsHide: true, detached: true }).unref();
@@ -843,7 +879,7 @@ function effPluginSec() {
           const coreObj = ['web', 'osc', 'chatbox', 'sources'].some(function (k) { return cfg[k] && typeof cfg[k] === 'object' && !Array.isArray(cfg[k]); });
           if (!coreObj) return json(res, 400, { ok: false, error: '无效配置(缺少核心字段)' });
           // 导入前先把当前配置留档 config.json.bak, 防止编码损坏后无回滚
-          try { fs.writeFileSync(configPath + '.bak', fs.readFileSync(configPath)); } catch (e) {}
+          try { fs.writeFileSync(configPath + '.bak', fs.readFileSync(configPath)); } catch(e){noteFail('网络端口(零级, 无需密码; P',e);}
           // 必须同时更新内存: 只写文件的话, 之后任何一次 persist() 都会用旧内存把导入结果覆盖掉(M-20260911-06)
           require('../configio').applyInPlace(rootConfig, cfg);
           if (!persist()) return json(res, 500, { ok: false, error: '配置写入失败' });
@@ -858,7 +894,7 @@ function effPluginSec() {
         try {
           const o = JSON.parse(body || '{}');
           logger.warn('[前端] ' + String(o.msg || '未知错误') + (o.line ? ' @line ' + o.line : '') + (o.ua ? ' | ' + String(o.ua).slice(0, 80) : ''));
-        } catch (e) {}
+        } catch(e){noteFail('/api/fe-err',e);}
         return json(res, 200, { ok: true });
       });
     }
@@ -906,9 +942,9 @@ function effPluginSec() {
     if (req.method === 'GET' && url.pathname === '/api/health') {
       return portCheck().then(function (pc) {
         let pkgV = 'unknown';
-        try { pkgV = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')).version; } catch (e) {}
-        let ltFound = false; try { const lt = getLtStatus(rootConfig.ocrtl || {}); ltFound = !!(lt && lt.found); } catch (e) {}
-        let py = null; try { py = resolvePython(projectRoot); } catch (e) {}
+        try { pkgV = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')).version; } catch(e){noteFail('/api/health',e);}
+        let ltFound = false; try { const lt = getLtStatus(rootConfig.ocrtl || {}); ltFound = !!(lt && lt.found); } catch(e){noteFail('/api/health',e);}
+        let py = null; try { py = resolvePython(projectRoot); } catch(e){noteFail('/api/health',e);}
         const pls = pluginManager ? pluginManager.entries : [];
         return json(res, 200, {
           version: pkgV,
