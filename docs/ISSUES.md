@@ -304,11 +304,12 @@
 - 验证(批 1, 2026-09-11): node --check 通过; GI18NU 键数 **202 与改名前完全一致**(证明无调用点漏改/漏迁); G-BOOT 顶层加载无异常、tr('bootTagline') 取到真实文案、window.t 与 tr 取值一致; 全文件残留"前一字符非词字符的 t(" = **0 处**、残留局部绑定 t = **0 处**; run-gates -Smoke = 13 PASS / 1 FAIL(GSYNC 属预期)。
 - 状态: CLOSED
 
-## M-20260911-05 更新链接注入路径: 白名单未锚尾 + 前端 innerHTML 未转义(OPEN)
+## M-20260911-05 更新链接注入路径: 白名单未锚尾 + 前端 innerHTML 未转义(CLOSED)
 - 来源: 2026-09-11 新版代码审核
 - 现象: 版本更新提示把服务端返回的 releaseUrl 直接拼进 innerHTML 的 href, 未转义; 而服务端白名单正则只锚定前缀、未锚定结尾。
 - 复现: 构造 version.json: {"version":"9.9.9","releaseUrl":"https://github.com/dkxfox/VRCLiveBoard\"><img src=x onerror=alert(1)>"} → versioncheck.validate() 放行(前缀匹配成功), 前端 app.js 将其拼入 `<a href="...">` → 注入的 img/onerror 进入控制台页面。
 - 影响面: 需要攻击者控制更新源。config.update.mirror 是**用户可配置的第一优先源**(versioncheck.js:52-53), 所以威胁模型下可达; 也可通过劫持 jsDelivr/GitHub 响应实现。
 - 根因: 双半格防线 —— 服务端 versioncheck.js:26 正则 `^https://(github.com/dkxfox/VRCLiveBoard|cdn.jsdelivr.net/gh/dkxfox/VRCLiveBoard)` 无 `$` 与字符集约束; 前端 app.js:85(批 B 新增代码)直接 innerHTML 拼接。
-- 计划: 批 2 —— 服务端正则锚尾 + 限制路径字符集; 前端改 esc() 或 DOM API 赋值(纵深防御)。
-- 状态: OPEN(批 2)
+- 改动(批 2, 2026-09-11): ① 服务端 versioncheck.js 白名单正则**锚尾 + 限定路径字符集**(^https://官方域名(/[A-Za-z0-9._~%/-]*)?$), 原正则只锚前缀, 形如 .../VRCLiveBoard"><img onerror=...> 的载荷能通过校验; ② 前端 app.js 的更新提示由 innerHTML 拼接改为 **DOM API**(a.href 属性赋值 + a.textContent + a.rel=noopener), 并加 https 前缀校验 —— 该路径从此不参与 HTML 解析, 对注入结构性免疫; ③ 顺带修掉上报链路的**递归隐患**: fetch(/api/fe-err) 自身失败会触发 unhandledrejection, 而该处理器又去 POST fe-err → 自激; 现统一走 feErr(), 上报失败即永久关闭(_feErrOff)。
+- 验证(批 2, 2026-09-11): 用真实 checkUpdate() 喂 4 档载荷 —— 恶意(引号+标签) → remote=null 拒绝; 合法(带路径 /releases/tag/v1.3.3) → 接受; 合法(裸链接) → 接受; 第三方域名 → 拒绝。前端在恶意 releaseUrl 下: createElement 未产生 img/script/iframe/svg 任何注入载体, #updateHint 仅 1 个子节点(A 元素), URL 仅作属性赋值、文案走 textContent; 专项冒烟 18 PASS / 0 FAIL; run-gates -Smoke = 13 PASS / 1 FAIL(GSYNC 属预期)。
+- 状态: CLOSED

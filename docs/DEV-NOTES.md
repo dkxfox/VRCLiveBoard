@@ -266,6 +266,20 @@
 - 遗留 / 教训: ①**批次**: 批 1(立即做)= 任意文件读 + 2 处无守卫赋值 + t→tr 改名 + 两个新门禁; 批 2 = 更新链接注入两格 + 统一 api() 错误包装; 批 3(需排期)= app.js 拆模块 / server.js 抽路由表 / index.html 迁出内联块与主题命名统一。②**方法论教训**: 静态扫描会给假阳性(langSel、render、innerHTML 转义率), 而"用桩件把真实代码跑起来"能一次分清真假 —— 两次事故(死按键、启动动画)都是可以这样被拦住的, 这也是新增两个门禁的立论基础。③子代理报告的 6 条(H3/H4/H5/M1/M5/L1/L3)本人未逐条复核, 已在台账表后单列"待复验", **不得当作结论引用**。④子代理跑得比预期久(约 20 分钟), 我一度按"可能陷入病态扫描"中断它, 结果它已正常完成并回传 —— 教训: 对 UNC 共享盘上的大范围只读扫描, 应在派单时就把文件清单限定死, 而不是靠范围描述。
 
 
+## 122. 审核批 2: 更新链接注入两格 + 前端静默失败统一上报(2026-09-11, 用户"继续")
+- 解读与边界: 批 2 = M-20260911-05(注入路径)+ 台账 前后端静默失败 行的**前端**部分。边界: 不改任何 UI 行为与文案; 诊断标签一律 ASCII(不进 i18n 基线); 后端 22 处空 catch 不在此批(与批 3 的路由表重构同做, 否则包一层又要改一遍)。
+- 现象: ① 服务端白名单只锚前缀、前端把 releaseUrl 拼进 innerHTML 的 href —— 构造 官方域名"><img onerror=...> 即可通过服务端校验并注入控制台页; 且 config.update.mirror 是用户可配的第一优先源, 载荷可达; ② 前端 80 个 catch 里 58 个完全空吞, 网络/解析失败彻底静默(排查启动动画事故时唯一线索就是一行 unhandled rejection)。
+- 根因: ① 防御各差半格: 服务端只锚前缀不锚尾, 前端直接 innerHTML 拼接; ② 移植期把 try{fetch}catch(e){} 当默认写法, 没有统一失败出口。
+- 改动(批 2):
+  ① src/versioncheck.js: 白名单正则锚尾 + 限定路径字符集;
+  ② src/web/public/app.js: 更新提示改 DOM API(a.href / a.textContent / a.rel=noopener)+ https 前缀校验, 该路径不再参与 HTML 解析;
+  ③ app.js 新增 feErr() 统一上报出口与 _feErrOff 失败即停, window.onerror / unhandledrejection / apiFail 全部改走它(消除上报自激);
+  ④ app.js 56 处空 catch 接入 apiFail(where,err): 标签取最近的 #元素id / 函数名 / 分区 slug(ASCII), 按标签去重只报一次, 并同时 console.warn 便于 DevTools 定位;
+  ⑤ scripts/checks/frontend-boot.js: 桩件补 options/selectedIndex/files/naturalWidth; 取词断言加 try/catch —— **门禁遇到自身无法解释的错误必须报 FAIL, 不能崩栈**;
+  ⑥ docs/I18N-BASELINE.json: 收紧(HTML 30→21, JS 15→6), 剔除已删除死代码的残留条目。
+- 证据: ① checkUpdate() 四档载荷实测: 恶意拒绝 / 合法带路径接受 / 合法裸链接接受 / 第三方域名拒绝; ② 前端在恶意 releaseUrl 下 createElement 未产生任何 img|script|iframe|svg, #updateHint 仅 1 个子节点且为 A 元素(URL 只作属性赋值); ③ 专项冒烟 18 PASS / 0 FAIL(含 A1 配置文件读拦截 403 回归、S4 递归防护 _feErrOff、S5 DOM 化更新链接); ④ run-gates -Smoke = **13 PASS / 1 FAIL**(GSYNC 未推送属预期); ⑤ GUWIRE 0 死控件 / GBOOT 顶层加载正常。
+- 遗留 / 教训: ① **上报链路自身会自激**是这轮顺带挖出的真问题: 任何 出错就发请求 的兜底都必须假设该请求也会失败; ② **--update-baseline 必须在代码改对之后跑** —— 我第一次改标签因锚点带尾空格没匹配上, 脚本中止但基线已被更新, 等于把中文标签洗白进基线; 已重跑收紧到 6 项(全是既有合法字符串)。基线是允许清单, 更新它就是放宽门禁, 顺序反了等于自欺; ③ G-BOOT 又救了一次: 补丁覆盖掉了 var 美元定义, 门禁立刻报错(并暴露门禁自身缺 try/catch, 已补), 这条 能跑起来 的断言连续两批证明价值; ④ 批 3 剩余: app.js 拆模块 / server.js 抽路由表 + 后端 22 处空 catch / index.html 内联块迁出与主题命名统一 / 未复验清单(H3/H4/H5 等)。
+
 ## 121. 审核批 1: 路径穿越封堵 + 两道新门禁 + 取词函数改名(2026-09-11, 用户"继续, 按你的建议来")
 - 解读与边界: 承接条目 120 的审核结论, 按"降低事故率优先"执行批 1 = M-20260911-02(任意文件读)/ -03(门禁盲区)/ -04(t 遮蔽 + 无守卫赋值)。边界: 只动 server.js 的 /api/special/video 一处围栏、app.js 的取词函数与守卫、新增两个 checks 脚本与 smoke 断言语法; 不改任何业务行为、不碰用户配置与端口、UI 文案与交互零变化(唯一可感差异是 after 改名后语言切换改走显式取元素, 行为一致)。
 - 现象: ①GET /api/special/video?file=config.json 可读走含 level1Password 的配置, 带 ../ 可越出工程根; ②最近两次前端事故(20 死按键 / 启动动画静默失效)提交时门禁全绿; ③i18n 取词函数叫单字母 t, 被 var t= 咬过两次, 且 app.js:355-356 两处 getElementById 直接取属性无守卫。

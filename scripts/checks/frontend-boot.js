@@ -20,6 +20,7 @@ function el(tag) {
   const e = {
     tagName: String(tag || 'div').toUpperCase(), style: { setProperty() {}, removeProperty() {} },
     dataset: {}, children: [], _text: '', _html: '', _v: '', _c: false,
+    options: [], selectedIndex: 0, files: [], naturalWidth: 100, naturalHeight: 100,
     classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
     appendChild() {}, removeChild() {}, insertBefore() {}, remove() {},
     addEventListener() {}, removeEventListener() {}, dispatchEvent() {},
@@ -74,10 +75,12 @@ try {
 }
 
 const tr = sb.tr, tw = sb.window && sb.window.t;
-if (typeof tr !== 'function') problems.push('未定义 i18n 取词函数 tr()');
-else if (tr('bootTagline') === 'bootTagline') problems.push('tr("bootTagline") 取不到文案(lang.js 未生效或键缺失)');
-if (typeof tw !== 'function') problems.push('window.t 兼容别名缺失(index.html 内联块会失去翻译)');
-else if (typeof tr === 'function' && tw('bootTagline') !== tr('bootTagline')) problems.push('window.t 与 tr 取值不一致');
+try {
+  if (typeof tr !== 'function') problems.push('未定义 i18n 取词函数 tr()');
+  else if (tr('bootTagline') === 'bootTagline') problems.push('tr("bootTagline") 取不到文案(lang.js 未生效或键缺失)');
+  if (typeof tw !== 'function') problems.push('window.t 兼容别名缺失(index.html 内联块会失去翻译)');
+  else if (typeof tr === 'function' && tw('bootTagline') !== tr('bootTagline')) problems.push('window.t 与 tr 取值不一致');
+} catch (e) { problems.push('i18n 取词断言抛错(脚本可能未执行到字典初始化): ' + e.message); }
 
 const lines = app.split(/\r?\n/);
 const mk = lines.findIndex((l) => l.indexOf('启动动画(品牌感知)') >= 0);

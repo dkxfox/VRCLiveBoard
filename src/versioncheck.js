@@ -23,7 +23,9 @@ function validate(j) {
   if (!parseVersion(j.version)) return null;
   const url = String(j.releaseUrl || '');
   // 安全: 只接受官方 GitHub 域名(防第三方镜像注入钓鱼下载链接)
-  if (!/^https:\/\/(github\.com\/dkxfox\/VRCLiveBoard|cdn\.jsdelivr\.net\/gh\/dkxfox\/VRCLiveBoard)/.test(url)) return null;
+  // 只允许官方域名的 https 链接, 且必须锚尾 + 限定字符集: 原正则只锚前缀, 形如
+  // https://github.com/dkxfox/VRCLiveBoard"><img onerror=...> 的载荷能通过校验并进入前端 innerHTML(M-20260911-05)
+  if (!/^https:\/\/(github\.com\/dkxfox\/VRCLiveBoard|cdn\.jsdelivr\.net\/gh\/dkxfox\/VRCLiveBoard)(\/[A-Za-z0-9._~%\/-]*)?$/.test(url)) return null;
   return {
     version: String(j.version),
     codename: String(j.codename || ''),
