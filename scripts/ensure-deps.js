@@ -19,6 +19,11 @@ if (r.status !== 0) {
   console.log('常规安装未成功,改用忽略脚本模式重试...');
   r = spawnSync('npm install --omit=dev --no-audit --no-fund --ignore-scripts', { cwd: root, stdio: 'inherit', shell: true, env: env });
 }
+if (r.status !== 0) {
+  // 国内网络兜底(2026-09-11): 默认源不通时改用 npmmirror 镜像重试一次 —— 不再让用户手动配 registry
+  console.log('改用国内镜像(npmmirror)重试...');
+  r = spawnSync('npm install --omit=dev --no-audit --no-fund --registry=https://registry.npmmirror.com', { cwd: root, stdio: 'inherit', shell: true, env: env });
+}
 if (r.status !== 0) { console.error('依赖安装失败,请检查网络后重试'); process.exit(1); }
 try { fs.writeFileSync(path.join(root, 'node_modules', '.install-stamp'), need); } catch (e) {}
 console.log('依赖就绪');

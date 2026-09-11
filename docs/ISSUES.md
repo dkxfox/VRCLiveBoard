@@ -542,3 +542,12 @@
 - 改动(2026-09-11): ① index.html: 引导层(遮罩 + 标题/正文/不再自动/按钮, 三语键全是现成的) + 页头常驻引导按钮 + 当前来源行 #curMeta + 控制台实际地址 #consoleUrl; ② app.js: guideShow/guideHide + 首访自动弹一次(写 localStorage vrcbGuideDone) + 常驻按钮打开; pollStatus 里补三件事 —— 当前来源/优先级/剩余秒数、截图倒计时(phase==='countdown' 时把秒数写进按钮旁提示)、控制台实际地址(读 /api/ports 的 web.host/actual); 数据源说明列补 (SMTC 进程: 运行中/未运行) 与 lastError 前 60 字(用现成的 smtcRun/smtcDown 三语键)。
 - 说明: 本批只做"键齐全、无产品口径争议"的 5 项; 其余控制台挂账(插件三件套: 删除/打开页/重扫、健康总览接回 /api/health、更新按钮回页头、capInfo、portsInfo、13 段说明文字、成功回执、日志行为)仍列在 docs/AUDIT-20260911-03-新旧控制台差异.md。
 - 状态: CLOSED
+## M-20260911-30 打包唯一清单 + 国内可用性(镜像回退/哈希校验/npm 国内源)+ 出厂白名单(CLOSED)
+- 来源: 打包链路审计的"下一步建议" + 用户"按照你的建议来, 考虑到国内用户的使用"
+- 现象: ① "什么能出厂"由 make-dist 脚本里的两套字面量名单决定(pack-audit 另有一套正则), 越用越容易漏; ② 首次运行从 npm 源装依赖、从镜像下载 Electron 并直接解压执行, 无任何完整性校验; ③ docs/ 与仓库根有一批内部资料顺带进包(ISSUES/PROCESS-*/基线 json/开发者文档 04/版本说明内部条目等)。
+- 影响面: 漏排除 = 内部资料/开发物料出厂; 无校验 = 镜像或中间人被投毒的后果是用户机执行任意代码; 但**不能**为了校验把国内用户挡住(官方 GitHub 在国内经常连不上)。
+- 根因: 名单分散在两个脚本里各自维护; 安装链路只考虑"能装上", 没考虑"装上的东西是否可信"; 出厂范围从来没有白名单。
+- 证据(2026-09-11): ① 清单文件 scripts/pack-exclude.json 成为唯一来源(dirs 13 / files 31 / 禁入正则 23), make-dist 与 pack-audit 都读它; ② make-dist 的 PS5.1 解析错误 0(BOM 保留), GPLUG 仍 0 FAIL / 0 WARN; ③ 全套门禁见提交记录。
+- 改动(2026-09-11): ① 新增 scripts/pack-exclude.json(目录/文件/目录名正则/禁入正则/docs 白名单); make-dist 读它并与历史字面量取并集, pack-audit 的 FORBIDDEN_NAME 直接由它生成(两边不再各写一套); docs 只发 DEV-NOTES/GLOSSARY/PLUGIN-DEV/LIVETRANSLATE/RESEARCH, FEATURES 目录与其余 docs 文件全部不进包; ② install-electron.js: 国内优先 npmmirror、失败自动回退官方 release; 下载后**用镜像公布的 SHASUMS256.txt 严格校验**(不一致直接中止), 镜像没提供时明确警告后继续(不因校验把国内用户挡住); ③ ensure-deps.js: 默认源失败后自动改用 registry.npmmirror.com 重试一次, 用户不必手工配 registry。
+- 拍板结论(2026-09-11, 用户授权按建议执行): **保留 `--no-sandbox`** —— 国内机器 GPU/驱动差异大, 去掉可能白屏而收益只是一个没有现成利用链的纵深防御缺口; 同时本轮已把 openExternal 收成"只放行 https"并加了 will-navigate 守卫, 实际暴露面已大幅下降。这一条与被否掉的"改官方源"一起记在此处, 避免以后被当成遗漏重复提。
+- 状态: CLOSED

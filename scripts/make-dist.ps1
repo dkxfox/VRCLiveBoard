@@ -22,7 +22,10 @@ $userDirs = @(Get-ChildItem $p -Directory | Where-Object { $_.Name -match '测�
 $exclDirs = @('node_modules','logs','.electron-cache','.ocr-cache','.ocr-langs','.pydist','.git') + $userDirs
 # 只排除项目顶层的 dist(用绝对路径),避免误伤插件自带的 vendor\dist 等嵌套同名目录
 # scripts\checks 是开发期门禁工具, 不随分发包出厂(仓库里保留)
-$exclAbs = @($dist, (Join-Path $p 'dev-dongle'), (Join-Path $p 'scripts\checks'), (Join-Path $p '秘密开发项目素材'), (Join-Path $p '旧版控制台备份')) + $exclDirs  # 旧版控制台仅仓库内存档, 不进包
+# 排除清单唯一来源(2026-09-11): scripts\pack-exclude.json —— make-dist 与 pack-audit 共用, 新增项改清单文件
+$pe = Get-Content (Join-Path $p 'scripts\pack-exclude.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+$exclAbs = @($dist) + @($pe.dirs | ForEach-Object { Join-Path $p $_ }) + $exclDirs
+$peFiles = @($pe.files) + @($xfFiles)
 
 Write-Output '==== 1. integrity check ===='
 $problems = @()
