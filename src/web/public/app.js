@@ -146,6 +146,24 @@ function plgCard(p){var en=!!(p.enabled||p.run),ap=!!p.approved;var d=document.c
     };
     pbody.appendChild(db);
   }
+  // 优先级输入(M-20260911-40): 旧版每行一个优先级输入框, 新版只剩一键重置
+  if (pbody) {
+    var pin = document.createElement('input'); pin.type = 'number'; pin.value = (p.priority == null ? '' : p.priority); pin.style.width = '64px'; pin.title = 'priority';
+    pin.onchange = function () {
+      var n = Number(this.value) || 0;
+      fetch('/api/plugins/config', { method: 'POST', body: JSON.stringify({ id: p.id, cfg: { priority: n } }) })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { if (j && j.ok === false) note(tr('opFail') + ': ' + (j.error || ''), 'warn'); else note(tr('savedOk'), 'ok'); })
+        .catch(function (e) { apiFail('#plugCards', e); });
+    };
+    pbody.insertBefore(pin, pbody.firstChild);
+    // 第三方面板(M-20260911-40): 用沙箱 iframe 承载插件自带页面 —— 绝不把插件 HTML 直接 innerHTML 进控制台(存储型 XSS)
+    if (p.hasPanel || p.panel) {
+      var pn = document.createElement('button'); pn.className = 'small gray'; pn.textContent = tr('btnOpenPage'); pn.style.marginLeft = '6px';
+      pn.onclick = function () { var ov = $('plgPanelOverlay'); var fr = $('plgPanelFrame'); if (!ov || !fr) return; fr.src = '/api/plugins/panel?id=' + encodeURIComponent(p.id); ov.hidden = false; };
+      pbody.appendChild(pn);
+    }
+  }
  return d;}
 function renderPlgCards(){var el=$('plugCards');if(!el)return;el.innerHTML='';if(!plgArr.length){el.innerHTML='<div class="sub">'+tr('plgNoPlugins')+'</div>';return;}plgArr.forEach(function(p){el.appendChild(plgCard(p));});}
 async function loadPlugins(){try{var r=await fetch('/api/plugins');var list=await r.json();plgArr=Array.isArray(list)?list:(list.plugins||list.entries||[]);renderPlgCards();if(typeof syncQuickPlg==='function')syncQuickPlg();}catch(e){apiFail('loadPlugins',e);}}
@@ -363,6 +381,9 @@ function guideHide(){var ov=$('guideOverlay');if(ov)ov.hidden=true;try{var no=$(
 // 截图区域信息(M-20260911-35): 旧版 capInfo 显示当前模式与自定义区域坐标, 区域没设置也在这里提示
 function capInfoShow(){fetch('/api/config').then(function(r){return r.json();}).then(function(c){var cap=((c.ocrtl||{}).capture)||{};var el=$('capInfo');if(!el)return;var md=cap.mode||'window';var key=md==='region'?'capModeReg':(md==='screen'?'capModeScr':'capModeWin');var s=tr(key);if(md==='region'){var rg=cap.region||{};s+=' '+(rg.w>0?((rg.x||0)+','+(rg.y||0)+' '+(rg.w||0)+'x'+(rg.h||0)):tr('capNoRegion'));}el.textContent=s;}).catch(function(e){apiFail('#capInfo',e);});}
 capInfoShow();
+// 插件面板关闭(M-20260911-40): 关闭时把 iframe 置空, 避免残留页面在后台继续跑
+(function(){var c=$('plgPanelClose');if(!c)return;c.onclick=function(){var ov=$('plgPanelOverlay'),fr=$('plgPanelFrame');if(ov)ov.hidden=true;if(fr)fr.src='about:blank';};})();
+
 // init
 
 pollStatus();setInterval(pollStatus,5000);

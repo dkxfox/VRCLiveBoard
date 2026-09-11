@@ -49,7 +49,7 @@ for (const id of dirs) {
   try { m = JSON.parse(fs.readFileSync(mp, 'utf8').replace(/^\uFEFF/, '')); }
   catch (e) { say('FAIL', id + ': manifest.json 解析失败 ' + e.message); continue; }
   let bodyHash = '';
-  try { bodyHash = require(path.join(ROOT, 'src', 'pluginsys', 'hash.js')).hashDir(dir); } catch (e) {}
+  try { bodyHash = require(path.join(ROOT, 'src', 'pluginsys', 'hash.js')).hashPlugin(dir, m); } catch (e) {}
   manifests[id] = { m: m, bodyHash: bodyHash };
   const problems = [];
   if (m.id !== id) problems.push('manifest.id(' + m.id + ') 与目录名不符');

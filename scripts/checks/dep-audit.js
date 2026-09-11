@@ -64,7 +64,7 @@ if (Object.keys(cur.artifacts).every((r) => base.artifacts[r] === cur.artifacts[
 // npm audit(best effort; 离线只警告)
 if (!process.argv.includes('--no-npm')) {
   try {
-    const out = execFileSync('npm', ['audit', '--json'], { cwd: ROOT, encoding: 'utf8', windowsHide: true, maxBuffer: 32 * 1024 * 1024, shell: true });
+    const out = execFileSync('npm', ['audit', '--json', '--prefix', ROOT], { cwd: ROOT, encoding: 'utf8', windowsHide: true, maxBuffer: 32 * 1024 * 1024, shell: true });
     const j = JSON.parse(out);
     const v = (j.metadata && j.metadata.vulnerabilities) || {};
     const total = Object.values(v).reduce((a, b) => a + (typeof b === 'number' ? b : 0), 0);

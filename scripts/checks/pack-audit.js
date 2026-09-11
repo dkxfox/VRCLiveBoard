@@ -72,7 +72,7 @@ function audit(zp) {
   for (const n of names) for (const re of FORBIDDEN_NAME) if (re.test(n)) fails.push('禁入文件混入: ' + n);
 
   // 3. 必备文件
-  for (const r of REQUIRED) if (!names.includes(r)) fails.push('缺少必备文件: ' + r);
+  for (const r of (PLUGIN_PACK ? [] : REQUIRED)) if (!names.includes(r)) fails.push('缺少必备文件: ' + r);
 
   // 4. config.json 脱敏
   const cfgEntry = z.entries.find((e) => e.name === 'config.json');
@@ -84,7 +84,7 @@ function audit(zp) {
   }
 
   // 4b. 官方插件恢复备份: 打包必须为 plugins\ 下每个插件生成 官方可选插件\<id>\ 副本(用户误删可拷回)
-  const officialDirs = fs.readdirSync(path.join(ROOT, 'plugins'), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).filter((n) => n !== 'conflict-test');   // 开发自测夹具不进包, 也不要求它在包里(2026-09-11 审计 H2)
+  const officialDirs = PLUGIN_PACK ? [] : fs.readdirSync(path.join(ROOT, 'plugins'), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).filter((n) => n !== 'conflict-test');   // 开发自测夹具不进包, 也不要求它在包里(2026-09-11 审计 H2)
   for (const id of officialDirs) {
     if (!names.includes('plugins/' + id + '/manifest.json')) fails.push('包内缺少插件本体: plugins/' + id);
     if (!names.includes('官方可选插件/' + id + '/manifest.json')) fails.push('包内缺少误删恢复备份: 官方可选插件/' + id);
@@ -146,7 +146,8 @@ function audit(zp) {
   return fails.length;
 }
 
-const zips = process.argv.slice(2);
+const PLUGIN_PACK = process.argv.includes('--plugin-pack');   // 插件更新包模式(M-20260911-39): 只查禁入名单/机密/文件名编码
+const zips = process.argv.slice(2).filter((a) => a !== '--plugin-pack');
 if (!zips.length) { console.log('用法: node scripts/checks/pack-audit.js <zip> [<zip> ...]'); process.exit(2); }
 let bad = 0;
 for (const z of zips) { try { bad += audit(z); } catch (e) { console.log('[G-PACK] ' + path.basename(z) + '  FAIL ' + e.message); bad++; } }

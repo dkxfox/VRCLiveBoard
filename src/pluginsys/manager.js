@@ -66,7 +66,8 @@ class PluginManager {
             id: manifest.id, dir: dir, manifest: manifest,
             // 双口径容忍(M-20260911-34): 老授权存的是 index.js 哈希(继续有效, 用户不必重新授权),
             // 新授权存的是全目录哈希(改 cdp.js/bat/ps1 也会失效)。
-            approved: !!(this.approvals[manifest.id] && (this.approvals[manifest.id].hash === this.hash({ manifest: manifest, dir: dir }) || this.approvals[manifest.id].hash === this.hashFull({ manifest: manifest, dir: dir }))),
+            // 三级兼容(M-20260911-40): ① index.js 口径(最早) ② 目录口径 ③ 目录+权限口径(当前) —— 老授权一律继续有效
+            approved: !!(this.approvals[manifest.id] && (this.approvals[manifest.id].hash === this.hash({ manifest: manifest, dir: dir }) || this.approvals[manifest.id].hash === this.hashFull({ manifest: manifest, dir: dir }) || this.approvals[manifest.id].hash === this.hashPlugin({ manifest: manifest, dir: dir }))),
             _lastAiAt: 0,
             enabled: false, plugin: null, error: null, runtimeSources: [], runtimeErrors: [],
             settings: {}
@@ -89,7 +90,14 @@ class PluginManager {
     vrclog.start();
     return this.entries.length;
   }
-  // 全目录哈希(M-20260911-34): 审批时用这个 —— 覆盖整个插件目录, 而不只是 index.js
+  // 全量哈希(M-20260911-40): 目录内容 + manifest.permissions —— 审批时用这个
+  hashPlugin(entry) {
+    const m = entry.manifest || entry;
+    let bodyHash = '';
+    try { if (entry.dir) bodyHash = require('./hash').hashPlugin(entry.dir, m); } catch (e) {}
+    return String(m.id + '@' + m.version + '|' + (m.api || '') + '|' + bodyHash);
+  }
+  // 全目录哈希(M-20260911-34, 兼容保留)
   hashFull(entry) {
     const m = entry.manifest || entry;
     let bodyHash = '';

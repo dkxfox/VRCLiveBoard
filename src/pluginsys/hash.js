@@ -36,4 +36,16 @@ function hashDir(dir) {
 
 function format(id, version, api, bodyHash) { return String(id + '@' + version + '|' + (api || '') + '|' + bodyHash); }
 
-module.exports = { hashIndex: hashIndex, hashDir: hashDir, format: format };
+// 全量口径(M-20260911-40): 目录内容 + manifest.permissions —— 权限声明变了也必须重新确认。
+// 旧的两级口径(index.js / 目录)在 manager 里继续被兼容接受, 所以老用户不会被要求重新授权。
+function permsKey(manifest) {
+  try { return JSON.stringify((manifest && manifest.permissions) || {}); } catch (e) { return ''; }
+}
+function hashPlugin(dir, manifest) {
+  const h = crypto.createHash('sha256');
+  h.update('PERMS:' + permsKey(manifest) + '\n');
+  h.update(hashDir(dir));
+  return h.digest('hex').slice(0, 16);
+}
+
+module.exports = { hashIndex: hashIndex, hashDir: hashDir, hashPlugin: hashPlugin, permsKey: permsKey, format: format };

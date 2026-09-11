@@ -128,7 +128,12 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', function () { if (win) { win.show(); win.focus(); } });
-  app.on('before-quit', function (e) {
+  // 早期兜底监听(M-20260911-39): 核心要到启动末尾才注册 vrcb:shutdown, 在此之前退出会让 process.emit 拿不到监听者,
+// 壳于是直接退出 -> 已拉起的子进程(python 助手/截图常驻助手)残留。这里先占位: 给核心最多 8 秒登记并清理的时间。
+process.on('vrcb:shutdown', function (done) {
+  setTimeout(function () { try { done(); } catch (e) {} }, 8000);
+});
+app.on('before-quit', function (e) {
     quitting = true;
     if (coreStopped) return;
     // 先让核心清理(停服务 / 杀 python 助手 / 释放端口)再退, 否则会残留子进程与端口占用(M-20260911-07)

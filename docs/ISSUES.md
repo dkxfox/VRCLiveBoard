@@ -608,3 +608,16 @@
 - 改动(2026-09-11): ① capture_core.ps1: 先压后放大(maxdim 与 scale 同时生效)并为最终尺寸加 4096 硬上限; Copy-Screen / Resize-Bmp 补 try/finally(失败也不漏 GDI+ 句柄); 新增 beep 模式(提示音走常驻进程); ② ocrtranslate.js: 全屏模式传 maxdim=1920(先压再 2 倍放大, 上限内); 视觉 400/422 保留响应体并在最终错误里回显; recognize 加 90 秒超时 + 超时后 terminate 并清 workerPromise(下次自动重建); beep 优先走常驻助手、失败退回一次性 spawn; ③ ocrregion.js: 改用独立临时文件并在识别后删除。
 - 说明: 提示音走常驻进程后, 5 秒倒计时不再产生 5 个 powershell 进程; 一次性路径仍保留(助手不可用时行为不退化)。
 - 状态: CLOSED
+## M-20260911-39 打包/壳零头: 插件包审计 + BUILD-INFO 绑定 + 依赖基线漂移 + 退出早期兜底(CLOSED)
+- 来源: 桌面壳与打包审计挂账(用户"一起挨个做了吧")
+- 现象: ① 插件更新包(dist\插件更新包\*.zip)完全不在审计范围, 而 PROCESS-03 写明应覆盖; ② 包与提交没有绑定关系(谁都能拿旧代码打的包去过审计); ③ dep-audit 的产物哈希基线自"三插件 vendor 裁剪"之后就没更新过 → 发布审计第 4 步一直 FAIL(只是没人跑过); ④ npm audit 在 UNC 工作区必然失败(shell 把 cwd 折叠到 C:\Windows, npm 找不到 lockfile); ⑤ 核心注册 vrcb:shutdown 在启动末尾, 启动过程中退出时 process.emit 拿不到监听者 → 壳直接退, 已拉起的子进程残留。
+- 证据(2026-09-11): ① dep-audit 更新基线后实跑 **exit=0**(依赖 6 个 / 产物哈希 8 项); ② 三个 JS 与 release-audit 解析全部通过; ③ 控制台批次的门禁: GBOOT 正常(id 171)、GUWIRE 91 控件 / 死控件 0、GHTML/GI18NU 全过; ④ 全套门禁见提交记录。
+- 改动(2026-09-11): ① pack-audit 新增 `--plugin-pack` 模式(只查禁入名单/机密/文件名编码, 不要求整包必备文件), release-audit 第 7 步把 dist\插件更新包\*.zip 一并送审; ② release-audit 读包内 BUILD-INFO.json 并断言其 commit == HEAD(不一致直接 FAIL); ③ dep-audit 用内置 `--update-baseline` 复核更新基线, npm audit 显式带 `--prefix ROOT`(UNC 下 npm 仍会失败, 但只记 WARN 不阻塞); ④ electron/main.js 在启动早期挂一个**兜底 shutdown 监听**: 给核心最多 8 秒登记并清理的时间, 避免"启动窗口期退出 → 子进程残留"。
+- 状态: CLOSED
+## M-20260911-40 授权模型: manifest.permissions 进哈希 + 控制台零头(优先级输入/沙箱面板/说明文字)(CLOSED)
+- 来源: 授权模型挂账 + 控制台差异挂账(用户"一起挨个做了吧")
+- 现象: ① 授权哈希不含 manifest.permissions —— 权限声明(决定红窗提示哪些高危能力)被改也不会让授权失效, 而 netease "声明不实"那条正是钻了这个空子; ② 插件优先级只能一键重置, 没有逐插件设置入口(旧版每行一个输入框); ③ 第三方插件的服务端渲染面板在旧版是 innerHTML 直插(存储型 XSS 面), 新版索性没做; ④ 5 段说明文字(transSysDesc/transVoiceDesc/visGuideLocal/ocrLtNote/diagHint)有键无家。
+- 证据(2026-09-11): ① GPLUG 0 FAIL / 0 WARN, 授权哈希已按新口径显示(weather-board@1.0.0|2.0.0|3a874acd...); ② GBOOT 正常(id 171)、GUWIRE 91 控件 / **死控件 0**、GHTML 全过、GI18NU 引用 215 项; ③ 全套门禁见提交记录。
+- 改动(2026-09-11): ① hash.js 新增 `hashPlugin(dir, manifest)`(目录内容 + permissions 规范化串), manager 的授权判断改为**三级兼容**(index.js 口径 / 目录口径 / 目录+权限口径) —— 老授权一律继续有效, 新授权一律用最严口径; approve 路由与 plugin-check 同步改用新口径, 开发者文档更新; ② 插件卡片新增优先级输入框(改动即存 /api/plugins/config); ③ 第三方面板用**沙箱 iframe**(sandbox=allow-scripts allow-forms, 关闭时置空 src)承载 —— 插件 HTML 永不直接进入控制台 DOM; ④ 5 段说明文字挂回各自卡片。
+- 说明: 沙箱 iframe 里的插件页面拿不到父窗口, 需要与宿主通信的第三方插件要改用 postMessage(目前 4 个官方插件都用内置面板, 不受影响)。
+- 状态: CLOSED

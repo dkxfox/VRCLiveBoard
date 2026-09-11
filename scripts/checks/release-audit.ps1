@@ -69,6 +69,30 @@ RunStep '7. 发布包审计 + SHA256 清单' {
   $zipTime = (Get-Item $zips[0]).LastWriteTime
   if ($newest -and $newest.LastWriteTime -gt $zipTime) { Log ('FAIL 包比源码旧: ' + (Split-Path $newest.FullName -Leaf) + ' (' + $newest.LastWriteTime + ') 晚于 zip (' + $zipTime + ') -> 先重新跑 make-dist'); $script:exit = 1; return }
   node scripts\checks\pack-audit.js $zips
+  # 包与提交绑定(M-20260911-39): BUILD-INFO.commit 必须等于 HEAD, 否则说明包是从旧代码打的
+  $head = ''
+  try { $head = (git rev-parse HEAD).Trim() } catch {}
+  $biZip = $zips | Select-Object -First 1
+  $biTxt = ''
+  try {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $z = [System.IO.Compression.ZipFile]::OpenRead($biZip)
+    try {
+      $entry = $z.GetEntry('BUILD-INFO.json')
+      if ($entry) { $sr = New-Object System.IO.StreamReader($entry.Open()); $biTxt = $sr.ReadToEnd(); $sr.Dispose() }
+    } finally { $z.Dispose() }
+  } catch { Log ('WARN 读取 BUILD-INFO 失败: ' + $_.Exception.Message) }
+  if (-not $biTxt) { Log 'WARN 包内没有 BUILD-INFO.json(旧包或未用新版 make-dist 构建)' }
+  else {
+    $bi = $biTxt | ConvertFrom-Json
+    if ($head -and $bi.commit -and ($bi.commit -ne $head)) { Log ('FAIL 包内 BUILD-INFO.commit(' + $bi.commit.Substring(0,7) + ') 与当前 HEAD(' + $head.Substring(0,7) + ') 不一致 -> 用当前代码重新打包'); $script:exit = 1 }
+    else { Log ('包与提交绑定: commit ' + (String($bi.commit)).Substring(0,7) + ' 与 HEAD 一致') }
+  }
+  # 插件更新包也要过一遍禁入名单/机密/文件名编码(M-20260911-39)
+  $plugDir = Join-Path $proj 'dist\插件更新包'
+  $plugZips = @(Get-ChildItem $plugDir -Filter '*.zip' -File -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+  if ($plugZips.Count) { node scripts\checks\pack-audit.js --plugin-pack @plugZips; if ($LASTEXITCODE -ne 0) { Log 'FAIL 插件更新包审计未通过'; $script:exit = 1 } else { Log ('插件更新包审计通过(' + $plugZips.Count + ' 个)') } }
+  else { Log 'WARN 没有找到插件更新包(dist\插件更新包\*.zip)' }
   $sums = Join-Path $pub ('SHA256SUMS-v' + $ver + '.txt')
   Get-FileHash $zips -Algorithm SHA256 | ForEach-Object { '{0}  {1}' -f $_.Hash.ToLower(), (Split-Path $_.Path -Leaf) } | Set-Content -Path $sums -Encoding ascii
   Log ('已生成校验和清单: ' + $sums)
