@@ -120,7 +120,13 @@ function loadPlgSettings(p,body){if(!(p.enabled||p.run)){body.innerHTML='<div cl
 function NM(id){return ({hardware:'srcHW',media:'srcMedia',pages:'srcPages',livetranslate:'srcLive',ocrregion:'srcOcr'})[id]||id;}
 function DSC(id){return ({hardware:'srcHWd',media:'srcMediad',pages:'srcPagesd',livetranslate:'srcLived',ocrregion:'srcOcrd'})[id]||'';}
 function srcTok(td,x){var sw=document.createElement('div');sw.className='sw'+(x.enabled?' on':'');sw.dataset.src=x.id;sw.onclick=async function(){sw.classList.toggle('on');try{await fetch('/api/sources',{method:'POST',body:JSON.stringify({id:x.id,enabled:sw.classList.contains('on')})});}catch(e){apiFail('srcTok',e);}pollStatus();};td.appendChild(sw);}
-function renderSrcTable(){var tb=$('srcRows');if(!tb)return;tb.innerHTML='';(window._srcs||[]).forEach(function(x){var rowEl=document.createElement('tr');var td1=document.createElement('td');srcTok(td1,x);var td2=document.createElement('td');td2.textContent=tr(NM(x.id));var td3=document.createElement('td');td3.textContent=tr(DSC(x.id));var td4=document.createElement('td');var pi=document.createElement('input');pi.type='number';pi.value=x.priority;pi.style.width='62px';pi.onchange=async function(){try{await fetch('/api/sources',{method:'POST',body:JSON.stringify({id:x.id,priority:Number(pi.value)||0})});}catch(e){apiFail('sec-sources',e);}pollStatus();};td4.appendChild(pi);rowEl.appendChild(td1);rowEl.appendChild(td2);rowEl.appendChild(td3);rowEl.appendChild(td4);tb.appendChild(rowEl);});}
+function renderSrcTable(force){var tb=$('srcRows');if(!tb)return;
+  // 数据源表由 pollStatus 每 5 秒重渲染一次; 无条件整表重建会把正在输入的优先级输入框换掉(字符丢失/焦点丢失/onchange 不触发)(M-20260911-20)
+  var sig=JSON.stringify(window._srcs||[]);
+  if(!force&&tb._sig===sig)return;                                  // 数据没变: 什么都不做
+  var ae=document.activeElement;
+  if(!force&&ae&&tb.contains&&tb.contains(ae))return;               // 正在表格里编辑: 等这一次过去, 下次轮询再更新
+  tb._sig=sig;tb.innerHTML='';(window._srcs||[]).forEach(function(x){var rowEl=document.createElement('tr');var td1=document.createElement('td');srcTok(td1,x);var td2=document.createElement('td');td2.textContent=tr(NM(x.id));var td3=document.createElement('td');td3.textContent=tr(DSC(x.id));var td4=document.createElement('td');var pi=document.createElement('input');pi.type='number';pi.value=x.priority;pi.style.width='62px';pi.onchange=async function(){try{await fetch('/api/sources',{method:'POST',body:JSON.stringify({id:x.id,priority:Number(pi.value)||0})});}catch(e){apiFail('sec-sources',e);}pollStatus();};td4.appendChild(pi);rowEl.appendChild(td1);rowEl.appendChild(td2);rowEl.appendChild(td3);rowEl.appendChild(td4);tb.appendChild(rowEl);});}
 function setDot(id,cls){var e=$(id);if(e)e.className='dot '+(cls||'');}
 async function pollStatus(){try{
   var s=await (await fetch('/api/status')).json();var v=s.vrc||{};

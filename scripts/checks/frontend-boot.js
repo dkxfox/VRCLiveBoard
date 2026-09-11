@@ -58,6 +58,9 @@ function el(tag) {
     get() { return e._html; },
     set(v) {
       e._html = String(v);
+      // 真实 DOM 里给 innerHTML 赋值会替换掉所有子节点 —— 桩件必须照做, 否则"重建后旧节点应消失"这类断言永远失败
+      e.children.length = 0;
+      if (e._qs) e._qs = {};
       // 极简解析: 只认 class="x" 与 style="..." 的配对, 让门禁能断言 innerHTML 构建出来的内容
       // (本项目的卡片/面板大量用 innerHTML 拼, 不解析就只能断言到"外层存在"这一层)
       if (!e._qs) e._qs = {};
@@ -236,7 +239,24 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
     // 结果是"什么都不打印 + 退出码 0", 门禁形同虚设(2026-09-11)
     problems.push('门禁自身执行异常(请修门禁): ' + ((e && e.stack) || e));
   }
-  // 动效开关(M-20260911-18): 关掉再打开必须重启星空画布; 已保存的设置必须在加载时生效
+    // 数据源表格: 数据没变不得整表重建(否则 pollStatus 每 5 秒会打断正在输入的优先级)(M-20260911-20)
+  try {
+    const tb = byId['srcRows'];
+    if (!tb || typeof sb.renderSrcTable !== 'function') problems.push('#srcRows 或 renderSrcTable 缺失');
+    else {
+      sb._srcs = [{ id: 'hardware', enabled: true, priority: 10, intervalMs: 2000 }];
+      sb.renderSrcTable(true);
+      const mark = sb.document.createElement('i');
+      tb.appendChild(mark);
+      sb.renderSrcTable();                       // 数据没变 -> 必须原样保留(标记还在)
+      if (tb.children.indexOf(mark) < 0) problems.push('数据没变时数据源表格仍被整表重建(正在输入的优先级会被打断)');
+      sb._srcs = sb._srcs.concat([{ id: 'media', enabled: false, priority: 30, intervalMs: 2000 }]);
+      sb.renderSrcTable();                       // 数据变了 -> 必须重建(标记消失)
+      if (tb.children.indexOf(mark) >= 0) problems.push('数据变化后数据源表格没有重建');
+      else if (tb.children.length !== 2) problems.push('重建后行数不对(期望 2, 实际 ' + tb.children.length + ')');
+    }
+  } catch (e) { problems.push('数据源表格重建断言异常: ' + e.message); }
+// 动效开关(M-20260911-18): 关掉再打开必须重启星空画布; 已保存的设置必须在加载时生效
   try {
     const top = byId['animTop'], body = sb.document.body;
     let fxN = 0;

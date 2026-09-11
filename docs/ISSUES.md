@@ -444,3 +444,12 @@
 - 改动(2026-09-11): ① setTheme 增加第二参数 save(默认保存): 用户点选即写入 localStorage['vrcbTheme'], 带 try/catch(隐私模式/禁用存储时不炸); ② 启动改用 pickTheme() 按优先级选主题 —— URL ?t=xxx(分享与测试) > localStorage 上次选择 > 默认 blue, 首次应用传 save=false(只有用户显式选择才记录); ③ 头部注释写明口径与优先级; ④ G-BOOT 新增主题持久化断言(点选要写盘 / 重开要恢复)。
 - 说明: 选择存 localStorage 而不是 config —— 与动效开关(vrcbAnimMaster)及旧版控制台(vrcbBoardsOpen / vrcbGuideDone)同一层, 属"本机界面偏好"; 主题是纯客户端 CSS 变量, 服务端不需要知道, 因此不动 config 契约与 GCONF/GROUTE 基线。
 - 状态: CLOSED
+## M-20260911-20 数据源表格每 5 秒被整表重建: 正在输入的优先级会被打断(CLOSED)
+- 来源: "程序还有哪些需要优化"自查(用户说"也可能我没发现" —— 这条正是此类)
+- 现象: 在「数据源」标签里改优先级数字时, 输入框会在最多 5 秒内被替换掉: 已输入的字符丢失、焦点丢失、onchange 不触发(等于改不了这一格)。
+- 复现: 打开数据源标签 → 在优先级输入框里慢慢输入数字(先别回车) → 5 秒内输入框被重建, 输入内容消失。
+- 影响面: 优先级是本页唯一的可编辑字段, 也就是说这一页的编辑功能实际上很难用。
+- 根因: pollStatus 每 5 秒跑一次并调用 renderSrcTable(), 而后者**无条件** tb.innerHTML='' + 逐行重建(每行都新建 input 元素)。
+- 证据: ① 代码路径 —— pollStatus 每 5s(app.js:309) → renderSrcTable(app.js:133) → 无条件重建(app.js:129); ② 门禁 A/B —— 撤掉"数据没变不重建"守卫后, G-BOOT 报「数据没变时数据源表格仍被整表重建(正在输入的优先级会被打断)」, 复原后通过。
+- 改动(2026-09-11): ① renderSrcTable(force) 加两道守卫 —— 数据签名(JSON.stringify)未变则不重建; 表格内有焦点(正在编辑)则不重建, 等下一次轮询; 只有真正重建时才更新签名; ② reRenderAll(切语言)改为 renderSrcTable(true) 强制重建, 否则表格会留在旧语言; ③ G-BOOT 新增断言: 数据没变不得重建 / 数据变了必须重建 / 重建后行数正确; ④ 顺带修门禁桩件保真度: innerHTML 赋值现在会清空 children(真实 DOM 行为), 否则"重建后旧节点应消失"这类断言永远失败。
+- 状态: CLOSED
