@@ -65,6 +65,8 @@ Gate 'GI18N' '三语键对齐'      { node scripts\checks\i18n-check.js }
 Gate 'GI18NU' 'i18n 引用完整性'  { node scripts\checks\i18n-usage.js }
 Gate 'GI18NH' '硬编码文案检测'   { node scripts\checks\i18n-hardcode.js }
 Gate 'GHTML' '控制台页面'      { node scripts\checks\html-inline-check.js }
+Gate 'GUWIRE' '控件接线'       { node scripts\checks\ui-wiring.js }
+Gate 'GBOOT' '前端启动可执行性' { node scripts\checks\frontend-boot.js }
 Gate 'GPLUG' '插件契约/单一源'   { node scripts\checks\plugin-check.js }
 Gate 'GCONF' '配置契约/安全默认' { node scripts\checks\config-contract.js }
 Gate 'GDOC'  '说明文件一致性'    { node scripts\checks\doc-consistency.js }

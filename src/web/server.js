@@ -484,7 +484,12 @@ function effPluginSec() {
     if (req.method === 'GET' && url.pathname === '/api/special/video') {
       const rel = (url.searchParams && url.searchParams.get('file')) || ((rootConfig.specialVideo && rootConfig.specialVideo.file) || '');
       if (!rel) return json(res, 404, { ok: false, error: '未配置特殊彩蛋视频' });
-      const f = path.join(__dirname, '..', '..', rel);
+      // 安全: 本接口只服务工程内 assets/ 下的彩蛋视频(上传接口写入的也是 assets/videos/)。
+      // 防 ../ 与绝对路径导致的本机任意文件读 —— 注意 config.json 就在工程根内, 只挡"根外"挡不住它(M-20260911-02)
+      const rootDir = path.resolve(__dirname, '..', '..');
+      const assetsDir = path.join(rootDir, 'assets');
+      const f = path.resolve(rootDir, rel);
+      if (f !== assetsDir && f.indexOf(assetsDir + path.sep) !== 0) return json(res, 403, { ok: false, error: '路径非法' });
       return fs.stat(f, function (err, stat) {
         if (err) return json(res, 404, { ok: false });
         const total = stat.size; const range = req.headers.range; let start = 0, end = total - 1;

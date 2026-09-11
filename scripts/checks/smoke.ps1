@@ -4,6 +4,7 @@
 #   powershell -File scripts\checks\smoke.ps1                      # 测当前工作树, 端口 19250
 #   powershell -File scripts\checks\smoke.ps1 -Zip dist\...zip -Port 19260
 #   powershell -File scripts\checks\smoke.ps1 -Assert 'updateBtn|/|id="updateBtn"'
+#   断言第 4 段可选=期望 HTTP 状态码(默认要求 2xx): '文件读拦截|/api/special/video?file=config.json|ok.:false|403'
 #   M-09(2026-09-02): 响应体按 UTF-8 解码(中文断言可用); 经 run-gates/feature-accept 转发时断言数组用 [char]31 拼成一个参数, 本脚本自动拆分
 param(
   [string]$Zip = '',
@@ -46,10 +47,11 @@ $proc = Start-Process -FilePath 'node' -ArgumentList 'src/main.js' -WorkingDirec
 Start-Sleep -Seconds 12
 
 $script:pass = 0; $script:fail = 0
-function T($name, $urlPath, $pattern) {
+function T($name, $urlPath, $pattern, $wantStatus = 0) {
+  $code = 0; $body = ''
   try {
     $resp = Invoke-WebRequest -Uri ('http://127.0.0.1:' + $Port + $urlPath) -UseBasicParsing -TimeoutSec 12
-    $body = $null
+    $code = [int]$resp.StatusCode
     if ($resp.RawContentStream) {
       try {
         $ms = New-Object System.IO.MemoryStream
@@ -58,9 +60,15 @@ function T($name, $urlPath, $pattern) {
         $ms.Dispose()
       } catch { $body = $resp.Content }
     } else { $body = $resp.Content }
-    if ($body -match $pattern) { Write-Output ('  PASS ' + $name); $script:pass++ }
-    else { Write-Output ('  FAIL ' + $name + '  body=' + $body.Substring(0, [Math]::Min(140, $body.Length))); $script:fail++ }
-  } catch { Write-Output ('  FAIL ' + $name + '  err=' + $_.Exception.Message); $script:fail++ }
+  } catch {
+    try { $code = [int]$_.Exception.Response.StatusCode.value__ } catch { $code = 0 }
+    try { $sr = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream()); $body = $sr.ReadToEnd(); $sr.Dispose() } catch { $body = '' }
+  }
+  $ok = $false
+  if ($wantStatus) { $ok = (($code -eq [int]$wantStatus) -and ($body -match $pattern)) }
+  else { $ok = (($code -ge 200) -and ($code -lt 300) -and ($body -match $pattern)) }
+  if ($ok) { Write-Output ('  PASS ' + $name); $script:pass++ }
+  else { Write-Output ('  FAIL ' + $name + '  code=' + $code + ' body=' + $body.Substring(0, [Math]::Min(140, $body.Length))); $script:fail++ }
 }
 T 'version'        '/api/version'        ('"version"\s*:\s*"' + [regex]::Escape($pkgVer) + '"')
 T 'health'         '/api/health'         '"osc"|"sources"|"uptime"'
@@ -71,9 +79,13 @@ T 'console page'   '/'                   'VRCLiveBoard'
 T 'lang.js'        '/lang.js'            'VRCB_LANG'
 T 'devgate status' '/api/devgate/status' '"level1"'
 foreach ($a in $Assert) {
-  $parts = $a -split '\|', 3
-  if ($parts.Count -eq 3) { T ('[专项] ' + $parts[0]) $parts[1] $parts[2] }
-  else { Write-Output ('  FAIL 断言格式错误(应为 name|urlPath|regex): ' + $a); $script:fail++ }
+  $parts = $a -split '\|', 4
+  if ($parts.Count -ge 3) {
+    $want = 0
+    if ($parts.Count -eq 4) { $want = [int]$parts[3] }
+    T ('[专项] ' + $parts[0]) $parts[1] $parts[2] $want
+  }
+  else { Write-Output ('  FAIL 断言格式错误(应为 name|urlPath|regex[|期望状态码]): ' + $a); $script:fail++ }
 }
 Write-Output ('SMOKE RESULT: pass=' + $script:pass + ' fail=' + $script:fail)
 

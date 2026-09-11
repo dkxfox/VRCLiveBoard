@@ -272,35 +272,37 @@
 - 遗留: ①同文件另有两处同类遮蔽待用户定夺 —— renderBdEditor() 第 25 行 `var t=$('bdText')` 之后的 t('emptyPage')(#bdList / #bdPrev 在 index.html 均存在, 故当页面文本为空或公告板被删空时**可达**, 会抛同类 TypeError); 以及第 23/38 行 `var t=pages[i-1]`(仅用于数组交换, 内部无 t() 调用, 实测无害)。②"节日/季节/问候语"内联动画自 a2b937f 起即不可达, 现由 skin.js 皮肤判定 + simpleBoot 承担; 如日后想恢复问候语动画, 可从 a2b937f^ 取回旧实现。
 - 状态: CLOSED(动画已恢复; 两处同类遮蔽经用户确认后再另行处理)
 
-## M-20260911-02 本机任意文件读: /api/special/video 路径穿越(OPEN)
+## M-20260911-02 本机任意文件读: /api/special/video 路径穿越(CLOSED)
 - 来源: 2026-09-11 新版代码审核(用户"审核一下新版代码")
 - 现象: GET /api/special/video?file=<任意路径> 可读取本机任意文件; file=config.json 即可取走工程根下的配置文件。
 - 复现: 浏览器或 curl 访问 http://127.0.0.1:19190/api/special/video?file=config.json → 返回 config.json 原文(含 level1Password、devchain.anchor); file=../../../../Windows/win.ini 可越出工程根。
 - 影响面: 本机任意进程/脚本可读取任意文件, 并据此拿到一级密码 → 该密码保护的配置导出/导入等门禁全部失效。web.host 默认 127.0.0.1(仅回环), 故暂未暴露到局域网; 但不影响本机提权性质。
 - 根因: server.js 第 487 行 `const f = path.join(__dirname, '..', '..', rel)` 对 rel 零校验(既未拒 '..', 也未做 resolve 后的目录前缀比对)。对照: 同一文件第 142-144 行的静态资源分支**已**显式做了 URL 解码与 '..' / '\\' 拒绝 —— 同类防护只做了一半。
 - 证据(本人复验): 读 src/web/server.js:484-495 确认; config.default.json 与 config.json 的 web.host 均为 127.0.0.1; 静态资源分支 L142-144 有防穿越代码。
-- 计划: 批 1(2026-09-11)修复 —— path.resolve 后与工程根做前缀比对 + 拒 '..'; 隔离冒烟加越界读断言。
-- 状态: OPEN(批 1 修复中)
+- 改动(批 1, 2026-09-11): server.js 在 fs.stat 之前加目录围栏 —— 以 assets 目录为边界, path.resolve 归一化后要求结果落在 assets/ 之内, 否则 403。**边界取 assets/ 而不是工程根**: config.json 本身就在工程根内, 只挡"根外"挡不住它; 而该接口的产物(上传接口写入的正是 assets/videos/)天然在 assets/ 下。覆盖 ../ 穿越、带盘符的绝对路径与根内其它文件。scripts/checks/smoke.ps1 扩展断言语法: 第 4 段可选 = 期望 HTTP 状态码, 使 403 拦截类修复能被门禁长期看住(3 段旧写法保持兼容)。
+- 验证(批 1, 2026-09-11): 隔离实例 :19260 专项断言 **15 PASS / 0 FAIL** —— A1 file=config.json → 403、A2 ../../../../Windows/win.ini → 403、A3 C:/Windows/win.ini → 403、A4 file=assets/videos/nope.mp4 → 404(阳性对照: 过围栏、仅文件不存在)、A5 未配置 file → 404(行为不变); run-gates -Smoke = 13 PASS / 1 FAIL(GSYNC 未推送属预期)。
+- 状态: CLOSED
 
-## M-20260911-03 前端门禁盲区: 控件接线与启动可执行性无任何门禁(OPEN)
+## M-20260911-03 前端门禁盲区: 控件接线与启动可执行性无任何门禁(CLOSED)
 - 来源: 2026-09-11 新版代码审核
 - 现象: 近两次前端事故(M-20260907-01 的 20 个死按键、M-20260911-01 的启动动画不播)在提交时全部门禁为绿, 事故类型没有任何闸能拦。
 - 复现: ①删掉 index.html 里某个按钮的 app.js 引用 → run-gates 仍 11 PASS; ②在启动 IIFE 里写一句必然抛错的代码 → 门禁仍全绿, 只有运行时日志里多一行 unhandled rejection。
 - 影响面: 前端"静默失效"类缺陷全靠人工实机发现, 回归成本高。
 - 根因: GHTML(html-inline-check.js)只做 JS → HTML 单向检查(getElementById 目标是否存在、id 是否唯一、脚本语法), **不做 HTML → JS 反向检查**(控件是否有任何 JS 引用), 也不执行任何前端代码(无"能不能跑起来"的断言)。
-- 计划: 批 1(2026-09-11)新增两个门禁 —— ① ui-wiring.js: 遍历 index.html 中带 id 的 button/input/select/textarea, 断言每个都能在 app.js 里找到引用(quoted / $(id) / 浏览器命名访问三种形态), 消除 langSel 类误报; ② frontend-boot.js: 用 DOM 桩件在 node vm 里加载 app.js, 断言顶层无异常, 并抽取启动动画 IIFE 断言各品牌分支能正确调用 simpleBoot / starryBoot。
-- 证据(本人原型已跑通): ui-wiring 原型在 87 个控件上得 0 死控件; frontend-boot 原型三场景(normal / normal+皮肤 / starry)调用链全部正确。
-- 状态: OPEN(批 1 实施中)
+- 改动(批 1, 2026-09-11): 新增 scripts/checks/ui-wiring.js(G-UWIRE)与 scripts/checks/frontend-boot.js(G-BOOT), 在 run-gates.ps1 注册为 GUWIRE / GBOOT 两道闸(写 .ps1 时保留 UTF-8 BOM)。G-UWIRE 遍历 index.html 里 87 个带 id 的 button/input/select/textarea, 要求每个都能在 app.js 找到**显式**引用(字符串 id / $(id) / getElementById(id))或带内联 onclick —— 裸标识符(浏览器命名访问)不算接线, 由 G-BOOT 直接拒绝。G-BOOT 用 DOM 桩件(按 index.html 真实存在的 id 给元素桩, 不存在的给 null)在 node vm 里加载 lang.js + app.js, 断言: ①顶层加载无异常 ②加载期无 unhandledRejection ③ tr() 能取到真实文案且 window.t 别名一致 ④启动动画三个品牌分支各自走到 simpleBoot / starryBoot。
+- 验证(批 1, 2026-09-11): **两道闸首次试跑就抓出两个真问题** —— ① app.js 末尾 if(langSel) 依赖浏览器命名访问(G-BOOT 报 langSel is not defined), 已改为 $('langSel') 显式取并加守卫; ② G-BOOT 自己的桩件缺 tr 导致启动分支报 tr is not defined(门禁自身的 bug), 已修, 并给"裸标识符访问 DOM id"的报错补了中文提示。修完后 G-UWIRE 0 死控件 / G-BOOT 顶层加载正常; run-gates -Smoke = **13 PASS / 1 FAIL**(GSYNC 属预期)。
+- 状态: CLOSED
 
-## M-20260911-04 i18n 取词函数单字母 t 的遮蔽风险 + 2 处无守卫 DOM 赋值(OPEN)
+## M-20260911-04 i18n 取词函数单字母 t 的遮蔽风险 + 2 处无守卫 DOM 赋值(CLOSED)
 - 来源: 2026-09-11 新版代码审核(承接 M-20260911-01 的根因)
 - 现象: ①i18n 取词函数名为单字母 t, 与最常见的临时变量名冲突, 已被 `var t=null` 咬过两次(启动动画事故 + 公告板编辑器潜伏用例); ②app.js 第 355-356 行 `document.getElementById('gateL1'/'gateL2').onclick = ...` 无空值守卫。
 - 复现: ①在任意函数作用域内写 `var t=<任意值>` 并在其后调用 t('key') → TypeError; ②用 DOM 桩件加载 app.js(元素缺失) → 顶层即抛 `TypeError: Cannot set properties of null (setting 'onclick')` 并中断, 其后所有代码(含语言切换与初始化)全部失效。
 - 影响面: ①类事故会复发且症状隐蔽(async IIFE 场景下只剩一行 unhandled rejection); ②只要 gateL1 / gateL2 任一 id 被改名或所在区块被裁, 整个控制台脚本从该行起失效。
 - 根因: ①取词函数采用单字母全局名(第 304 行 function t(k)), 而 app.js 全文件 257 处 var 声明, 无块级作用域纪律; ②旧版套皮代码直接对 getElementById 结果取属性, 未沿用新版 `if($('x'))` 的守卫写法。
 - 证据(本人复验): ①M-20260911-01 的提取式 harness 与线上日志; ②DOM 桩件加载 app.js 实测抛错行即 L355; ③全文件扫描: 局部 `var t=` 现存 3 处(L23 数组交换无害、L25 可达、L38 数组交换无害)。
-- 计划: 批 1(2026-09-11)—— 取词函数改名 t → tr(保留 window.t 兼容 index.html 内联块), 同步更新 i18n-usage / i18n-hardcode 门禁对 tr( 的识别, 并在 i18n-usage 中新增"禁止局部绑定 t"检查; 两处无守卫赋值补 if 守卫。
-- 状态: OPEN(批 1 实施中)
+- 改动(批 1, 2026-09-11): ① app.js 取词函数 function t(k) → function tr(k), 305 处调用点按"前一字符非词字符"的边界规则整体重命名(避免误伤 alert( / createElement( / setTimeout( / parseFloat( 这类词尾), 并保留 window.t = tr 兼容 index.html 内联块(批 3 迁出内联块后删除); ② 消除 3 处局部 var t=(公告板两处数组交换 → tp, 编辑器文本域 → bdt)—— 其中编辑器那处正是 t('emptyPage') 的可达崩溃点; ③ app.js:355-356 两处无守卫赋值改为 var _g = document.getElementById(...); if (_g) _g.onclick = ...; ④ i18n-usage.js 的取词正则改为 \btr?\( , 并新增"禁止局部绑定 t"检查(命中即 FAIL)。
+- 验证(批 1, 2026-09-11): node --check 通过; GI18NU 键数 **202 与改名前完全一致**(证明无调用点漏改/漏迁); G-BOOT 顶层加载无异常、tr('bootTagline') 取到真实文案、window.t 与 tr 取值一致; 全文件残留"前一字符非词字符的 t(" = **0 处**、残留局部绑定 t = **0 处**; run-gates -Smoke = 13 PASS / 1 FAIL(GSYNC 属预期)。
+- 状态: CLOSED
 
 ## M-20260911-05 更新链接注入路径: 白名单未锚尾 + 前端 innerHTML 未转义(OPEN)
 - 来源: 2026-09-11 新版代码审核
