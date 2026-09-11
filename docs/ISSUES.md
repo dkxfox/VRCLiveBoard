@@ -565,3 +565,10 @@
 - 改动(2026-09-11): ① weather-board: 单次导入上限 200 行(超出在返回值里给 truncated), 一次性定时器用句柄登记 + 重新导入先清旧的; ② scheduled-board: testFire 支持 regular(播第一条常规公告, 没有则明确报错), saveRows 补入参保护; ③ netease: status() 返回 cfg, 两处 spawn 补 'error' 监听, taskkill 失败改为记日志(不再静默); ④ friend-welcome: exclusive 声明 chatbox-timeline(此前占用独占资源却没声明, 静态冲突检测看不见); ⑤ conflict-test 移出 plugins/ → dev-fixtures/(git mv, 打包清单已加 dev-fixtures)。
 - 说明: weather-board 的授权哈希随 index.js 变化(0991d931...), 已授权的用户会被要求重新授权一次 —— 这是设计如此(index.js 是哈希对象)。
 - 状态: CLOSED
+## M-20260911-33 控制台恢复移植丢失(批 2): 插件重扫 / 更新轮询 / 体检报告 / 日志行为(CLOSED)
+- 来源: 新旧控制台差异审计的挂账(用户"继续")
+- 现象: ① 手动放进 plugins/ 的新插件, 点"刷新"看不到(旧版先 POST /api/plugins/scan 重扫目录再加载); ② "发现新版本"只在页面加载时查一次 —— 挂机/长期不关的用户永远看不到更新提示(旧版 6 小时轮询一次); ③ "复制体检结果"复制的是 /api/ports/check 的原始 JSON, 旧版复制的是格式化的体检报告(/api/health); ④ 日志每次输入过滤条件都重新 fetch 一遍, 且不再跟随底部, 错误过滤正则被收窄成只认 [WARN]/[ERROR]/[ERR]。
+- 证据(2026-09-11): ① app.js 语法通过; ② G-BOOT 顶层加载正常(166 个 id); ③ GI18NH 与基线一致(HTML 21 / JS 6 —— 本次没有新增硬编码文案); ④ GHTML 全通过; ⑤ 全套门禁见提交记录。
+- 改动(2026-09-11): ① plgRefresh 改为先 POST /api/plugins/scan 再 loadPlugins; ② 更新检查抽成 window.__checkUpdate 并 setInterval 6 小时复查一次(保持只在有新版本且 releaseUrl 是 https 时才渲染链接); ③ healthCopy 改为优先取 /api/health 并用通用格式化器逐字段排版(取不到时回退 /api/ports/check 的 JSON); ④ 日志改成"缓存 + 本地渲染": fetch 只在加载/刷新时发生, 过滤与错误筛选在本地做, 渲染前判断是否贴底并自动跟随, 错误正则放宽为 warn|error|err|fail。
+- 说明: 日志的错误过滤正则只用 ASCII 关键词(新 UI 的门禁禁止 JS 里硬编码中文 —— 旧版写的 错误|失败 在现行口径下不能直接照搬)。
+- 状态: CLOSED
