@@ -203,20 +203,6 @@ function simpleBoot(c1,c2,greet,deco,title,tag){
  if(brd==='starry'){starryBoot();return;}
  if(_r){simpleBoot(_r.c1,_r.c2,_r.greet,_r.deco,'VRCLiveBoard',t('bootTagline'));return;}
  simpleBoot('#3b82f6','#7dd3fc','','✦','VRCLiveBoard',t('bootTagline'));return;
- var now=new Date(),m=now.getMonth()+1,d=now.getDate();
- var fest=[[1,1,'元旦快乐','#f59e0b','#60a5fa','🎆'],[9,15,'中秋快乐','#f5c518','#ff8c42','🥮'],[10,1,'国庆快乐','#ff5b5b','#f5c518','🎆'],[10,31,'万圣节快乐','#ff8c00','#c084fc','🎃'],[12,25,'圣诞快乐','#2fbf71','#e2405b','🎄']];
- var t=null;for(var i=0;i<fest.length;i++){var f=fest[i];if(f[0]===m&&f[1]===d){t=f;break;}}
- var c1,c2,greet,deco,title,tag;
- if(brd==='starry'){starryBoot();return;}
- else if(t){c1=t[3];c2=t[4];greet=t[2];deco=t[5];title='VRCLiveBoard';tag=t('bootTagline');}
- else if(m>=3&&m<=5){c1='#34d399';c2='#f9a8d4';greet='春色满园';deco='🌸';title='VRCLiveBoard';tag=t('bootTagline');}
- else if(m>=6&&m<=8){c1='#38bdf8';c2='#86efac';greet='夏日浓荫';deco='☀️';title='VRCLiveBoard';tag=t('bootTagline');}
- else if(m>=9&&m<=11){c1='#f59e0b';c2='#f87171';greet='秋意渐浓';deco='🍂';title='VRCLiveBoard';tag=t('bootTagline');}
- else{c1='#60a5fa';c2='#e0f2fe';greet='冬日暖阳';deco='❄️';title='VRCLiveBoard';tag=t('bootTagline');}
- var ov=document.createElement('div');
- ov.style.cssText='position:fixed;inset:0;z-index:9999;pointer-events:none;background:radial-gradient(110% 110% at 50% 32%, '+c1+'40 0%, #0b0e13 72%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:#e8edf3;transition:opacity .55s';
- ov.innerHTML='<img src="/api/icon" onerror="this.style.display=\'none\'" style="width:78px;height:78px;border-radius:20px;filter:drop-shadow(0 0 20px '+c1+'99)"><div style="font-size:30px;font-weight:800;background:linear-gradient(90deg,'+c1+','+c2+');-webkit-background-clip:text;background-clip:text;color:transparent">'+title+'</div><div style="color:#9aa7ba;font-size:13px;letter-spacing:3px">'+tag+'</div><div style="color:'+c2+';font-size:14px;margin-top:6px;font-weight:600">'+(greet?deco+' '+greet:'')+'</div>';
- document.body.appendChild(ov);setTimeout(function(){ov.style.opacity='0';},1900);setTimeout(function(){ov.remove();},2455);
 })();
 syncQuickPlg();
 

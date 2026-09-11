@@ -259,3 +259,15 @@
 - 改动(批 B, 2026-09-07, 用户"全做(8 项一次补完)"): ①index.html 补齐 8 项面板 —— 插件安全策略(psNet/psProc/psFsW/psFsR/psAi + psSave + psMsg)、截图区域可视化覆盖层(#capOverlay 含 capImg/capRect/capSel/capRefresh/capSave/capCancel, z-index 10000 压过启动动画)、插件导入工具条(plgZip/plgImport/plgRefresh/plgPrioReset/plgMsg)、版本号 #ver + #updateHint、诊断结果 #diagOut + #diagCopy、#healthCopy、#logErrOnly、公告板折叠 #collapseAll/#expandAll, 并加 .edlist.compact .snip{display:none} 紧凑样式; ②app.js 新增"批 B 补缺失面板"块 —— 截图覆盖层拖拽选区(按 naturalWidth/rect.width 换算真实像素, 保存走 /api/capture/set region 并回写模式下拉)、插件 zip 导入(空路径复用既有 importNeedPath 键)、插件优先级重置、版本号+更新检查(/api/version、/api/version/check)、健康信息复制、诊断复制、日志只看错误(/\[(WARN|ERROR|ERR)\]/i 过滤)、折叠展开(bdSetCompact)。
 - 验证(批 B, 2026-09-07): run-gates -Smoke 11 PASS/1 FAIL(GSYNC 未推送属预期例外); GI18NU 0 缺失(修正 1 处新引用键名 plgImportPath → 复用既有 importNeedPath, 未新增重复键); smoke.ps1 -Port 19260 专项断言 44 PASS/0 FAIL(17 项新面板控件 + 7 项批 B app.js 接线 + 12 项批 A 回归 + 8 项基线); 死按键复扫保持 0; 8 项面板 HTML/app.js 双向引用核对 100%。
 - 状态: CLOSED(批 A + 批 B 全部完成, 无遗留项)
+
+## M-20260911-01 启动动画不播放(async IIFE 内 var t 遮蔽全局 t 函数)(CLOSED)
+- 来源: 用户实机测试反馈"启动动画现在不播放了, 检查一下"(2026-09-11)
+- 现象: 控制台页面加载时不再播放启动动画; 品牌为「默认/自动」时完全不播, 品牌为「星轨茶会(starry)」时正常; 每次加载日志新增一条 [WARN] [前端] Promise拒绝: t is not a function。
+- 复现: ①branding=normal(用户当前配置); ②打开或刷新控制台 → 无启动动画, 页面直接出现; ③logs/app.log 新增 "Promise拒绝: t is not a function"。
+- 影响面: 所有非 starry 品牌用户的启动动画(纯视觉, 不影响功能); 附带污染日志。
+- 根因: app.js 的启动动画是 (async function(){...})() IIFE, 其内部 `var t=null` 被提升到 IIFE 作用域顶部, 遮蔽了全局 `function t(k)`(i18n 取词)。于是 IIFE 内 t('bootTagline') 在 t 仍为 undefined 时被调用 → TypeError → async IIFE 以 rejected promise 结束, 动画从未创建(bootscrim 已先行移除, 所以页面看着"正常"只是没动画)。该 `var t` 属于 0460cc3 的"节日/季节动画"块; a2b937f 把该块重构为 simpleBoot 并在其上方插入 `_r` 早返回, 使旧块成为不可达死代码, 但 var 提升造成的遮蔽照旧生效。
+- 证据: ①logs/app.log 中 2026-09-08 09:03(x3) 与 2026-09-11 17:21 / 18:10 / 18:16 共 6 条 "Promise拒绝: t is not a function"; ②提取式 harness(用 node vm 加载真实 IIFE, 对 simpleBoot/starryBoot/playSpecialVideo/t/document/fetch 打桩)复现: branding=normal(有皮肤/无皮肤)与 auto 三场景全部 `TypeError: t is not a function` 且调用链为空, branding=starry 正常调用 starryBoot; ③git log -S 定位: `var t=null` 由 5ececfe 引入、节日块由 0460cc3 引入、`_r` 早返回由 a2b937f 引入(三者同为 2026-09-06, 均非批 A/批 B 引入)。
+- 改动(2026-09-11): 删除 app.js 中已不可达的旧节日/季节块(14 行, 含 `var t=null`)。该块与 simpleBoot 重复(同为 ov 构建 + 图标/问候/装饰/标题), 且被上一行 `return;` 判定为不可达; 删除后 IIFE 内不再有局部 t 声明, t('bootTagline') 重新解析到全局函数。改动量: 1 文件 / -14 行 / +0 行。
+- 验证(2026-09-11): harness 四场景复跑全部无异常且调用链正确 —— normal+皮肤 → simpleBoot(#f59e0b,#f87171,秋意渐浓,🍂); normal+无皮肤 → simpleBoot(#3b82f6,#7dd3fc,'','✦'); auto+皮肤 → simpleBoot(节日配色); starry → starryBoot; run-gates -Smoke = 11 PASS / 1 FAIL(GSYNC 未推送属预期例外); smoke.ps1 -Port 19260 专项断言 20 PASS / 0 FAIL(8 基线 + 8 启动动画相关 + 4 批 B 回归); node --check 通过。
+- 遗留: ①同文件另有两处同类遮蔽待用户定夺 —— renderBdEditor() 第 25 行 `var t=$('bdText')` 之后的 t('emptyPage')(#bdList / #bdPrev 在 index.html 均存在, 故当页面文本为空或公告板被删空时**可达**, 会抛同类 TypeError); 以及第 23/38 行 `var t=pages[i-1]`(仅用于数组交换, 内部无 t() 调用, 实测无害)。②"节日/季节/问候语"内联动画自 a2b937f 起即不可达, 现由 skin.js 皮肤判定 + simpleBoot 承担; 如日后想恢复问候语动画, 可从 a2b937f^ 取回旧实现。
+- 状态: CLOSED(动画已恢复; 两处同类遮蔽经用户确认后再另行处理)
