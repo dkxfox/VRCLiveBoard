@@ -175,14 +175,14 @@ body.no-anim *{animation:none!important;transition:none!important}
       <div class="col">
         <div class="sub" style="margin-bottom:6px" data-t="pageList">页面列表</div>
         <div class="edlist" id="bdList" style="max-height:360px;flex:1"></div>
-        <div class="row" style="margin-top:10px"><button class="small" id="bdAdd" data-t="btnAddPage">+ 添加页面</button><button class="small" data-t="btnBatchImport">批量导入(Excel)</button><button class="small" data-t="btnExport">导出</button></div>
+        <div class="row" style="margin-top:10px"><button class="small" id="bdAdd" data-t="btnAddPage">+ 添加页面</button></div>
       </div>
       <div class="col">
         <div class="row" style="margin-bottom:4px"><span class="sub" data-t="lblContent144">内容(一页最多 144 字符)</span><span class="row" style="margin-left:auto;gap:4px"><select id="bdVar" style="max-width:200px"><option value="{cpu_util}">{cpu_util} · CPU 使用率 %</option><option value="{cpu_temp}">{cpu_temp} · CPU 温度 ℃</option><option value="{gpu_util}">{gpu_util} · GPU 使用率 %</option><option value="{gpu_temp}">{gpu_temp} · GPU 温度 ℃</option><option value="{mem_used}">{mem_used} · 内存已用 GB</option><option value="{mem_total}">{mem_total} · 内存总量 GB</option><option value="{net_down}">{net_down} · 下载 KB/s</option><option value="{net_up}">{net_up} · 上传 KB/s</option><option value="{song}">{song} · 歌名</option><option value="{artist}">{artist} · 歌手</option><option value="{album}">{album} · 专辑</option><option value="{date}">{date} · 日期</option><option value="{time}">{time} · 时间</option></select><button class="small gray" id="bdVarBtn" data-t="btnInsertVar">插入变量</button></span></div>
         <textarea id="bdText" rows="4"></textarea>
         <div class="row" style="margin:10px 0 4px;justify-content:space-between"><span class="sub" data-t="lblGamePreviewFull">游戏内实际效果(聊天框 · 宽度随最宽一行自适应)</span><span class="sub"><span data-t="lblWidth">每行</span> <input id="bdWidth" type="number" value="28" style="width:52px"> <span data-t="lblWidthUnit">宽(半角)</span></span></div>
         <div class="chatbox-wrap" style="flex:1"><div class="chatbox-bubble" id="bdPrev">( 空白页 )</div></div>
-        <div class="row" style="margin-top:10px"><button class="small" id="bdSave" data-t="btnSavePage"></button><button class="small gray" id="bdDup" data-t="btnDupPage"></button><button class="small gray" id="bdDel" data-t="btnDelPage">删除此页</button><span class="sub" style="margin-left:auto"><span data-t="rotInterval">轮播间隔</span> <input type="number" value="8" style="width:60px"> <span data-t="rotSec">秒</span></span></div>
+        <div class="row" style="margin-top:10px"><button class="small" id="bdSave" data-t="btnSavePage"></button><button class="small gray" id="bdDup" data-t="btnDupPage"></button><button class="small gray" id="bdDel" data-t="btnDelPage">删除此页</button><span class="sub" style="margin-left:auto"><span data-t="rotInterval">轮播间隔</span> <input type="number" id="bdRot" value="8" style="width:60px"> <span data-t="rotSec">秒</span></span></div>
       </div>
     </div>
   </div>
@@ -194,21 +194,21 @@ body.no-anim *{animation:none!important;transition:none!important}
     <div class="card-title" style="margin-bottom:8px" data-t="secSrc"></div>
     <div class="sub" style="margin:0 0 8px" data-t="lblPriorityHint">值越大越先显示; 调整后保存</div>
     <table><thead><tr><th data-t="thEnable">启用</th><th data-t="thName">名称</th><th data-t="thDesc">说明</th><th data-t="thPriority">优先级</th></tr></thead><tbody id="srcRows"></tbody></table>
-    <div class="row" style="margin-top:8px"><button class="small gray" data-t="prioReset">优先级重置</button></div>
+    <div class="row" style="margin-top:8px"><button class="small gray" id="prioReset" data-t="prioReset">优先级重置</button></div>
   </div>
 </div>
 <!-- 翻译系统 -->
 <div id="tab-trans" hidden>
   <div class="card">
     <div class="card-title" style="margin-bottom:8px" data-t="secTrans"></div>
-    <div class="row" style="margin:4px 0"><span style="font-size:13px" data-t="ltSvcLabel">翻译服务</span><b style="font-size:13px" id="ltStatus">未配置</b><button class="small gray" data-t="ltCheckBtn">检测</button><button class="small gray" data-t="ltDownloadBtn">下载</button></div>
+    <div class="row" style="margin:4px 0"><span style="font-size:13px" data-t="ltSvcLabel">翻译服务</span><b style="font-size:13px" id="ltStatus">未配置</b><button class="small gray" id="ltCheckBtn" data-t="ltCheckBtn">检测</button><button class="small gray" id="ltDownloadBtn" data-t="ltDownloadBtn">下载</button></div>
     <div class="sub" style="margin:10px 0 4px;font-size:15px;font-weight:600" data-t="transVoice">🎙️ 语音字幕</div>
     <div class="row"><input type="checkbox" id="transVoice"><span class="sub" data-t="transVoiceHint">启用(需 LiveTranslate 转录)</span></div>
     <div class="sub" style="margin:10px 0 4px;font-size:15px;font-weight:600" data-t="transShot">📷 截图翻译</div>
     <div class="row"><span style="font-size:13px" data-t="visModeLabel">模式</span><select id="transMode"><option>auto</option><option>vision</option><option>ocr</option></select></div>
-    <div class="row" style="margin-top:8px"><input type="text" id="transApiBase" data-t-ph="visBasePh" placeholder="接口地址" style="flex:2"><input type="password" id="transApiKey" placeholder="API Key" style="flex:1"><input type="text" data-t-ph="visModelPh" placeholder="模型" style="flex:1"><button class="small" data-t="visSave">保存</button></div>
-    <div class="row" style="margin-top:8px"><button data-t="btnShot">截图翻译</button><span style="font-size:13px" data-t="lblCountdownSec">倒计时(秒)</span><input type="number" value="5" style="width:56px"><span style="font-size:13px" data-t="lblDisplaySec">显示(秒)</span><input type="number" value="8" style="width:56px"><span style="font-size:13px" data-t="lblLoop">循环</span><input type="number" value="2" style="width:48px"></div>
-    <div class="row" style="margin-top:8px"><span style="font-size:13px" data-t="capTitle">截图区域</span><select id="transRegion"><option data-t="capModeWin">窗口</option><option data-t="capModeReg">区域</option><option data-t="capModeScr">全屏</option></select><button class="small gray" data-t="capAdjBtn">调整区域</button><button class="small gray" data-t="capFullBtn">设为全屏</button></div>
+    <div class="row" style="margin-top:8px"><input type="text" id="transApiBase" data-t-ph="visBasePh" placeholder="接口地址" style="flex:2"><input type="password" id="transApiKey" placeholder="API Key" style="flex:1"><input type="text" id="transApiModel" data-t-ph="visModelPh" placeholder="模型" style="flex:1"><button class="small" id="visSave" data-t="visSave">保存</button></div>
+    <div class="row" style="margin-top:8px"><button id="btnShot" data-t="btnShot">截图翻译</button><span style="font-size:13px" data-t="lblCountdownSec">倒计时(秒)</span><input type="number" id="ocrDelay" value="5" style="width:56px"><span style="font-size:13px" data-t="lblDisplaySec">显示(秒)</span><input type="number" id="ocrDisplay" value="8" style="width:56px"><span style="font-size:13px" data-t="lblLoop">循环</span><input type="number" id="ocrLoops" value="2" style="width:48px"></div>
+    <div class="row" style="margin-top:8px"><span style="font-size:13px" data-t="capTitle">截图区域</span><select id="transRegion"><option data-t="capModeWin">窗口</option><option data-t="capModeReg">区域</option><option data-t="capModeScr">全屏</option></select><button class="small gray" id="capAdjBtn" data-t="capAdjBtn">调整区域</button><button class="small gray" id="capFullBtn" data-t="capFullBtn">设为全屏</button></div>
   </div>
 </div>
 <!-- 环境检测 -->
@@ -216,10 +216,8 @@ body.no-anim *{animation:none!important;transition:none!important}
   <div class="card">
     <div class="card-title" style="margin-bottom:8px" data-t="secEnv"></div>
     <table><thead><tr><th data-t="thDep">依赖</th><th data-t="thUse">用途</th><th data-t="thState">状态</th><th data-t="thAct">操作</th></tr></thead><tbody id="envRows">
-      <tr><td>Node.js</td><td>运行本体</td><td class="sub">✅ 已内置</td><td>-</td></tr>
-      <tr><td>听歌显示(Python+winsdk)</td><td>SMTC 读取</td><td class="sub">✅ 就绪</td><td>-</td></tr>
-      <tr><td>翻译服务(LiveTranslate)</td><td>字幕</td><td class="sub">⚠ 未配置</td><td><button class="small gray">安装</button></td></tr>
     </tbody></table>
+    <div class="sub" id="envMsg" style="margin-top:8px"></div>
   </div>
 </div>
 <!-- 高级设置 -->
@@ -231,7 +229,7 @@ body.no-anim *{animation:none!important;transition:none!important}
     <div class="sub" style="margin:12px 0 4px">🔒1 <span data-t="cfgBackupTitle">配置备用</span></div>
     <div class="row"><button class="small gray" id="expCfg" data-t="btnExportCfg"></button><button class="small gray" id="impCfg" data-t="btnImportCfg"></button></div>
     <div class="sub" style="margin:12px 0 4px" data-t="advNetwork">网络 / 端口</div>
-    <div class="row"><span style="font-size:13px">OSC</span><input type="number" id="oscPort" value="9000" style="width:80px"><button class="small" id="oscApply" data-t="btnApply"></button><span style="font-size:13px">Web</span><input type="number" value="19190" style="width:80px"><button class="small" data-t="portsSaveRestart">保存并重启</button><button class="small gray" style="margin-left:6px" data-t="portsCheckBtn">端口体检</button></div>
+    <div class="row"><span style="font-size:13px">OSC</span><input type="number" id="oscPort" value="9000" style="width:80px"><button class="small" id="oscApply" data-t="btnApply"></button><span style="font-size:13px">Web</span><input type="number" id="webPort" value="19190" style="width:80px"><button class="small" id="webSave" data-t="portsSaveRestart">保存并重启</button><button class="small gray" style="margin-left:6px" id="portsCheckBtn" data-t="portsCheckBtn">端口体检</button><span class="sub" id="portsOut" style="font-size:12px"></span></div>
     <div class="sub" style="margin:12px 0 4px" data-t="secSecurity"></div>
   <div style="margin-top:12px">
     <div class="sub" style="margin-top:4px">🔓 <span data-t="gateLv0"></span> · 🔒1 <span data-t="gateLv1"></span> · 🔒2 <span data-t="gateLv2"></span></div>
@@ -291,7 +289,7 @@ body.no-anim *{animation:none!important;transition:none!important}
     <div class="row" style="margin-top:8px"><span class="sub" data-t="secAnim"></span><span class="sw on" id="animTgl" data-tt="lblDetectGame" title="检测到游戏在运行就自动关闭动效"></span><span class="sub" style="font-size:11px" data-t="lblDetectGame"></span></div>
     <div class="row" style="margin-top:8px"><span class="sub" data-t="startupBrand">启动动画 · 品牌</span><select id="brandSel"><option value="auto" data-t="brandAuto">自动(按社区身份)</option><option value="starry" data-t="brandStarry">星轨茶会(社区)</option><option value="normal" data-t="brandDefault">默认</option></select><span class="sub" style="font-size:11px" data-t="brandHint">优先检测: 加密狗授权名 / config 品牌标记; 插件名单含"星轨茶会"仅作弱提示; 可手动覆盖</span></div>
     <div class="sub" style="margin:12px 0 4px" data-t="secLog"></div>
-    <div class="row"><button class="small gray" id="logRefresh" data-t="logRefresh">刷新</button><label style="font-size:13px"><input type="checkbox"> <span data-t="logAuto">自动刷新</span></label><input type="checkbox" id="logAuto" style="display:none"><input type="text" data-t-ph="logFilterPh" placeholder="过滤关键字" style="flex:1"><button class="small gray" data-t="logCopy">复制</button></div>
+    <div class="row"><button class="small gray" id="logRefresh" data-t="logRefresh">刷新</button><label style="font-size:13px"><input type="checkbox" id="logAuto"> <span data-t="logAuto">自动刷新</span></label><input type="text" id="logFilter" data-t-ph="logFilterPh" placeholder="过滤关键字" style="flex:1"><button class="small gray" id="logCopy" data-t="logCopy">复制</button></div>
     <pre id="logView" style="max-height:180px;overflow:auto;background:var(--deep);border:1px solid var(--border2);border-radius:6px;padding:8px;font-size:12px;white-space:pre-wrap"></pre>
   </div>
 </div>

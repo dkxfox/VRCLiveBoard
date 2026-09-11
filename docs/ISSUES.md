@@ -245,3 +245,16 @@
 - 改动(2026-09-06/07): ①lang.js 357→579 键×三语, 覆盖高级设置/公告板/状态条/翻译/环境/插件卡片+授权弹窗/4 个插件设置面板/主题名/变量下拉/启动文案; ②index.html 162 处 data-t / data-t-ph / data-tt + 主题名三语映射; ③头部 #langSel 三选项 + reRenderAll() 切语言重渲染动态内容(仅 applyLang 不够); ④顺带补齐插件授权链路(弹窗被吞进隐藏 tab、approve 调用丢失、高危二次确认)。
 - 验证(2026-09-07): run-gates -Smoke 11 PASS / 1 FAIL(GSYNC 未推送 —— 用户明令不推送, 属预期例外); GI18N 579 键三语对齐; GI18NU 0 缺失; GI18NH 与白名单基线一致; GHTML + 隔离冒烟 8/8 全过。
 - 关联: DEV-NOTES 条目 113/114/115; commits 705c5d1 / 4ec8a1e / 3259ee6 / 07c9cff / 51e8596 / b25d35c / f8fa7fa / 0bf94a7 / 79eed0b / d10bf7c
+
+## M-20260907-01 新版 UI 功能接线缺失(死按键 / 失效输入框 / 缺失面板)(OPEN)
+- 来源: 用户"进行实机测试, 完整检测现有软件 UI 中和旧版不一致的内容"
+- 现象: 新版控制台(单屏仪表盘)存在大量"有控件无功能": 20 个按钮点击无反应; 12 个输入框改了不生效; 若干旧版面板整块丢失; 同一动作两条路径交互不一致。
+- 复现: ①打开控制台; ②点公告板「编辑」/ 翻译「截图翻译」/ 高级「端口体检」等任意死按键 → 无任何反应; ③在日志「过滤关键字」输入内容 → 列表不过滤; ④用「常用」标签的插件快捷开关启用未授权插件 → 开关闪回且无提示(而「插件」标签的卡片开关会正常弹授权窗)。
+- 影响面: 全部控制台用户; 多个核心功能不可用(配置导出导入、端口体检、截图翻译、日志过滤、版本显示、插件安全策略)。
+- 根因: 新版 UI 移植时只搬了 HTML 控件, 漏接 app.js 的事件处理器; 部分旧版面板未移植; 新控件命名与 app.js 既有引用不一致(如日志过滤框缺 id="logFilter")。
+- 证据(实机 2026-09-07): smoke.ps1 -Port 19260 专项断言 21 PASS / 4 FAIL —— 12 个死按键确实存在于服务端返回页面; verLine / psNet / plgImport 在页面中不存在; 后端路由(/api/config/export、/api/ports/check、/api/ocrtl、/api/capture/preview、/api/env、/api/plugins/import、/api/plugins/config 等)全部存在且实测可用, 证明是前端未接线而非后端缺能力。
+- 分级: 批 A = 接线类(20 按钮 + 12 输入框, M 档同质批量); 批 B = 缺失面板类(插件安全策略 / 截图区域 / 插件导入 / 版本显示, H 档, 另行排期)。
+- 改动(批 A, 2026-09-07): ①index.html 补 15 处控件 id(prioReset/ltCheckBtn/ltDownloadBtn/visSave/btnShot/capAdjBtn/capFullBtn/transApiModel/ocrDelay/ocrDisplay/ocrLoops/webPort/webSave/portsCheckBtn/portsOut/logFilter/logCopy/bdRot/envMsg), 修正日志行 id 归属(可见复选框才该有 logAuto), 移除公告板 2 只装饰按钮(批量导入/导出 —— 新版新增且从无实现)与 env 静态占位行; ②app.js 新增"批 A 补接线"块 + 公告板 6 项 + renderEnv 改用 /api/env 并支持 winsdk/Python 一键安装; ③lang.js 增 delPageConfirm / needL1 两键×三语。
+- 验证(批 A, 2026-09-07): run-gates -Smoke 11 PASS/1 FAIL(GSYNC 未推送属预期); smoke.ps1 -Port 19260 专项断言 28 PASS/0 FAIL; 死按键复扫 20 → 0。
+- 剩余(批 B, H 档, 待排期): 插件安全策略面板(5)、截图区域可视化覆盖层(4)、插件 zip 导入/刷新/优先级(4)、版本号显示、诊断结果面板、健康复制、日志只看错误、公告板折叠展开。
+- 状态: OPEN(批 A 已修完, 批 B 待排期)

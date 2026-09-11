@@ -24,6 +24,7 @@ function renderBdEditor(){
     list.appendChild(d);});
   var t=$('bdText');if(t&&pages[curIdx])t.value=pages[curIdx].text;
   var prev=$('bdPrev');if(prev)prev.textContent=pages[curIdx]?(pages[curIdx].text||t('emptyPage')):t('emptyPage');
+  applyBdPrevWidth();
 }
 function renderBoard(){
   var pt=$('pageText');if(pt&&pages.length)pt.textContent=pages[curIdx].text||'-';
@@ -42,6 +43,33 @@ if($('pgNext'))$('pgNext').onclick=function(){if(pages.length)curIdx=(curIdx+1)%
 if($('addPage'))$('addPage').onclick=function(){pages.push({text:t('newPageText')});curIdx=pages.length-1;renderBoard();};
 if($('bdAdd'))$('bdAdd').onclick=function(){pages.push({text:t('newPageText')});curIdx=pages.length-1;renderBoard();};
 if($('bdSave'))$('bdSave').onclick=async function(){pages[curIdx].text=$('bdText').value;try{var r=await fetch('/api/config',{method:'POST',body:JSON.stringify({pages:pages})});var j=await r.json();if(!j.ok)alert(t('saveFail'));}catch(e){alert(t('saveFail'));}renderBoard();};
+// ===== 公告板补接线(M-20260907-01 批 A) =====
+function applyBdPrevWidth(){var w=$('bdWidth'),p=$('bdPrev');if(!w||!p)return;var n=Math.max(8,Math.min(144,Math.round(Number(w.value)||28)));w.value=n;p.style.width=n+'ch';p.style.maxWidth='100%';}
+if($('boardEdit'))$('boardEdit').onclick=function(){var em=$('editMode');if(!em)return;var show=em.hidden;em.hidden=!show;this.classList.toggle('on',show);if(show)renderBoard();};
+if($('bdVarBtn'))$('bdVarBtn').onclick=function(){var s=$('bdVar'),tx=$('bdText');if(!s||!tx)return;var v=s.value;var st=(tx.selectionStart==null)?tx.value.length:tx.selectionStart,en=(tx.selectionEnd==null)?st:tx.selectionEnd;tx.value=tx.value.slice(0,st)+v+tx.value.slice(en);tx.selectionStart=tx.selectionEnd=st+v.length;tx.focus();};
+if($('bdDup'))$('bdDup').onclick=function(){if(!pages.length)return;pages.splice(curIdx+1,0,{text:String((pages[curIdx]||{}).text||'')});curIdx++;renderBoard();};
+if($('bdDel'))$('bdDel').onclick=function(){if(!pages.length)return;if(!confirm(t('delPageConfirm')))return;pages.splice(curIdx,1);if(curIdx>=pages.length)curIdx=Math.max(0,pages.length-1);renderBoard();};
+if($('bdWidth'))$('bdWidth').onchange=applyBdPrevWidth;
+if($('bdRot')){(async function(){try{var c=await (await fetch('/api/config')).json();var el=$('bdRot');if(el)el.value=Math.max(3,Math.round((Number(c.rotationMs)||8000)/1000));}catch(e){}})();$('bdRot').onchange=async function(){var s=Math.max(3,Math.round(Number(this.value)||8));this.value=s;try{await fetch('/api/config',{method:'POST',body:JSON.stringify({rotationMs:s*1000})});}catch(e){}};}
+// ===== 批 A 补接线: 数据源 / 翻译 / 高级 / 日志(M-20260907-01) =====
+var SRC_DEFAULT_PRIO={pages:5,hardware:10,media:30,livetranslate:40,ocrregion:45};
+if($('prioReset'))$('prioReset').onclick=async function(){try{var s=await (await fetch('/api/status')).json();var arr=s.sources||[];for(var i=0;i<arr.length;i++){var d=SRC_DEFAULT_PRIO[arr[i].id];if(d!==undefined)await fetch('/api/sources',{method:'POST',body:JSON.stringify({id:arr[i].id,priority:d})});}}catch(e){}try{pollStatus();}catch(e){}};
+if($('ltCheckBtn'))$('ltCheckBtn').onclick=async function(){var st=$('ltStatus');try{var lt=await (await fetch('/api/ocrtl-lt')).json();if(st){st.textContent=lt.found?((lt.model||'LiveTranslate')+' → '+(lt.targetLang||'')):t('ltNotFound');st.style.color=lt.found?'var(--ok)':'var(--warn)';}}catch(e){if(st){st.textContent=t('ltNotFound');st.style.color='var(--warn)';}}};
+if($('ltDownloadBtn'))$('ltDownloadBtn').onclick=function(){window.open('https://space.bilibili.com/21426055/lists/7714676?type=season','_blank');};
+if($('visSave'))$('visSave').onclick=async function(){try{var body={apiBase:(($('transApiBase')||{}).value||'').trim(),model:(($('transApiModel')||{}).value||'').trim()};var k=(($('transApiKey')||{}).value||'').trim();if(k)body.apiKey=k;var j=await (await fetch('/api/ocrtl-vision',{method:'POST',body:JSON.stringify(body)})).json();alert(j&&j.ok?t('visSaved'):(t('visSaveFail')+((j&&j.error)||'')));}catch(e){alert(t('visSaveFail')+e.message);}};
+if($('btnShot'))$('btnShot').onclick=async function(){try{var j=await (await fetch('/api/ocrtl',{method:'POST',body:'{}'})).json();alert(j&&j.ok?t('ocrRunning'):t('triggerFail'));}catch(e){alert(t('triggerFail'));}};
+if($('transRegion')){(async function(){try{var c=await (await fetch('/api/config')).json();var md=((c.ocrtl||{}).capture||{}).mode||'window';var v={window:0,region:1,screen:2}[md];var s=$('transRegion');if(s&&v!==undefined)s.selectedIndex=v;}catch(e){}})();$('transRegion').onchange=async function(){var md=['window','region','screen'][this.selectedIndex]||'window';try{await fetch('/api/capture/set',{method:'POST',body:JSON.stringify({mode:md})});}catch(e){}};}
+if($('capFullBtn'))$('capFullBtn').onclick=async function(){try{await fetch('/api/capture/set',{method:'POST',body:JSON.stringify({mode:'screen'})});var s=$('transRegion');if(s)s.selectedIndex=2;}catch(e){}};
+if($('capAdjBtn'))$('capAdjBtn').onclick=function(){window.open('/api/capture/preview','_blank');};
+if($('ocrDelay')){(async function(){try{var c=await (await fetch('/api/config')).json();var o=c.ocrtl||{};if($('ocrDelay'))$('ocrDelay').value=Math.round((Number(o.delayMs)||5000)/1000);if($('ocrDisplay'))$('ocrDisplay').value=Math.round((Number(o.eachMs)||8000)/1000);if($('ocrLoops'))$('ocrLoops').value=Number(o.loops)||2;}catch(e){}})();}
+if($('expCfg'))$('expCfg').onclick=async function(){try{var r=await fetch('/api/config/export');if(r.status===403){alert(t('needL1'));return;}var j=await r.json();if(!j||!j.ok){alert(t('saveFail'));return;}var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(j.config,null,2)],{type:'application/json'}));a.download=j.filename||'config.json';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);if(a.parentNode)a.parentNode.removeChild(a);},1500);}catch(e){alert(t('saveFail'));}};
+if($('impCfg'))$('impCfg').onclick=function(){var f=document.createElement('input');f.type='file';f.accept='.json';f.onchange=function(){var file=f.files&&f.files[0];if(!file)return;var rd=new FileReader();rd.onload=async function(){try{var j=await (await fetch('/api/config/import',{method:'POST',body:String(rd.result)})).json();alert(j&&j.ok?t('cfgImportOk'):(t('cfgImportFail')+((j&&j.error)||'')));}catch(e){alert(t('cfgImportBad'));}};rd.readAsText(file);};f.click();};
+if($('webSave'))$('webSave').onclick=async function(){var v=Number(($('webPort')||{}).value);if(!v){alert(t('saveFail'));return;}try{var j=await (await fetch('/api/ports/web',{method:'POST',body:JSON.stringify({port:v})})).json();if(!j||!j.ok){alert(t('saveFail')+((j&&j.error)||''));return;}await fetch('/api/desktop/restart',{method:'POST',body:'{}'});}catch(e){alert(t('saveFail'));}};
+if($('portsCheckBtn'))$('portsCheckBtn').onclick=async function(){var out=$('portsOut');if(out)out.textContent='…';try{var j=await (await fetch('/api/ports/check')).json();var s='';var u=j.udp9000||{};if(u.occupied===false)s=t('portsUdpFree');else if(u.occupied===true){var nm=String(u.name||('PID '+(u.pid||'?')));s=nm.toLowerCase().indexOf('vrchat')>=0?t('portsUdpOk'):(t('portsUdpBusy')+nm);}else s=t('portsUdpUnknown');if(j.vrc){s+='\n'+(j.vrc.running?(j.vrc.oscEnabled?(t('portsVrcOn')+(j.vrc.oscPort||'?')):t('portsVrcOff')):t('portsVrcStop'));}var actual=19190;try{var pj=await (await fetch('/api/ports')).json();actual=(pj.web||{}).actual||19190;}catch(e){}var busy=(j.tcpAround||[]).filter(function(x){return x.port!==actual;});if(busy.length)s+='\n'+t('portsTcpBusy')+busy.map(function(x){return x.port+'('+x.name+')';}).join(' ');if(out)out.textContent=s;}catch(e){if(out)out.textContent=t('portsCheckErr')+e.message;}};
+if($('logCopy'))$('logCopy').onclick=async function(){var el=$('logView');var txt=el?el.textContent:'';try{await navigator.clipboard.writeText(txt);alert(t('healthCopied'));}catch(e){try{var ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();alert(t('healthCopied'));}catch(e2){}}};
+var logAutoIv=null;
+if($('logAuto'))$('logAuto').onchange=function(){if(this.checked){if(logAutoIv)clearInterval(logAutoIv);logAutoIv=setInterval(loadLogs,3000);}else{if(logAutoIv)clearInterval(logAutoIv);logAutoIv=null;}};
+if($('dC'))$('dC').onclick=function(){var dr=$('drawer'),sc=$('scrim');if(dr)dr.classList.remove('open');if(sc)sc.classList.remove('on');};
 // ===== 插件卡片 =====
 function plgName(p){var M={'friend-welcome':'plgNameFriendWelcome','scheduled-board':'plgNameScheduled','weather-board':'plgNameWeather','netease-lyrics':'plgNameNetease'};return M[p.id]?t(M[p.id]):(p.name||p.id);}var plgArr=[];
 function plgPermsDesc(p){var ps=p.permissions||{};var parts=[];if(ps.network)parts.push(t('permNetShort')+(ps.network==='whitelist'?('('+t('polWhitelistShort')+')'):''));if(ps.process)parts.push(t('permProcShort'));if(ps.writeFile)parts.push(t('permWriteShort'));if(ps.readFile)parts.push(t('permReadShort'));if(ps.ai)parts.push(t('plgAiShort'));return parts.length?parts.join(' · '):t('plgNone');}
@@ -78,12 +106,28 @@ if($('diagBtn'))$('diagBtn').onclick=async function(){try{var r=await fetch('/ap
 if($('healthRefresh'))$('healthRefresh').onclick=pollStatus;
 // 环境/翻译
 async function renderEnv(){var tb=$('envRows');if(!tb)return;tb.innerHTML='';
-  var h=await (await fetch('/api/health')).json();
-  [['Node.js',t('envNodeUse'),'✅ '+t('envBuiltIn'),'-'],[t('envMedia'),t('envMediaUseShort'),(h.deps&&h.deps.python?('✅ '+t('envReady')):('⚠ '+t('envPythonMissing'))),'-']].forEach(function(r){var tr=document.createElement('tr');['td','td','td','td'].forEach(function(tag,i){var td=document.createElement(tag);if(i===2)td.className='sub';td.textContent=r[i];tr.appendChild(td);});tb.appendChild(tr);});
-  var lt=await (await fetch('/api/ocrtl-lt')).json();
-  var trLt=document.createElement('tr');var a=document.createElement('td');a.textContent=t('envLt');var b2=document.createElement('td');b2.textContent=t('envLtSubtitle');var c2=document.createElement('td');c2.className='sub';c2.textContent=lt.found?('✅ '+t('envLtConfigured')+(lt.model?' ('+lt.model+')':'')):'⚠ '+t('envLtNotConfigured');var d2=document.createElement('td');d2.textContent='-';trLt.appendChild(a);trLt.appendChild(b2);trLt.appendChild(c2);trLt.appendChild(d2);tb.appendChild(trLt);
-  var st=$('ltStatus');if(st){st.textContent=lt.found?(t('envLtConfigured')+' '+(lt.model||'')+' → '+lt.targetLang):t('envLtNone');st.style.color=lt.found?'var(--ok)':'var(--warn)';}}
-async function loadTrans(){try{var c=await (await fetch('/api/config')).json();var o=c.ocrtl||{};var v=o.vision||{};if($('transMode'))$('transMode').value=o.mode||'auto';if($('transApiBase'))$('transApiBase').value=v.apiBase||'';if($('transDelay'))$('transDelay').value=o.delayMs||5000;}catch(e){}}
+  var e=null;try{e=await (await fetch('/api/env')).json();}catch(err){}
+  if(!e)return;
+  var add=function(name,use,st,ok,btnLabel,btnWhat){var tr=document.createElement('tr');
+    var c1=document.createElement('td');c1.textContent=name;
+    var c2=document.createElement('td');c2.textContent=use;
+    var c3=document.createElement('td');c3.className='sub';c3.textContent=st;c3.style.color=ok?'var(--ok)':'var(--warn)';
+    var c4=document.createElement('td');
+    if(btnLabel){var b=document.createElement('button');b.className='small gray';b.textContent=btnLabel;b.onclick=function(){envInstall(btnWhat);};c4.appendChild(b);}else{c4.textContent='-';}
+    tr.appendChild(c1);tr.appendChild(c2);tr.appendChild(c3);tr.appendChild(c4);tb.appendChild(tr);};
+  add(t('envNode'),t('envNodeUse'),t('envNodeState')+((e.node||{}).version||''),true);
+  var m=e.media||{},ins=e.install||{};
+  if(m.ok)add(t('envMedia'),t('envMediaUse'),t('envAvailable'),true);
+  else if(ins.running)add(t('envMedia'),t('envMediaUse'),t('envInstalling')+(ins.msg||''),false);
+  else if((e.systemPython||{}).found)add(t('envMedia'),t('envMediaUse'),t('envNeedWinsdk'),false,t('envBtnWinsdk'),'winsdk');
+  else add(t('envMedia'),t('envMediaUse'),t('envMissing'),false,t('envBtnPython'),'python');
+  var lt=e.livetranslate||{};
+  if(lt.found)add(t('envLt'),t('envLtUse'),t('envLtOk')+(lt.model||''),true);
+  else add(t('envLt'),t('envLtUse'),t('envLtNone'),false);
+  var em=$('envMsg');if(em)em.textContent=(ins.running||ins.ok===false)?(ins.msg||''):'';
+  var st=$('ltStatus');if(st){st.textContent=lt.found?(t('envLtConfigured')+' '+(lt.model||'')+' → '+(lt.targetLang||'')):t('envLtNone');st.style.color=lt.found?'var(--ok)':'var(--warn)';}}
+function envInstall(what){fetch('/api/env/install-'+what,{method:'POST',body:'{}'}).then(function(r){return r.json();}).then(function(j){if(j&&!j.ok&&j.error){var mm=$('envMsg');if(mm)mm.textContent=j.error;}}).catch(function(){});setTimeout(renderEnv,1500);}
+async function loadTrans(){try{var c=await (await fetch('/api/config')).json();var o=c.ocrtl||{};var v=o.vision||{};if($('transMode'))$('transMode').value=o.mode||'auto';if($('transApiBase'))$('transApiBase').value=v.apiBase||'';if($('transApiModel'))$('transApiModel').value=v.model||'';if($('transApiKey')&&v.hasKey)$('transApiKey').placeholder='sk-••••••('+t('envLtConfigured')+')';}catch(e){}}
 if($('transVoice'))$('transVoice').onchange=async function(){try{await fetch('/api/sources',{method:'POST',body:JSON.stringify({id:'livetranslate',enabled:this.checked})});}catch(e){}pollStatus();};
 if($('transShot'))$('transShot').onclick=async function(){try{var r=await fetch('/api/ocrtl',{method:'POST',body:'{}'});var j=await r.json();alert(j.ok?t('shotTriggered'):t('triggerFail'));}catch(e){alert(t('triggerFail'));}};
 // 高级设置
