@@ -40,9 +40,17 @@ function scanApp(t) {
   return [...found].sort();
 }
 function collect() {
+  // 扫描范围 = 界面逻辑所在的全部文件: app.js 以及 2026-09-11 从 index.html 内联块迁出的 theme.js / fx.js
+  // (lang.js 是词库本身不扫; 不把新文件纳进来 = 那些中文会从门禁视野里消失)
+  const js = new Set();
+  for (const f of ['app.js', 'theme.js', 'fx.js']) {
+    const p = path.join(ROOT, 'src', 'web', 'public', f);
+    if (!fs.existsSync(p)) continue;
+    for (const x of scanApp(fs.readFileSync(p, 'utf8'))) js.add(x);
+  }
   return {
-    indexHtml: scanIndex(fs.readFileSync(path.join(ROOT, 'src/web/public/index.html'), 'utf8')),
-    appJs: scanApp(fs.readFileSync(path.join(ROOT, 'src/web/public/app.js'), 'utf8'))
+    indexHtml: scanIndex(fs.readFileSync(path.join(ROOT, 'src', 'web', 'public', 'index.html'), 'utf8')),
+    appJs: [...js].sort()
   };
 }
 const cur = collect();

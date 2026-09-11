@@ -44,6 +44,11 @@ for (const [i, b] of blocks.entries()) {
   catch (e) { console.log('  FAIL 第 ' + (i + 1) + ' 块语法错误: ' + e.message); fail++; }
 }
 
+// 约定(PROCESS-02 §0 #5 + 台账): 前端逻辑一律进 app.js / 独立 .js, index.html 不再出现内联脚本块。
+// 2026-09-11 迁移(theme.js / fx.js)后内联块已清零, 这里把它固化成门禁; 确需内联时请在此显式放行。
+const inlineBlocks = blocks.filter((b) => b.code);
+if (inlineBlocks.length) { console.log('  FAIL index.html 出现 ' + inlineBlocks.length + ' 个内联脚本块(约定: 前端逻辑进 app.js / 独立 .js)'); fail++; }
+else console.log('  OK   无内联脚本块(前端逻辑全部在独立 .js 里)');
 // 重复 id
 const ids = [...html.matchAll(/\sid\s*=\s*["']([^"']+)["']/g)].map((x) => x[1]);
 const dup = ids.filter((x, i) => ids.indexOf(x) !== i);

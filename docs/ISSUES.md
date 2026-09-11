@@ -407,3 +407,11 @@
 - 改动(2026-09-11): ① 抽取 54 个路由块(含 1 个双路径 chatbox)从请求处理器内搬到 createServer 作用域, 变为 on(method, path, function (req, res, url) {...}) 注册(共 55 条), 处理器统一签名, 原闭包变量引用不变; ② 请求处理器只剩五步: 跨站守卫 → 首页 → 静态资源 → 插件静态前缀 → **表分发** → 兜底 404; ③ /plugin/* 前缀分支与区域内 3 条区块注释原样保留; ④ GROUTE 解析器升级为识别新形态(同时保留对旧 if 形态的兼容, 便于对照历史版本与二分定位); ⑤ backend-flow 新增**路由可达性扫描**: 清单里的 GET 路由逐条实打, 用响应体区分"落空 404"(分发器没匹配到)与业务 404, 任何一条丢失即 FAIL
 - 验证(2026-09-11): ① **无损证明**: 换表前后 GROUTE 均报"代码 55 条 / 基线 55 条 / L0 49 L1 4 L2 2", 路由与门禁等级一字不差; ② G4 内 backend-flow **13 PASS / 0 FAIL**, 含"清单内 **17 条 GET 路由全部可达(无落空 404)**"; ③ 全套门禁 **14 PASS / 1 FAIL**(GSYNC 未推送属预期); ④ 行数 985→998, 最长行仍 1259 字符(未恶化)
 - 状态: CLOSED
+## M-20260911-16 index.html 内联块迁出(theme.js / fx.js)+ 主题标识 ASCII 化 + 门禁覆盖同步(CLOSED)
+- 来源: 台账三行 ——「index.html 内联脚本残留(改判)」「主题命名三套并存」「跨文件隐式契约」; 用户"继续优化"
+- 现象: ① index.html 里仍有 6,355 字符**真实功能逻辑**(主题系统 3,553 / 星空背景 2,802), 与 PROCESS-02 §0 #5「前端逻辑只进 app.js」的约定冲突; ② 主题一个概念三套命名 —— 配置/URL 侧用英文 key(blue), KEYMAP 映射到中文标识(海蓝), THEME_LABELS 再映射到 i18n 键(themeOcean), setTheme 以中文名作内部标识
+- 影响面: index.html 继续膨胀; 主题相关改动要同时改三处; 内联代码不进门禁的可维护性检查
+- 根因: 新版 UI 重写时主题与背景动效留在内联块里; 主题名最初以中文作标识, 后来加 i18n 与 URL 参数时各加了一层映射, 没人回收
+- 改动(2026-09-11): ① 两个内联块**逐字**迁出为 src/web/public/theme.js(3,937 字节)与 fx.js(2,990 字节), index.html 现为 5 个外链脚本、**0 内联块**; ② 主题内部标识统一为 ASCII key(blue/teal/violet/green/amber/neon), 显示名仍走 window.t(themeXxx), 删掉恒等的 KEYMAP 映射层, URL 参数 ?t=xxx 直接用 key 校验 —— theme.js 代码区中文归零; ③ 门禁覆盖同步扩展(关键: 不能因为搬家而让检查范围缩水): GBOOT 加载 theme.js/fx.js 并断言两个跨文件契约(window.__reThemeLabels 可调用 / window.__fxRestart 存在)**外加主题真的应用了**(documentElement 上有 --bg 变量、#themeName 是文案而不是 i18n 键); GI18NH 扫描范围从 app.js 扩到 app.js + theme.js + fx.js; GHTML 新增「index.html 不得出现内联脚本块」的约定检查; ④ G-BOOT 沙箱补 canvas 2D 上下文桩与 innerWidth/innerHeight 等浏览器全局
+- 验证(2026-09-11): ① GHTML: 5 外链 / 0 内联, 且**反向实测**塞回一个内联块立即 FAIL; ② GBOOT: 三个脚本全部加载通过, 两个契约存在且可调用, 主题变量已应用; ③ GI18NH: 扩展扫描后仍与基线一致(JS 6 项), **无需放宽基线**; ④ 全套门禁 **14 PASS / 1 FAIL**(GSYNC 未推送属预期)
+- 状态: CLOSED

@@ -120,14 +120,14 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke
 
 | 债 | 现状 | 计划 |
 | --- | --- | --- |
-| `index.html` 内联脚本残留(**改判**, 2026-09-11 审核) | 原判"已还清"不准确: 剩余 6,355 字符**是真实功能逻辑** —— 主题系统 3,553 字符(THEMES 六套配色 + 色板 + KEYMAP)与星空背景 2,802 字符(canvas fx, 对外暴露 window.__fxRestart), 均与 PROCESS-02 §0 #5"前端逻辑只进 app.js"的约定冲突 | 低优先级: 迁到 theme.js / fx.js, HTML 只留 script 外链 |
+| ~~`index.html` 内联脚本残留~~ | **已还清**(2026-09-11): 主题系统与星空背景迁出为 theme.js / fx.js, index.html 现为 5 个外链、0 个内联块; GHTML 已固化为约定检查(出现内联块即 FAIL, 并反向实测过) | 无需再排 |
 | ~~插件 vendor 重复~~ | **已还清**: 三插件各裁到 4 文件(约 2.2MB/插件, 原 7.1MB); 剩重打包与体积基线更新见 M-20260901-04 | 重打包收尾(待用户指令) |
 | 三插件 vendor xlsx 版本漂移 | weather-board 0.18.5 vs 另两个 0.20.3 | M-20260904-01: 统一 0.20.3 + 回归 Excel 导入/导出, 与 M-20260901-04 一并重打包 |
 | `lang.js` 单文件 579 键 72.7KB | 三语混排, 体积随新 UI 增长(原 285 键 40KB) | 低优先级; 若继续增长再评估按 Tab 拆多文件 |
 | `app.js` 单文件密度 | 66.5KB / 440 行 / 平均 154 字符每行 / 24 行超 500 字符 / 最长 1,507; 分区: "数据源/状态" 180 行、"安全与权限(旧版套皮)" 155 行 | 低优先级: 按功能拆多文件(保持无构建步骤, 顺序 script 或 ESM), 至少把"安全与权限(旧版套皮)"整块独立出去 |
 | ~~`server.js` 路由链~~ | **已还清**(2026-09-11): 54 个路由块抽成 55 条 `on(method, path, fn(req,res,url))` 注册, 请求处理器只剩 守卫→首页→静态→插件前缀→表分发→404; 附 GROUTE 口径清单门禁 + 运行时 GET 路由可达性扫描; 处理器内部长行风格未动(见 M-20260911-15) | 无需再排 |
-| 跨文件隐式契约 | 13 个 window.* 全局无声明处: app.js 读 window.__fxRestart / __reThemeLabels(index.html 内联块写入), index.html 内联块读 window.t | 低优先级: 随内联块迁出一起收敛, 或集中为单一 window.VRCB 命名空间并在文件头写明契约 |
-| 主题命名三套并存 | 配置存 blue → KEYMAP 映射中文"海蓝" → THEME_LABELS 再映射 i18n 键 themeOcean; setTheme("海蓝") 以中文名作内部标识 | 低优先级: 内部一律用 key(blue), 显示名走 t(); 与内联块迁出合并做 |
+| 跨文件隐式契约 | **已收敛**(2026-09-11): theme.js / fx.js 各自文件头写明对外契约(window.__reThemeLabels / window.__fxRestart), GBOOT 每次门禁都断言二者存在且可调用; 其余 window.* 都在 app.js 内部(同文件内, 风险低) | 无需再排 |
+| ~~主题命名三套并存~~ | **已还清**(2026-09-11): 内部标识统一为 ASCII key(blue/teal/violet/green/amber/neon), 显示名走 t(themeXxx), 删掉恒等 KEYMAP 层, URL ?t=xxx 直接按 key 校验 | 无需再排 |
 | ~~前后端静默失败~~ | **已还清**(2026-09-11): 前端 56 处空 catch 接入 apiFail()(批 2), 后端 server.js 22 处空 catch 接入 noteFail()(批 3b) —— 两端对称, 均按位置去重只报一次; 上报链路自身保留空 catch 以免自激 | 无需再排; 新增代码请沿用 apiFail / noteFail |
 | 无 lint / 单测 / CI | **部分还清**(2026-09-11): package.json 增加 gates / gates:fast / selftest 三个脚本(不引入任何依赖), 编辑器与 CI 可直接调用; 仍无 eslint / prettier / tsconfig / .github | 低优先级; 接入 CI 时注意两点: ① NS 会话下 npm 脚本的相对路径会落到 C:\\Windows(UNC 的 cwd 不可用), 故这三个脚本用 %npm_package_json% 拼绝对路径; ② gates 因 GSYNC(用户明令不推送)固定退出码 1, CI 应按 GATES SUMMARY 判定而不是退出码 |
 

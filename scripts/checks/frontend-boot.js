@@ -45,7 +45,12 @@ function el(tag) {
     querySelector(sel) { if (!e._qs) e._qs = {}; if (!e._qs[sel]) e._qs[sel] = el('div'); return e._qs[sel]; },
     querySelectorAll() { return []; },
     focus() {}, blur() {}, click() {}, contains() { return false; },
-    getContext() { return null; },
+    // canvas 2D 上下文桩: fx.js(星空背景)会同步调用一些 ctx 方法, 返回 null 会误报
+    getContext() { return { canvas: e, globalAlpha: 1, globalCompositeOperation: '', fillStyle: '', strokeStyle: '', lineWidth: 1, shadowBlur: 0, shadowColor: '', filter: '',
+      clearRect() {}, fillRect() {}, beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, stroke() {}, fill() {}, arc() {}, ellipse() {},
+      save() {}, restore() {}, translate() {}, scale() {}, rotate() {}, setTransform() {}, drawImage() {},
+      createLinearGradient() { return { addColorStop() {} }; }, createRadialGradient() { return { addColorStop() {} }; },
+      getImageData() { return { data: [] }; }, putImageData() {} }; },
     getBoundingClientRect() { return { left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100 }; }
   };
   Object.defineProperty(e, 'textContent', { get() { return e._text; }, set(v) { e._text = String(v); } });
@@ -84,6 +89,7 @@ function makeSandbox() {
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     navigator: { clipboard: { writeText: async () => {} }, userAgent: 'gate' },
     location: { search: '', href: 'http://127.0.0.1/', hash: '' },
+    innerWidth: 1280, innerHeight: 800, outerWidth: 1280, outerHeight: 800, devicePixelRatio: 1, // fx.js 会读这几个浏览器全局
     URLSearchParams, Blob: function () {}, FileReader: function () {}, XMLHttpRequest: function () {},
     URL: { createObjectURL: () => '', revokeObjectURL() {} },
     matchMedia: () => ({ matches: false, addEventListener() {}, addListener() {} }),
@@ -120,6 +126,12 @@ process.on('unhandledRejection', function (e) { rejections.push(e && e.message ?
 try {
   vm.runInNewContext(fs.readFileSync(path.join(PUB, 'lang.js'), 'utf8'), sb, { filename: 'lang.js' });
   vm.runInNewContext(app, sb, { filename: 'app.js' });
+  // 主题与星空背景 2026-09-11 从 index.html 内联块迁出(M-20260911-16): 必须仍能被加载
+  for (const f of ['theme.js', 'fx.js']) {
+    const fp = path.join(PUB, f);
+    if (!fs.existsSync(fp)) problems.push('缺少 ' + f + '(可能从 index.html 外链里掉了)');
+    else vm.runInNewContext(fs.readFileSync(fp, 'utf8'), sb, { filename: f });
+  }
 } catch (e) {
   let msg = e.message;
   const mm = /^([A-Za-z_$][\w$]*) is not defined$/.exec(msg);
@@ -127,6 +139,16 @@ try {
   problems.push('app.js 顶层加载抛错: ' + msg);
 }
 
+// 跨文件契约: app.js 依赖这两个全局(切语言时重挂主题名 / 重开动效时重启星空)
+if (typeof sb.__reThemeLabels !== 'function') problems.push('theme.js 未导出 window.__reThemeLabels(app.js 切语言时要用)');
+else { try { sb.__reThemeLabels(); } catch (e) { problems.push('__reThemeLabels() 抛错: ' + e.message); } }
+if (typeof sb.__fxRestart !== 'function') problems.push('fx.js 未导出 window.__fxRestart(app.js 重开动效时要用)');
+// 主题系统必须**真的应用了**(只断言不抛错是不够的: setTheme 静默失效也会"不报错")
+const de = sb.document && sb.document.documentElement;
+if (!de || !de.style || !de.style['--bg']) problems.push('theme.js 未应用主题变量(原始 setTheme 可能没跑到)');
+const tn = byId['themeName'];
+if (tn && !String(tn.textContent || '').trim()) problems.push('#themeName 未被主题系统写入显示名');
+else if (tn && /theme[A-Z]/.test(String(tn.textContent))) problems.push('#themeName 显示的是 i18n 键而不是文案: ' + tn.textContent);
 const tr = sb.tr, tw = sb.window && sb.window.t;
 try {
   if (typeof tr !== 'function') problems.push('未定义 i18n 取词函数 tr()');
