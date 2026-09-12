@@ -106,8 +106,19 @@ RunStep '7. 发布包审计 + SHA256 清单' {
   if (-not $biTxt) { Log 'WARN 包内没有 BUILD-INFO.json(旧包或未用新版 make-dist 构建)' }
   else {
     $bi = $biTxt | ConvertFrom-Json
-    if ($head -and $bi.commit -and ($bi.commit -ne $head)) { Log ('FAIL 包内 BUILD-INFO.commit(' + $bi.commit.Substring(0,7) + ') 与当前 HEAD(' + $head.Substring(0,7) + ') 不一致 -> 用当前代码重新打包'); $script:exit = 1 }
-    else { Log ('包与提交绑定: commit ' + ([string]$bi.commit).Substring(0,7) + ' 与 HEAD 一致') }
+    if ($head -and $bi.commit -and ($bi.commit -ne $head)) {
+      # 打包后只允许"文档追记"(M-20260911-52 实测痛点): 否则每次审计后写记录, 重跑审计就会红 —— 而包里的代码并没变。
+      # 判定: 差集里的文件必须全部在 docs/ 下; 任何 src/electron/plugins/scripts/配置 的改动仍然算漂移。
+      $diff = @()
+      try { $diff = @(git diff --name-only ($bi.commit + '..HEAD') 2>$null | Where-Object { $_ }) } catch {}
+      $nonDoc = @($diff | Where-Object { $_ -notlike 'docs/*' })
+      if ($diff.Count -gt 0 -and $nonDoc.Count -eq 0) {
+        Log ('包与提交绑定: 包装于 ' + $bi.commit.Substring(0,7) + ', 其后仅有文档追记(' + $diff.Count + ' 个 docs/ 文件) -> 视为绑定有效')
+      } else {
+        Log ('FAIL 包内 BUILD-INFO.commit(' + $bi.commit.Substring(0,7) + ') 与当前 HEAD(' + $head.Substring(0,7) + ') 不一致, 且差异不止文档(' + $nonDoc.Count + ' 个非 docs 文件) -> 用当前代码重打一次包')
+        $script:exit = 1
+      }
+    }
   }
   # 插件更新包也要过一遍禁入名单/机密/文件名编码(M-20260911-39)
   $plugDir = Join-Path $proj 'dist\插件更新包'
