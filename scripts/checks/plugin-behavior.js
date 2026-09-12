@@ -138,6 +138,51 @@ function loadPlugin(id) {
     }
   } catch (e) { ok(false, 'netease 行为用例异常: ' + e.message); }
 
+  // ⑤ netease CDP 客户端生命周期(需要假 WebSocket): 停用后不得重建定时器 / 未应答请求要被结束 / 待应答有上限
+  try {
+    const { CdpClient } = require(path.join(ROOT, 'plugins', 'netease-lyrics', 'cdp.js'));
+    const savedFetch = global.fetch, savedWS = global.WebSocket;
+    const fakeWS = function (silent) {
+      return class {
+        constructor(url) { this.url = url; this.sent = []; const self = this; setTimeout(function () { if (self.onopen) self.onopen(); }, 0); }
+        send(s) {
+          this.sent.push(s);
+          if (silent) return;   // 只发不回: 用来验证超时/上限/dispose
+          const m = JSON.parse(s); const self = this;
+          setTimeout(function () { if (self.onmessage) self.onmessage({ data: JSON.stringify({ id: m.id, result: { result: { value: null } } }) }); }, 0);
+        }
+        close() { this.closed = true; }
+      };
+    };
+    global.fetch = async function () { return { ok: true, json: async function () { return [{ webSocketDebuggerUrl: 'ws://127.0.0.1:9234/devtools/page/1' }]; } }; };
+    const quiet = { info: function () {}, warn: function () {} };
+    global.WebSocket = fakeWS(false);
+    const c1 = new CdpClient(9234, quiet);
+    await c1.start();
+    ok(!!c1._retryTimer, '连接后建立了重连定时器(正常路径)');
+    c1.dispose();
+    ok(c1._retryTimer === null, 'dispose 后重连定时器被清空');
+    await c1.start();
+    ok(c1._retryTimer === null, '停用后再 start() 不会重建定时器(旧实现会建在 await 之后且引用丢失)');
+    global.WebSocket = fakeWS(true);
+    const c2 = new CdpClient(9234, quiet);
+    c2.ws = new (fakeWS(true))('ws://x');   // 必须有 ws, 否则 _send 会在读 .send 时同步抛错(那是测试写错, 不是产品行为)
+    let stopMsg = '';
+    const p2 = c2._send('Runtime.evaluate', {}).catch(function (e) { stopMsg = e.message; });
+    c2.dispose();
+    await p2;
+    ok(stopMsg.indexOf('CDP 已停止') >= 0, 'dispose 结束未应答请求(实得: ' + (stopMsg || '(无)') + ')');
+    const c3 = new CdpClient(9234, quiet);
+    c3.ws = new (fakeWS(true))('ws://x');
+    let overMsg = '';
+    // 阈值语义: 代码判的是 size > 200, 所以第 201 次仍被接受、第 202 次开始拒绝
+    for (let i = 0; i < 202; i++) c3._send('Runtime.evaluate', {}).catch(function (e) { if (e.message.indexOf('待应答过多') >= 0) overMsg = e.message; });
+    await tick();
+    ok(overMsg.indexOf('待应答过多') >= 0, '待应答超过上限(>200)时明确拒绝(实得: ' + (overMsg || '(无)') + ')');
+    c3.dispose();
+    global.fetch = savedFetch; global.WebSocket = savedWS;
+  } catch (e) { ok(false, 'CDP 生命周期用例异常: ' + e.message); }
+
   console.log('[plugin-behavior] pass=' + pass + ' fail=' + fail + (skip ? (' skip=' + skip) : ''));
   process.exitCode = fail ? 1 : 0;
 })().catch(function (e) { console.log('  FAIL 行为门禁自身异常: ' + ((e && e.stack) || e)); process.exitCode = 1; });
