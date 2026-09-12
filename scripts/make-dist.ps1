@@ -31,7 +31,7 @@ $exclDirs = @('node_modules','logs','.electron-cache','.ocr-cache','.ocr-langs',
 # 排除清单唯一来源(2026-09-11): scripts\pack-exclude.json —— make-dist 与 pack-audit 共用, 新增项改清单文件
 $pe = Get-Content (Join-Path $p 'scripts\pack-exclude.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $exclAbs = @($dist) + @($pe.dirs | ForEach-Object { Join-Path $p $_ }) + $exclDirs
-$peFiles = @($pe.files) + @($xfFiles)
+# (并集在 $xfFiles 定义之后计算 —— 见下方 peFiles 行; 之前写在这里时 $xfFiles 还没定义, 等于整段历史字面量没生效)
 
 Write-Output '==== 1. integrity check ===='
 $problems = @()
@@ -93,6 +93,7 @@ function New-VrcbZip($srcDir, $zipPath) {
   if ($node) { & node (Join-Path $p 'scripts\fix-zip-sep.js') $zipPath } else { Write-Output '[WARN] node 不存在, 跳过 zip 分隔符规整' }
 }
 # 出厂前最后一道闸: 扫描 stage 目录(= 即将打进 zip 的真实内容), 命中真实密钥/私有字段即中止
+$peFiles = @($pe.files) + @($xfFiles)   # 清单文件段 + 历史字面量(M-20260911-46: 必须在 $xfFiles 之后计算)
 function Check-Stage($dir) {
   $bad = @()
   $files = Get-ChildItem $dir -Recurse -File -Include *.json,*.bak,*.txt,*.cfg,*.ini,*.env -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch 'node_modules' }

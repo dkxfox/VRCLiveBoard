@@ -38,7 +38,7 @@
     "conflict-test",
     ".gitignore",
     "startup-test.html",
-    "打包与分发.md",
+    "*打包与分发*",
     "ui-dashboard-preview.html",
     ".serve-preview.js",
     "ISSUES.md",
