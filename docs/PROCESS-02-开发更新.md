@@ -211,3 +211,13 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke
 - 本轮审计抓出并修掉的真问题(都在门禁/流程自身): ① make-dist 的 `Get-ChildItem -Include` 不带 `-Recurse` 恒为空 → 打出"彩蛋素材为空"的**假日志**(包其实带了视频); ② release-audit.ps1 用了 `String(...)`(PowerShell 没有这个函数)→ "包与提交绑定"检查静默跳过; ③ 门禁自测的市场用例首次取目录命中"失败缓存"→ 自测误判; ④ 攻击面基线未登记插件删除回退路径的 `fs.rmSync`。
 - 不阻塞的 WARN(留作下一轮首件事): `market.timeoutMs` 代码读取但默认配置未定义; en 字典 `pageN2` 是空值(1.3.2 起就有, 非本版回归)。
 - **待用户执行**: ① 实机验证启动彩蛋(桌面壳启动画面 + 控制台首屏; 测试台可指定日期预览); ② 把上面两个 zip 传到 GitHub Release(v1.4.0 标签)。注意 `version.json` 已在本次推送里宣布 1.4.0 —— 老用户会看到"有新版本", Release 页若还是 1.3.2 会让人下错包, 所以**尽快上传**, 或让我把 version.json 先退回 1.3.2。
+
+**最终产物(2026-09-12 11:40, 提交 `485ab00`, AUDIT PASS)** —— 以这一份为准(11:14 那份已被本轮改动取代):
+
+| 文件(`dist\公开版\`) | 大小 | SHA256 |
+| --- | --- | --- |
+| `VRCLiveBoard-Desktop-SelfContained-v1.4.0.zip` | 215.44MB | `1b68683773bfb62d5a51ada113f76cb9aeadf677bd8125c5a302d4114b9562a3` |
+| `VRCLiveBoard-Lite-RequiresNode-v1.4.0.zip` | 7.91MB | `5a634eb2f1ef1bc61516cc2e75289d27aa00e49451ae7897f803b77588f01027` |
+
+- 审计新增 **6b 步"产物级验收"**: 把两个 zip 解包后各起一个隔离实例跑完整冒烟 + backend-flow —— 以前所有步骤验的都是工作树, 而用户拿到的是 zip; 现在"包内事件表可触发 / 包内素材可服务 / 不带彩蛋的包明确 404 且无视频"都由 ⑩ 段在**包内**断言(日期从包内配置读, 不写死在脚本里)。
+- 绑定检查新增容差: 包内 BUILD-INFO.commit 与 HEAD 不同时, 若差集**只有 docs/** 则视为绑定有效(打包后写记录不必再重打); 任何 src/electron/plugins/scripts/配置 的改动仍判漂移。
