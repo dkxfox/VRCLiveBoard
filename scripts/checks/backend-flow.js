@@ -205,6 +205,17 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     const sp2 = await req('/splash.js');
     ok(sp1.status === 200 && sp1.body.toString('utf8').indexOf('/splash.js') > 0, '启动画面页 /splash.html 可服务且引用 /splash.js');
     ok(sp2.status === 200 && sp2.body.toString('utf8').indexOf('__splashDone') > 0, '启动画面脚本置 __splashDone(壳的收尾约定)');
+    // 日期参数两种写法都要认(M-20260911-54 实测事故: 测试页给的是 ISO, 判定只认 MM-DD -> 模拟 6/15 永远不播)
+    // 自带确定的前置状态(前面的用例把条目版本与开关都改过): 否则会查错 key / 被 oncePerDay 挡住
+    await setEfx({ specialEvents: [Object.assign({}, EV, { version: 42 })], efx: { enabled: true, oncePerDay: true, played: {} } });
+    const iso8 = JSON.parse((await req('/api/efx/boot?date=2026-' + D + '&dry=1')).body.toString('utf8'));
+    ok(iso8.action === 'special' && iso8.today === D, 'ISO 日期(2026-' + D + ')与 MM-DD 等价: 实得 action=' + iso8.action + ' today=' + iso8.today);
+    await req('/api/efx/boot?date=2026-' + D);   // 真实播一次, 看记录写成什么形式
+    const rec8 = (((JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8')).efx || {}).played) || {})['gate-egg@42'] || null;
+    ok(!!rec8 && rec8.last === D, 'ISO 输入也按 MM-DD 记账(避免两种写法各记一次): last=' + (rec8 ? rec8.last : '无'));
+    await setEfx({ efx: { played: {} } });
+    const bad8 = JSON.parse((await req('/api/efx/boot?date=2026/13/45&dry=1')).body.toString('utf8'));
+    ok(bad8.dateInvalid === true && bad8.action !== 'special', '非法日期被标记(dateInvalid=true)且不会误播: action=' + bad8.action);
     // 本地事件表兜底(M-20260911-50): 仓库是公开的, 事件表不进库 —— 所以本地文件这条路径必须也能用
     if (ROOT) {
       try {

@@ -34,7 +34,7 @@ var _specCache=[];
 // 判定改问服务端(M-20260911-50): 开关/窗口/强播一次/已播记录都在那边, 测试台不能自己再算一套;
 // 用 &dry=1 只问不记 —— 否则"看一眼今天会播什么"就把当天的彩蛋消耗掉了
 async function refreshInfo(){
-  var d=$('dsel').value||'2026-06-15';
+  var d=$('dsel').value||$('dsel').dataset.eventDate||'2026-06-15';
   var el=$('skinInfo'); var txt=d+' → ';
   var dec=null; try{dec=await (await fetch('/api/efx/boot?date='+encodeURIComponent(d)+'&dry=1')).json();}catch(e){}
   if(dec&&dec.action==='special'){ txt+='🎬 特殊彩蛋: '+((dec.event&&(dec.event.title||dec.event.video))||'')+' ['+(dec.forced?'开关关 → 强播一次':'窗口内 + 开关开')+']'; if(el)el.textContent=txt; return dec; }
@@ -71,7 +71,7 @@ function videoBoot(url){
   var skipped=false;var skip=function(){if(skipped)return;skipped=true;ov.remove();};
   ov.addEventListener('click',skip);var v=ov.querySelector('video');if(v){v.addEventListener('ended',skip);v.addEventListener('error',skip);}setTimeout(skip,120000);
 }
-(async function(){try{var _c=await (await fetch('/api/config')).json();var _sv=_c.specialEvents;_specCache=Array.isArray(_sv)?_sv:[];if(_c.efx){var _es=document.getElementById('efxSw');var _on=_c.efx.enabled!==false;_es.classList.toggle('on',_on);_es.textContent='启动动画: '+(_on?'开':'关');}if(_specCache.length){$('svList').value=JSON.stringify(_sv,null,2);}}catch(e){}})();
+(async function(){try{var _c=await (await fetch('/api/config')).json();var _sv=_c.specialEvents;_specCache=Array.isArray(_sv)?_sv:[];if(_specCache.length&&$('dsel')&&!$('dsel').value){var _e0=String((_specCache[0]&&(_specCache[0].start||_specCache[0].date))||'');if(/^\d{2}-\d{2}$/.test(_e0)){$('dsel').dataset.eventDate='2026-'+_e0;$('dsel').value='2026-'+_e0;}}if(_c.efx){var _es=document.getElementById('efxSw');var _on=_c.efx.enabled!==false;_es.classList.toggle('on',_on);_es.textContent='启动动画: '+(_on?'开':'关');}if(_specCache.length){$('svList').value=JSON.stringify(_sv,null,2);}}catch(e){}})();
 $('svUploadBtn').onclick=function(){$('svFileInput').click();};
 $('svFileInput').onchange=function(ev){var f=ev.target.files&&ev.target.files[0];if(!f)return;var rd=new FileReader();rd.onload=function(){fetch('/api/special/upload',{method:'POST',headers:{'x-filename':f.name},body:rd.result}).then(function(r){return r.json();}).then(function(j){if(j&&j.ok){$('svMsg').textContent='已上传: '+j.file+' (复制进 JSON 的 video 字段)';}else{$('svMsg').textContent='失败 '+(j&&j.error||'');}});};rd.readAsArrayBuffer(f);};
 $('svSave').onclick=function(){var arr;try{arr=JSON.parse($('svList').value||'[]');}catch(e){$('svMsg').textContent='JSON 解析失败: '+e.message;return;}fetch('/api/config',{method:'POST',body:JSON.stringify({specialEvents:arr})}).then(function(){$('svMsg').textContent='已保存 '+(arr.length)+' 条 ✓';});};

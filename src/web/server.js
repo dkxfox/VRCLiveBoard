@@ -131,6 +131,12 @@ function effPluginSec() {
   }
   function localDateStr() { const d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
   function mmddOf(s) { const m = /^(\d{2})-(\d{2})$/.exec(String(s || '')); return m ? m[0] : ''; }
+  // 日期参数接受 MM-DD 与 YYYY-MM-DD 两种(M-20260911-54): 控制台的日期选择器(<input type="date">)给的是 ISO 形式,
+  // 而判定原来只认 MM-DD —— 结果测试页模拟 6/15 时被当成"今天", 彩蛋永远不播。
+  function parseDateArg(s) {
+    const m = /^(?:(\d{4})-)?(\d{2})-(\d{2})$/.exec(String(s || '').trim());
+    return m ? { mmdd: m[2] + '-' + m[3], iso: !!m[1] } : null;
+  }
   function dayNumOf(s) { const m = /^(\d{2})-(\d{2})$/.exec(String(s || '')); return m ? Number(m[1]) * 100 + Number(m[2]) : -1; }
   function efxInWindow(today, ev) {
     if (!ev) return false;
@@ -155,8 +161,12 @@ function effPluginSec() {
   function efxDecision(dateArg, dry) {
     const e = efxCfg();
     const today = localDateStr();
-    const asOf = String(dateArg || '') || today;
-    const day = mmddOf(asOf) || mmddOf(today);
+    const raw = String(dateArg || '').trim();
+    const parsed = raw ? parseDateArg(raw) : null;
+    const asOf = raw || today;                       // 回传原始输入(便于测试页显示)
+    const day = parsed ? parsed.mmdd : mmddOf(today); // 判定口径: 一律 MM-DD
+    const stamp = day;                                // 记录口径: 同样 MM-DD(与 oncePerDay 的比较保持一致, 免得两种写法各记一次)
+    const dateInvalid = !!raw && !parsed;
     const cfgList = Array.isArray(rootConfig.specialEvents) ? rootConfig.specialEvents : [];
     const list = cfgList.length ? cfgList : localSpecialEvents();
     let hit = null;
@@ -167,18 +177,18 @@ function effPluginSec() {
       const key = id + '@' + ver;
       const rec = e.played[key] || null;
       const forced = !e.enabled;                                                 // 设计 §4: 开关关 → 到日期强播一次
-      const playedToday = !!(rec && rec.last === asOf);
+      const playedToday = !!(rec && (rec.last === stamp || rec.last === asOf));
       let play = true, reason;
       if (forced && rec && rec.forced) { play = false; reason = '开关关且本版本已强播过'; }
       else if (!forced && e.oncePerDay && playedToday) { play = false; reason = '开关开但今天已播过'; }
       else { reason = forced ? '开关关 → 强播一次' : '窗口内且开关开'; }
-      if (play && !dry) { e.played[key] = { forced: forced || !!(rec && rec.forced), last: asOf }; persist(); }
-      return { ok: true, dry: !!dry, source: cfgList.length ? 'config' : 'local', action: play ? 'special' : 'off', today: asOf, enabled: e.enabled, forced: forced, reason: reason, maxMs: e.splashMaxMs,
+      if (play && !dry) { e.played[key] = { forced: forced || !!(rec && rec.forced), last: stamp }; persist(); }
+      return { ok: true, dry: !!dry, source: cfgList.length ? 'config' : 'local', action: play ? 'special' : 'off', today: day, input: asOf, dateInvalid: dateInvalid, enabled: e.enabled, forced: forced, reason: reason, maxMs: e.splashMaxMs,
         event: play ? { id: id, version: ver, title: String(hit.title || ''), video: String(hit.video || ''), mode: String(hit.mode || 'video'), sound: String(hit.sound || ''), maxMs: e.splashMaxMs } : null };
     }
-    if (!e.enabled) return { ok: true, dry: !!dry, action: 'off', today: asOf, enabled: false, forced: false, reason: '开关关且今天没有特殊彩蛋', event: null };
+    if (!e.enabled) return { ok: true, dry: !!dry, action: 'off', today: day, input: asOf, dateInvalid: dateInvalid, enabled: false, forced: false, reason: '开关关且今天没有特殊彩蛋', event: null, maxMs: e.splashMaxMs };
     const daily = (Array.isArray(rootConfig.dailyEvents) ? rootConfig.dailyEvents : []).filter(function (d) { return efxInWindow(day, d); })[0] || null;
-    return { ok: true, dry: !!dry, action: daily ? 'daily' : 'normal', today: asOf, enabled: true, forced: false, reason: daily ? '日常彩蛋窗口' : '普通启动动画',
+    return { ok: true, dry: !!dry, action: daily ? 'daily' : 'normal', today: day, input: asOf, dateInvalid: dateInvalid, enabled: true, forced: false, reason: daily ? '日常彩蛋窗口' : '普通启动动画', maxMs: e.splashMaxMs,
       event: daily ? { id: String(daily.id || 'daily'), version: Number(daily.version || 1) || 1, title: String(daily.title || ''), video: String(daily.asset || daily.video || ''), mode: 'daily', sound: String(daily.sound || '') } : null };
   }
   // 图片类静态资源: 用 ETag + no-cache 代替 no-store —— 每次仍向服务器校验(换图立刻生效),
