@@ -67,14 +67,14 @@
   },
   "updatedAt": "2026-09-11",
   "zipVolumes": {
-    "asOf": "v1.3.2 (2026-09-11 验证性打包; vendor 精简与出厂白名单生效)",
+    "asOf": "v1.4.0 (2026-09-12 正式打包; 插件市场 + 启动彩蛋素材进自包含包, Lite 排除)",
     "Lite-RequiresNode": {
-      "entries": 135,
-      "bytes": 8261198
+      "entries": 140,
+      "bytes": 8289203
     },
     "Desktop-SelfContained": {
-      "entries": 1312,
-      "bytes": 218050414
+      "entries": 1318,
+      "bytes": 225899546
     }
   },
   "supplyChain": {
