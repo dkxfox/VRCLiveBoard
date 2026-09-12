@@ -172,7 +172,7 @@ Check-Stage $stage
 # 彩蛋素材只在开发机本地(gitignore): 干净克隆上打出来的包没有视频, 必须让这件事在日志里看得见(M-20260911-50)
 $eggDir = Join-Path $p 'assets\videos'
 $eggN = 0
-if (Test-Path $eggDir) { $eggN = @(Get-ChildItem $eggDir -File -Include *.mp4,*.webm -ErrorAction SilentlyContinue).Count }
+if (Test-Path $eggDir) { $eggN = @(Get-ChildItem $eggDir -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -eq '.mp4' -or $_.Extension -eq '.webm' }).Count }   # -Include 不带 -Recurse 恒为空(实测), 会打出"素材为空"的假日志
 if ($eggN -gt 0) { Write-Output ('egg assets: ' + $eggN + ' video(s) -> self-contained package') }
 else { Write-Output '[WARN] assets\videos 为空: 本次自包含包不含启动彩蛋视频(素材只在开发机本地, M-20260911-50)' }
 Write-Output '==== 3. zip self-contained (big, wait) ===='
