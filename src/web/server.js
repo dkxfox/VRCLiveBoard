@@ -414,13 +414,28 @@ function effPluginSec() {
         const o = JSON.parse(body || '{}');
         pluginManager.disable(o.id);
         const entry = pluginManager.entries.find(function (e) { return e.id === o.id; });
-        if (entry) { require('fs').rmSync(entry.dir, { recursive: true, force: true }); }
+        let movedDir = '';
+        if (entry) {
+          // 删除 = 移到回收目录(M-20260911-47): 界面上一键删除不该造成不可恢复的数据丢失,
+          // 用户把插件改坏/删错了还能从 _removed-plugins 里捞回来(打包时该目录被排除)
+          try {
+            const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            const trash = path.join(projectRoot, '_removed-plugins');
+            fs.mkdirSync(trash, { recursive: true });
+            const dest = path.join(trash, String(o.id) + '-' + stamp);
+            fs.renameSync(entry.dir, dest);
+            movedDir = dest;
+          } catch (e2) {
+            noteFail('/api/plugins/remove', e2);
+            try { fs.rmSync(entry.dir, { recursive: true, force: true }); } catch (e3) { noteFail('/api/plugins/remove', e3); }
+          }
+        }
         rootConfig.pluginApprovals = rootConfig.pluginApprovals || {};
         delete rootConfig.pluginApprovals[o.id];
         rootConfig.pluginEnabled = (rootConfig.pluginEnabled || []).filter(function (x) { return x !== o.id; });
         persist();
         pluginManager.scan();
-        return json(res, 200, { ok: true });
+        return json(res, 200, { ok: true, moved: movedDir });
       } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
     });
   });

@@ -15,7 +15,8 @@
     "秘密开发项目素材",
     "旧版控制台备份",
     "docs\\FEATURES",
-    "dev-fixtures"
+    "dev-fixtures",
+    "_removed-plugins"
   ],
   "files": [
     "config.json",

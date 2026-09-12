@@ -84,6 +84,23 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     else ok(true, '清单内 ' + gets.length + ' 条 GET 路由全部可达(无落空 404)');
   } catch (e) { note('路由可达性检查跳过: ' + e.message); }
 
+  // ⑥b 插件删除(M-20260911-47): 必须是"移到回收目录"而不是不可恢复的 rmSync —— 用隔离实例里的一个插件试
+  try {
+    const before = JSON.parse((await req('/api/plugins')).body.toString('utf8'));
+    const arr = Array.isArray(before) ? before : (before.plugins || before.entries || []);
+    const victim = arr.filter(function (p) { return p && p.id === 'weather-board'; })[0];
+    if (!victim) note('隔离实例里没有 weather-board, 跳过删除用例');
+    else {
+      const rd = await req('/api/plugins/remove', { method: 'POST', body: JSON.stringify({ id: 'weather-board' }) });
+      const jd = JSON.parse(rd.body.toString('utf8'));
+      ok(rd.status === 200 && jd.ok === true, '删除插件接口 200');
+      ok(!!jd.moved && fs.existsSync(jd.moved), '插件目录被移到回收目录(可恢复): ' + String(jd.moved).split(/[\\/]/).pop());
+      const after = JSON.parse((await req('/api/plugins')).body.toString('utf8'));
+      const arr2 = Array.isArray(after) ? after : (after.plugins || after.entries || []);
+      ok(!arr2.some(function (p) { return p && p.id === 'weather-board'; }), '删除后插件列表里不再出现');
+    }
+  } catch (e) { ok(false, '插件删除用例异常: ' + e.message); }
+
   // ⑦ 截图翻译设置落盘(M-20260911-23): 面板上的识别方式与参数都读自 config, 必须能写回去(否则重启回默认)
   try {
     const cfgPath = path.join(ROOT, 'config.json');

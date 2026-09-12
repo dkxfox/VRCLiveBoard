@@ -141,10 +141,12 @@ function plgCard(p){var en=!!(p.enabled||p.run),ap=!!p.approved;var d=document.c
       if (!confirm(tr('removeConfirm'))) return;
       fetch('/api/plugins/remove', { method: 'POST', body: JSON.stringify({ id: p.id }) })
         .then(function (r) { return r.json(); })
-        .then(function (j) { if (j && j.ok === false) note(tr('opFail') + ': ' + (j.error || ''), 'warn'); else note(tr('savedOk'), 'ok'); loadPlugins(); })
+        .then(function (j) { if (j && j.ok === false) note(tr('opFail') + ': ' + (j.error || ''), 'warn'); else note(tr('savedOk') + (j && j.moved ? ' → ' + j.moved : ''), 'ok'); loadPlugins(); })
         .catch(function (e) { apiFail('#plgRefresh', e); });
     };
-    pbody.appendChild(db);
+    // 删除按钮放在**卡片头上**(M-20260911-47): 之前放在可折叠的设置区里, 不展开根本看不到
+    var dbHost = d.querySelector('.plgcard-ctrl') || pbody || d;
+    dbHost.appendChild(db);
   }
   // 优先级输入(M-20260911-40): 旧版每行一个优先级输入框, 新版只剩一键重置
   if (pbody) {
