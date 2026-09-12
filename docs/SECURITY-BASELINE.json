@@ -70,11 +70,11 @@
     "asOf": "v1.3.2 (2026-09-11 验证性打包; vendor 精简与出厂白名单生效)",
     "Lite-RequiresNode": {
       "entries": 135,
-      "bytes": 8261200
+      "bytes": 8261198
     },
     "Desktop-SelfContained": {
       "entries": 1312,
-      "bytes": 218050416
+      "bytes": 218050414
     }
   },
   "supplyChain": {

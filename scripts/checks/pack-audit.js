@@ -89,7 +89,7 @@ function audit(zp) {
     if (!names.includes('plugins/' + id + '/manifest.json')) fails.push('包内缺少插件本体: plugins/' + id);
     if (!names.includes('官方可选插件/' + id + '/manifest.json')) fails.push('包内缺少误删恢复备份: 官方可选插件/' + id);
   }
-  if (!names.includes('官方可选插件/说明-如何装回插件.txt')) fails.push('包内缺少 官方可选插件/说明-如何装回插件.txt');
+  if (!PLUGIN_PACK && !names.includes('官方可选插件/说明-如何装回插件.txt')) fails.push('包内缺少 官方可选插件/说明-如何装回插件.txt');   // 插件更新包里没有这个说明文件(M-20260911-46)
 
   // 5. 盐一致性: 包内 devgate 必须与当前源码同盐(否则授权版必然解锁失败)
   const dgEntry = z.entries.find((e) => e.name === 'src/devgate.js');
@@ -135,7 +135,10 @@ function audit(zp) {
     if (!key) warns.push('zipVolumes 基线没有与 ' + label + ' 匹配的键(应为 Lite-RequiresNode / Desktop-SelfContained)');
     else {
       const b = baseline[key];
-      if (b.entries !== z.entries.length || b.bytes !== fileBytes) {
+      // 条目数必须严格一致; 字节数给 1%(至少 4KB)容差 —— zip 每次重建的压缩结果会差几字节(时间戳),
+      // 否则"打包→改一处→再打包"会永远对不上, 只能反复刷基线(M-20260911-46 实测差 2 字节)。
+      const tolBytes = Math.max(4096, Math.round(b.bytes * 0.01));
+      if (b.entries !== z.entries.length || Math.abs(fileBytes - b.bytes) > tolBytes) {
         fails.push('体积/条目数与基线 ' + key + '(entries=' + b.entries + ', bytes=' + b.bytes + ', ' + (baseline.asOf || '?') + ')不符: 现为 entries=' + z.entries.length + ', bytes=' + fileBytes + ' —— 若为发布变化, 人工复核后更新 SECURITY-BASELINE.json 的 zipVolumes(见 PROCESS-03)');
       } else console.log('  体积与基线一致: ' + key);
     }
