@@ -14,7 +14,7 @@ module.exports = function (ctx) {
   function onJoin(pname, meta) {
     // 进房快照: 玩家进入房间时, VRChat 会把房间里已存在的玩家补写一遍 OnPlayerJoined;
     // 这些"已在场"的好友不触发欢迎, 只有玩家进房之后真正进入的好友才触发。
-    if (meta && meta.alreadyInWorld) { ctx.logger.info('[friend-welcome] 跳过进房快照: ' + String(pname || '').replace(/\(usr_[^)]*\)/g, '').trim()); return; }
+    if (meta && meta.alreadyInWorld) { ctx.logger.info('[friend-welcome] 跳过进房快照: ' + String(pname || '').replace(/\(usr_[^)]*\)/g, '').replace(/\s+$/, '').trim() + (meta.sinceRoomSec != null ? ('(进房后 ' + meta.sinceRoomSec + 's)') : '')); return; }
     // 只使用显示名, 不发送/不显示任何 UID 形态(usr_xxx)
     const displayName = String(pname || '')
       .replace(/\(\s*usr_[a-z0-9-]+\s*\)|\busr_[a-z0-9-]+\b/gi, '')
