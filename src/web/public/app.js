@@ -275,6 +275,8 @@ function starryBoot(){
   setTimeout(function(){ov.remove();},6300);
 }
 function playSpecialVideo(sv){
+  // 上限与卡播守卫(M-20260911-53): 与桌面壳启动画面同一口径(服务端 /api/efx/boot 的 maxMs), 原来是硬编码 120s
+  var maxMs=(sv&&typeof sv.maxMs==='number')?sv.maxMs:0;
   var vurl='/api/special/video'+(sv&&sv.video?('?file='+encodeURIComponent(sv.video)):'');
   var ov=document.createElement('div');ov.style.cssText='position:fixed;inset:0;z-index:9999;background:#000;cursor:pointer';
   ov.innerHTML='<video src="'+vurl+'" autoplay playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain"></video>'+(sv&&sv.title?('<div style="position:absolute;bottom:26px;left:0;right:0;text-align:center;color:rgba(255,255,255,.7);font-size:13px;letter-spacing:2px;pointer-events:none">'+tr('clickToSkip')+'</div>'):'');
@@ -283,7 +285,8 @@ function playSpecialVideo(sv){
   ov.addEventListener('click',skip);
   var v=ov.querySelector('video');
   if(v){v.addEventListener('ended',skip);v.addEventListener('error',function(){if(!skipped)skip();});}
-  setTimeout(skip,120000);
+  if(maxMs>0)setTimeout(skip,maxMs);
+  setTimeout(function(){if(v&&!v.videoWidth&&v.readyState<2)skip();},8000);
 }
 function simpleBoot(c1,c2,greet,deco,title,tag){
   var ov=document.createElement('div');ov.style.cssText='position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(110% 110% at 50% 32%, '+c1+'40 0%, #0b0e13 72%);display:flex;align-items:center;justify-content:center;transition:opacity .55s';

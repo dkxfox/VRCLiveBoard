@@ -23,7 +23,7 @@
   <textarea id="svList" rows="2" style="flex:1;min-width:400px;font:12px monospace" placeholder='[{"id":"fes-0615","version":1,"start":"06-15","end":"06-15","yearly":true,"mode":"video","title":"特别放送","video":"assets/videos/fes-0615.mp4"}]'></textarea>
   <input type="file" id="svFileInput" accept="video/*" style="display:none">
   <button id="svUploadBtn">导入视频</button><button id="svSave">保存到 config</button><button id="svClear">清空</button>
-  <button id="splashBtn">▶ 预览启动画面</button><button id="resetPlayed">重置已播记录</button><button id="efxSw">启动动画: ?</button>
+  <button id="splashBtn">▶ 预览启动画面</button><button id="resetPlayed">重置已播记录</button><button id="efxSw">启动动画: ?</button><label style="font-size:12px">画面上限(秒) <input type="number" id="capSec" min="0" max="300" value="20" style="width:70px"></label><button id="capSave">保存</button><span class="sub" style="font-size:12px">0=不限(播完素材)</span>
   <span id="svMsg" style="font-size:12px;color:#3ddc84"></span>
 </div>
 <script src="/skin.js"></script>
@@ -81,7 +81,9 @@ $('resetPlayed').onclick=function(){fetch('/api/config',{method:'POST',body:JSON
 $('efxSw').onclick=function(){var on=this.classList.contains('on');this.classList.toggle('on',!on);this.textContent='启动动画: '+(!on?'开':'关');var self=this;fetch('/api/config',{method:'POST',body:JSON.stringify({efx:{enabled:!on}})}).then(function(){$('svMsg').textContent='启动动画开关已存(开关关时特殊彩蛋到日期仍会强播一次)';refreshInfo();});};
 // 预览真正的启动画面(不是模拟): 壳加载的就是这一页, 收尾同样置 __splashDone
 $('splashBtn').onclick=function(){var d=$('dsel').value||'';var f=document.createElement('iframe');f.src='/splash.html'+(d?('?date='+encodeURIComponent(d)):'');f.style.cssText='position:fixed;inset:0;width:100%;height:100%;border:0;z-index:10001;background:#000';document.body.appendChild(f);var t=setTimeout(function(){f.remove();},150000);f.onload=function(){var iv=setInterval(function(){try{if(f.contentWindow&&f.contentWindow.__splashDone){clearInterval(iv);clearTimeout(t);setTimeout(function(){f.remove();},400);}}catch(e){}},300);};};
+$('capSave').onclick=function(){var s=Number($('capSec').value);if(!isFinite(s)||s<0||s>300){$('svMsg').textContent='秒数需在 0~300 之间';return;}fetch('/api/config',{method:'POST',body:JSON.stringify({efx:{splashMaxMs:Math.round(s*1000)}})}).then(function(r){return r.json();}).then(function(){$('svMsg').textContent='画面上限已存: '+(s===0?'不限':(s+' 秒'));refreshInfo();});};
 $('efxSw').textContent='启动动画: ?';
+fetch('/api/config').then(function(r){return r.json();}).then(function(c){var m=(c.efx&&typeof c.efx.splashMaxMs==='number')?c.efx.splashMaxMs:20000;if($('capSec'))$('capSec').value=Math.round(m/1000);}).catch(function(){});
 $('go').onclick=function(){
   $('stage').innerHTML='';
   if(mode==='special'){ videoBoot($('vurl').value); return; }

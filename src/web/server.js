@@ -123,6 +123,9 @@ function effPluginSec() {
     const e = rootConfig.efx;
     if (typeof e.enabled !== 'boolean') e.enabled = true;                        // 设计 §2: 「动效/启动动画」默认开
     if (typeof e.oncePerDay !== 'boolean') e.oncePerDay = true;                  // 实测 59s 视频: 同一天不重复播, 否则每次重启都要等一遍
+    // 启动画面时长上限(M-20260911-53): 素材可能长达一分钟, 而"启动画面挡住主窗口多久"必须有一个上限;
+    // 0 = 不限(素材多长就播多长)。实测事故: 59s 视频把主窗口挡了近一分钟, 用户以为程序坏了。
+    if (typeof e.splashMaxMs !== 'number' || !isFinite(e.splashMaxMs) || e.splashMaxMs < 0) e.splashMaxMs = 20000;
     if (!e.played || typeof e.played !== 'object' || Array.isArray(e.played)) e.played = {};
     return e;
   }
@@ -170,8 +173,8 @@ function effPluginSec() {
       else if (!forced && e.oncePerDay && playedToday) { play = false; reason = '开关开但今天已播过'; }
       else { reason = forced ? '开关关 → 强播一次' : '窗口内且开关开'; }
       if (play && !dry) { e.played[key] = { forced: forced || !!(rec && rec.forced), last: asOf }; persist(); }
-      return { ok: true, dry: !!dry, source: cfgList.length ? 'config' : 'local', action: play ? 'special' : 'off', today: asOf, enabled: e.enabled, forced: forced, reason: reason,
-        event: play ? { id: id, version: ver, title: String(hit.title || ''), video: String(hit.video || ''), mode: String(hit.mode || 'video'), sound: String(hit.sound || '') } : null };
+      return { ok: true, dry: !!dry, source: cfgList.length ? 'config' : 'local', action: play ? 'special' : 'off', today: asOf, enabled: e.enabled, forced: forced, reason: reason, maxMs: e.splashMaxMs,
+        event: play ? { id: id, version: ver, title: String(hit.title || ''), video: String(hit.video || ''), mode: String(hit.mode || 'video'), sound: String(hit.sound || ''), maxMs: e.splashMaxMs } : null };
     }
     if (!e.enabled) return { ok: true, dry: !!dry, action: 'off', today: asOf, enabled: false, forced: false, reason: '开关关且今天没有特殊彩蛋', event: null };
     const daily = (Array.isArray(rootConfig.dailyEvents) ? rootConfig.dailyEvents : []).filter(function (d) { return efxInWindow(day, d); })[0] || null;
@@ -304,7 +307,7 @@ function effPluginSec() {
     const swf = (rootConfig.chatbox && rootConfig.chatbox.swearFilter) || {};
     // 空安全: 配置段缺失时宁可给空值, 也不能让这个高频接口抛未捕获异常(整个服务会因此不回包)
     const pgCfg = (rootConfig.sources && rootConfig.sources.pages) || {};
-    return json(res, 200, { pages: pgCfg.pages || [], rotationMs: pgCfg.rotationMs, sources: srcs, autostart: autostart, desktop: { showConsole: !((rootConfig.desktop || {}).showConsole === false) }, lang: (rootConfig.web && rootConfig.web.lang) || 'zh-CN', ocrtl: { delayMs: (rootConfig.ocrtl || {}).delayMs || 5000, displayMs: (rootConfig.ocrtl || {}).displayMs || 8000, loops: (rootConfig.ocrtl || {}).loops || 2, mode: (rootConfig.ocrtl || {}).mode || 'auto', vision: { apiBase: v.apiBase || '', model: v.model || 'deepseek-v4-flash-vision-exp', hasKey: !!v.apiKey, targetLang: v.targetLang || 'zh' }, capture: { mode: cap.mode || 'window', windowTitle: cap.windowTitle || 'VRChat', region: cap.region || { x: 0, y: 0, w: 0, h: 0 } }, security: { promptDefense: sec.promptDefense !== false, jsonMode: sec.jsonMode !== false, outputSanitize: sec.outputSanitize !== false, extraPrompt: sec.extraPrompt || '', blockWords: sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS } }, swearFilter: { enabled: swf.enabled !== false, words: swf.words && swf.words.length ? swf.words : swearfilter.DEFAULTS }, pluginsSecurity: effPluginSec(), branding: (rootConfig.branding || 'default'), specialEvents: (rootConfig.specialEvents || []), efx: { enabled: efxCfg().enabled, oncePerDay: efxCfg().oncePerDay }, market: { indexUrl: ((rootConfig.market || {}).indexUrl || ''), revokeUrl: ((rootConfig.market || {}).revokeUrl || ''), installed: rootConfig.marketInstalled || {} } });
+    return json(res, 200, { pages: pgCfg.pages || [], rotationMs: pgCfg.rotationMs, sources: srcs, autostart: autostart, desktop: { showConsole: !((rootConfig.desktop || {}).showConsole === false) }, lang: (rootConfig.web && rootConfig.web.lang) || 'zh-CN', ocrtl: { delayMs: (rootConfig.ocrtl || {}).delayMs || 5000, displayMs: (rootConfig.ocrtl || {}).displayMs || 8000, loops: (rootConfig.ocrtl || {}).loops || 2, mode: (rootConfig.ocrtl || {}).mode || 'auto', vision: { apiBase: v.apiBase || '', model: v.model || 'deepseek-v4-flash-vision-exp', hasKey: !!v.apiKey, targetLang: v.targetLang || 'zh' }, capture: { mode: cap.mode || 'window', windowTitle: cap.windowTitle || 'VRChat', region: cap.region || { x: 0, y: 0, w: 0, h: 0 } }, security: { promptDefense: sec.promptDefense !== false, jsonMode: sec.jsonMode !== false, outputSanitize: sec.outputSanitize !== false, extraPrompt: sec.extraPrompt || '', blockWords: sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS } }, swearFilter: { enabled: swf.enabled !== false, words: swf.words && swf.words.length ? swf.words : swearfilter.DEFAULTS }, pluginsSecurity: effPluginSec(), branding: (rootConfig.branding || 'default'), specialEvents: (rootConfig.specialEvents || []), efx: { enabled: efxCfg().enabled, oncePerDay: efxCfg().oncePerDay, splashMaxMs: efxCfg().splashMaxMs }, market: { indexUrl: ((rootConfig.market || {}).indexUrl || ''), revokeUrl: ((rootConfig.market || {}).revokeUrl || ''), installed: rootConfig.marketInstalled || {} } });
   });
   const route_v1_chatbox = function (req, res, url) {
     return readBody(req, function (body) {
@@ -346,6 +349,7 @@ function effPluginSec() {
           const e = efxCfg();
           if (o.efx.enabled !== undefined) e.enabled = !!o.efx.enabled;
           if (o.efx.oncePerDay !== undefined) e.oncePerDay = !!o.efx.oncePerDay;
+          if (o.efx.splashMaxMs !== undefined) { const m = Number(o.efx.splashMaxMs); if (isFinite(m) && m >= 0 && m <= 300000) e.splashMaxMs = m; }
           if (o.efx.played !== undefined && o.efx.played && typeof o.efx.played === 'object' && !Array.isArray(o.efx.played)) e.played = o.efx.played;
         }
         persist();

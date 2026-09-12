@@ -82,11 +82,13 @@ function showMain() { try { if (win && !win.isDestroyed() && !win.isVisible()) {
 // 跳过开关: VRCB_NO_SPLASH=1 或命令行 --no-splash(排查白屏时用)。
 function createSplash(onDone) {
   if (process.env.VRCB_HEADLESS_TEST === '1' || process.env.VRCB_NO_SPLASH === '1' || process.argv.indexOf('--no-splash') >= 0) return onDone();
-  const maxMs = Number(process.env.VRCB_SPLASH_MAX_MS || 135000);
+  // 兜底上限(M-20260911-53): 从前是 135s —— 事故里用户被黑框挡了一分钟。页面自己有 20s 上限(服务端 efx.splashMaxMs),
+  // 壳的兜底只需略高于它, 页面彻底卡死时也能放行。
+  const maxMs = Number(process.env.VRCB_SPLASH_MAX_MS || 0) || 25000;
   let sp = null;
   try {
     sp = new BrowserWindow({ width: 960, height: 540, frame: false, resizable: false, center: true, show: false,
-      alwaysOnTop: true, skipTaskbar: true, backgroundColor: '#0b0e13', title: 'VRCLiveBoard', icon: loadIcon(),
+      alwaysOnTop: false, skipTaskbar: false, backgroundColor: '#0b0e13', title: 'VRCLiveBoard', icon: loadIcon(),
       webPreferences: { contextIsolation: true, nodeIntegration: false } });
   } catch (e) { return onDone(); }
   let finished = false, poll = null, bail = null;

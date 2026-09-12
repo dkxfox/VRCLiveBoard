@@ -167,6 +167,9 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     let d8 = await boot(D);
     ok(d8.action === 'special' && d8.event && d8.event.video === EV.video, '窗口内+开关开 → 播特殊彩蛋(带 video)');
     ok(d8.enabled === true && d8.forced === false, '开关开时 forced=false(强播标记只属于开关关)');
+    // 上限必须存在且默认别太大(M-20260911-53 事故: 59s 素材把主窗口挡了近一分钟); 0 = 不限是给"就想播完"的用户留的
+    ok(typeof d8.maxMs === 'number' && d8.maxMs >= 0 && d8.maxMs <= 60000, '决策带上画面时长上限 maxMs(默认 20000, 0=不限, 上限 60s): 实得 ' + d8.maxMs);
+    ok(d8.event && d8.event.maxMs === d8.maxMs, '事件里也带同一份 maxMs(控制台播放路径直接用它)');
     d8 = await boot(D);
     ok(d8.action === 'off' && /已播过/.test(d8.reason || ''), '同一天再问 → off(oncePerDay 生效)');
     const cfg8 = ROOT && fs.existsSync(path.join(ROOT, 'config.json')) ? JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8')) : null;

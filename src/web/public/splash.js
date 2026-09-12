@@ -11,7 +11,10 @@
   var elVideo = document.getElementById('video');
   var elNorm = document.getElementById('norm');
   var elBar = document.getElementById('barIn');
-  var bail = null;
+  var bail = null, cap = null, stall = null;
+  // 先把品牌态亮出来(M-20260911-53): 事故里用户第一眼看到的是"无解释的黑框" —— 现在即使决策还没回来, 也先显示 logo+名字
+  try { if (elNorm) elNorm.classList.add('on'); } catch (e) {}
+  function clearTimers() { if (bail) clearTimeout(bail); if (cap) clearTimeout(cap); if (stall) clearTimeout(stall); }
 
   // 迷你三语应用器: 启动画面不加载 app.js(它带着整套控制台逻辑), 但文案仍走同一份字典, 不新增硬编码
   function t(key, lang) {
@@ -32,6 +35,7 @@
 
   function finish(why) {
     if (done) return; done = true;
+    clearTimers();
     window.__splashWhy = String(why || '');
     window.__splashDone = true;
     try { document.body.style.transition = 'opacity .3s'; document.body.style.opacity = '0'; } catch (e) {}
@@ -46,9 +50,14 @@
     elBar.style.transition = 'width ' + ms + 'ms linear';
     elBar.style.width = '100%';
   }
-  function playSpecial(ev) {
+  function playSpecial(ev, maxMs) {
     if (!elVideo) return finish('no-video-el');
+    // 上限(M-20260911-53): 素材可以长达一分钟, 但"挡住主窗口"必须有上限 —— 到点就收尾, 主窗口照常亮起
+    if (maxMs > 0) cap = setTimeout(function () { finish('cap ' + maxMs + 'ms'); }, maxMs);
+    // 卡播守卫: 8 秒还没进入可播状态(readyState<2)就放行, 不让黑框把人锁住
+    stall = setTimeout(function () { if (!elVideo.videoWidth && elVideo.readyState < 2) finish('no-playback'); }, 8000);
     elVideo.style.display = 'block';
+    if (elNorm) elNorm.classList.remove('on');
     elVideo.src = '/api/special/video?file=' + encodeURIComponent(ev.video);
     progress(ev.durationMs || 60000);
     elVideo.addEventListener('ended', function () { finish('ended'); });
@@ -72,7 +81,7 @@
   fetch('/api/efx/boot' + (dateArg ? ('?date=' + encodeURIComponent(dateArg)) : ''))
     .then(function (r) { return r.json(); })
     .then(function (d) {
-      if (d && d.action === 'special' && d.event && d.event.video) { playSpecial(d.event); return; }
+      if (d && d.action === 'special' && d.event && d.event.video) { playSpecial(d.event, Number(d.maxMs) || 0); return; }
       if (d && d.action === 'off') { finish('off'); return; }   // 动效开关关且今天没有特殊彩蛋 → 不播启动动画(设计 §2/§4)
       playNormal();
     })
