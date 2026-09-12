@@ -253,7 +253,10 @@ if($('logRefresh'))$('logRefresh').onclick=loadLogs;if($('logFilter'))$('logFilt
 if($('oscTest'))$('oscTest').onclick=async function(){try{var s=await (await fetch('/api/status')).json();var v=s.vrc||{};var pc=await (await fetch('/api/ports/check')).json();var u=pc.udp9000||{};var m=tr('oscTestPrefix')+new Date().toLocaleTimeString();var sr=await fetch('/v1/chatbox',{method:'POST',body:JSON.stringify({text:m})});var sj=await sr.json();note('VRChat: '+(v.running?tr('running'):tr('notRunning'))+'\nOSC: '+(v.oscEnabled?tr('oscOn'):tr('oscOff'))+'\nUDP 9000: '+(u.occupied?((u.name||'').indexOf('VRChat')>=0?tr('udpVrc'):tr('udpBusy')+': '+(u.name||u.pid)):tr('udpFree'))+'\n'+tr('oscTestMsg')+': '+(sj.ok?(tr('sent')+'「'+m+'」'):(tr('sendFailShort')+': '+(sj.error||''))));}catch(e){note(tr('testError'),'warn');}};
 // 动效
 function applyAnim(){var off=localStorage.getItem('vrcbAnimMaster')==='1'||(localStorage.getItem('vrcbAnimAutoOff')==='1'&&!!window._vrcRunning);document.body.classList.toggle('no-anim',off);if(!off&&window.__fxRestart)window.__fxRestart();}
-if($('animTop')){$('animTop').onclick=function(){var off=!document.body.classList.contains('no-anim');localStorage.setItem('vrcbAnimMaster',off?'1':'0');$('animTop').classList.toggle('on',!off);applyAnim();};$('animTop').classList.toggle('on',localStorage.getItem('vrcbAnimMaster')!=='1');}
+// 动效开关同时决定"启动动画/彩蛋"(设计 §2, M-20260911-50): 本机偏好仍在 localStorage(离线与首屏都要用),
+// 但结果必须同步进 config —— 桌面壳启动画面跑在主进程里, 读不到 localStorage, 只能读 config.efx.enabled
+function efxPush(on){try{fetch('/api/config',{method:'POST',body:JSON.stringify({efx:{enabled:!!on}})}).catch(function(){});}catch(e){}}
+if($('animTop')){$('animTop').onclick=function(){var off=!document.body.classList.contains('no-anim');localStorage.setItem('vrcbAnimMaster',off?'1':'0');$('animTop').classList.toggle('on',!off);applyAnim();efxPush(!off);};$('animTop').classList.toggle('on',localStorage.getItem('vrcbAnimMaster')!=='1');}
 if($('animTgl')){$('animTgl').onclick=function(){var on=this.classList.contains('on');this.classList.toggle('on',!on);localStorage.setItem('vrcbAnimAutoOff',on?'0':'1');applyAnim();};$('animTgl').classList.toggle('on',localStorage.getItem('vrcbAnimAutoOff')==='1');}
 // 加载时应用已保存的动效设置(M-20260911-18): 此前 applyAnim 只在手动切换时被调用 ->
 // "关掉动效"只存不读, 刷新后动效会自己回来; 同时也保证开关视觉与实际状态一致
@@ -296,13 +299,17 @@ function simpleBoot(c1,c2,greet,deco,title,tag){
   setTimeout(function(){ov.style.opacity='0';},2100);
   setTimeout(function(){ov.remove();},2700);
 }
-// 启动动画(品牌感知)
+// 启动动画(品牌感知) —— 特殊彩蛋与「动效开关」的判定统一交给服务端(M-20260911-50):
+// 桌面壳启动画面与这里读的是同一个 /api/efx/boot(两套判定必然漂移, 而"已播记录"只能由服务端写回 config)
 (async function(){var bc=null;try{bc=await (await fetch('/api/config')).json();}catch(e){apiFail('sec-sources',e);}
  var _bs=document.getElementById('bootscrim');if(_bs)_bs.remove();
+ // 开关的权威来源是 config.efx.enabled(设计 §2): localStorage 只当首屏防闪的本地缓存, 拿到 config 后以它为准
+ try{if(bc&&bc.efx&&typeof bc.efx.enabled==='boolean'){var _lm=bc.efx.enabled?'0':'1';if(localStorage.getItem('vrcbAnimMaster')!==_lm){localStorage.setItem('vrcbAnimMaster',_lm);applyAnim();}var _at=$('animTop');if(_at)_at.classList.toggle('on',bc.efx.enabled);}}catch(e){}
+ var _dec=null;try{_dec=await (await fetch('/api/efx/boot')).json();}catch(e){apiFail('sec-sources',e);}
+ if(_dec&&_dec.action==='special'&&_dec.event&&_dec.event.video){playSpecialVideo(_dec.event);return;}
+ if(_dec&&_dec.action==='off'){return;}   // 开关关且今天没有特殊彩蛋 → 不播启动动画(设计 §2/§4)
  var _d0=new Date();var _ds=_d0.getFullYear()+'-'+('0'+(_d0.getMonth()+1)).slice(-2)+'-'+('0'+_d0.getDate()).slice(-2);
- var _specs=(bc&&bc.specialEvents)||[];
- var _r=(window.VRCB_SKIN&&window.VRCB_SKIN.resolve)?window.VRCB_SKIN.resolve(_ds,_specs,(bc&&bc.lang)||'zh-CN'):null;
- if(_r&&_r.type==='special'){playSpecialVideo(_r);return;}
+ var _r=(window.VRCB_SKIN&&window.VRCB_SKIN.resolve)?window.VRCB_SKIN.resolve(_ds,[],(bc&&bc.lang)||'zh-CN'):null;
  var brd=(bc&&bc.branding)||'default';
  if(brd==='starry'){starryBoot();return;}
  if(_r){simpleBoot(_r.c1,_r.c2,_r.greet,_r.deco,'VRCLiveBoard',tr('bootTagline'));return;}

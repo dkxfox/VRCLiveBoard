@@ -131,5 +131,11 @@
                         },
     "pluginEnabled":  [
 
-                      ]
+                      ],
+    "efx":  {
+                "enabled":  true,
+                "oncePerDay":  true,
+                "played":  {
+                           }
+            }
 }

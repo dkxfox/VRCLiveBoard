@@ -71,6 +71,25 @@ function audit(zp) {
   // 2. 禁入名单
   for (const n of names) for (const re of FORBIDDEN_NAME) if (re.test(n)) fails.push('禁入文件混入: ' + n);
 
+  // 2b. 启动彩蛋素材(M-20260911-50): 素材只在开发机本地(gitignore, 不进仓库/云端), 所以这里断言的是"自洽"而不是"必须有" ——
+  //     本机有素材 → 自包含包必须原样带上; Lite 包一律不许带(它只有 8MB, 一个视频就把它翻倍)
+  if (!PLUGIN_PACK) {
+    const eggDir = path.join(ROOT, 'assets', 'videos');
+    let local = [];
+    try { local = fs.readdirSync(eggDir).filter((f) => /\.(mp4|webm)$/i.test(f)); } catch (e) {}
+    const inZip = z.entries.filter((e) => /^assets\/videos\/.+\.(mp4|webm)$/i.test(e.name));
+    if (/Lite/i.test(label)) {
+      if (inZip.length) fails.push('Lite 包混入彩蛋视频(' + inZip.map((e) => e.name).join(', ') + '): 素材属于自包含版, Lite 必须单独排除');
+      else console.log('  彩蛋素材: Lite 正确排除');
+    } else if (local.length && !inZip.length) {
+      fails.push('本机有 ' + local.length + ' 个彩蛋视频, 但自包含包里一个都没有(打包排除写错?)');
+    } else if (local.length) {
+      const bad = local.filter((f) => { const e = inZip.find((x) => x.name === 'assets/videos/' + f); return !e || e.uSize < 4096; });
+      if (bad.length) fails.push('彩蛋视频没有原样进包: ' + bad.join(', '));
+      else console.log('  彩蛋素材: 自包含包含 ' + local.length + ' 个视频(' + local.join(', ') + ')');
+    } else console.log('  彩蛋素材: 本机无素材, 跳过(自包含包不含彩蛋视频)');
+  }
+
   // 3. 必备文件
   for (const r of (PLUGIN_PACK ? [] : REQUIRED)) if (!names.includes(r)) fails.push('缺少必备文件: ' + r);
 

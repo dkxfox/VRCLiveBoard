@@ -1,0 +1,30 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-t="appTitle">VRCLiveBoard</title>
+<link rel="preload" as="image" href="/icon-256.png">
+<style>
+:root{color-scheme:dark}
+html,body{margin:0;height:100%;overflow:hidden;background:#0b0e13;color:#e8edf3;user-select:none;cursor:pointer;
+  font:14px/1.6 "Microsoft YaHei","Segoe UI",system-ui,sans-serif}
+#video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;display:none}
+#norm{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  background:radial-gradient(110% 110% at 50% 34%, #1d2b4a 0%, #0b0e13 72%)}
+#norm.on{display:flex}
+#norm img{width:86px;height:86px;border-radius:22px;filter:drop-shadow(0 0 22px #3b82f699);
+  opacity:0;transform:translateY(8px);transition:opacity .5s, transform .5s}
+#nm{font-size:30px;font-weight:800;background:linear-gradient(90deg,#3b82f6,#7dd3fc);-webkit-background-clip:text;background-clip:text;color:transparent;
+  opacity:0;transition:opacity .5s .12s}
+#tg{color:#9aa7ba;font-size:13px;letter-spacing:3px;opacity:0;transition:opacity .5s .24s}
+#norm.show img,#norm.show #nm,#norm.show #tg{opacity:1;transform:none}
+#bar{position:absolute;left:0;right:0;bottom:0;height:3px;background:#3b82f622;overflow:hidden}
+#barIn{display:block;height:100%;width:0;background:linear-gradient(90deg,#3b82f6,#7dd3fc)}
+#skip{position:absolute;right:16px;bottom:14px;padding:6px 12px;border-radius:8px;font-size:12px;letter-spacing:1px;
+  border:1px solid #ffffff2e;background:#00000059;color:#ffffffcc;pointer-events:none}
+</style></head>
+<body>
+<video id="video" autoplay playsinline></video>
+<div id="norm"><img id="logo" src="/icon-256.png" alt=""><div id="nm">VRCLiveBoard</div><div id="tg" data-t="bootTagline"></div></div>
+<div id="bar"><i id="barIn"></i></div>
+<div id="skip" data-t="clickToSkip"></div>
+<script src="/lang.js"></script>
+<script src="/splash.js"></script>
+</body></html>

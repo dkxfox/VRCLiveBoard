@@ -20,9 +20,10 @@
 <div id="stage"></div>
 <div class="bar" style="top:auto;bottom:0;border-top:1px solid #232a37;border-bottom:0;align-items:flex-start">
   <b style="font-size:12px">彩蛋配置(测试用, 多条目 JSON)</b>
-  <textarea id="svList" rows="2" style="flex:1;min-width:400px;font:12px monospace" placeholder='[{"date":"09-06","video":"assets/videos/x.mp4","title":"周年庆"}]'></textarea>
+  <textarea id="svList" rows="2" style="flex:1;min-width:400px;font:12px monospace" placeholder='[{"id":"fes-0615","version":1,"start":"06-15","end":"06-15","yearly":true,"mode":"video","title":"特别放送","video":"assets/videos/fes-0615.mp4"}]'></textarea>
   <input type="file" id="svFileInput" accept="video/*" style="display:none">
   <button id="svUploadBtn">导入视频</button><button id="svSave">保存到 config</button><button id="svClear">清空</button>
+  <button id="splashBtn">▶ 预览启动画面</button><button id="resetPlayed">重置已播记录</button><button id="efxSw">启动动画: ?</button>
   <span id="svMsg" style="font-size:12px;color:#3ddc84"></span>
 </div>
 <script src="/skin.js"></script>
@@ -30,15 +31,19 @@
 var $=function(id){return document.getElementById(id)};var mode='special';
 document.querySelectorAll('.bar button[data-m]').forEach(function(b){b.onclick=function(){document.querySelectorAll('.bar button[data-m]').forEach(function(x){x.classList.remove('on');});b.classList.add('on');mode=b.dataset.m;};});
 var _specCache=[];
-function refreshInfo(){
-  var d=$('dsel').value||'2026-09-06';
-  var r=(window.VRCB_SKIN&&window.VRCB_SKIN.resolve)?window.VRCB_SKIN.resolve(d,_specCache,$('langSel').value):null;
+// 判定改问服务端(M-20260911-50): 开关/窗口/强播一次/已播记录都在那边, 测试台不能自己再算一套;
+// 用 &dry=1 只问不记 —— 否则"看一眼今天会播什么"就把当天的彩蛋消耗掉了
+async function refreshInfo(){
+  var d=$('dsel').value||'2026-06-15';
   var el=$('skinInfo'); var txt=d+' → ';
-  if(r&&r.type==='special')txt+='🎬 特殊彩蛋: '+(r.title||r.video||'');
-  else if(r&&r.type==='festival')txt+='🎉 节日: '+r.name+' ('+r.greet+')';
+  var dec=null; try{dec=await (await fetch('/api/efx/boot?date='+encodeURIComponent(d)+'&dry=1')).json();}catch(e){}
+  if(dec&&dec.action==='special'){ txt+='🎬 特殊彩蛋: '+((dec.event&&(dec.event.title||dec.event.video))||'')+' ['+(dec.forced?'开关关 → 强播一次':'窗口内 + 开关开')+']'; if(el)el.textContent=txt; return dec; }
+  if(dec&&dec.action==='off'){ txt+='⏸ 不播('+(dec.reason||'')+')'; if(el)el.textContent=txt; return dec; }
+  var r=(window.VRCB_SKIN&&window.VRCB_SKIN.resolve)?window.VRCB_SKIN.resolve(d,[],$('langSel').value):null;
+  if(r&&r.type==='festival')txt+='🎉 节日: '+r.name+' ('+r.greet+')';
   else if(r&&r.type==='season-term')txt+='🍃 季节·节气日: '+r.season+' '+r.greet;
-  else if(r&&r.type==='season')txt+='🍃 季节: '+r.season+' '+r.greet;
-  else txt+='默认/日常';
+  else txt+='普通启动动画';
+  if(dec)txt+=' [efx.enabled='+dec.enabled+']';
   if(el)el.textContent=txt;
   return r;
 }
@@ -66,17 +71,23 @@ function videoBoot(url){
   var skipped=false;var skip=function(){if(skipped)return;skipped=true;ov.remove();};
   ov.addEventListener('click',skip);var v=ov.querySelector('video');if(v){v.addEventListener('ended',skip);v.addEventListener('error',skip);}setTimeout(skip,120000);
 }
-(async function(){try{var _c=await (await fetch('/api/config')).json();var _sv=_c.specialEvents;_specCache=Array.isArray(_sv)?_sv:[];if(_specCache.length){$('svList').value=JSON.stringify(_sv,null,2);}}catch(e){}})();
+(async function(){try{var _c=await (await fetch('/api/config')).json();var _sv=_c.specialEvents;_specCache=Array.isArray(_sv)?_sv:[];if(_c.efx){var _es=document.getElementById('efxSw');var _on=_c.efx.enabled!==false;_es.classList.toggle('on',_on);_es.textContent='启动动画: '+(_on?'开':'关');}if(_specCache.length){$('svList').value=JSON.stringify(_sv,null,2);}}catch(e){}})();
 $('svUploadBtn').onclick=function(){$('svFileInput').click();};
 $('svFileInput').onchange=function(ev){var f=ev.target.files&&ev.target.files[0];if(!f)return;var rd=new FileReader();rd.onload=function(){fetch('/api/special/upload',{method:'POST',headers:{'x-filename':f.name},body:rd.result}).then(function(r){return r.json();}).then(function(j){if(j&&j.ok){$('svMsg').textContent='已上传: '+j.file+' (复制进 JSON 的 video 字段)';}else{$('svMsg').textContent='失败 '+(j&&j.error||'');}});};rd.readAsArrayBuffer(f);};
 $('svSave').onclick=function(){var arr;try{arr=JSON.parse($('svList').value||'[]');}catch(e){$('svMsg').textContent='JSON 解析失败: '+e.message;return;}fetch('/api/config',{method:'POST',body:JSON.stringify({specialEvents:arr})}).then(function(){$('svMsg').textContent='已保存 '+(arr.length)+' 条 ✓';});};
 $('svClear').onclick=function(){$('svList').value='';fetch('/api/config',{method:'POST',body:JSON.stringify({specialEvents:[]})}).then(function(){$('svMsg').textContent='已清空';});};
 $('dsel').onchange=function(){refreshInfo();};
+$('resetPlayed').onclick=function(){fetch('/api/config',{method:'POST',body:JSON.stringify({efx:{played:{}}})}).then(function(){$('svMsg').textContent='已重置已播记录(同一个礼物可以再看一次)';refreshInfo();});};
+$('efxSw').onclick=function(){var on=this.classList.contains('on');this.classList.toggle('on',!on);this.textContent='启动动画: '+(!on?'开':'关');var self=this;fetch('/api/config',{method:'POST',body:JSON.stringify({efx:{enabled:!on}})}).then(function(){$('svMsg').textContent='启动动画开关已存(开关关时特殊彩蛋到日期仍会强播一次)';refreshInfo();});};
+// 预览真正的启动画面(不是模拟): 壳加载的就是这一页, 收尾同样置 __splashDone
+$('splashBtn').onclick=function(){var d=$('dsel').value||'';var f=document.createElement('iframe');f.src='/splash.html'+(d?('?date='+encodeURIComponent(d)):'');f.style.cssText='position:fixed;inset:0;width:100%;height:100%;border:0;z-index:10001;background:#000';document.body.appendChild(f);var t=setTimeout(function(){f.remove();},150000);f.onload=function(){var iv=setInterval(function(){try{if(f.contentWindow&&f.contentWindow.__splashDone){clearInterval(iv);clearTimeout(t);setTimeout(function(){f.remove();},400);}}catch(e){}},300);};};
+$('efxSw').textContent='启动动画: ?';
 $('go').onclick=function(){
   $('stage').innerHTML='';
   if(mode==='special'){ videoBoot($('vurl').value); return; }
   if(mode==='starry'){ starryBoot(); return; }
-  if(mode==='date'){ var r=refreshInfo(); if(r&&r.type==='special'){ videoBoot('/api/special/video?file='+encodeURIComponent(r.video||'')); } else if(r&&(r.type==='festival'||r.type==='season'||r.type==='season-term')){ simpleBoot(r.c1,r.c2,r.greet,r.deco,'VRCLiveBoard','星光落进聊天框'); } else { simpleBoot('#3b82f6','#7dd3fc','','✦','VRCLiveBoard','星光落进聊天框'); } return; }
+  if(mode==='date'){ refreshInfo().then(function(dec){ if(dec&&dec.action==='special'&&dec.event&&dec.event.video){ videoBoot('/api/special/video?file='+encodeURIComponent(dec.event.video)); return; } if(dec&&dec.action==='off'){ return; } var r2=(window.VRCB_SKIN&&window.VRCB_SKIN.resolve)?window.VRCB_SKIN.resolve($('dsel').value||'',[],$('langSel').value):null; if(r2&&(r2.type==='festival'||r2.type==='season-term')){ simpleBoot(r2.c1,r2.c2,r2.greet,r2.deco,'VRCLiveBoard',''); return; } simpleBoot('#3b82f6','#7dd3fc','','✦','VRCLiveBoard','星光落进聊天框'); }); return; }
+  if(false){ var r=refreshInfo(); if(r&&r.type==='special'){ videoBoot('/api/special/video?file='+encodeURIComponent(r.video||'')); } else if(r&&(r.type==='festival'||r.type==='season'||r.type==='season-term')){ simpleBoot(r.c1,r.c2,r.greet,r.deco,'VRCLiveBoard','星光落进聊天框'); } else { simpleBoot('#3b82f6','#7dd3fc','','✦','VRCLiveBoard','星光落进聊天框'); } return; }
   simpleBoot('#3b82f6','#7dd3fc','','✦','VRCLiveBoard','星光落进聊天框');
 };
 refreshInfo();

@@ -123,6 +123,72 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     ok((await readCfg()).ocrtl.mode === 'auto', '用例结束后恢复默认 auto');
   } catch (e) { ok(false, '截图翻译设置落盘用例异常: ' + e.message); }
 
+  // ⑧ 启动彩蛋决策矩阵(M-20260911-50): 设计稿 §4 状态机 + §5 持久化 —— 桌面壳启动画面与网页控制台共用这一个判定
+  try {
+    const D = '03-03';                     // 任意测试日期(不写真实素材日期: 仓库是公开的)
+    const OUT = '03-20';                   // 窗口外
+    const boot = async function (date) { return JSON.parse((await req('/api/efx/boot' + (date ? ('?date=' + date) : ''))).body.toString('utf8')); };
+    const setEfx = async function (o) { await req('/api/config', { method: 'POST', body: JSON.stringify(o) }); };
+    const EV = { id: 'gate-egg', version: 1, start: '03-03', end: '03-03', yearly: true, title: 'gate', video: 'assets/videos/gate-egg.mp4' };
+    await setEfx({ specialEvents: [EV], efx: { enabled: true, oncePerDay: true, played: {} } });
+    let d8 = await boot(D);
+    ok(d8.action === 'special' && d8.event && d8.event.video === EV.video, '窗口内+开关开 → 播特殊彩蛋(带 video)');
+    ok(d8.enabled === true && d8.forced === false, '开关开时 forced=false(强播标记只属于开关关)');
+    d8 = await boot(D);
+    ok(d8.action === 'off' && /已播过/.test(d8.reason || ''), '同一天再问 → off(oncePerDay 生效)');
+    const cfg8 = ROOT && fs.existsSync(path.join(ROOT, 'config.json')) ? JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8')) : null;
+    ok(!!(cfg8 && cfg8.efx && cfg8.efx.played && cfg8.efx.played['gate-egg@1'] && cfg8.efx.played['gate-egg@1'].last === D), '已播记录落盘(efx.played[gate-egg@1].last)');
+    await setEfx({ efx: { enabled: true, oncePerDay: false } });
+    d8 = await boot(D);
+    ok(d8.action === 'special', 'oncePerDay=false → 同一天可反复看(设计 §4)');
+    await setEfx({ specialEvents: [Object.assign({}, EV, { version: 2 })], efx: { enabled: false, oncePerDay: true } });
+    d8 = await boot(D);
+    ok(d8.action === 'special' && d8.forced === true, '开关关 → 到日期仍强播一次(设计 §4)');
+    d8 = await boot(D);
+    ok(d8.action === 'off' && /强播过/.test(d8.reason || ''), '强播只发生一次(同版本)');
+    await setEfx({ specialEvents: [Object.assign({}, EV, { version: 3 })] });
+    d8 = await boot(D);
+    ok(d8.action === 'special' && d8.forced === true, '版本升级=新事件 → 可再强播一次(设计 §5)');
+    await setEfx({ specialEvents: [Object.assign({}, EV, { version: 4 })], efx: { enabled: true, oncePerDay: true } });
+    d8 = await boot(OUT);
+    ok(d8.action === 'normal' && !d8.event, '窗口外+开关开 → 普通启动动画(无日常素材时不报 special)');
+    await setEfx({ efx: { enabled: false } });
+    ok((await boot(OUT)).action === 'off', '窗口外+开关关 → 不播(设计 §4 末行)');
+    await setEfx({ specialEvents: [{ date: '12-31', video: 'assets/videos/legacy.mp4', title: 'legacy' }], efx: { enabled: true, oncePerDay: true, played: {} } });
+    d8 = await boot('12-31');
+    ok(d8.action === 'special' && d8.event && d8.event.video === 'assets/videos/legacy.mp4', '旧格式 {date,video,title} 继续可用(向后兼容)');
+    await setEfx({ specialEvents: [{ id: 'ny', version: 1, start: '12-28', end: '01-03', yearly: true, video: 'assets/videos/ny.mp4' }], efx: { enabled: true, oncePerDay: false, played: {} } });
+    ok((await boot('01-01')).action === 'special' && (await boot('12-30')).action === 'special', '跨年窗口 12-28~01-03: 01-01 与 12-30 都命中');
+    ok((await boot('07-01')).action === 'normal', '跨年窗口外(07-01)不命中');
+    await setEfx({ specialEvents: [Object.assign({}, EV, { version: 9 })], efx: { enabled: true, oncePerDay: true, played: {} } });
+    const dry8 = JSON.parse((await req('/api/efx/boot?date=' + D + '&dry=1')).body.toString('utf8'));
+    const dry8b = JSON.parse((await req('/api/efx/boot?date=' + D + '&dry=1')).body.toString('utf8'));
+    ok(dry8.action === 'special' && dry8.dry === true && dry8b.action === 'special', 'dry=1 只问不记(预览不会把彩蛋消耗掉)');
+    // 启动画面契约(M-20260911-50): 桌面壳轮询 window.__splashDone 才亮主窗口 —— 这个约定必须两边都在
+    const sp1 = await req('/splash.html');
+    const sp2 = await req('/splash.js');
+    ok(sp1.status === 200 && sp1.body.toString('utf8').indexOf('/splash.js') > 0, '启动画面页 /splash.html 可服务且引用 /splash.js');
+    ok(sp2.status === 200 && sp2.body.toString('utf8').indexOf('__splashDone') > 0, '启动画面脚本置 __splashDone(壳的收尾约定)');
+    // 本地事件表兜底(M-20260911-50): 仓库是公开的, 事件表不进库 —— 所以本地文件这条路径必须也能用
+    if (ROOT) {
+      try {
+        const evDir = path.join(ROOT, 'assets', 'videos');
+        fs.mkdirSync(evDir, { recursive: true });
+        const evFile = path.join(evDir, 'events.json');
+        fs.writeFileSync(evFile, JSON.stringify({ specialEvents: [{ id: 'local-egg', version: 1, start: D, end: D, video: 'assets/videos/local.mp4' }] }), 'utf8');
+        await setEfx({ specialEvents: [], efx: { enabled: true, oncePerDay: false, played: {} } });
+        const dLoc = JSON.parse((await req('/api/efx/boot?date=' + D)).body.toString('utf8'));
+        ok(dLoc.action === 'special' && dLoc.source === 'local' && dLoc.event && dLoc.event.id === 'local-egg', 'config 为空时用本地事件表(assets/videos/events.json)兜底');
+        await setEfx({ specialEvents: [Object.assign({}, EV, { version: 1 })], efx: { played: {} } });
+        const dCfg = JSON.parse((await req('/api/efx/boot?date=' + D)).body.toString('utf8'));
+        ok(dCfg.source === 'config' && dCfg.event && dCfg.event.id === 'gate-egg', 'config 里的 specialEvents 优先于本地事件表');
+        try { fs.unlinkSync(evFile); } catch (e) {}
+      } catch (e) { ok(false, '本地事件表兜底用例异常: ' + e.message); }
+    } else note('未提供 --root, 跳过本地事件表用例');
+    await setEfx({ specialEvents: [], dailyEvents: [], efx: { enabled: true, oncePerDay: true, played: {} } });
+    ok((await boot(D)).action === 'normal', '用例结束清空彩蛋条目(恢复原状)');
+  } catch (e) { ok(false, '启动彩蛋决策用例异常: ' + e.message); }
+
   console.log('[backend-flow] pass=' + pass + ' fail=' + fail + (skip ? (' skip=' + skip) : ''));
   process.exitCode = fail ? 1 : 0;
 })().catch(function (e) { console.log('  FAIL 流程测试异常: ' + ((e && e.stack) || e)); process.exitCode = 1; });

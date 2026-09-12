@@ -115,6 +115,68 @@ function effPluginSec() {
   function persist() {
     try { require('../configio').writeConfigAtomic(configPath, rootConfig); return true; } catch (e) { logger.error('config 写入失败: ' + e.message); return false; }
   }
+  // ===== 启动彩蛋决策(设计稿 §4 状态机, M-20260911-50) =====
+  // 单一来源: 桌面壳启动画面与网页控制台都问 /api/efx/boot —— 两套判定必然漂移, 而"已播记录"只有服务端能写回 config
+  function efxCfg() {
+    if (!rootConfig.efx || typeof rootConfig.efx !== 'object' || Array.isArray(rootConfig.efx)) rootConfig.efx = {};
+    const e = rootConfig.efx;
+    if (typeof e.enabled !== 'boolean') e.enabled = true;                        // 设计 §2: 「动效/启动动画」默认开
+    if (typeof e.oncePerDay !== 'boolean') e.oncePerDay = true;                  // 实测 59s 视频: 同一天不重复播, 否则每次重启都要等一遍
+    if (!e.played || typeof e.played !== 'object' || Array.isArray(e.played)) e.played = {};
+    return e;
+  }
+  function localDateStr() { const d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function mmddOf(s) { const m = /^(\d{2})-(\d{2})$/.exec(String(s || '')); return m ? m[0] : ''; }
+  function dayNumOf(s) { const m = /^(\d{2})-(\d{2})$/.exec(String(s || '')); return m ? Number(m[1]) * 100 + Number(m[2]) : -1; }
+  function efxInWindow(today, ev) {
+    if (!ev) return false;
+    const s = String(ev.start || ev.date || ''); const e2 = String(ev.end || ev.date || s);
+    const t = dayNumOf(today), a = dayNumOf(s), b = dayNumOf(e2);
+    if (t < 0 || a < 0 || b < 0) return false;
+    return a <= b ? (t >= a && t <= b) : (t >= a || t <= b);                     // 支持跨年窗口(12-28 ~ 01-03)
+  }
+  // 本地事件表兜底(M-20260911-50): 仓库是公开的, "什么时候播什么"不能写进库里的 config.default.json;
+  // 本地 assets\videos\events.json(gitignore) 有就用它 —— config 里的 specialEvents 优先, 本文件只在 config 为空时生效。
+  function localSpecialEvents() {
+    try {
+      const f = path.join(__dirname, '..', '..', 'assets', 'videos', 'events.json');
+      if (!fs.existsSync(f)) return [];
+      const j = JSON.parse(fs.readFileSync(f, 'utf8').replace(/^\uFEFF/, ''));
+      return Array.isArray(j.specialEvents) ? j.specialEvents : (Array.isArray(j) ? j : []);
+    } catch (e) { return []; }
+  }
+  // 设计 §4 状态机: 命中特殊彩蛋窗口 → 开关开可反复(受 oncePerDay 约束) / 开关关则本版本只强播一次;
+  // 未命中 → 开关开走日常彩蛋或普通启动动画, 开关关则不播
+  // dry=1: 只问不记(开发测试页的"今天会播什么"预览不能把彩蛋消耗掉)
+  function efxDecision(dateArg, dry) {
+    const e = efxCfg();
+    const today = localDateStr();
+    const asOf = String(dateArg || '') || today;
+    const day = mmddOf(asOf) || mmddOf(today);
+    const cfgList = Array.isArray(rootConfig.specialEvents) ? rootConfig.specialEvents : [];
+    const list = cfgList.length ? cfgList : localSpecialEvents();
+    let hit = null;
+    for (let i = 0; i < list.length; i++) { if (efxInWindow(day, list[i])) { hit = list[i]; break; } }
+    if (hit) {
+      const id = String(hit.id || hit.video || 'special');
+      const ver = Number(hit.version || 1) || 1;
+      const key = id + '@' + ver;
+      const rec = e.played[key] || null;
+      const forced = !e.enabled;                                                 // 设计 §4: 开关关 → 到日期强播一次
+      const playedToday = !!(rec && rec.last === asOf);
+      let play = true, reason;
+      if (forced && rec && rec.forced) { play = false; reason = '开关关且本版本已强播过'; }
+      else if (!forced && e.oncePerDay && playedToday) { play = false; reason = '开关开但今天已播过'; }
+      else { reason = forced ? '开关关 → 强播一次' : '窗口内且开关开'; }
+      if (play && !dry) { e.played[key] = { forced: forced || !!(rec && rec.forced), last: asOf }; persist(); }
+      return { ok: true, dry: !!dry, source: cfgList.length ? 'config' : 'local', action: play ? 'special' : 'off', today: asOf, enabled: e.enabled, forced: forced, reason: reason,
+        event: play ? { id: id, version: ver, title: String(hit.title || ''), video: String(hit.video || ''), mode: String(hit.mode || 'video'), sound: String(hit.sound || '') } : null };
+    }
+    if (!e.enabled) return { ok: true, dry: !!dry, action: 'off', today: asOf, enabled: false, forced: false, reason: '开关关且今天没有特殊彩蛋', event: null };
+    const daily = (Array.isArray(rootConfig.dailyEvents) ? rootConfig.dailyEvents : []).filter(function (d) { return efxInWindow(day, d); })[0] || null;
+    return { ok: true, dry: !!dry, action: daily ? 'daily' : 'normal', today: asOf, enabled: true, forced: false, reason: daily ? '日常彩蛋窗口' : '普通启动动画',
+      event: daily ? { id: String(daily.id || 'daily'), version: Number(daily.version || 1) || 1, title: String(daily.title || ''), video: String(daily.asset || daily.video || ''), mode: 'daily', sound: String(daily.sound || '') } : null };
+  }
   // 图片类静态资源: 用 ETag + no-cache 代替 no-store —— 每次仍向服务器校验(换图立刻生效),
   // 但内容没变就回 304(几百字节), 不必重下几十 KB~几 MB(M-20260911-11)
   const IMG_EXT = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.ico', '.svg'];
@@ -241,7 +303,7 @@ function effPluginSec() {
     const swf = (rootConfig.chatbox && rootConfig.chatbox.swearFilter) || {};
     // 空安全: 配置段缺失时宁可给空值, 也不能让这个高频接口抛未捕获异常(整个服务会因此不回包)
     const pgCfg = (rootConfig.sources && rootConfig.sources.pages) || {};
-    return json(res, 200, { pages: pgCfg.pages || [], rotationMs: pgCfg.rotationMs, sources: srcs, autostart: autostart, desktop: { showConsole: !((rootConfig.desktop || {}).showConsole === false) }, lang: (rootConfig.web && rootConfig.web.lang) || 'zh-CN', ocrtl: { delayMs: (rootConfig.ocrtl || {}).delayMs || 5000, displayMs: (rootConfig.ocrtl || {}).displayMs || 8000, loops: (rootConfig.ocrtl || {}).loops || 2, mode: (rootConfig.ocrtl || {}).mode || 'auto', vision: { apiBase: v.apiBase || '', model: v.model || 'deepseek-v4-flash-vision-exp', hasKey: !!v.apiKey, targetLang: v.targetLang || 'zh' }, capture: { mode: cap.mode || 'window', windowTitle: cap.windowTitle || 'VRChat', region: cap.region || { x: 0, y: 0, w: 0, h: 0 } }, security: { promptDefense: sec.promptDefense !== false, jsonMode: sec.jsonMode !== false, outputSanitize: sec.outputSanitize !== false, extraPrompt: sec.extraPrompt || '', blockWords: sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS } }, swearFilter: { enabled: swf.enabled !== false, words: swf.words && swf.words.length ? swf.words : swearfilter.DEFAULTS }, pluginsSecurity: effPluginSec(), branding: (rootConfig.branding || 'default'), specialEvents: (rootConfig.specialEvents || []) });
+    return json(res, 200, { pages: pgCfg.pages || [], rotationMs: pgCfg.rotationMs, sources: srcs, autostart: autostart, desktop: { showConsole: !((rootConfig.desktop || {}).showConsole === false) }, lang: (rootConfig.web && rootConfig.web.lang) || 'zh-CN', ocrtl: { delayMs: (rootConfig.ocrtl || {}).delayMs || 5000, displayMs: (rootConfig.ocrtl || {}).displayMs || 8000, loops: (rootConfig.ocrtl || {}).loops || 2, mode: (rootConfig.ocrtl || {}).mode || 'auto', vision: { apiBase: v.apiBase || '', model: v.model || 'deepseek-v4-flash-vision-exp', hasKey: !!v.apiKey, targetLang: v.targetLang || 'zh' }, capture: { mode: cap.mode || 'window', windowTitle: cap.windowTitle || 'VRChat', region: cap.region || { x: 0, y: 0, w: 0, h: 0 } }, security: { promptDefense: sec.promptDefense !== false, jsonMode: sec.jsonMode !== false, outputSanitize: sec.outputSanitize !== false, extraPrompt: sec.extraPrompt || '', blockWords: sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS } }, swearFilter: { enabled: swf.enabled !== false, words: swf.words && swf.words.length ? swf.words : swearfilter.DEFAULTS }, pluginsSecurity: effPluginSec(), branding: (rootConfig.branding || 'default'), specialEvents: (rootConfig.specialEvents || []), efx: { enabled: efxCfg().enabled, oncePerDay: efxCfg().oncePerDay } });
   });
   const route_v1_chatbox = function (req, res, url) {
     return readBody(req, function (body) {
@@ -271,6 +333,14 @@ function effPluginSec() {
         }
         if (o.branding) rootConfig.branding = String(o.branding);
         if (o.specialEvents !== undefined) rootConfig.specialEvents = Array.isArray(o.specialEvents) ? o.specialEvents : [];
+        if (Array.isArray(o.dailyEvents)) rootConfig.dailyEvents = o.dailyEvents;
+        // 启动彩蛋开关(M-20260911-50): 只合并白名单字段, played 记录允许测试页重置
+        if (o.efx !== undefined && o.efx && typeof o.efx === 'object') {
+          const e = efxCfg();
+          if (o.efx.enabled !== undefined) e.enabled = !!o.efx.enabled;
+          if (o.efx.oncePerDay !== undefined) e.oncePerDay = !!o.efx.oncePerDay;
+          if (o.efx.played !== undefined && o.efx.played && typeof o.efx.played === 'object' && !Array.isArray(o.efx.played)) e.played = o.efx.played;
+        }
         persist();
         return json(res, 200, { ok: true, pageCount: (pg && pg.pages ? pg.pages.length : 0) });
       } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
@@ -556,6 +626,16 @@ function effPluginSec() {
     };
     runNext();
     return;
+  });
+  // 启动彩蛋: "决策即记录"(设计 §4/§5) —— 桌面壳启动画面与网页控制台共用同一个判定; ?date=MM-DD / YYYY-MM-DD 供开发测试页模拟日期
+  on('GET', '/api/efx/boot', function (req, res, url) {
+    try {
+      // 这个 GET 会写回"已播"状态 → 与 POST /api/config 同一道跨站围栏(恶意网页不能替用户消耗掉彩蛋)
+      if (!originAllowed(req)) return json(res, 403, { ok: false, error: '已拒绝跨站请求' });
+      const sp = url.searchParams || new URLSearchParams();
+      return json(res, 200, efxDecision(sp.get('date') || '', !!(sp.get('dry') && sp.get('dry') !== '0')));
+    }
+    catch (e) { noteFail('/api/efx/boot', e); return json(res, 500, { ok: false, error: String(e.message) }); }
   });
   on('POST', '/api/special/upload', function (req, res, url) {
     const name = String(req.headers['x-filename'] || ('video-' + Date.now() + '.mp4')).replace(/[\\/:*?"<>|]/g, '_');

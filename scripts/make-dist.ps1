@@ -145,6 +145,22 @@ robocopy $p $stage /E /NFL /NDL /NJH /NJS /XD $exclAbs /XF $peFiles | Out-Null  
 robocopy (Join-Path $p 'node_modules') (Join-Path $stage 'node_modules') /E /NFL /NDL /NJH /NJS | Out-Null
 Copy-Item (Join-Path $p 'config.default.json') (Join-Path $stage 'config.json') -Force
 Scrub-Secrets (Join-Path $stage 'config.json')
+# 彩蛋事件表注入(M-20260911-50): 仓库是公开的, "什么时候播什么"只放在本地 assets\videos\events.json(gitignore),
+# 打包时注入包内 config.json —— 只注入自包含版(Lite 连视频都不带, 注入也没用)
+$eggEv = Join-Path $p 'assets\videos\events.json'
+if (Test-Path $eggEv) {
+  try {
+    $evObj = (Get-Content $eggEv -Raw -Encoding UTF8) | ConvertFrom-Json
+    $evArr = @($evObj.specialEvents)
+    if ($evArr.Count -gt 0) {
+      $cfgSc = Join-Path $stage 'config.json'
+      $cfgObj = (Get-Content $cfgSc -Raw -Encoding UTF8) | ConvertFrom-Json
+      $cfgObj | Add-Member -NotePropertyName specialEvents -NotePropertyValue $evArr -Force
+      [System.IO.File]::WriteAllText($cfgSc, ($cfgObj | ConvertTo-Json -Depth 8), (New-Object System.Text.UTF8Encoding($false)))
+      Write-Output ('egg events injected: ' + $evArr.Count + ' -> ' + $eggN + ' video(s)')
+    }
+  } catch { Write-Output ('[WARN] 彩蛋事件表注入失败: ' + $_.Exception.Message) }
+}
 Copy-OfficialPlugins $stage
       # BUILD-INFO(M-20260911-37): 包内记录构建来源; 让"审计后又改代码/重新打包"的时序漂移可被发现
       $gitHead = ''
@@ -153,6 +169,12 @@ Copy-OfficialPlugins $stage
       [System.IO.File]::WriteAllText((Join-Path $stage 'BUILD-INFO.json'), ($bi | ConvertTo-Json -Depth 4), (New-Object System.Text.UTF8Encoding($false)))
 Prune-Docs $stage
 Check-Stage $stage
+# 彩蛋素材只在开发机本地(gitignore): 干净克隆上打出来的包没有视频, 必须让这件事在日志里看得见(M-20260911-50)
+$eggDir = Join-Path $p 'assets\videos'
+$eggN = 0
+if (Test-Path $eggDir) { $eggN = @(Get-ChildItem $eggDir -File -Include *.mp4,*.webm -ErrorAction SilentlyContinue).Count }
+if ($eggN -gt 0) { Write-Output ('egg assets: ' + $eggN + ' video(s) -> self-contained package') }
+else { Write-Output '[WARN] assets\videos 为空: 本次自包含包不含启动彩蛋视频(素材只在开发机本地, M-20260911-50)' }
 Write-Output '==== 3. zip self-contained (big, wait) ===='
 $zipSc = Join-Path $pubDir ('VRCLiveBoard-Desktop-SelfContained-v' + $ver + '.zip')
 New-VrcbZip $stage $zipSc
@@ -168,7 +190,10 @@ if (-not $SkipLight) {
   $stageL = Join-Path $dist ('stage-light-' + $ver)
   Remove-Item $stageL -Recurse -Force -ErrorAction SilentlyContinue
   New-Item -ItemType Directory -Force -Path $stageL | Out-Null
-  robocopy $p $stageL /E /NFL /NDL /NJH /NJS /XD $exclAbs /XF $peFiles | Out-Null
+  # Lite 包不含启动彩蛋视频(M-20260911-50): 素材是给自包含版的"惊喜", Lite 只有 ~8MB, 塞一个 8MB 视频就翻倍;
+  # 这里用只对 lite 生效的附加 /XD, 不动两份包共用的排除清单
+  $liteXd = $exclAbs + @((Join-Path $p 'assets\videos'))
+  robocopy $p $stageL /E /NFL /NDL /NJH /NJS /XD $liteXd /XF $peFiles | Out-Null
   Copy-Item (Join-Path $p 'config.default.json') (Join-Path $stageL 'config.json') -Force
   Scrub-Secrets (Join-Path $stageL 'config.json')
   Copy-OfficialPlugins $stageL
