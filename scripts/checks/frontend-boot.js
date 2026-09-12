@@ -392,6 +392,22 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
       }
     }
   } catch (e) { problems.push('高危确认框断言异常: ' + e.message); }
+  // 公告板列表项(M-20260911-49): 长文本要能被悬停查看(两行截断后的补偿), 且行结构带 .snip/.ops
+  try {
+    const { uiJsOrder: order8 } = require('./_ui-files.js');
+    const s8 = makeSandbox();
+    for (const fp of order8(ROOT)) vm.runInNewContext(fs.readFileSync(fp, 'utf8'), s8, { filename: path.basename(fp) });
+    s8.pages = [{ text: '第一行很长很长\n第二行' }, { text: '短' }];
+    s8.renderBoard();
+    const list = s8.document.getElementById('edlist');
+    if (!list || !list.children.length) problems.push('renderBoard 没有渲染公告板列表');
+    else {
+      const first = list.children[0];
+      const snip = first.querySelector('.snip');
+      if (!first.querySelector('.ops')) problems.push('公告板列表项缺少 .ops(↑↓ 按钮区)');
+      if (snip && !snip.title) problems.push('公告板列表项的长文本没有 title(两行截断后无法查看全文)');
+    }
+  } catch (e) { problems.push('公告板列表项断言异常: ' + e.message); }
   console.log('[G-BOOT frontend-boot] 前端启动: 顶层加载 ' + (problems.length ? '有异常' : '正常') + ' / 控件桩 ' + ids.size + ' 个 id');
   for (const p of problems) console.log('  -> FAIL ' + p);
   process.exitCode = problems.length ? 1 : 0; // 用 exitCode: process.exit 在管道下会丢掉未刷新的输出

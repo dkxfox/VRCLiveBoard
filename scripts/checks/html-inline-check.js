@@ -111,4 +111,37 @@ if (badSelects.length) { console.log('  FAIL 下拉选项缺显式 value=(JS 会
 else console.log('  OK   读了 .value 的下拉都有显式 value=(文案翻译不会污染取值)');
 
 
+// 公告板列表项长文本的样式契约(M-20260911-49): 这几条是"长公告不再撑变卡片"的全部实现, 缺一条就退化 ——
+//   ① min-width:0 —— 没有它 flex 子项按 min-content 宽度撑开, 长文本把行/卡片顶宽;
+//   ② -webkit-line-clamp + -webkit-box-orient:vertical + overflow:hidden —— 行高封顶两行;
+//   ③ white-space:normal + text-indent/padding-left —— 允许换行并给续行悬挂缩进;
+//   ④ 不允许任何一条 .edrow .snip 规则再写回 white-space:nowrap(旧写法, 会覆盖上面的换行)。
+const styleText = (html.match(/<style[^>]*>([\s\S]*?)<\/style>/i) || [, ''])[1];
+// 长文本撑爆卡片(M-20260911-49): grid 轨道里的裸 1fr 其隐含最小值是 auto, 一条长 URL/英文串就能把整列顶宽
+//   (实测 #grid2 在 1280 窗口下 1080px → 2867px, 邻列被挤到 233px, 整页横向滚动)。多列时每列都必须写 minmax(0,1fr);
+//   单列(响应式降级 / 整体布局)不涉及顶宽, 放行。
+const bareGrid = [];
+for (const mm of styleText.matchAll(/grid-template-columns\s*:([^;}]*)/g)) {
+  const tracks = mm[1].trim().split(/\s+/).filter(Boolean);
+  if (tracks.length < 2) continue;
+  if (tracks.some((t) => t === '1fr')) bareGrid.push(mm[1].trim());
+}
+if (bareGrid.length) { console.log('  FAIL grid 多列出现裸 1fr(长文本会顶宽卡片): ' + bareGrid.join(' | ')); fail++; }
+else console.log('  OK   grid 多列都是 minmax(0,…)(长文本顶不宽卡片)');
+// 公告板正文的自动缩进契约(M-20260911-49): 折行续行缩进, 显式换行不缩(each-line/hanging), 且能断长串。
+const pageTextRule = (styleText.match(/[^}]*#pageText\s*\{([^}]*)\}/) || [, ''])[1];
+if (!/text-indent\s*:[^;}]*hanging[^;}]*each-line/.test(pageTextRule)) { console.log('  FAIL #pageText 缺少 text-indent:…hanging each-line(长正文折行不会自动缩进)'); fail++; }
+else console.log('  OK   公告板正文折行自动缩进(text-indent:hanging each-line)');
+const snipRules = [...styleText.matchAll(/\.edrow\s+\.snip\s*\{([^}]*)\}/g)].map((x) => x[1]);
+const snipAll = snipRules.join(';');
+const snipMiss = [];
+if (!/min-width\s*:\s*0/.test(snipAll)) snipMiss.push('min-width:0');
+if (!/-webkit-line-clamp\s*:/.test(snipAll)) snipMiss.push('-webkit-line-clamp');
+if (!/-webkit-box-orient\s*:\s*vertical/.test(snipAll)) snipMiss.push('-webkit-box-orient:vertical');
+if (!/white-space\s*:\s*normal/.test(snipAll)) snipMiss.push('white-space:normal');
+if (!/text-indent\s*:\s*-/.test(snipAll)) snipMiss.push('悬挂缩进(text-indent:-…)');
+if (/white-space\s*:\s*nowrap/.test(snipAll)) snipMiss.push('(禁止)white-space:nowrap 会覆盖换行');
+if (snipMiss.length) { console.log('  FAIL 公告板列表项 .edrow .snip 样式契约缺失: ' + snipMiss.join(', ')); fail++; }
+else console.log('  OK   公告板列表项长文本: 两行截断 + 悬挂缩进 + 可收缩(' + snipRules.length + ' 条规则)');
+
 process.exit(fail ? 1 : 0);

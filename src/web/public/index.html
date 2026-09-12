@@ -34,9 +34,15 @@ td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border2)}
 .stripe .stat{display:flex;align-items:center;gap:6px;font-size:13px}.stripe .stat .k{color:var(--muted)}
 .legend{display:flex;gap:12px;font-size:12px;color:var(--faint);margin-left:auto}.legend span{display:flex;align-items:center;gap:4px}
 .edlist{display:flex;flex-direction:column;gap:8px;overflow:auto}.edlist.compact .snip{display:none}
+/* 公告板列表项的长文本(M-20260911-49): ① 悬挂缩进 —— 换行后的续行自动缩进 1.6em, 与首行文字错开;
+   ② 最多两行 + 省略号 —— 否则一条长公告会把卡片越撑越高, 全文靠 title 悬停查看(列表本身已是 overflow:auto);
+   ③ min-width:0 —— 缺了它 flex 子项不会收缩, 长文本会把整行/卡片顶宽(白名单: 门禁 G-HTML 校验这三条) */
+.edlist .edrow .snip{flex:1;min-width:0;white-space:normal;overflow:hidden;word-break:break-word;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.5;
+  padding-left:1.6em;text-indent:-1.6em}
 .edlist::-webkit-scrollbar{width:8px;height:8px}.edlist::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
-.edrow{display:flex;align-items:center;gap:10px;background:var(--inset);border:1px solid var(--border2);border-radius:8px;padding:8px 10px}
-.edrow .drag{color:var(--faint);cursor:grab}.edrow .snip{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.edrow .ops{display:flex;gap:4px}
+.edrow{display:flex;align-items:flex-start;gap:10px;background:var(--inset);border:1px solid var(--border2);border-radius:8px;padding:8px 10px}
+.edrow .drag{color:var(--faint);cursor:grab}.edrow .snip{flex:1;min-width:0}.edrow .ops{display:flex;gap:4px;flex:none;margin-left:auto}
 .edrow.sel{border-color:var(--accent);background:#1c2740}
 .sw{width:38px;height:20px;border-radius:20px;background:var(--gray);position:relative;flex:none;cursor:pointer}
 .sw i{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#c9d1da;transition:.15s}
@@ -48,20 +54,28 @@ td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border2)}
 .drawer{position:fixed;top:0;right:-330px;width:310px;height:100%;background:var(--card);border-left:1px solid var(--border);z-index:60;transition:right .2s;padding:18px;overflow:auto}
 .drawer.open{right:0}.scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;opacity:0;pointer-events:none;transition:.2s}.scrim.on{opacity:1;pointer-events:auto}
 .tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}.tabs .tab{background:rgba(22,30,42,.5);border:1px solid var(--border2);color:var(--muted);padding:8px 14px;border-radius:8px;font-size:13px;cursor:pointer;-webkit-color:#fff;border-color:var(--accent)}
-#grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:stretch}
+/* 长文本不许改变卡片长度(M-20260911-49): 裸 1fr 的隐含最小值是 auto, 一条长 URL/英文串能把整列顶宽
+   —— 实测 1280 宽窗口下 #grid2 从 1080px 被顶到 2867px, 邻列被挤到 233px 并出现整页横向滚动。
+   grid 列一律写 minmax(0,1fr)(门禁 G-HTML 校验) */
+#grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:stretch}
 #grid2 .card{display:flex;flex-direction:column;margin-bottom:0;min-height:310px}
 #grid2 .card .btnRow{flex:none}
-#grid2 .preFlex{flex:1;min-height:0}
-.funcgrid{display:grid;grid-template-columns:1fr 1fr;gap:18px;flex:1;min-height:0;overflow:auto;padding-right:6px}
+#grid2 .preFlex{flex:1;min-height:0;min-width:0;overflow-wrap:anywhere}
+/* 公告板正文长文本的自动缩进(M-20260911-49): 折行的续行缩进 1.6em, 显式换行的新行不缩 —— each-line/hanging
+   是关键, 老写法(padding-left + 负 text-indent)会把每个新行也一起缩进去, 反而分不清哪里是新条目。
+   Chromium 实测支持; 不支持的旧浏览器只是不缩进, 不会错乱。折叠态不限制高度, 编辑态把正文限高, 卡片高度就不再随文本长度变 */
+#pageText{text-indent:1.6em hanging each-line}
+#tab-dash.editing #pageText{max-height:132px;overflow:auto}
+.funcgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;flex:1;min-height:0;overflow:auto;padding-right:6px}
 .funcgrid::-webkit-scrollbar{width:8px}.funcgrid::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
 .fgroup .sub{font-weight:600;color:var(--text);margin-bottom:6px}
 .frow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 2px;border-bottom:1px solid var(--border2);font-size:13px}
 .frow .k{color:var(--text)}.frow .k .d{color:var(--faint);font-size:11px}
 #beGrid{display:grid;grid-template-columns:minmax(0,0.86fr) minmax(0,1.14fr);gap:20px;align-items:stretch}
-#beGrid .edrow .snip{padding-left:12px}
 #beGrid .edrow .mono{color:var(--faint);width:20px;flex:none}
 #bdText{min-height:150px;font-size:14px}
-#beGrid .col{display:flex;flex-direction:column;min-width:0;overflow:hidden}#bdText{width:100%;box-sizing:border-box;max-width:100%}#bdPrev{max-width:100%;overflow-wrap:anywhere;word-break:break-word}
+#beGrid .col{display:flex;flex-direction:column;min-width:0;overflow:hidden}
+#bdText{width:100%;box-sizing:border-box;max-width:100%}#bdPrev{max-width:100%;overflow-wrap:anywhere;word-break:break-word}
 .chatbox-wrap{background:var(--deep);border:1px solid var(--border2);border-radius:10px;padding:16px;display:flex;align-items:center;justify-content:center;min-height:120px}
 .chatbox-bubble{background:var(--panel2,#1c1d24);border:1px solid var(--border2,#34364a);border-radius:12px;padding:10px 14px;font:600 15px/1.55 "Segoe UI","Microsoft YaHei",system-ui,sans-serif;color:var(--text,#fff);white-space:pre-wrap;word-break:break-word;max-width:100%;text-align:center}
 /* ---- 低耗微动效(仅 opacity/transform, 不动布局) ---- */

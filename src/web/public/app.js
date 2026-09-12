@@ -37,6 +37,8 @@ function renderBdEditor(){
   var list=$('bdList');if(!list)return;list.innerHTML='';
   pages.forEach(function(p,i){var d=document.createElement('div');d.className='edrow'+(i===curIdx?' on':'');d.style.cursor='pointer';
     d.innerHTML='<span class="mono">'+(i+1)+'</span><span class="snip">'+esc(fl(p.text))+'</span><span class="ops"><button class="small gray" data-a="up" data-i="'+i+'">↑</button><button class="small gray" data-a="down" data-i="'+i+'">↓</button></span>';
+    // 悬停可看全文(M-20260911-49): 列表里现在最多显示两行, 完整首行放进 title
+    (function(){var sn=d.querySelector('.snip');if(sn)sn.title=fl(p.text);})();
     d.onclick=function(){curIdx=i;renderBoard();};
     d.querySelectorAll('button').forEach(function(b){b.onclick=function(ev){ev.stopPropagation();var a=b.dataset.a,i=+b.dataset.i;if(a==='up'&&i>0){var tp=pages[i-1];pages[i-1]=pages[i];pages[i]=tp;if(curIdx===i)curIdx=i-1;}if(a==='down'&&i<pages.length-1){var t2=pages[i];pages[i]=pages[i+1];pages[i+1]=t2;if(curIdx===i)curIdx=i+1;}renderBoard();};});
     list.appendChild(d);});
@@ -52,6 +54,7 @@ function renderBoard(){
   var el=$('edlist');if(el){el.innerHTML='';
     pages.forEach(function(p,i){var d=document.createElement('div');d.className='edrow';
       d.innerHTML='<span class="drag">⠿</span><span class="mono">'+(i+1)+'</span><span class="snip">'+esc(fl(p.text))+'</span><span class="ops"><button class="small gray" data-a="up" data-i="'+i+'">↑</button><button class="small gray" data-a="down" data-i="'+i+'">↓</button><button class="small gray" data-a="del" data-i="'+i+'">'+tr('delBtn')+'</button></span>';
+      (function(){var sn=d.querySelector('.snip');if(sn)sn.title=fl(p.text);})();
       el.appendChild(d);});
     el.querySelectorAll('button').forEach(function(b){b.onclick=function(){var a=b.dataset.a,i=+b.dataset.i;if(a==='up'&&i>0){var tp=pages[i-1];pages[i-1]=pages[i];pages[i]=tp;if(curIdx===i)curIdx=i-1;}if(a==='down'&&i<pages.length-1){var t2=pages[i];pages[i]=pages[i+1];pages[i+1]=t2;if(curIdx===i)curIdx=i+1;}if(a==='del')pages.splice(i,1);renderBoard();};});}
   renderBdEditor();
@@ -63,7 +66,10 @@ if($('bdAdd'))$('bdAdd').onclick=function(){pages.push({text:tr('newPageText')})
 if($('bdSave'))$('bdSave').onclick=async function(){pages[curIdx].text=$('bdText').value;try{var r=await fetch('/api/config',{method:'POST',body:JSON.stringify({pages:pages})});var j=await r.json();if(!j.ok)note(tr('saveFail'),'warn');else note(tr('savedOk'),'ok');}catch(e){note(tr('saveFail'),'warn');}renderBoard();};
 // ===== 公告板补接线(M-20260907-01 批 A) =====
 function applyBdPrevWidth(){var w=$('bdWidth'),p=$('bdPrev');if(!w||!p)return;var n=Math.max(8,Math.min(144,Math.round(Number(w.value)||28)));w.value=n;p.style.width=n+'ch';p.style.maxWidth='100%';}
-if($('boardEdit'))$('boardEdit').onclick=function(){var em=$('editMode');if(!em)return;var show=em.hidden;em.hidden=!show;this.classList.toggle('on',show);if(show)renderBoard();};
+if($('boardEdit'))$('boardEdit').onclick=function(){var em=$('editMode');if(!em)return;var show=em.hidden;em.hidden=!show;this.classList.toggle('on',show);
+  // 编辑态给 #tab-dash 挂 .editing(M-20260911-49): 正文限高, 卡片高度不再随文本长度变化
+  var td=$('tab-dash');if(td)td.classList.toggle('editing',show);
+  if(show)renderBoard();};
 if($('bdVarBtn'))$('bdVarBtn').onclick=function(){var s=$('bdVar'),tx=$('bdText');if(!s||!tx)return;var v=s.value;var st=(tx.selectionStart==null)?tx.value.length:tx.selectionStart,en=(tx.selectionEnd==null)?st:tx.selectionEnd;tx.value=tx.value.slice(0,st)+v+tx.value.slice(en);tx.selectionStart=tx.selectionEnd=st+v.length;tx.focus();};
 if($('bdDup'))$('bdDup').onclick=function(){if(!pages.length)return;pages.splice(curIdx+1,0,{text:String((pages[curIdx]||{}).text||'')});curIdx++;renderBoard();};
 if($('bdDel'))$('bdDel').onclick=function(){if(!pages.length)return;if(!confirm(tr('delPageConfirm')))return;pages.splice(curIdx,1);if(curIdx>=pages.length)curIdx=Math.max(0,pages.length-1);renderBoard();};
