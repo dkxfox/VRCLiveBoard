@@ -44,7 +44,6 @@ app.setAppUserModelId('com.vrcliveboard.app');
 // 测试/多实例场景: 允许用环境变量覆盖 userData 目录(单实例锁随之独立)
 if (process.env.VRCB_USER_DATA) { try { app.setPath('userData', process.env.VRCB_USER_DATA); } catch (e) {} }
 let win = null;
-let splashPending = false;  // 启动画面播放期间不许主窗口抢显(M-20260911-50)
 let tray = null;
 let trayOk = false;   // 托盘是否创建成功(M-20260911-36): 失败时不能再"关窗即隐藏", 否则用户既没窗口也没托盘
 let quitting = false;
@@ -77,46 +76,18 @@ function loadIcon() {
   return nativeImage.createFromBitmap(buf, { width: size, height: size });
 }
 function showMain() { try { if (win && !win.isDestroyed() && !win.isVisible()) { win.show(); win.focus(); } } catch (e) {} }
-// 启动画面(M-20260911-50): 特殊彩蛋/启动动画的决策由核心服务给(/api/efx/boot), 壳只负责"播完再亮主窗口"。
-// 一切失败路径(加载失败/拿不到决策/超时)都直接放行 —— 启动画面绝不能把用户挡在控制台外面。
-// 跳过开关: VRCB_NO_SPLASH=1 或命令行 --no-splash(排查白屏时用)。
-function createSplash(onDone) {
-  if (process.env.VRCB_HEADLESS_TEST === '1' || process.env.VRCB_NO_SPLASH === '1' || process.argv.indexOf('--no-splash') >= 0) return onDone();
-  // 兜底上限(M-20260911-53): 从前是 135s —— 事故里用户被黑框挡了一分钟。页面自己有 20s 上限(服务端 efx.splashMaxMs),
-  // 壳的兜底只需略高于它, 页面彻底卡死时也能放行。
-  const maxMs = Number(process.env.VRCB_SPLASH_MAX_MS || 0) || 25000;
-  let sp = null;
-  try {
-    sp = new BrowserWindow({ width: 960, height: 540, frame: false, resizable: false, center: true, show: false,
-      alwaysOnTop: false, skipTaskbar: false, backgroundColor: '#0b0e13', title: 'VRCLiveBoard', icon: loadIcon(),
-      webPreferences: { contextIsolation: true, nodeIntegration: false } });
-  } catch (e) { return onDone(); }
-  let finished = false, poll = null, bail = null;
-  const close = function (why) {
-    if (finished) return; finished = true;
-    if (poll) clearInterval(poll); if (bail) clearTimeout(bail);
-    console.log('[启动画面] 收尾: ' + why);
-    try { if (sp && !sp.isDestroyed()) sp.destroy(); } catch (e) {}
-    onDone();
-  };
-  sp.once('ready-to-show', function () { if (sp && !sp.isDestroyed()) sp.show(); });
-  sp.webContents.on('did-fail-load', function (e, code, desc, url, isMainFrame) { if (isMainFrame) close('load-fail ' + code); });
-  sp.loadURL(consoleUrl() + '/splash.html').catch(function () { close('load-throw'); });
-  // 页面播完(或跳过/出错)会置 window.__splashDone —— 用轮询而不是 preload/IPC, 免得为一个启动画面开新的进程间通道
-  poll = setInterval(function () {
-    if (!sp || sp.isDestroyed()) return close('window-gone');
-    sp.webContents.executeJavaScript('!!window.__splashDone').then(function (v) { if (v) close(window.__splashWhy || 'page-done'); }).catch(function () {});
-  }, 250);
-  bail = setTimeout(function () { close('timeout'); }, maxMs);
-}
+// 启动画面载体(2026-09-12 用户拍板回改): **不再另开窗口** —— 启动动画与特殊彩蛋在主窗口(控制台页面)里播(见 src/web/public/app.js 的启动段),
+// 原因: 独立启动窗会把主窗口挡在后面(实测: 59s 素材挡了一分钟, 用户以为程序坏了)。
+// 页面内播放同样有上限(efx.splashMaxMs, 默认 20s, 0=不限)与卡播守卫(8s), 且可随时点击/Esc 跳过。
+// /splash.html + splash.js 保留作为开发测试台的预览页(判定仍走 /api/efx/boot, 与主窗口同源)。
 function createWindow() {
   const icon = loadIcon();
   // show:false + ready-to-show: 首帧即带正确图标再上任务栏, 不给 Windows 缓存默认图标的机会(M-20260903-03)
   win = new BrowserWindow({ width: 940, height: 760, minWidth: 600, minHeight: 460, autoHideMenuBar: true, backgroundColor: '#10141a', title: 'VRCLiveBoard', icon: icon, show: false });
   try { win.setIcon(icon); } catch (e) { /* 旧版本 Electron 无此方法则忽略 */ }
-  win.once('ready-to-show', function () { if (!splashPending) showMain(); });
+  win.once('ready-to-show', function () { showMain(); });
   // 兜底: 页面加载异常时也要显示窗口(3 秒后仍未显示则强制) —— 但启动画面正在播时不抢显
-  setTimeout(function () { if (!splashPending) showMain(); }, 3000);
+  setTimeout(showMain, 3000);
   // 端口要等核心报出来(可能回退); 加载失败自动重试, 三次仍失败就给一页可读的错误提示而不是白屏
   let loadTries = 0;
   const loadConsole = function () { win.loadURL(consoleUrl()).catch(function () {}); };
@@ -188,7 +159,6 @@ app.on('before-quit', function (e) {
     startCore();
     if (process.env.VRCB_HEADLESS_TEST === '1') { console.log('SHELL-OK'); setTimeout(function () { app.quit(); }, 500); return; }
     createWindow();
-    whenCoreReady(function () { splashPending = true; createSplash(function () { splashPending = false; showMain(); }); });
     try {
       tray = new Tray(loadIcon());
       trayOk = true;
