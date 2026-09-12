@@ -83,6 +83,61 @@ function loadPlugin(id) {
     } else note('未找到 saveRows 导出(跳过)');
   } catch (e) { ok(false, 'scheduled-board 行为用例异常: ' + e.message); }
 
+  // ③ weather-board: 单次导入上限(旧版逐行串行 geocode, 大表会把控制台请求挂很久)
+  try {
+    const factory = require(path.join(ROOT, 'plugins', 'weather-board', 'index.js'));
+    let netCalls = 0;
+    const ctx = {
+      config: { cities: [] },
+      logger: { info: function () {}, warn: function () {}, error: function () {} },
+      http: { request: async function () { netCalls++; throw new Error('测试环境不发真实请求'); }, fetch: async function () { netCalls++; throw new Error('测试环境不发真实请求'); } },
+      chatbox: { showSequence: function () { return Promise.resolve(); }, show: function () { return Promise.resolve(); } },
+      events: { on: function () {}, off: function () {}, every: function () { return { stop: function () {} }; } },
+      resource: function () {}, media: { get: function () { return null; } }, ai: { chat: async function () { return { text: '' }; } }, fs: {}, process: {}
+    };
+    const api = factory(ctx) || {};
+    const saveRows = api.saveRows || (api.api && api.api.saveRows);
+    if (typeof saveRows !== 'function') note('weather-board 未导出 saveRows(跳过)');
+    else {
+      const rows = [];
+      for (let i = 0; i < 250; i++) rows.push(['City' + i, '是']);   // 插件行格式就是数组: [城市名, 启用]
+      const r = await saveRows(rows);
+      ok(netCalls <= 200, '单次导入的上限生效(250 行只发起 ' + netCalls + ' 次定位请求)');
+      ok(r && r.truncated === 250 - netCalls, '被截断的行数如实回报(truncated=' + (r && r.truncated) + ')');
+    }
+  } catch (e) { ok(false, 'weather-board 行为用例异常: ' + e.message); }
+
+  // ④ netease-lyrics: status() 必须带 cfg(前端设置面板靠它回显); cdpPort 必须被夹取(注入 '9234@host' 这类值不能生效)
+  try {
+    const factory = require(path.join(ROOT, 'plugins', 'netease-lyrics', 'index.js'));
+    const cfg = { cdpPort: 9234, updateSec: 5, showTranslation: true, allowOtherPlayers: true, apiPath: '/api' };
+    const ctx = {
+      config: cfg,
+      logger: { info: function () {}, warn: function () {}, error: function () {} },
+      media: { get: function () { return { data: {} }; }, on: function () {} },
+      chatbox: { show: function () { return Promise.resolve(); }, showSequence: function () { return Promise.resolve(); } },
+      events: { on: function () {}, off: function () {}, every: function () { return { stop: function () {} }; } },
+      resource: function () {}, ai: { chat: async function () { return { text: '' }; } }, http: { request: async function () { return { ok: false }; } }, fs: {}, process: {}
+    };
+    const api = factory(ctx) || {};
+    const NAPI = api.api || api;   // 插件把可调用接口挂在 api 下(friend-welcome 同款)
+    if (typeof NAPI.status !== 'function') note('netease 未导出 status(跳过)');
+    else {
+      let st = null;
+      try { st = NAPI.status(); } catch (e) { note('netease status() 需要更多 ctx, 跳过: ' + e.message.slice(0, 60)); }
+      if (st) ok(!!st.cfg, 'status() 返回 cfg(设置面板回显不再失效)');
+    }
+    if (typeof NAPI.saveConfig !== 'function') note('netease 未导出 saveConfig(跳过)');
+    else {
+      NAPI.saveConfig({ args: { cdpPort: '9234@evil.tld' } });
+      ok(ctx.config.cdpPort === 9234, '非法端口被夹回默认值(实得 ' + ctx.config.cdpPort + ')');
+      NAPI.saveConfig({ args: { cdpPort: 99999 } });
+      ok(ctx.config.cdpPort === 65535, '超范围端口被夹到上限(实得 ' + ctx.config.cdpPort + ')');
+      NAPI.saveConfig({ args: { cdpPort: 5 } });
+      ok(ctx.config.cdpPort === 1024, '过小端口被夹到下限(实得 ' + ctx.config.cdpPort + ')');
+    }
+  } catch (e) { ok(false, 'netease 行为用例异常: ' + e.message); }
+
   console.log('[plugin-behavior] pass=' + pass + ' fail=' + fail + (skip ? (' skip=' + skip) : ''));
   process.exitCode = fail ? 1 : 0;
 })().catch(function (e) { console.log('  FAIL 行为门禁自身异常: ' + ((e && e.stack) || e)); process.exitCode = 1; });
