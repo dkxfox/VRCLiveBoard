@@ -37,6 +37,9 @@ function collect() {
   // 排除 CSS z-index 之类的假端口(M-20260911-37): z-index:9999 被当成"端口 9999"会让安全基线无意义地漂移
   const numAt = m.index + m[0].indexOf(m[1]);
   if (/z-index\s*:\s*$/.test(t.slice(Math.max(0, numAt - 12), numAt))) continue;
+  // 排除时间/间隔/超时类数值(M-20260911-53): 20000(毫秒上限) / timeout: 20000 / displayMs : 120000 都不是端口
+  const ctx = t.slice(Math.max(0, numAt - 28), numAt);
+  if (/(ms|MS|Ms|timeout|Timeout|interval|Interval|delay|Delay|maxMs|displayMs|TimeoutMs)\s*[=:]\s*$/.test(ctx)) continue;
   const p = Number(m[1]); if (p >= 1024 && p <= 65535) ports.add(String(p));
 }
     }
