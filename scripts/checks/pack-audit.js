@@ -12,7 +12,7 @@ const PE = require(path.join(ROOT, 'scripts', 'pack-exclude.json'));
 const FORBIDDEN_NAME = [
   ...PE.forbiddenNamePatterns.map((p) => new RegExp(p, 'i')),
   // 以下是脚本内置兜底(清单文件缺失时仍能拦最基本的东西)
-/\.bak$/i, /^config\.json\.bak$/i, /继续开发命令\.txt$/, /dev-unlocker/i, /加密狗/, /发布公告/, /彩蛋/, /秘密开发/, /旧版控制台/, /^dev-dongle//i, /母狗/, /chain\.json$/i, /mini-dongle-/i, /mini-unlock/i, /\.ocr-preview\.png$/i, /^\.gitignore$/i, /startup-test/i, /打包与分发/, /\.ocr-tmp\.png$/, /master\.key$/, /master-pass/i, /授权登记表/, /^\.git\//];  // .git 是 git init 之后新出现的根目录, 属于"新增根目录文件默认会进包"事故
+/\.bak$/i, /^config\.json\.bak$/i, /继续开发命令\.txt$/, /dev-unlocker/i, /加密狗/, /发布公告/, /彩蛋/, /秘密开发/, /旧版控制台/, /^dev-dongle\//i, /母狗/, /chain\.json$/i, /mini-dongle-/i, /mini-unlock/i, /\.ocr-preview\.png$/i, /^\.gitignore$/i, /startup-test/i, /打包与分发/, /\.ocr-tmp\.png$/, /master\.key$/, /master-pass/i, /授权登记表/, /^\.git\//];  // .git 是 git init 之后新出现的根目录, 属于"新增根目录文件默认会进包"事故
 const REQUIRED = ['package.json', 'config.json', '使用说明.txt', 'README.md', 'src/main.js', 'src/web/server.js', 'src/web/public/index.html', '启动.bat', '启动桌面版.bat'];
 // 真实凭据特征: 所有文本条目都扫
 const SECRET_RE = [/sk-[a-zA-Z0-9]{16,}/, /SESSDATA=[0-9a-fA-F]{8}/, /ghp_[A-Za-z0-9]{20,}/, /gho_[A-Za-z0-9]{20,}/, /github_pat_[A-Za-z0-9_]{20,}/];
