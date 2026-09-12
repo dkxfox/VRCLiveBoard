@@ -63,7 +63,13 @@ td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border2)}
 .pitem .nm{font-weight:600}.pitem .meta{color:var(--muted);font-size:12px}
 .drawer{position:fixed;top:0;right:-330px;width:310px;height:100%;background:var(--card);border-left:1px solid var(--border);z-index:60;transition:right .2s;padding:18px;overflow:auto}
 .drawer.open{right:0}.scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;opacity:0;pointer-events:none;transition:.2s}.scrim.on{opacity:1;pointer-events:auto}
-.tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}.tabs .tab{background:rgba(22,30,42,.5);border:1px solid var(--border2);color:var(--muted);padding:8px 14px;border-radius:8px;font-size:13px;cursor:pointer;-webkit-color:#fff;border-color:var(--accent)}
+.tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}.tabs .tab{background:rgba(22,30,42,.5);border:1px solid var(--border2);color:var(--muted);padding:8px 14px;border-radius:8px;font-size:13px;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+/* 当前 tab 一眼可辨(M-20260911-56): 这行的选择器 `.tabs .tab.on` 从新 UI(a2b937f)起就丢了 ——
+   结果 ① 选中态完全没有样式 ② border-color:accent 落到了所有 tab 上, 于是"不仔细看不知道是哪一个"。
+   现在: 选中 = 实心强调色 + 白字加粗; 未选中 hover 有反馈。 */
+.tabs .tab:hover{background:rgba(30,42,58,.78);border-color:rgba(96,128,180,.5);color:var(--text)}
+.tabs .tab.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700;box-shadow:0 2px 10px rgba(59,130,246,.35)}
+.tabs .tab.on::after{background:transparent}
 /* 长文本不许改变卡片长度(M-20260911-49): 裸 1fr 的隐含最小值是 auto, 一条长 URL/英文串能把整列顶宽
    —— 实测 1280 宽窗口下 #grid2 从 1080px 被顶到 2867px, 邻列被挤到 233px 并出现整页横向滚动。
    grid 列一律写 minmax(0,1fr)(门禁 G-HTML 校验) */
@@ -96,6 +102,7 @@ td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border2)}
 .tab{position:relative}
 .tab::after{content:'';position:absolute;left:10px;right:10px;bottom:-1px;height:2px;background:var(--accent);transform:scaleX(0);transform-origin:left;transition:transform .22s}
 .tab.on::after{transform:scaleX(1)}
+/* (下划线在选中态被实心底色盖住, 上面 .tabs .tab.on::after 置为透明 —— 两种指示不打架) */
 body.no-anim *{animation:none!important;transition:none!important}
 @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 #fxbg{position:fixed;inset:0;width:100vw;height:100vh;z-index:0;pointer-events:none}

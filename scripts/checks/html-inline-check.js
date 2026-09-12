@@ -144,4 +144,10 @@ if (/white-space\s*:\s*nowrap/.test(snipAll)) snipMiss.push('(禁止)white-space
 if (snipMiss.length) { console.log('  FAIL 公告板列表项 .edrow .snip 样式契约缺失: ' + snipMiss.join(', ')); fail++; }
 else console.log('  OK   公告板列表项长文本: 两行截断 + 悬挂缩进 + 可收缩(' + snipRules.length + ' 条规则)');
 
+// 当前 tab 选中态的契约(M-20260911-56): 曾经因为选择器丢失(`.tabs .tab.on` 被并进上一条规则), 选中态完全没有样式,
+// 反而所有 tab 都吃到 border-color:accent —— 用户反馈"不仔细看不知道是哪一个"。这里固化: 必须存在选中态规则且它设了背景。
+const tabOn = [...styleText.matchAll(/\.tab\.on\s*\{([^}]*)\}/g)].map((x) => x[1]).join(';');
+if (!/background\s*:/.test(tabOn)) { console.log('  FAIL 缺少 tab 选中态样式(.tab.on 必须设置 background —— 否则分不清当前在哪个页签)'); fail++; }
+else console.log('  OK   页签选中态有实心高亮(.tab.on 设了 background)');
+
 process.exit(fail ? 1 : 0);
