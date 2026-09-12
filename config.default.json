@@ -134,7 +134,8 @@
                       ],
     "market":  {
                    "indexUrl":  "",
-                   "revokeUrl":  ""
+                   "revokeUrl":  "",
+                   "timeoutMs":  0
                },
     "efx":  {
                 "enabled":  true,

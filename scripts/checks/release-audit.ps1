@@ -1,9 +1,10 @@
 ﻿# 发布前审计(流程 3 的一键入口): 全部门禁 + 安全扫描 + 包审计 + 授权链沙箱 + 校验和清单
 # 产出: dist\公开版\SHA256SUMS-v<版本>.txt 与 审计报告-AUDIT-<时间>.txt
-# 用法: powershell -File scripts\checks\release-audit.ps1 [-SkipSmoke] [-NoSelftest]
+# 用法: powershell -File scripts\checks\release-audit.ps1 [-SkipSmoke] [-NoSelftest] [-SkipPackAccept]
 param(
   [switch]$SkipSmoke,
-  [switch]$NoSelftest
+  [switch]$NoSelftest,
+  [switch]$SkipPackAccept
 )
 $proj = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Set-Location $proj
@@ -57,6 +58,26 @@ RunStep '5. 常规门禁(语法/编码/版本/i18n/HTML/插件/配置)' { powers
 if (-not $SkipSmoke) {
   RunStep '6. 隔离冒烟(端口 19260)' { powershell -NoProfile -ExecutionPolicy Bypass -File scripts\checks\smoke.ps1 -Port 19260 }
 } else { Log '[skipped] 6. 冒烟(-SkipSmoke)'; Log '' }
+
+# 6b. 产物级验收(M-20260911-52): 前面所有步骤验的都是"工作树", 而用户拿到的是 zip —— 解包后真跑一遍。
+#     打包规则(彩蛋素材只进自包含包)与"包内事件/素材一致性"由 backend-flow 的 ⑩ 段断言, 这里只负责把包装进去跑。
+if (-not $SkipPackAccept -and -not $SkipSmoke) {
+  RunStep '6b. 产物级验收(发布包解包后跑冒烟 + 包内一致性)' {
+    $pub = Join-Path $proj 'dist\公开版'
+    $lite = @(Get-ChildItem $pub -Filter ('*Lite*v' + $ver + '.zip') -ErrorAction SilentlyContinue)[0]
+    $sc = @(Get-ChildItem $pub -Filter ('*SelfContained*v' + $ver + '.zip') -ErrorAction SilentlyContinue)[0]
+    $bad = 0
+    if (-not $lite -or -not $sc) { Log 'FAIL dist\公开版 缺少本版 Lite / 自包含包(先跑 make-dist)'; $bad = 1 }
+    else {
+      foreach ($t in @(@{ z = $lite; port = 19262 }, @{ z = $sc; port = 19264 })) {
+        Log ('---- 解包验收: ' + $t.z.Name + ' (:' + $t.port + ') ----')
+        powershell -NoProfile -ExecutionPolicy Bypass -File scripts\checks\smoke.ps1 -Zip $t.z.FullName -Port $t.port -Flow
+        if ($LASTEXITCODE -ne 0) { Log ('FAIL 产物级验收未通过: ' + $t.z.Name); $bad = 1 } else { Log ('OK   产物级验收通过: ' + $t.z.Name) }
+      }
+    }
+    cmd /c exit $bad
+  }
+} else { Log '[skipped] 6b. 产物级验收'; Log '' }
 
 # 7. 发布包审计 + SHA256 清单
 RunStep '7. 发布包审计 + SHA256 清单' {

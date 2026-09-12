@@ -11,6 +11,9 @@ function arg(name, def) { const i = args.indexOf('--' + name); return i >= 0 ? a
 const PORT = Number(arg('port', 19250));
 const ROOT = arg('root', '');
 const BASE = 'http://127.0.0.1:' + PORT;
+// 起手先快照一份『出厂时』的配置: 后面的用例会改内存与磁盘上的 config(彩蛋段), 包/树一致性断言必须看最初那份
+let ROOT_CFG0 = null;
+try { ROOT_CFG0 = ROOT ? JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8')) : null; } catch (e) {}
 let pass = 0, fail = 0, skip = 0;
 function ok(cond, msg) { if (cond) { console.log('  PASS ' + msg); pass++; } else { console.log('  FAIL ' + msg); fail++; } }
 function note(msg) { console.log('  SKIP ' + msg); skip++; }
@@ -273,6 +276,35 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
       fs.rmSync(pub, { recursive: true, force: true }); fs.rmSync(src, { recursive: true, force: true });
       await req('/api/market/refresh', { method: 'POST', body: '{}' });
     } catch (e) { ok(false, '插件市场用例异常: ' + e.message); }
+  }
+
+  // ⑩ 包/树一致性(M-20260911-52): 同一份用例既能跑工作树也能跑发布包 ——
+  //    发布包与工作树的差别只有"配置里有没有注入彩蛋事件"与"素材在不在包里", 所以按根目录的实际情况断言:
+  //    带事件+素材的包必须能触发(dry, 不消耗), 不带素材的包必须明确 404, 有事件没素材必须报错。
+  //    日期从包内配置里读, 这里不写死 —— 否则彩蛋日期会随这个脚本进公开仓库。
+  if (!ROOT) note('未提供 --root, 跳过包/树一致性用例');
+  else {
+    try {
+      const evs = (ROOT_CFG0 && Array.isArray(ROOT_CFG0.specialEvents)) ? ROOT_CFG0.specialEvents : [];
+      const vids = evs.map(function (e) { return String((e && e.video) || ''); }).filter(Boolean);
+      const present = vids.filter(function (v) { return fs.existsSync(path.join(ROOT, v)); });
+      if (evs.length && present.length) {
+        const start = String(evs[0].start || evs[0].date || '');
+        const dec = JSON.parse((await req('/api/efx/boot?date=' + encodeURIComponent(start) + '&dry=1')).body.toString('utf8'));
+        ok(dec.action === 'special' && dec.event && dec.event.video === present[0], '包内事件表可触发(按包内自带日期 dry 判定 → special)');
+        const vr = await req('/api/special/video?file=' + encodeURIComponent(present[0]));
+        ok(vr.status === 200 && vr.body.length > 1024, '包内彩蛋素材可服务(' + present[0] + ', ' + Math.round(vr.body.length / 1024) + 'KB)');
+      } else if (evs.length && !present.length) {
+        ok(false, '配置里有 ' + evs.length + ' 条彩蛋事件但包内没有对应素材(打包漏了?)');
+      } else {
+        const vr = await req('/api/special/video?file=' + encodeURIComponent('assets/videos/__absent__.mp4'));
+        ok(vr.status === 404, '不带彩蛋的包: 请求未打包的素材回 404(不静默)');
+        const vd = path.join(ROOT, 'assets', 'videos');
+        let n = 0;
+        try { n = fs.readdirSync(vd).filter(function (f) { return /\.(mp4|webm)$/i.test(f); }).length; } catch (e) {}
+        ok(n === 0, '不带彩蛋的包: 包内确实没有视频文件(与 Lite 口径一致)');
+      }
+    } catch (e) { ok(false, '包/树一致性用例异常: ' + e.message); }
   }
 
   console.log('[backend-flow] pass=' + pass + ' fail=' + fail + (skip ? (' skip=' + skip) : ''));
