@@ -365,6 +365,33 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
       if (String(el6.textContent || '').indexOf('测试提示内容') < 0) problems.push('note() 没有把文字写进提示条');
     }
   } catch (e) { problems.push('页内提示断言异常: ' + e.message); }
+  // 高危插件确认框(M-20260911-48): 输入 "插件名或 ID" 都必须能通过; 输错要有提示且不能放行
+  try {
+    const { uiJsOrder: order7 } = require('./_ui-files.js');
+    const s7 = makeSandbox();
+    for (const fp of order7(ROOT)) vm.runInNewContext(fs.readFileSync(fp, 'utf8'), s7, { filename: path.basename(fp) });
+    const nameKey = { 'friend-welcome': 'plgNameFriendWelcome', 'netease-lyrics': 'plgNameNetease' };
+    const hp = { id: 'netease-lyrics', name: 'netease-lyrics', version: '1.1.3', permissions: { process: true }, description: 'x' };
+    let allowed = 0;
+    if (typeof s7.plgWarn !== 'function') problems.push('app.js 未导出 plgWarn(高危确认框)');
+    else {
+      s7.plgWarn(hp, function () { allowed++; });
+      const row = s7.document.getElementById('plgTypeRow'), ti = s7.document.getElementById('plgTypeName');
+      if (!row || row.style.display !== 'flex') problems.push('高危插件没有显示"输入名称确认"那一行');
+      else if (!ti) problems.push('缺少 #plgTypeName 输入框');
+      else {
+        const btn = s7.document.getElementById('plgConfirm');
+        const dispName = s7.tr(nameKey['netease-lyrics']);
+        btn.disabled = false;                       // 跳过 5 秒倒计时(沙箱里 setInterval 不会真的跑)
+        ti.value = dispName; btn.onclick();
+        if (allowed !== 1) problems.push('按提示输入插件名(' + dispName + ')却被拒绝 —— 确认框只认 id 不认名称');
+        ti.value = 'netease-lyrics'; btn.onclick();
+        if (allowed !== 2) problems.push('输入插件 ID 也被拒绝');
+        ti.value = '随便写的'; btn.onclick();
+        if (allowed !== 2) problems.push('输入不匹配的内容竟然放行了');
+      }
+    }
+  } catch (e) { problems.push('高危确认框断言异常: ' + e.message); }
   console.log('[G-BOOT frontend-boot] 前端启动: 顶层加载 ' + (problems.length ? '有异常' : '正常') + ' / 控件桩 ' + ids.size + ' 个 id');
   for (const p of problems) console.log('  -> FAIL ' + p);
   process.exitCode = problems.length ? 1 : 0; // 用 exitCode: process.exit 在管道下会丢掉未刷新的输出
