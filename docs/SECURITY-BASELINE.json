@@ -61,9 +61,11 @@
       ],
       "fs.rmSync": [
         "electron/userdata-cleanup.js",
-        "src/pluginsys/manager.js"
+        "src/pluginsys/manager.js",
+        "src/web/server.js"
       ]
-    }
+    },
+    "updatedAt": "2026-09-12"
   },
   "updatedAt": "2026-09-11",
   "zipVolumes": {

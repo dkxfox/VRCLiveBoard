@@ -228,10 +228,10 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
       const mref = async function () { await req('/api/market/refresh', { method: 'POST', body: '{}' }); return mget(); };
       let m = await mget();
       const pick = function (j) { return (j.items || []).filter(function (x) { return x.id === 'market-test'; })[0] || {}; };
-      ok(m.ok === true && !!pick(m).id, '市场目录可拉取并列出条目(本地源)');
+      ok(m.ok === true && !!pick(m).id, '市场目录可拉取并列出条目(本地源)' + (m.ok === true ? (' [items=' + (m.items || []).length + ']') : (' —— ' + JSON.stringify(m.problems || m.error || m).slice(0, 220))));
       ok(pick(m).tier === 'reviewed' && pick(m).installed === false, '条目带分级标记(reviewed)且未安装状态正确');
       let inst = JSON.parse((await req('/api/market/install', { method: 'POST', body: JSON.stringify({ id: 'market-test' }) })).body.toString('utf8'));
-      ok(inst.ok === true && inst.tier === 'reviewed' && inst.sha256 === hash, '安装成功(下载 → sha256 校验 → importZip)并回传分级');
+      ok(inst.ok === true && inst.tier === 'reviewed' && inst.sha256 === hash, '安装成功(下载 → sha256 校验 → importZip)并回传分级' + (inst.ok ? '' : (' —— ' + JSON.stringify(inst).slice(0, 220))));
       const pl = JSON.parse((await req('/api/plugins')).body.toString('utf8'));
       ok((pl.plugins || []).some(function (p) { return p.id === 'market-test'; }), '安装后插件出现在插件列表');
       const cfg = JSON.parse((await req('/api/config')).body.toString('utf8'));

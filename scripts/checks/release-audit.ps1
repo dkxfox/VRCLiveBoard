@@ -86,7 +86,7 @@ RunStep '7. 发布包审计 + SHA256 清单' {
   else {
     $bi = $biTxt | ConvertFrom-Json
     if ($head -and $bi.commit -and ($bi.commit -ne $head)) { Log ('FAIL 包内 BUILD-INFO.commit(' + $bi.commit.Substring(0,7) + ') 与当前 HEAD(' + $head.Substring(0,7) + ') 不一致 -> 用当前代码重新打包'); $script:exit = 1 }
-    else { Log ('包与提交绑定: commit ' + (String($bi.commit)).Substring(0,7) + ' 与 HEAD 一致') }
+    else { Log ('包与提交绑定: commit ' + ([string]$bi.commit).Substring(0,7) + ' 与 HEAD 一致') }
   }
   # 插件更新包也要过一遍禁入名单/机密/文件名编码(M-20260911-39)
   $plugDir = Join-Path $proj 'dist\插件更新包'
