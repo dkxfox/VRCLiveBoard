@@ -15,7 +15,10 @@ const { runHousekeeping } = require('./housekeeping');
 const { PluginManager } = require('./pluginsys/manager');
 
 async function main() {
-  logger.info('VRCLiveBoard(代号 星光)启动中...');
+  // 启动横幅的代号从 version.json 读(M-20260911-52): 原先把「星光」写死在这里, 1.4.0 换代号后日志仍报旧名 —— GVER 现在管这条
+  let codename = '';
+  try { codename = String(JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'version.json'), 'utf8').replace(/^\uFEFF/, '')).codename || ''); } catch (e) {}
+  logger.info('VRCLiveBoard' + (codename ? ('(' + codename + ') ') : ' ') + '启动中...');
   const configPath = path.join(__dirname, '..', 'config.json');
   const configio = require('./configio');
   // 配置损坏不炸: config.json -> .bak -> config.default.json 兜底链(日志警告)

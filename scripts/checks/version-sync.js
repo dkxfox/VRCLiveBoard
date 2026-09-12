@@ -25,6 +25,22 @@ grab('版本说明首节', '版本说明.txt', /^v([0-9]+\.[0-9]+\.[0-9]+)/gm);
 grab('README 当前版本', 'README.md', /当前版本[::]\s*v([0-9]+\.[0-9]+\.[0-9]+)/g);
 grab('README 下载文件名', 'README.md', /VRCLiveBoard-[A-Za-z-]+-v([0-9]+\.[0-9]+\.[0-9]+)\.zip/g, true);
 
+// 代号一致性(M-20260911-52): 启动横幅曾把代号写死在 src/main.js, 换代号后日志仍报旧名(1.4.0 实测才发现)。
+// 规则: 横幅代号必须从 version.json 读, main.js 里不得出现任何硬编码代号。
+let _cnRow = null;
+try {
+  const mainJs = read('src/main.js');
+  const vj = JSON.parse(read('version.json'));
+  // 只看代码: 注释里提到旧代号是正常的(本轮就被自己的注释坑过一次) —— 去掉行注释再扫
+  const code = mainJs.split('\n').map((l) => l.replace(/(^|[^:'"\\])\/\/.*$/, '$1')).join('\n');
+  const names = [...new Set(['星光', '集市', String(vj.codename || '')].filter(Boolean))];
+  const hard = names.filter((n) => code.includes(n));
+  if (hard.length) _cnRow = ['启动横幅代号', 'src/main.js', hard.join('/'), '硬编码了代号(应从 version.json 读)'];
+  else if (!mainJs.includes('version.json')) _cnRow = ['启动横幅代号', 'src/main.js', null, '横幅没有从 version.json 读代号'];
+  else _cnRow = ['启动横幅代号', 'src/main.js', String(vj.codename || ''), 'OK'];
+} catch (e) { _cnRow = ['启动横幅代号', 'src/main.js', null, 'CHECK FAIL: ' + e.message]; }
+rows.push(_cnRow);
+
 const bad = rows.filter((r) => r[3] !== 'OK');
 if (process.argv.includes('--json')) console.log(JSON.stringify({ package: pkg, rows }, null, 2));
 else {
