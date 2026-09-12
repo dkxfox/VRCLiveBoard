@@ -130,7 +130,9 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
   //   发布包与工作树的差别只有"配置里有没有注入彩蛋事件"与"素材在不在包里", 所以按根目录的实际情况断言。
   //   必须排在 ⑧ 之前: ⑧ 的收尾会把内存里的 specialEvents 清空(恢复原状), 之后再看就不是"出厂配置"了。
   //   日期从包内配置读, 不写死 —— 否则彩蛋日期会随这个脚本进公开仓库。
+  const isPack = ROOT ? fs.existsSync(path.join(ROOT, 'BUILD-INFO.json')) : false;
   if (!ROOT) note('未提供 --root, 跳过包/树一致性用例');
+  else if (!isPack) note('当前是工作树(无 BUILD-INFO.json): 包级口径不适用(本地事件表在 assets/videos/events.json, 由 ⑧ 段覆盖)');
   else {
     try {
       const evs = (ROOT_CFG0 && Array.isArray(ROOT_CFG0.specialEvents)) ? ROOT_CFG0.specialEvents : [];
