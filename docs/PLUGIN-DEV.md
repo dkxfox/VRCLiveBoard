@@ -132,3 +132,12 @@ market/packages/<id>-<ver>.zip   分发包(客户端装的就是它)
 
 ### 自定义源(国内镜像/内网目录)
 `config.market.indexUrl` / `config.market.revokeUrl` 可指向自建镜像(与官方源同一份 schema); 指向 `http://127.0.0.1` 时视为**测试模式**, 允许同源 http 下载地址(门禁就是这么跑端到端的)。
+
+### 分级与安全策略的关系(2026-09-12 核对)
+
+分级(tier)**只影响标记与提示**, 不改变任何权限判定: 插件安全策略是全局一套(`config.plugins.security`, 默认
+`networkPolicy=whitelist / processPolicy=consent / fsWritePolicy=sandbox / fsReadPolicy=self`), 所有插件(含官方)
+走同一套默认值, 授权红窗与高危插件的"输入插件名确认"一个都不少 —— 从市场装不比手动导入多任何权限。
+
+按分级**再收紧**(例如实验区强制 `aiPolicy=off`、或实验区禁止进程能力)属于 1.4.x 候选, **不在 1.4.0 范围内**;
+写在这里免得以后误以为已经做了。

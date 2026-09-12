@@ -221,3 +221,6 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke
 
 - 审计新增 **6b 步"产物级验收"**: 把两个 zip 解包后各起一个隔离实例跑完整冒烟 + backend-flow —— 以前所有步骤验的都是工作树, 而用户拿到的是 zip; 现在"包内事件表可触发 / 包内素材可服务 / 不带彩蛋的包明确 404 且无视频"都由 ⑩ 段在**包内**断言(日期从包内配置读, 不写死在脚本里)。
 - 绑定检查新增容差: 包内 BUILD-INFO.commit 与 HEAD 不同时, 若差集**只有 docs/** 则视为绑定有效(打包后写记录不必再重打); 任何 src/electron/plugins/scripts/配置 的改动仍判漂移。
+
+- **线上链路实测(2026-09-12, 非模拟)**: 用官方默认源(空 market 配置)拉取 `https://cdn.jsdelivr.net/gh/dkxfox/VRCLiveBoard@main/market/index.json` → 4 个官方插件 / schema 1 / 分级 official / 哈希齐全; 线上下载 friend-welcome 包并 sha256 校验通过(751862 字节); 更新提示逻辑(同版本 upToDate / 旧版本 updateAvailable)一并在同一轮验过。此前所有市场测试都用本地镜像, 这一轮才第一次走真实 CDN。
+- **Release 状态(待用户)**: 截至本轮, GitHub 最新 Release 仍是 `v1.3.2` —— 1.4.0 的两个 zip 尚未上传(本机无 gh CLI / GITHUB_TOKEN / 存储凭据, 无法代发)。`version.json` 已宣布 1.4.0, 老用户会看到"有新版本"并跳到 1.3.2 的 Release 页, **建议尽快上传**; 发布说明可直接粘贴 `dist\公开版\发布说明-v1.4.0.txt`(已按最终产物写好, 含两份 SHA256)。
