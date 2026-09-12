@@ -126,11 +126,21 @@ function Get-ZipNames($zipPath) {
   return $names
 }
 
+# docs 白名单(M-20260911-46): 只发对外文档; 内部流程/基线文件不进包
+# (审计指出"黑名单式排除必然越用越漏", 所以 docs/ 用白名单: 清单外的文件与目录一律删掉)
+function Prune-Docs($dir) {
+  $keep = @('DEV-NOTES.md','GLOSSARY.md','PLUGIN-DEV.md','LIVETRANSLATE.md','RESEARCH.md')
+  $dd = Join-Path $dir 'docs'
+  if (-not (Test-Path $dd)) { return }
+  Get-ChildItem $dd -File -ErrorAction SilentlyContinue | Where-Object { $keep -notcontains $_.Name } | Remove-Item -Force -ErrorAction SilentlyContinue
+  Get-ChildItem $dd -Directory -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 Write-Output '==== 2. stage self-contained (full deps) ===='
 $stage = Join-Path $dist ('stage-sc-' + $ver)
 Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
-robocopy $p $stage /E /NFL /NDL /NJH /NJS /XD $exclAbs /XF $xfFiles | Out-Null
+robocopy $p $stage /E /NFL /NDL /NJH /NJS /XD $exclAbs /XF $peFiles | Out-Null   # peFiles = 清单文件段 + 历史字面量(M-20260911-46: 之前只用了清单的目录段)
 robocopy (Join-Path $p 'node_modules') (Join-Path $stage 'node_modules') /E /NFL /NDL /NJH /NJS | Out-Null
 Copy-Item (Join-Path $p 'config.default.json') (Join-Path $stage 'config.json') -Force
 Scrub-Secrets (Join-Path $stage 'config.json')
@@ -140,6 +150,7 @@ Copy-OfficialPlugins $stage
       try { $gitHead = (git rev-parse HEAD).Trim() } catch {}
       $bi = [ordered]@{ version = $ver; commit = $gitHead; builtAt = (Get-Date).ToString('s'); kind = 'self-contained' }
       [System.IO.File]::WriteAllText((Join-Path $stage 'BUILD-INFO.json'), ($bi | ConvertTo-Json -Depth 4), (New-Object System.Text.UTF8Encoding($false)))
+Prune-Docs $stage
 Check-Stage $stage
 Write-Output '==== 3. zip self-contained (big, wait) ===='
 $zipSc = Join-Path $pubDir ('VRCLiveBoard-Desktop-SelfContained-v' + $ver + '.zip')
@@ -156,7 +167,7 @@ if (-not $SkipLight) {
   $stageL = Join-Path $dist ('stage-light-' + $ver)
   Remove-Item $stageL -Recurse -Force -ErrorAction SilentlyContinue
   New-Item -ItemType Directory -Force -Path $stageL | Out-Null
-  robocopy $p $stageL /E /NFL /NDL /NJH /NJS /XD $exclAbs /XF $xfFiles | Out-Null
+  robocopy $p $stageL /E /NFL /NDL /NJH /NJS /XD $exclAbs /XF $peFiles | Out-Null
   Copy-Item (Join-Path $p 'config.default.json') (Join-Path $stageL 'config.json') -Force
   Scrub-Secrets (Join-Path $stageL 'config.json')
   Copy-OfficialPlugins $stageL
@@ -165,6 +176,7 @@ if (-not $SkipLight) {
       try { $gitHead = (git rev-parse HEAD).Trim() } catch {}
       $bi = [ordered]@{ version = $ver; commit = $gitHead; builtAt = (Get-Date).ToString('s'); kind = 'lite' }
       [System.IO.File]::WriteAllText((Join-Path $stageL 'BUILD-INFO.json'), ($bi | ConvertTo-Json -Depth 4), (New-Object System.Text.UTF8Encoding($false)))
+  Prune-Docs $stageL
   Check-Stage $stageL
   Write-Output '==== 5. zip lite ===='
   $zipL = Join-Path $pubDir ('VRCLiveBoard-Lite-RequiresNode-v' + $ver + '.zip')
