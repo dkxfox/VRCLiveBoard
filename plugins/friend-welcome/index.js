@@ -25,8 +25,10 @@ module.exports = function (ctx) {
       if (!fr || fr.enabled === false) continue;
       const n = String(fr.name || '').trim();
       if (!n) continue;
-      // 精确匹配(M-20260911-31): 旧写法用 indexOf 子串匹配, 好友名填"小"会命中所有名字含"小"的陌生人
-      if (String(pname).trim().toLowerCase() !== n.toLowerCase()) continue;
+      // 精确匹配(M-20260911-31): 旧写法用 indexOf 子串匹配, 好友名填"小"会命中所有名字含"小"的陌生人。
+      // 用去掉 UID 后的显示名比对(2026-09-12 实测): VRChat 原始行是 "OnPlayerJoined 显示名 (usr_xxx)",
+      // 以前拿带 UID 的原始串去比, 永远匹配不上 —— 好友进房因此完全没有欢迎。
+      if (String(displayName || pname).trim().toLowerCase() !== n.toLowerCase()) continue;
       busy = true;
       // 欢迎时也记一条(2026-09-12): 之前只在跳过时打日志, 导致"到底欢迎过没有"只能靠 chatbox 日志反推
       ctx.logger.info('[friend-welcome] 欢迎 ' + (displayName || pname) + (meta && meta.sinceRoomSec != null ? ('(进房后 ' + meta.sinceRoomSec + 's)') : ''));

@@ -11,14 +11,14 @@
         "name": "VRCLiveBoard 官方",
         "contact": "https://github.com/dkxfox/VRCLiveBoard"
       },
-      "version": "1.3.1",
+      "version": "1.3.2",
       "api": "2.0.0",
       "tier": "official",
       "summary": "指定好友进入房间时显示专属欢迎语并轮巡(仅显示显示名,不发送 UID),结束后自动恢复原状",
       "tags": [],
-      "url": "https://cdn.jsdelivr.net/gh/dkxfox/VRCLiveBoard@main/market/packages/friend-welcome-1.3.1.zip",
-      "sha256": "15b00a5026b1ca524154c50efdcbe701ff90d1c915456ad88e3e0767776ba90f",
-      "size": 751998,
+      "url": "https://cdn.jsdelivr.net/gh/dkxfox/VRCLiveBoard@main/market/packages/friend-welcome-1.3.2.zip",
+      "sha256": "3c126ebcfb417923d53094b217052ef6e6914ac32f4408a60bc5414c1ebdb678",
+      "size": 752123,
       "permissions": {
         "network": [],
         "filesystem": {

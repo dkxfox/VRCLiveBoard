@@ -49,6 +49,11 @@ function newestLog() {
   return best;
 }
 function parseLine(line) {
+  // 只认 [Behaviour] 自己的行(2026-09-12 实测): VisitorsInformationBoard 等世界/第三方日志里也会出现
+  // "OnPlayerJoined" 字样(形如 [VisitorsInformationBoard] 174.37 / OnPlayerJoined / player=某某(local)),
+  // 以前被当成进房事件喂给插件 —— 名字还带 "/ player=" 前缀, 只会制造噪音与误匹配。
+  if (/VisitorsInformationBoard/i.test(line)) return null;
+  if (!/\[Behaviour\]/.test(line)) return null;
   if (/Entering Room:/i.test(line)) return { type: 'room' };
   const m = line.match(/OnPlayerJoined\s+(.+)$/i);
   if (m) return { type: 'joined', name: String(m[1]).trim() };
@@ -109,4 +114,4 @@ function start() {
 function stop() {
   if (watcher) { clearInterval(watcher); watcher = null; }
 }
-module.exports = { start, stop, on: function (e, fn) { bus.on(e, fn); }, off: function (e, fn) { bus.off(e, fn); }, isSnapshotJoin: isSnapshotJoin, SNAPSHOT_MS: SNAPSHOT_MS };
+module.exports = { start, stop, on: function (e, fn) { bus.on(e, fn); }, off: function (e, fn) { bus.off(e, fn); }, isSnapshotJoin: isSnapshotJoin, SNAPSHOT_MS: SNAPSHOT_MS, __parseLineForTest: parseLine };

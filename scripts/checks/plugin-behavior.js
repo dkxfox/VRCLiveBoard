@@ -22,6 +22,11 @@ try {
   ok(vrclog.isSnapshotJoin(base, at(60), null) === false, '进房 +60s 判为真实进房');
   ok(vrclog.isSnapshotJoin(0, at(5), null) === false, '没有进房锚点时不算快照(不误吞)');
   ok(vrclog.SNAPSHOT_MS > 10000 && vrclog.SNAPSHOT_MS < 22000, '快照窗口落在实测区间内(10s < 窗口 < 22s): ' + vrclog.SNAPSHOT_MS + 'ms');
+  const parseLine = vrclog.__parseLineForTest;
+  if (typeof parseLine === 'function') {
+    ok(parseLine('2026.09.12 15:54:55 Debug      -  [Behaviour] OnPlayerJoined 名字 (usr_11111111-2222-3333-4444-555555555555)') !== null, '解析 Behaviour 的真实进房行');
+    ok(parseLine('2026.09.12 15:54:55 Debug      -  [VisitorsInformationBoard] 174.37 / OnPlayerJoined / player=某某(local)') === null, '忽略 VisitorsInformationBoard 的伪进房行');
+  } else note('vrclog 未导出 parseLine, 跳过解析断言');
 } catch (e) { ok(false, 'vrclog 快照判定断言异常: ' + e.message); }
 
 function loadPlugin(id) {
@@ -73,8 +78,14 @@ function loadPlugin(id) {
       ok(p.calls.length === 2, '名字精确匹配: 含子串的陌生人不再被命中');
       onJoin('Carol', null); await tick();
       ok(p.calls.length === 2, '非数组 lines 不播报(且不抛错)');
+      // 2026-09-12 实测: VRChat 原始行是 "OnPlayerJoined 显示名 (usr_xxx)" —— 以前拿带 UID 的原始串比对,
+      // 好友进房永远匹配不上(用户报"·颜帆·进入房间后没有触发")。这两条把该口径锁死。
+      onJoin('Alice (usr_11111111-2222-3333-4444-555555555555)', null); await tick();
+      ok(p.calls.length === 3, '名字带 UID 后缀(真实日志格式)仍能匹配并播报');
+      onJoin('Alice', { alreadyInWorld: true }); await tick();
+      ok(p.calls.length === 3, '进房快照(alreadyInWorld)不播报');
       onJoin('Bob', null); await tick();
-      ok(p.calls.length === 3, '非数组那次之后 busy 仍已解锁(插件没卡死)');
+      ok(p.calls.length === 4, '非数组那次之后 busy 仍已解锁(插件没卡死)');
     }
   } catch (e) { ok(false, 'friend-welcome 行为用例异常: ' + e.message); }
 
