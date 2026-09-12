@@ -11,7 +11,17 @@ let watcher = null;
 let seen = new Set();
 let lastLog = null;
 let roomEntryAt = 0; // 最近一次 Entering Room 的日志时间戳
-const SNAPSHOT_MS = 30000; // 进房后 30 秒内的 OnPlayerJoined 视为"进房快照"(房间里已存在的玩家)
+// 进房快照窗口(2026-09-12 实测修正): VRChat 在 Entering Room 之后约 10~11 秒, 把房间里**已存在**的玩家
+// 补写成 OnPlayerJoined。旧值 30 秒会把随后 20 秒内真正进房的好友一起吞掉 ——
+// 实测时间线: 15:29:45 进房 → 15:29:56(+11s) 快照 → 15:30:07(+22s) 好友真实进房却被跳过。
+// 15 秒 = 覆盖实测的快照批(+10~11s), 又不碰 +22s 那类真实进房。
+const SNAPSHOT_MS = 15000;
+// 纯函数便于门禁断言(plugin-behavior): 是否算"进房快照"
+function isSnapshotJoin(roomEntryAt, joinTs, windowMs) {
+  const w = Number(windowMs) || SNAPSHOT_MS;
+  if (!roomEntryAt || !joinTs) return false;
+  return joinTs >= roomEntryAt && (joinTs - roomEntryAt) < w;
+}
 
 function lineTs(line) {
   const m = String(line || '').match(/^(\d{4})\.(\d{2})\.(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
@@ -83,8 +93,9 @@ function poll() {
       if (ev.type === 'joined' && !seen.has(ev.name)) {
         seen.add(ev.name);
         const t = lineTs(line) || Date.now();
-        const alreadyInWorld = roomEntryAt > 0 && t >= roomEntryAt && (t - roomEntryAt) < SNAPSHOT_MS;
-        bus.emit('player.joined', ev.name, { alreadyInWorld: alreadyInWorld });
+        const alreadyInWorld = isSnapshotJoin(roomEntryAt, t, SNAPSHOT_MS);
+        const sinceRoomSec = roomEntryAt > 0 ? Math.round((t - roomEntryAt) / 1000) : null;
+        bus.emit('player.joined', ev.name, { alreadyInWorld: alreadyInWorld, sinceRoomSec: sinceRoomSec });
       }
       else if (ev.type === 'left' && seen.has(ev.name)) { seen.delete(ev.name); bus.emit('player.left', ev.name); }
     }
@@ -98,4 +109,4 @@ function start() {
 function stop() {
   if (watcher) { clearInterval(watcher); watcher = null; }
 }
-module.exports = { start, stop, on: function (e, fn) { bus.on(e, fn); }, off: function (e, fn) { bus.off(e, fn); } };
+module.exports = { start, stop, on: function (e, fn) { bus.on(e, fn); }, off: function (e, fn) { bus.off(e, fn); }, isSnapshotJoin: isSnapshotJoin, SNAPSHOT_MS: SNAPSHOT_MS };

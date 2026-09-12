@@ -10,6 +10,20 @@ function ok(cond, msg) { if (cond) { console.log('  PASS ' + msg); pass++; } els
 function note(msg) { console.log('  SKIP ' + msg); skip++; }
 const tick = function () { return new Promise(function (r) { setImmediate(r); }); };
 
+// 进房快照判定(2026-09-12 实测修正): 旧实现用"进房后 30 秒内一律算快照", 把 +22s 真实进房的好友吞了。
+// 这里直接断言纯函数, 锁住"快照窗口"这条产品口径 —— 它出问题时用户只会看到"插件没反应"。
+try {
+  const vrclog = require(path.join(ROOT, 'src', 'pluginsys', 'vrclog.js'));
+  const base = Date.UTC(2026, 8, 12, 15, 29, 45);
+  const at = function (sec) { return base + sec * 1000; };
+  ok(typeof vrclog.isSnapshotJoin === 'function', 'vrclog 导出 isSnapshotJoin(可被门禁断言)');
+  ok(vrclog.isSnapshotJoin(base, at(11), null) === true, '进房 +11s 判为在场快照(实测快照批出现时刻)');
+  ok(vrclog.isSnapshotJoin(base, at(22), null) === false, '进房 +22s 判为真实进房(实测好友被误吞的时刻)');
+  ok(vrclog.isSnapshotJoin(base, at(60), null) === false, '进房 +60s 判为真实进房');
+  ok(vrclog.isSnapshotJoin(0, at(5), null) === false, '没有进房锚点时不算快照(不误吞)');
+  ok(vrclog.SNAPSHOT_MS > 10000 && vrclog.SNAPSHOT_MS < 22000, '快照窗口落在实测区间内(10s < 窗口 < 22s): ' + vrclog.SNAPSHOT_MS + 'ms');
+} catch (e) { ok(false, 'vrclog 快照判定断言异常: ' + e.message); }
+
 function loadPlugin(id) {
   const factory = require(path.join(ROOT, 'plugins', id, 'index.js'));
   return function (cfg) {

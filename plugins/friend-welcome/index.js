@@ -28,6 +28,8 @@ module.exports = function (ctx) {
       // 精确匹配(M-20260911-31): 旧写法用 indexOf 子串匹配, 好友名填"小"会命中所有名字含"小"的陌生人
       if (String(pname).trim().toLowerCase() !== n.toLowerCase()) continue;
       busy = true;
+      // 欢迎时也记一条(2026-09-12): 之前只在跳过时打日志, 导致"到底欢迎过没有"只能靠 chatbox 日志反推
+      ctx.logger.info('[friend-welcome] 欢迎 ' + (displayName || pname) + (meta && meta.sinceRoomSec != null ? ('(进房后 ' + meta.sinceRoomSec + 's)') : ''));
       try {
         const lines = (Array.isArray(fr.lines) ? fr.lines : []).map(function (l) { return String(l).split('{name}').join(displayName || pname); });
         if (!lines.length) { busy = false; continue; }
