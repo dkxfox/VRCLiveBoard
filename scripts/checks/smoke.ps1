@@ -100,6 +100,12 @@ if ($Flow) {
     if ($LASTEXITCODE -ne 0) { $script:fail++ } else { $script:pass++ }
   } else { Write-Output '  FAIL 缺少 backend-flow.js'; $script:fail++ }
   # 截图助手契约(常驻协议 / UTF-8 往返 / 回退路径): 每次截图起一个 powershell 的冷启动太贵, 改常驻后由这条守住
+  # 插件行为断言(标志位卡死/入参/动作名): 假 ctx 跑插件工厂, 静态门禁查不出这类问题
+  $pbJs = Join-Path $PSScriptRoot 'plugin-behavior.js'
+  if (Test-Path $pbJs) {
+    node $pbJs
+    if ($LASTEXITCODE -ne 0) { $script:fail++ } else { $script:pass++ }
+  } else { Write-Output '  FAIL 缺少 plugin-behavior.js'; $script:fail++ }
   $capJs = Join-Path $PSScriptRoot 'capture-host.js'
   if (Test-Path $capJs) {
     node $capJs --root $tmp

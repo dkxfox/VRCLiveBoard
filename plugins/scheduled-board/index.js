@@ -91,7 +91,8 @@ module.exports = function (ctx) {
   }
   function saveRows(input) {
     if (input && typeof input === 'object' && Array.isArray(input.rows)) input = input.rows;
-    if (!Array.isArray(input)) input = [];   // 入参保护(M-20260911-32): POST {rows:"abc"} 时不能把字符串逐字符当行
+    // 入参保护(M-20260911-43): 不是数组就**拒绝**, 而不是当成空数组 —— 后者会把用户名单整表清空
+    if (!Array.isArray(input)) return { ok: false, error: '入参格式不对(需要数组)' };
     const n = normalizeSpecials(input);
     ctx.config.specials = n.out;
     return { ok: true, count: n.out.length, deduped: n.deduped };
