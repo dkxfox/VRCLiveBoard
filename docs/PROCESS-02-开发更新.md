@@ -216,8 +216,8 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke
 
 | 文件(`dist\公开版\`) | 大小 | SHA256 |
 | --- | --- | --- |
-| `VRCLiveBoard-Desktop-SelfContained-v1.4.0.zip` | 215.44MB | `6fa9dd2145b537fc604a5623c6a09fe07d22bd1fcd6e4465c29f6dad2d4afff6` |
-| `VRCLiveBoard-Lite-RequiresNode-v1.4.0.zip` | 7.91MB | `385447d4326b18ea0eb05b85d829b8b347688f86cbfa59855c92a14dddd3f269` |
+| `VRCLiveBoard-Desktop-SelfContained-v1.4.0.zip` | 215.44MB | `637308b4e8eb38f88d7f486e316cf5a7a8215bf6d4279362277e90c2aad97184` |
+| `VRCLiveBoard-Lite-RequiresNode-v1.4.0.zip` | 7.91MB | `e89c057de18620ff84fe6531426e6088febd741577bb2de04bcfadba1e8073f0` |
 
 - 审计新增 **6b 步"产物级验收"**: 把两个 zip 解包后各起一个隔离实例跑完整冒烟 + backend-flow —— 以前所有步骤验的都是工作树, 而用户拿到的是 zip; 现在"包内事件表可触发 / 包内素材可服务 / 不带彩蛋的包明确 404 且无视频"都由 ⑩ 段在**包内**断言(日期从包内配置读, 不写死在脚本里)。
 - 绑定检查新增容差: 包内 BUILD-INFO.commit 与 HEAD 不同时, 若差集**只有 docs/** 则视为绑定有效(打包后写记录不必再重打); 任何 src/electron/plugins/scripts/配置 的改动仍判漂移。
@@ -226,3 +226,4 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke
 - **Release 状态(待用户)**: 截至本轮, GitHub 最新 Release 仍是 `v1.3.2` —— 1.4.0 的两个 zip 尚未上传(本机无 gh CLI / GITHUB_TOKEN / 存储凭据, 无法代发)。`version.json` 已宣布 1.4.0, 老用户会看到"有新版本"并跳到 1.3.2 的 Release 页, **建议尽快上传**; 发布说明可直接粘贴 `dist\公开版\发布说明-v1.4.0.txt`(已按最终产物写好, 含两份 SHA256)。
 - **产物重建(2026-09-12 11:50, 提交 `bd9e877`)**: 包内桌面壳的启动横幅原先把代号写死(`星光`)—— 换成 1.4.0 的「集市」后日志仍报旧名。改成从 `version.json` 读, 并给 GVER 加了一条**代号一致性**检查(只看代码、忽略注释; A/B 验证: 在代码里写死代号即 FAIL)。两份产物因此重打, 校验和以上表为准。
 - **载体回改后重打(2026-09-12 12:22, 提交 `14f0b26`)**: 用户实机反馈独立启动窗把主窗口挡了近一分钟(59s 素材) —— 拆掉桌面壳启动窗, 动画与彩蛋回到**主窗口内**播放; 保留 `efx.splashMaxMs` 上限(默认 20s, 0=不限)/8 秒卡播守卫/点击与 Esc 跳过。包内已实测: `createSplash` 不再存在, 包内 `app.js` 带 maxMs 上限与卡播守卫; 审计含 6b 产物级验收全过。表内校验和已同步为本轮产物。
+- **日期模拟修复后重打(2026-09-12 12:54, 提交 `f277ec7`)**: 实测事故——测试页的日期选择器给的是 ISO(`2026-06-15`), 而 `/api/efx/boot` 只认 `MM-DD`, 于是"日期改成 6/15 彩蛋不播"。现在两种写法都收, 已播记录统一归一成 `MM-DD`(两种写法共用一条), 非法日期回 `dateInvalid` 且不误播; 测试页默认填入事件日期。**6b 产物级验收里已包含这三条断言**(包内实跑通过)。
