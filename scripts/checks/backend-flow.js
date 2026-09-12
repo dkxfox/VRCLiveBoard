@@ -309,6 +309,13 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
       fs.writeFileSync(path.join(pub, 'index.json'), JSON.stringify({ schema: 1, items: [Object.assign({}, item, { url: 'https://evil.example.com/x.zip' })] }), 'utf8');
       m = await mref();
       ok(pick(m).tier === 'local', '目录里的非白名单下载地址被丢弃(只剩本地已装条目, 不再作为市场条目出现)');
+      // 失败不该被长时间缓存(M-20260911-55 实测): 首次拉取失败后, 目录必须在短时间内能自己恢复(否则用户点开市场永远是空的)
+      await req('/api/config', { method: 'POST', body: JSON.stringify({ market: { indexUrl: 'http://127.0.0.1:' + mport + '/missing.json', revokeUrl: base + '/revoke.json' } }) });
+      const badCat = JSON.parse((await req('/api/market')).body.toString('utf8'));
+      ok(badCat.ok === true && pick(badCat).tier === 'local' && (badCat.problems || []).length > 0, '目录拉取失败时如实回报(problems 非空; 列表里只剩本地已装条目, 不假装成功)');
+      await req('/api/config', { method: 'POST', body: JSON.stringify({ market: { indexUrl: base + '/index.json', revokeUrl: base + '/revoke.json' } }) });
+      const recat = JSON.parse((await req('/api/market')).body.toString('utf8'));
+      ok(!!pick(recat).id, '失败不被长缓存: 源修好后下一次调用即可恢复(无需手动刷新)');
       fs.writeFileSync(path.join(pub, 'index.json'), JSON.stringify({ schema: 1, items: [item] }), 'utf8');
       await mref();
       // 清理: 卸下测试插件 + 恢复市场源

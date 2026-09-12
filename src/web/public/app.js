@@ -423,8 +423,8 @@ function mktRow(it){
   var d=document.createElement('div');d.className='edrow';d.style.alignItems='flex-start';
   var right;
   if(it.revoked)right='<span style="color:var(--err);font-size:12px">'+esc(tr('mktRevoked'))+'</span>';
-  else if(!it.installed)right='<button class="small" data-mkt="1" data-id="'+esc(it.id)+'">'+esc(tr('mktInstall'))+'</button>';
-  else if(it.updateAvailable)right='<button class="small" data-mkt="1" data-id="'+esc(it.id)+'">'+esc(tr('mktUpdate'))+' '+esc(it.version)+'</button>';
+  else if(!it.installed)right='<button class="small pri" data-mkt="1" data-id="'+esc(it.id)+'">'+esc(tr('mktInstall'))+'</button>';
+  else if(it.updateAvailable)right='<button class="small pri" data-mkt="1" data-id="'+esc(it.id)+'">'+esc(tr('mktUpdate'))+' '+esc(it.version)+'</button>';
   else right='<span class="sub" style="font-size:12px">'+esc(tr('mktInstalled'))+(it.installedApproved?'':(' · '+esc(tr('mktNeedApproval'))))+'</span>';
   var meta=esc(it.id)+(it.author&&it.author.name?(' · '+esc(it.author.name)):'')+(it.installed&&it.installedVersion?(' · '+esc(tr('mktLocalVer'))+' '+esc(it.installedVersion)):'')+(it.version?(' · '+esc(tr('mktLatest'))+' '+esc(it.version)):'');
   d.innerHTML='<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">'+esc(it.name)+mktBadge(it.tier)+'</div><div class="sub" style="font-size:12px;margin-top:2px;overflow-wrap:anywhere">'+meta+'</div>'+(it.summary?('<div class="sub" style="font-size:12px;margin-top:2px;overflow-wrap:anywhere">'+esc(fl(it.summary))+'</div>'):'')+(it.revokeReason?('<div class="sub" style="font-size:12px;color:var(--err);margin-top:2px">'+esc(it.revokeReason)+'</div>'):'')+'</div><div style="flex:none;display:flex;gap:6px;align-items:center">'+right+'</div>';
@@ -459,3 +459,21 @@ async function mktInstall(id,btn){
 if($('mktRefresh'))$('mktRefresh').onclick=function(){loadMarket(true);};
 // tr() 由 app-security.js 提供(它在本文件之后加载), 所以首屏不能同步调用 —— 延后一拍, 与既有启动动画同一套路
 if($('mktList'))setTimeout(function(){loadMarket(false);},0);
+// ===== "点了哪张卡片"(M-20260911-55): 用户反馈按钮点完分不清是哪张卡响应了 =====
+// 委托一个监听: 点到卡片里的按钮/开关时, 给它最近的那张卡(插件卡 > 列表行 > 开关行 > 卡片)加 .act;
+// 下一次点到别处时自动换过去 —— 只加一个 class, 不碰任何既有逻辑。
+(function () {
+  if (!document.addEventListener) return;
+  var last = null;
+  document.addEventListener('click', function (ev) {
+    var el = ev.target;
+    if (!el || !el.closest) return;
+    var hit = el.closest('button') || el.closest('.sw');
+    if (!hit) return;
+    var box = hit.closest('.plgcard') || hit.closest('.edrow') || hit.closest('.frow') || hit.closest('.card');
+    if (!box) return;
+    if (last && last !== box) { try { last.classList.remove('act'); } catch (e) {} }
+    try { box.classList.add('act'); } catch (e) {}
+    last = box;
+  }, true);
+})();

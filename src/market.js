@@ -28,7 +28,7 @@ const TIERS = ['official', 'reviewed', 'experimental'];
 // 注意 jsDelivr 的地址形如 .../VRCLiveBoard@main/market/...: 字符集必须含 @ , 否则白名单会把自家默认地址拒掉
 const URL_RE = new RegExp('^https://(cdn\\.jsdelivr\\.net/gh/' + OFFICIAL_REPO + '|raw\\.githubusercontent\\.com/' + OFFICIAL_REPO + '|github\\.com/' + OFFICIAL_REPO + ')([/@][A-Za-z0-9._~%/-]*)?$');
 
-let cache = { index: null, revoke: null, at: 0, source: null, problems: [] };
+let cache = { key: '', index: null, revoke: null, at: 0, source: null, problems: [] };
 let inflight = null;
 
 function sha256(buf) { return crypto.createHash('sha256').update(buf).digest('hex'); }
@@ -108,19 +108,25 @@ function urlsFor(cfg, kind) {
 async function getCatalog(config, force) {
   const cfg = (config && config.market) || {};
   const now = Date.now();
-  if (!force && cache.index && (now - cache.at) < CACHE_TTL_MS) return { index: cache.index, revoke: cache.revoke, source: cache.source, cached: true, problems: cache.problems };
   const idxUrls = urlsFor(cfg, 'index');
+  // 缓存按"实际用的源"区分(M-20260911-55 实测): 以前不区分 —— 用户把 market.indexUrl 指向镜像后,
+  // 最长 6 小时仍会拿旧源的目录(看起来像"改了没用")。
+  const key = idxUrls[0];
+  if (!force && cache.index && cache.key === key && (now - cache.at) < CACHE_TTL_MS) return { index: cache.index, revoke: cache.revoke, source: cache.source, cached: true, problems: cache.problems };
   const allowLocal = isLocalUrl(idxUrls[0]);
   const ri = await fetchJson(idxUrls, Number(cfg.timeoutMs || 0) || 10000);
   if (!ri.json) {
-    cache = { index: null, revoke: null, at: now, source: null, problems: ri.problems };
+    // 失败不进 6 小时正缓存(M-20260911-55): 只有成功才缓存 —— 否则一次网络抖动会让用户点开市场空空如也,
+    // 除非他自己想到去点"刷新目录"。这里只做 60 秒的负缓存(防界面反复重试打爆 CDN)。
+    cache = { key: key, index: null, revoke: null, at: now - CACHE_TTL_MS + 60000, source: null, problems: ri.problems };
     return { index: null, revoke: null, source: null, cached: false, problems: ri.problems };
   }
   const v = validateIndex(ri.json, { allowLocal: allowLocal });
   const rr = await fetchJson(urlsFor(cfg, 'revoke'), Number(cfg.timeoutMs || 0) || 10000);
   const revoked = validateRevoke(rr.json);
   const problems = ri.problems.concat(v.problems, rr.problems);
-  cache = { index: { items: v.items, schema: v.schema, updated: v.updated, allowLocal: allowLocal }, revoke: revoked, at: now, source: ri.source, problems: problems };
+  cache = { key: key, index: { items: v.items, schema: v.schema, updated: v.updated, allowLocal: allowLocal }, revoke: revoked, at: now, source: ri.source, problems: problems };
+  // (只有走到这里才是成功缓存; 上面的失败分支故意不进正缓存)
   return { index: cache.index, revoke: revoked, source: ri.source, cached: false, problems: problems };
 }
 // 目录 ∩ 本地已装: 给界面用的合并视图(更新提示/吊销标记都在这里算)
