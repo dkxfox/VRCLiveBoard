@@ -234,3 +234,4 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke
 - 发布前实机反馈三连修(DEV-NOTES 170/171): 启动黑框 → 动画回主窗口内播放; 页签选中态选择器丢失 → 补回 + 静态契约; 卡片点击无反馈 → `.act` 高亮; 页头补 GitHub 入口与真实地址; 日期模拟接受 ISO; 市场失败不再长缓存、缓存按源 key 化。
 - 发布动作: 打 tag `v1.4.0` → GitHub Release(令牌只从桌面文件读取, 不落任何日志与文档) → 上传两个 zip 与 SHA256SUMS → 复核 Release 与 `version.json` 一致。
 - 产物以本轮最终打包为准(校验和见 §8.5 表; 每次改动都重跑 release-audit 的 10 个步骤与 6b 产物级验收)。
+- **发布完成(2026-09-12)**: Release `v1.4.0` 已上线 —— https://github.com/dkxfox/VRCLiveBoard/releases/tag/v1.4.0 (资产 3 个, GitHub 侧 sha256 与本地一致, latest=v1.4.0); 发布前全量功能完整性测试 **51 PASS / 0 FAIL**(跑在发布包解出的实例上); 更新检测已报到 1.4.0(见 DEV-NOTES 172)。
