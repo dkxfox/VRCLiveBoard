@@ -235,3 +235,10 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke
 - 发布动作: 打 tag `v1.4.0` → GitHub Release(令牌只从桌面文件读取, 不落任何日志与文档) → 上传两个 zip 与 SHA256SUMS → 复核 Release 与 `version.json` 一致。
 - 产物以本轮最终打包为准(校验和见 §8.5 表; 每次改动都重跑 release-audit 的 10 个步骤与 6b 产物级验收)。
 - **发布完成(2026-09-12)**: Release `v1.4.0` 已上线 —— https://github.com/dkxfox/VRCLiveBoard/releases/tag/v1.4.0 (资产 3 个, GitHub 侧 sha256 与本地一致, latest=v1.4.0); 发布前全量功能完整性测试 **51 PASS / 0 FAIL**(跑在发布包解出的实例上); 更新检测已报到 1.4.0(见 DEV-NOTES 172)。
+
+### 8.7 1.4.1 补丁发布(2026-09-12)
+
+- 触发: 1.4.0 发布后实机反馈"好友欢迎不触发"。根因两条(见 DEV-NOTES 175): 插件用带 UID 的串比对显示名(1.4.0 里对谁都无效) + 进房快照窗口 30s 过宽。
+- 产物: `VRCLiveBoard-Desktop-SelfContained-v1.4.1.zip`(215.45MB) + `VRCLiveBoard-Lite-RequiresNode-v1.4.1.zip`(7.92MB) + `SHA256SUMS-v1.4.1.txt`; 审计 10 步全 PASS。
+- **Release 已上线**: https://github.com/dkxfox/VRCLiveBoard/releases/tag/v1.4.1 (3 资产, GitHub digest 与本地一致, `latest` = v1.4.1)。
+- 提醒: 官方插件「好友欢迎」升到 1.3.2 —— 用户在插件页**重新授权一次**即可(授权哈希含插件目录与权限声明)。
