@@ -67,14 +67,14 @@
   },
   "updatedAt": "2026-09-11",
   "zipVolumes": {
-    "asOf": "v1.3.2 (2026-09-03)",
+    "asOf": "v1.3.2 (2026-09-11 验证性打包; vendor 精简与出厂白名单生效)",
     "Lite-RequiresNode": {
-      "entries": 199,
-      "bytes": 16568725
+      "entries": 135,
+      "bytes": 8261200
     },
     "Desktop-SelfContained": {
-      "entries": 1376,
-      "bytes": 226357934
+      "entries": 1312,
+      "bytes": 218050416
     }
   },
   "supplyChain": {
