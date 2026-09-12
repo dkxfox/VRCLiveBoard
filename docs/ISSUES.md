@@ -661,3 +661,11 @@
 - 改动(2026-09-11): plugin-behavior.js 新增 netease CDP 用例(假 WebSocket 工厂 + 假 fetch), 5 条断言: 正常路径建定时器 / dispose 清空 / 停用后 start 不重建 / dispose 结束未应答请求 / 超上限明确拒绝。
 - 说明: 8 秒单次超时那条没有断言(会让门禁慢 8 秒), 由"上限 + dispose"两条覆盖同类风险; 阈值语义(`size > 200` → 第 202 次起拒绝)已写进测试注释, 避免以后误判。
 - 状态: CLOSED
+## M-20260911-46 发布验证打包: 走通 make-dist + release-audit, 抓出并修掉 6 处打包/审计问题(CLOSED)
+- 来源: 用户"继续到实机步骤"(版本先不升, 只做一次验证性打包)
+- 结果: **make-dist 自审全绿 + release-audit 全部 10 个步骤 PASS → AUDIT PASS**; 包内 BUILD-INFO.commit 与 HEAD 一致。
+- 这轮验证抓出的问题(全部修复, 都是"只有真跑一遍才会现形"的): ① **排除清单的并集变量没生效** —— `$peFiles` 定义在 `$xfFiles` 之前(那时它还是空), 等于清单里的文件段整段没起作用; ② **docs 白名单没做**: 内部流程/基线文件仍在出厂, 且排除项把文件名写成 `打包与分发.md`(实际是 `04-打包与分发.md`)→ 改为 `Prune-Docs` 白名单 + 通配; ③ **pack-audit 的一条禁入正则被转义吃掉反斜杠**(`/^dev-dongle//i` → `ReferenceError`)—— 被 make-dist 的**末尾自审当场拦下**; ④ **插件包模式漏关一条"整包必备文件"检查**, 导致插件更新包永远审不过; ⑤ **体积基线没有容差** —— zip 每次重建会差几字节(实测 2 字节), 严格相等会让"打包→改一处→再打包"永远对不上; ⑥ **审计报告(生成物)自己进了包**, 而且被误提交进版本库。
+- 复核记录: 新旧包条目差异 = **xlsx vendor 早先的精简(-8.3MB, 旧 1.3.2 包还是裁之前的版本) + conflict-test 自测插件 + 内部文档/基线 json/开发者文档-04/.gitignore/startup-test/加密狗安全声明** —— 逐条人工核对后更新 `zipVolumes` 基线; 新增条目 = 本次的新文件(BUILD-INFO.json / pack-exclude.json / capturehost.js / capture_core.ps1 / capture_host.ps1 / hash.js / icon-256.png / 前端拆分后的脚本)。
+- 改动(2026-09-11): ① make-dist: `peFiles` 并集移到 `$xfFiles` 之后计算、两个 robocopy 改用它、新增 `Prune-Docs`(docs 白名单: 只发 DEV-NOTES/GLOSSARY/PLUGIN-DEV/LIVETRANSLATE/RESEARCH)、排除清单加"审计报告-*.txt"; ② pack-audit: 插件包模式跳过整包必备文件检查、体积基线改成"条目严格 + 字节 1%/4KB 容差"; ③ .gitignore 加审计报告; ④ SECURITY-BASELINE.json 的 zipVolumes 按复核结果更新。
+- 教训: ① **"真跑一遍"和"门禁全绿"是两件事**: 15 项常规门禁全绿的状态下, 首次完整打包/审计仍然抓出 6 个问题(其中两个会让发布包带着内部文档出厂)。② **排除表这类"配置"最容易静默失效**: `$peFiles` 算错位置、文件名少个前缀、并集没被使用 —— 三种都不会报错, 只会"少排除"。③ 自审要放在**流水线末尾**(make-dist 自己跑 pack-audit), 这次正是它先抓到自己的门禁坏了。
+- 状态: CLOSED
