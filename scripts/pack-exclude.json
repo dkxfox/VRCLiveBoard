@@ -48,7 +48,8 @@
     "SECURITY-BASELINE.json",
     "DOC-BASELINE.json",
     "I18N-BASELINE.json",
-    "ROUTES-BASELINE.json"
+    "ROUTES-BASELINE.json",
+    "审计报告-AUDIT-*.txt"
   ],
   "docsWhitelist": [
     "DEV-NOTES.md",
