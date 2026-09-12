@@ -13,6 +13,7 @@ const { setConsoleVisible } = require('../consolewin');
 const devgate = require('../devgate');
 const swearfilter = require('../swearfilter');
 const { DEFAULT_BLOCK_WORDS } = require('../ocrtranslate');
+const market = require('../market');   // 插件市场客户端(M-20260911-51)
 
 function createServer(opts) {
   const composer = opts.composer;
@@ -303,7 +304,7 @@ function effPluginSec() {
     const swf = (rootConfig.chatbox && rootConfig.chatbox.swearFilter) || {};
     // 空安全: 配置段缺失时宁可给空值, 也不能让这个高频接口抛未捕获异常(整个服务会因此不回包)
     const pgCfg = (rootConfig.sources && rootConfig.sources.pages) || {};
-    return json(res, 200, { pages: pgCfg.pages || [], rotationMs: pgCfg.rotationMs, sources: srcs, autostart: autostart, desktop: { showConsole: !((rootConfig.desktop || {}).showConsole === false) }, lang: (rootConfig.web && rootConfig.web.lang) || 'zh-CN', ocrtl: { delayMs: (rootConfig.ocrtl || {}).delayMs || 5000, displayMs: (rootConfig.ocrtl || {}).displayMs || 8000, loops: (rootConfig.ocrtl || {}).loops || 2, mode: (rootConfig.ocrtl || {}).mode || 'auto', vision: { apiBase: v.apiBase || '', model: v.model || 'deepseek-v4-flash-vision-exp', hasKey: !!v.apiKey, targetLang: v.targetLang || 'zh' }, capture: { mode: cap.mode || 'window', windowTitle: cap.windowTitle || 'VRChat', region: cap.region || { x: 0, y: 0, w: 0, h: 0 } }, security: { promptDefense: sec.promptDefense !== false, jsonMode: sec.jsonMode !== false, outputSanitize: sec.outputSanitize !== false, extraPrompt: sec.extraPrompt || '', blockWords: sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS } }, swearFilter: { enabled: swf.enabled !== false, words: swf.words && swf.words.length ? swf.words : swearfilter.DEFAULTS }, pluginsSecurity: effPluginSec(), branding: (rootConfig.branding || 'default'), specialEvents: (rootConfig.specialEvents || []), efx: { enabled: efxCfg().enabled, oncePerDay: efxCfg().oncePerDay } });
+    return json(res, 200, { pages: pgCfg.pages || [], rotationMs: pgCfg.rotationMs, sources: srcs, autostart: autostart, desktop: { showConsole: !((rootConfig.desktop || {}).showConsole === false) }, lang: (rootConfig.web && rootConfig.web.lang) || 'zh-CN', ocrtl: { delayMs: (rootConfig.ocrtl || {}).delayMs || 5000, displayMs: (rootConfig.ocrtl || {}).displayMs || 8000, loops: (rootConfig.ocrtl || {}).loops || 2, mode: (rootConfig.ocrtl || {}).mode || 'auto', vision: { apiBase: v.apiBase || '', model: v.model || 'deepseek-v4-flash-vision-exp', hasKey: !!v.apiKey, targetLang: v.targetLang || 'zh' }, capture: { mode: cap.mode || 'window', windowTitle: cap.windowTitle || 'VRChat', region: cap.region || { x: 0, y: 0, w: 0, h: 0 } }, security: { promptDefense: sec.promptDefense !== false, jsonMode: sec.jsonMode !== false, outputSanitize: sec.outputSanitize !== false, extraPrompt: sec.extraPrompt || '', blockWords: sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS } }, swearFilter: { enabled: swf.enabled !== false, words: swf.words && swf.words.length ? swf.words : swearfilter.DEFAULTS }, pluginsSecurity: effPluginSec(), branding: (rootConfig.branding || 'default'), specialEvents: (rootConfig.specialEvents || []), efx: { enabled: efxCfg().enabled, oncePerDay: efxCfg().oncePerDay }, market: { indexUrl: ((rootConfig.market || {}).indexUrl || ''), revokeUrl: ((rootConfig.market || {}).revokeUrl || ''), installed: rootConfig.marketInstalled || {} } });
   });
   const route_v1_chatbox = function (req, res, url) {
     return readBody(req, function (body) {
@@ -334,6 +335,12 @@ function effPluginSec() {
         if (o.branding) rootConfig.branding = String(o.branding);
         if (o.specialEvents !== undefined) rootConfig.specialEvents = Array.isArray(o.specialEvents) ? o.specialEvents : [];
         if (Array.isArray(o.dailyEvents)) rootConfig.dailyEvents = o.dailyEvents;
+        // 市场源可自定义(国内镜像/内网目录): 只收白名单字段, 空串=回落官方默认源
+        if (o.market !== undefined && o.market && typeof o.market === 'object') {
+          if (!rootConfig.market || typeof rootConfig.market !== 'object') rootConfig.market = {};
+          if (o.market.indexUrl !== undefined) rootConfig.market.indexUrl = String(o.market.indexUrl || '');
+          if (o.market.revokeUrl !== undefined) rootConfig.market.revokeUrl = String(o.market.revokeUrl || '');
+        }
         // 启动彩蛋开关(M-20260911-50): 只合并白名单字段, played 记录允许测试页重置
         if (o.efx !== undefined && o.efx && typeof o.efx === 'object') {
           const e = efxCfg();
@@ -523,9 +530,49 @@ function effPluginSec() {
       } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
     });
   });
+  // 插件市场(1.4.0 MVP, M-20260911-51): 目录与吊销来自 GitHub + jsDelivr(与 versioncheck 同源双源/白名单),
+  // 安装永远走 manager.importZip(解包防线 + id 白名单)与既有的红窗审批 —— 市场不绕过任何一道门槛
   on('GET', '/api/market', function (req, res, url) {
-    return json(res, 200, { items: [], note: '插件市场将在后续版本开放,现阶段请通过群文件获取插件后本地导入。' });
+    return market.getCatalog(rootConfig, false).then(function (cat) {
+      const plugins = pluginManager ? pluginManager.status().plugins : [];
+      const items = market.mergeWithInstalled(cat, plugins);
+      return json(res, 200, {
+        ok: true,
+        schema: cat.index ? cat.index.schema : 0,
+        updated: cat.index ? cat.index.updated : '',
+        source: cat.source || '',
+        cached: !!cat.cached,
+        problems: (cat.problems || []).slice(0, 8),
+        revoked: (cat.revoke || []).map(function (r) { return { id: r.id, versions: r.versions, reason: r.reason }; }),
+        installedMeta: rootConfig.marketInstalled || {},
+        items: items
+      });
+    }).catch(function (e) { noteFail('/api/market', e); return json(res, 500, { ok: false, error: String(e.message) }); });
   });
+  on('POST', '/api/market/refresh', function (req, res, url) {
+    if (!originAllowed(req)) return json(res, 403, { ok: false, error: '已拒绝跨站请求' });
+    return market.getCatalog(rootConfig, true).then(function (cat) {
+      return json(res, 200, { ok: !!cat.index, source: cat.source || '', count: cat.index ? cat.index.items.length : 0, problems: (cat.problems || []).slice(0, 8) });
+    }).catch(function (e) { return json(res, 500, { ok: false, error: String(e.message) }); });
+  });
+  on('POST', '/api/market/install', function (req, res, url) {
+    return readBody(req, function (body) {
+      if (!originAllowed(req)) return json(res, 403, { ok: false, error: '已拒绝跨站请求' });
+      try {
+        const o = JSON.parse(body || '{}');
+        const id = String(o.id || '');
+        if (!pluginManager) return json(res, 400, { ok: false, error: '插件管理器未就绪' });
+        if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) return json(res, 400, { ok: false, error: '插件 id 非法' });
+        market.install(rootConfig, pluginManager, id, String(o.version || '')).then(function (r) {
+          if (!r.ok) return json(res, 400, r);
+          persist();
+          logger.info('市场安装: ' + r.id + '@' + r.version + ' (' + r.tier + ')');
+          return json(res, 200, r);
+        }).catch(function (e) { return json(res, 500, { ok: false, error: String(e.message) }); });
+      } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
+    });
+  });
+
   on('POST', '/api/ocrtl-vision', function (req, res, url) {
     return readBody(req, function (body) {
       try {

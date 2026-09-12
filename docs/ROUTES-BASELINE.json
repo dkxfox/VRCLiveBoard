@@ -13,7 +13,9 @@
     "POST /api/plugins/remove": "递归删除插件目录; 按 F-20260903-01 §1.7 属零级(威胁模型明确不防本机所有者)",
     "POST /api/fe-err": "前端错误上报入口(只写日志), 零级",
     "POST /v1/chatbox": "外部推送文本入口(本地), 与 /api/chatbox 同一处理器",
-    "GET /api/efx/boot": "启动彩蛋决策(设计稿 §4 状态机): 只读判定 + 写回\"已播\"状态; 零级, 但带跨站围栏(与 POST /api/config 同口径: 防恶意网页替用户消耗掉彩蛋); ?date= 供开发测试页模拟日期, ?dry=1 只问不记"
+    "GET /api/efx/boot": "启动彩蛋决策(设计稿 §4 状态机): 只读判定 + 写回\"已播\"状态; 零级, 但带跨站围栏(与 POST /api/config 同口径: 防恶意网页替用户消耗掉彩蛋); ?date= 供开发测试页模拟日期, ?dry=1 只问不记",
+    "POST /api/market/install": "安装市场条目: 下载 + sha256 校验 + manager.importZip; 零级(同 POST /api/config), 但仍需走既有的插件授权红窗才能启用",
+    "POST /api/market/refresh": "强制刷新市场目录(绕过 6h 缓存); 零级"
   },
   "specialBranches": [
     "GET / 与 /index.html: 首页",
@@ -145,6 +147,16 @@
     {
       "m": "GET",
       "p": "/api/market",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/market/install",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/market/refresh",
       "level": 0
     },
     {

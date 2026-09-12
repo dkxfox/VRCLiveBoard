@@ -132,6 +132,10 @@
     "pluginEnabled":  [
 
                       ],
+    "market":  {
+                   "indexUrl":  "",
+                   "revokeUrl":  ""
+               },
     "efx":  {
                 "enabled":  true,
                 "oncePerDay":  true,

@@ -189,6 +189,90 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     ok((await boot(D)).action === 'normal', '用例结束清空彩蛋条目(恢复原状)');
   } catch (e) { ok(false, '启动彩蛋决策用例异常: ' + e.message); }
 
+  // ⑨ 插件市场 MVP(M-20260911-51): 用隔离实例自己的静态目录当市场源 —— 不联网也能端到端验证
+  //    覆盖: 目录拉取/分级标记/安装(下载+sha256+importZip)/来源记录/更新提示/哈希不符拒装/吊销列表拦截
+  if (!ROOT) note('未提供 --root, 跳过插件市场用例');
+  else {
+    try {
+      const { execFileSync } = require('child_process');
+      const crypto = require('crypto');
+      // 市场源用独立的本地镜像进程: 主服务的静态路由只服务 public 根目录(含 / 的路径一律不服务), 而真实市场本来就在外部主机上
+      const http = require('http');
+      const os = require('os');
+      const pub = path.join(os.tmpdir(), 'vrcb-mkt-gate');
+      const src = path.join(os.tmpdir(), 'vrcb-mkt-gate-src');
+      const mport = PORT + 1;
+      const resetMarket = async function () { await req('/api/config', { method: 'POST', body: JSON.stringify({ market: { indexUrl: '', revokeUrl: '' } }) }); };
+      fs.rmSync(pub, { recursive: true, force: true }); fs.mkdirSync(pub, { recursive: true });
+      fs.rmSync(src, { recursive: true, force: true }); fs.mkdirSync(src, { recursive: true });
+      let msrv = null;
+      fs.writeFileSync(path.join(src, 'manifest.json'), JSON.stringify({ id: 'market-test', name: 'market gate', version: '1.0.0', api: '2.0.0', permissions: { network: [], filesystem: { read: [], write: [] }, process: false, ports: [] } }), 'utf8');
+      fs.writeFileSync(path.join(src, 'index.js'), 'module.exports = { onLoad: function () {} };\n', 'utf8');
+      const zip = path.join(pub, 'market-test-1.0.0.zip');
+      execFileSync('tar', ['-a', '-c', '-f', zip, '-C', src, '.'], { windowsHide: true });   // Windows 自带 bsdtar 能打 zip(importZip 也用 tar 解)
+      const hash = crypto.createHash('sha256').update(fs.readFileSync(zip)).digest('hex');
+      const base = 'http://127.0.0.1:' + mport;
+      const item = { id: 'market-test', name: 'market gate', version: '1.0.0', tier: 'reviewed', summary: 'gate', author: { id: 'gate', name: 'gate' }, api: '2.0.0', url: base + '/market-test-1.0.0.zip', sha256: hash, size: fs.statSync(zip).size, permissions: {} };
+      fs.writeFileSync(path.join(pub, 'index.json'), JSON.stringify({ schema: 1, updated: '2026-09-12', items: [item] }), 'utf8');
+      fs.writeFileSync(path.join(pub, 'revoke.json'), JSON.stringify({ schema: 1, revoked: [] }), 'utf8');
+      // 起本地镜像(只读这几个文件)
+      msrv = http.createServer(function (rq, rs) {
+        const rel = String(rq.url || '/').split('?')[0].replace(/^\/+/, '');
+        const f = path.join(pub, rel);
+        if (rel && f.indexOf(pub) === 0 && fs.existsSync(f) && fs.statSync(f).isFile()) { rs.writeHead(200); return fs.createReadStream(f).pipe(rs); }
+        rs.writeHead(404); rs.end('no');
+      });
+      await new Promise(function (r2) { msrv.listen(mport, '127.0.0.1', r2); });
+      await req('/api/config', { method: 'POST', body: JSON.stringify({ market: { indexUrl: base + '/index.json', revokeUrl: base + '/revoke.json' } }) });
+      const mget = async function () { return JSON.parse((await req('/api/market')).body.toString('utf8')); };
+      const mref = async function () { await req('/api/market/refresh', { method: 'POST', body: '{}' }); return mget(); };
+      let m = await mget();
+      const pick = function (j) { return (j.items || []).filter(function (x) { return x.id === 'market-test'; })[0] || {}; };
+      ok(m.ok === true && !!pick(m).id, '市场目录可拉取并列出条目(本地源)');
+      ok(pick(m).tier === 'reviewed' && pick(m).installed === false, '条目带分级标记(reviewed)且未安装状态正确');
+      let inst = JSON.parse((await req('/api/market/install', { method: 'POST', body: JSON.stringify({ id: 'market-test' }) })).body.toString('utf8'));
+      ok(inst.ok === true && inst.tier === 'reviewed' && inst.sha256 === hash, '安装成功(下载 → sha256 校验 → importZip)并回传分级');
+      const pl = JSON.parse((await req('/api/plugins')).body.toString('utf8'));
+      ok((pl.plugins || []).some(function (p) { return p.id === 'market-test'; }), '安装后插件出现在插件列表');
+      const cfg = JSON.parse((await req('/api/config')).body.toString('utf8'));
+      const mi = (cfg.market && cfg.market.installed) || {};
+      ok(!!(mi['market-test'] && mi['market-test'].sha256 === hash && mi['market-test'].tier === 'reviewed'), '安装来源(分级/哈希)进入运行中的配置');
+      const diskM = JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8'));
+      ok(!!(diskM.marketInstalled && diskM.marketInstalled['market-test'] && diskM.marketInstalled['market-test'].sha256 === hash), '安装来源已落盘(重启后仍知道它来自市场哪个分级)');
+      m = await mref();
+      ok(pick(m).installed === true && pick(m).upToDate === true, '已安装且版本一致 → upToDate');
+      fs.writeFileSync(path.join(pub, 'index.json'), JSON.stringify({ schema: 1, items: [Object.assign({}, item, { version: '1.1.0' })] }), 'utf8');
+      m = await mref();
+      ok(pick(m).updateAvailable === true && pick(m).installedVersion === '1.0.0', '目录版本更高 → 更新提示(带已装版本)');
+      fs.writeFileSync(path.join(pub, 'index.json'), JSON.stringify({ schema: 1, items: [Object.assign({}, item, { version: '1.1.0', sha256: 'a'.repeat(64) })] }), 'utf8');
+      await mref();   // 必须刷新缓存: 目录缓存 6h, 不刷新拿到的是上一份(好哈希)目录
+      inst = JSON.parse((await req('/api/market/install', { method: 'POST', body: JSON.stringify({ id: 'market-test' }) })).body.toString('utf8'));
+      ok(inst.ok === false && /sha256/.test(inst.error || ''), '哈希不符 → 拒绝安装(内容校验真的在跑)');
+      fs.writeFileSync(path.join(pub, 'index.json'), JSON.stringify({ schema: 1, items: [item] }), 'utf8');
+      m = await mref();
+      ok(pick(m).revoked === false, '未吊销时 revoked=false(基线)');
+      fs.writeFileSync(path.join(pub, 'revoke.json'), JSON.stringify({ schema: 1, revoked: [{ id: 'market-test', versions: ['*'], reason: 'gate revoke' }] }), 'utf8');
+      m = await mref();
+      ok(pick(m).revoked === true && /gate revoke/.test(pick(m).revokeReason || ''), '吊销列表命中 → 界面可见(revoked + 原因)');
+      inst = JSON.parse((await req('/api/market/install', { method: 'POST', body: JSON.stringify({ id: 'market-test' }) })).body.toString('utf8'));
+      ok(inst.ok === false && /吊销/.test(inst.error || ''), '被吊销的插件拒绝安装');
+      // 坏目录条目: 非白名单域名必须被丢(防投毒)
+      fs.writeFileSync(path.join(pub, 'index.json'), JSON.stringify({ schema: 1, items: [Object.assign({}, item, { url: 'https://evil.example.com/x.zip' })] }), 'utf8');
+      m = await mref();
+      ok(pick(m).tier === 'local', '目录里的非白名单下载地址被丢弃(只剩本地已装条目, 不再作为市场条目出现)');
+      fs.writeFileSync(path.join(pub, 'index.json'), JSON.stringify({ schema: 1, items: [item] }), 'utf8');
+      await mref();
+      // 清理: 卸下测试插件 + 恢复市场源
+      await req('/api/plugins/disable', { method: 'POST', body: JSON.stringify({ id: 'market-test' }) });
+      const rm = JSON.parse((await req('/api/plugins/remove', { method: 'POST', body: JSON.stringify({ id: 'market-test' }) })).body.toString('utf8'));
+      ok(rm.ok === true, '测试插件已移除(隔离实例内)');
+      await resetMarket();
+      if (msrv) { await new Promise(function (r2) { msrv.close(r2); }); msrv = null; }
+      fs.rmSync(pub, { recursive: true, force: true }); fs.rmSync(src, { recursive: true, force: true });
+      await req('/api/market/refresh', { method: 'POST', body: '{}' });
+    } catch (e) { ok(false, '插件市场用例异常: ' + e.message); }
+  }
+
   console.log('[backend-flow] pass=' + pass + ' fail=' + fail + (skip ? (' skip=' + skip) : ''));
   process.exitCode = fail ? 1 : 0;
 })().catch(function (e) { console.log('  FAIL 流程测试异常: ' + ((e && e.stack) || e)); process.exitCode = 1; });

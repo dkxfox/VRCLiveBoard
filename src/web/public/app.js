@@ -410,3 +410,49 @@ capInfoShow();
 
 pollStatus();setInterval(pollStatus,5000);
 loadPages();loadPlugins();renderEnv();loadTrans();loadLogs();
+// ===== 插件市场(1.4.0 MVP, M-20260911-51): 目录 / 分级标记 / 安装(sha256) / 更新提示 / 吊销 =====
+// 设计口径: 列表来自 /api/market(服务端已做白名单与哈希校验), 前端只负责呈现与点按钮; 安装仍会触发既有的红窗授权
+var _mkt=null,_mktBusy=false;
+function mktTierKey(t){return t==='official'?'mktTierOfficial':(t==='reviewed'?'mktTierReviewed':(t==='local'?'mktTierLocal':(t==='experimental'?'mktTierExperimental':'')));}
+function mktTierColor(t){return t==='official'?'#3ddc84':(t==='reviewed'?'#7dd3fc':(t==='local'?'#8b98a8':'#f0b429'));}
+function mktBadge(t){var k=mktTierKey(t);if(!k)return '';var c=mktTierColor(t);return '<span style="font-size:11px;border:1px solid '+c+'66;color:'+c+';border-radius:6px;padding:1px 6px;margin-left:6px;white-space:nowrap">'+esc(tr(k))+'</span>';}
+function mktRow(it){
+  var d=document.createElement('div');d.className='edrow';d.style.alignItems='flex-start';
+  var right;
+  if(it.revoked)right='<span style="color:var(--err);font-size:12px">'+esc(tr('mktRevoked'))+'</span>';
+  else if(!it.installed)right='<button class="small" data-mkt="1" data-id="'+esc(it.id)+'">'+esc(tr('mktInstall'))+'</button>';
+  else if(it.updateAvailable)right='<button class="small" data-mkt="1" data-id="'+esc(it.id)+'">'+esc(tr('mktUpdate'))+' '+esc(it.version)+'</button>';
+  else right='<span class="sub" style="font-size:12px">'+esc(tr('mktInstalled'))+(it.installedApproved?'':(' · '+esc(tr('mktNeedApproval'))))+'</span>';
+  var meta=esc(it.id)+(it.author&&it.author.name?(' · '+esc(it.author.name)):'')+(it.installed&&it.installedVersion?(' · '+esc(tr('mktLocalVer'))+' '+esc(it.installedVersion)):'')+(it.version?(' · '+esc(tr('mktLatest'))+' '+esc(it.version)):'');
+  d.innerHTML='<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">'+esc(it.name)+mktBadge(it.tier)+'</div><div class="sub" style="font-size:12px;margin-top:2px;overflow-wrap:anywhere">'+meta+'</div>'+(it.summary?('<div class="sub" style="font-size:12px;margin-top:2px;overflow-wrap:anywhere">'+esc(fl(it.summary))+'</div>'):'')+(it.revokeReason?('<div class="sub" style="font-size:12px;color:var(--err);margin-top:2px">'+esc(it.revokeReason)+'</div>'):'')+'</div><div style="flex:none;display:flex;gap:6px;align-items:center">'+right+'</div>';
+  return d;
+}
+function renderMarket(){
+  var el=$('mktList');if(!el)return;el.innerHTML='';
+  var meta=$('mktMeta'),noteEl=$('mktNote');
+  if(!_mkt){if(noteEl)noteEl.textContent=tr('mktLoading');return;}
+  var items=_mkt.items||[];
+  if(meta)meta.textContent=tr('mktSource')+': '+(_mkt.source?(String(_mkt.source).indexOf('jsdelivr')>=0?'jsDelivr':(String(_mkt.source).indexOf('raw.githubusercontent')>=0?'GitHub raw':tr('mktSourceCustom'))):tr('mktNoSource'))+(items.length?(' · '+items.length):'');
+  if(noteEl){var p=(_mkt.problems||[]).slice(0,2);noteEl.textContent=p.length?(tr('mktProblems')+': '+p.join(' / ')):'';noteEl.style.color=p.length?'var(--warn)':'';}
+  items.forEach(function(it){el.appendChild(mktRow(it));});
+  if(!items.length){var e=document.createElement('div');e.className='sub';e.style.fontSize='12px';e.style.marginTop='6px';e.textContent=tr('mktNoItems');el.appendChild(e);}
+  el.querySelectorAll('button[data-mkt]').forEach(function(b){b.onclick=function(){mktInstall(b.dataset.id,b);};});
+}
+async function loadMarket(force){
+  if(_mktBusy)return;_mktBusy=true;
+  var noteEl=$('mktNote');if(noteEl)noteEl.textContent=tr('mktLoading');
+  try{if(force)await fetch('/api/market/refresh',{method:'POST',body:'{}'});_mkt=await (await fetch('/api/market')).json();}
+  catch(e){_mkt={items:[],problems:[String((e&&e.message)||e)]};}
+  _mktBusy=false;renderMarket();
+}
+async function mktInstall(id,btn){
+  if(btn){btn.disabled=true;btn.textContent=tr('mktInstalling');}
+  try{var r=await fetch('/api/market/install',{method:'POST',body:JSON.stringify({id:id})});var j=await r.json();
+    if(j&&j.ok){note(tr('mktInstallOk')+' '+id+' @'+j.version);if(typeof loadPlugins==='function')loadPlugins();}
+    else note(tr('mktInstallFail')+': '+((j&&j.error)||r.status),'warn');}
+  catch(e){note(tr('mktInstallFail')+': '+((e&&e.message)||e),'warn');}
+  _mkt=null;loadMarket(false);
+}
+if($('mktRefresh'))$('mktRefresh').onclick=function(){loadMarket(true);};
+// tr() 由 app-security.js 提供(它在本文件之后加载), 所以首屏不能同步调用 —— 延后一拍, 与既有启动动画同一套路
+if($('mktList'))setTimeout(function(){loadMarket(false);},0);

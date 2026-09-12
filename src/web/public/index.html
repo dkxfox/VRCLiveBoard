@@ -204,7 +204,7 @@ body.no-anim *{animation:none!important;transition:none!important}
   </div>
 </div>
 <!-- 插件 -->
-<div id="tab-plugins" hidden><div class="card" style="margin-bottom:12px"><div class="row" style="flex-wrap:wrap;gap:8px"><input id="plgZip" data-t-ph="plgZipPh" style="flex:1;min-width:200px"><button id="plgImport" class="small" data-t="plgImport"></button><button id="plgRefresh" class="small" data-t="plgRefresh"></button><button id="plgPrioReset" class="small gray" data-t="prioReset"></button><span class="sub" id="plgMsg" style="font-size:12px"></span></div><div class="sub" style="margin:6px 0 0" data-t="plgPrioExplain"></div></div><div id="plugCards"></div></div>
+<div id="tab-plugins" hidden><div class="card" style="margin-bottom:12px"><div class="row" style="flex-wrap:wrap;gap:8px"><input id="plgZip" data-t-ph="plgZipPh" style="flex:1;min-width:200px"><button id="plgImport" class="small" data-t="plgImport"></button><button id="plgRefresh" class="small" data-t="plgRefresh"></button><button id="plgPrioReset" class="small gray" data-t="prioReset"></button><span class="sub" id="plgMsg" style="font-size:12px"></span></div><div class="sub" style="margin:6px 0 0" data-t="plgPrioExplain"></div></div><div id="plugCards"></div><div class="card" id="marketCard" style="margin-top:12px"><div class="row" style="flex-wrap:wrap;gap:8px"><b class="card-title" data-t="marketTitle">插件市场</b><button class="small gray" id="mktRefresh" data-t="mktRefresh">刷新目录</button><span class="sub" id="mktMeta" style="font-size:12px"></span><span class="sub" style="font-size:12px;margin-left:auto" data-t="mktTierHint">分级: 官方 / 已审核 / 实验</span></div><div class="sub" id="mktNote" style="font-size:12px;margin-top:6px;line-height:1.7"></div><div id="mktList"></div></div></div>
 <div id="tab-src" hidden>
   <div class="card">
     <div class="card-title" style="margin-bottom:8px" data-t="secSrc"></div>
@@ -339,7 +339,7 @@ body.no-anim *{animation:none!important;transition:none!important}
   </div>
 </div>
 </div>
-<div class="card sub" id="marketCard" style="display:none"></div>
+
 <div id="plgModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:10000;top:0;left:0;width:100%;height:100%;align-items:center;justify-content:center">
   <div style="background:#2a0e0e;border:2px solid var(--err);border-radius:12px;max-width:520px;width:90%;padding:20px;color:#ffd7d7">
     <b id="plgModalTitle" style="color:#ff6b6b;font-size:16px"></b>
