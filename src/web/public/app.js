@@ -477,3 +477,7 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     last = box;
   }, true);
 })();
+// 页头地址显示真实值(M-20260911-57): 原先是写死的 http://127.0.0.1:19190/ —— 端口回退后就不对了
+(function(){var u=document.getElementById('hdrUrl');if(u&&location&&location.origin)u.textContent=location.origin+'/';
+  // GitHub 入口: target/rel 用 JS 兜底(桌面壳只放行 https 且走系统浏览器打开; 新标签是必须的, 否则会被导航守卫拦下)
+  var g=document.getElementById('ghRepo');if(g){g.setAttribute('target','_blank');g.setAttribute('rel','noopener noreferrer');}})();
