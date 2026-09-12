@@ -95,3 +95,40 @@ ctx 能力清单:
 设置面板: <需要哪些输入框>
 只输出 manifest.json 与 index.js 两个文件内容,遵守 docs/PLUGIN-DEV.md 规范。
 ```
+
+## 插件市场(1.4.0): 入库流程与分级
+
+市场 = **同一个 GitHub 仓库的 `market/` 目录** + jsDelivr/raw 双源分发(与更新检测同一套: 国内可达, 直连只作回退)。客户端只认这一份目录, 不做任何"服务端登录"。
+
+### 目录结构
+```
+market/index.json            插件目录(唯一索引; 由脚本生成, 别手改)
+market/revoke.json           吊销列表(命中即拒绝安装并提示原因)
+market/packages/<id>-<ver>.zip   分发包(客户端装的就是它)
+```
+
+### 入库流程(代发制 —— 作者多为国内小圈子, "PR 流程"对人不成立)
+1. 作者把 **插件 zip + 说明 + 联系方式** 私聊给开发者;
+2. 开发者本地过审: 放进 `plugins/<id>/` → 跑门禁(G1/G2/GPLUG/GBOOT 与行为断言) → 人工看权限声明与来源;
+3. 生成目录: `node scripts/make-market.js --tier reviewed --only <id>`(官方插件用 `--tier official`);
+4. 提交 `market/` 并推送 —— 客户端最多 6 小时后(或点"刷新目录")看到它;
+5. 出问题: 往 `market/revoke.json` 加一条 `{id, versions:["*"], reason}`, 提交推送 —— 全量客户端立即拒装并显示原因。
+
+### 分级(tier)
+| 分级 | 含义 | 客户端表现 |
+| --- | --- | --- |
+| `official` | 官方自带插件 | 徽章"官方" |
+| `reviewed` | 已人工审核的第三方 | 徽章"已审核" |
+| `experimental` | 实验区/未审核(目录里没写 tier 时的**默认值**) | 徽章"实验" |
+| `local` | 只在本机存在(自装/已下架) | 徽章"本地" |
+
+分级只影响**标记与提示**, 不替代授权: 从市场装的插件仍然要在控制台里过一次红窗授权(高危插件还要输入插件名)才能启用。
+
+### 客户端拿到的保证
+- 目录条目必须带 **sha256**(缺则整条丢弃)与**白名单下载地址**(只允许官方仓库的 jsDelivr/raw/github 域名, 防投毒);
+- 下载后先比 `size`(±1KB)再比 **sha256**, 不符即拒绝安装并报出两侧前缀;
+- 解包走 `manager.importZip` 的既有防线(zip ≤50MB / 解包 ≤200MB / 条目 ≤2000 / 防 zip-slip / id 白名单);
+- 安装来源(分级/哈希/时间)记进 `config.marketInstalled`, 重启后仍知道它来自哪个分级。
+
+### 自定义源(国内镜像/内网目录)
+`config.market.indexUrl` / `config.market.revokeUrl` 可指向自建镜像(与官方源同一份 schema); 指向 `http://127.0.0.1` 时视为**测试模式**, 允许同源 http 下载地址(门禁就是这么跑端到端的)。
