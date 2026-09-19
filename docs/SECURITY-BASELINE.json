@@ -69,14 +69,14 @@
   },
   "updatedAt": "2026-09-11",
   "zipVolumes": {
-    "asOf": "v1.4.0 (2026-09-12 正式打包; 插件市场 + 启动彩蛋素材进自包含包, Lite 排除)",
+    "asOf": "v1.4.2 (2026-09-19 正式打包; 差异逐条复核: 相对 v1.4.1 只新增 src/updateinfo.js 一个进包文件 -> 条目 +1; 字节增长来自该文件与随包的 DEV-NOTES/前端资源改动, 无移除)",
     "Lite-RequiresNode": {
-      "entries": 140,
-      "bytes": 8289203
+      "entries": 141,
+      "bytes": 8328445
     },
     "Desktop-SelfContained": {
-      "entries": 1318,
-      "bytes": 225899546
+      "entries": 1319,
+      "bytes": 225938784
     }
   },
   "supplyChain": {
