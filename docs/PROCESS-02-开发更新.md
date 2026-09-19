@@ -187,7 +187,9 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke
 2. `powershell -File scripts\checks\release-audit.ps1` —— 验: 打包脚本自身健康(0a)、包与 HEAD 绑定、插件更新包禁入名单、依赖与产物基线、`SHA256SUMS`;
 3. 发布说明写明: **插件更新后需重新授权一次**(授权哈希含插件目录与权限声明);
 4. 实机点一遍: 截图翻译(含提示音与结果块)、识别方式重启保留、引导层首访、命令行窗口开关;
-5. 确认 `dist\公开版\` 只有本次版本的 zip(新 make-dist 会在开跑时清掉旧包与旧校验和)。
+5. 确认 `dist\公开版\` 只有本次版本的 zip(新 make-dist 会在开跑时清掉旧包与旧校验和);
+6. 在 `version.json` 的 `history` 里**追加当前版本那一条**(更新内容: 用户点「检查更新」看到的就是它)——
+   GVER 会拦: history 缺当前版本时门禁直接 FAIL(2026-09-19 起)。
 
 ### 8.4 发布验证(2026-09-12)
 

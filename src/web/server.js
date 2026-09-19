@@ -7,7 +7,8 @@ const { diagnose } = require('../diagnose');
 const { runOnce: runOcrTranslate, getLtStatus } = require('../ocrtranslate');
 const { installPortablePython, existsPython, pyExe } = require('../portablepy');
 const { resolvePython } = require('../pyhelper');
-const { checkUpdate, compareVersions } = require('../versioncheck');
+const { checkUpdate, compareVersions, fetchReleaseInfo } = require('../versioncheck');
+const updateinfo = require('../updateinfo');
 const { execFile, execFileSync, spawn } = require('child_process');
 const { setConsoleVisible } = require('../consolewin');
 const devgate = require('../devgate');
@@ -294,13 +295,31 @@ function effPluginSec() {
     try { const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')); return json(res, 200, { version: pkg.version || '0.0.0' }); }
     catch (e) { return json(res, 200, { version: 'unknown' }); }
   });
+  // 包内 BUILD-INFO.json 记着这份安装是哪种口味(self-contained / lite) —— 检查更新要按它挑对应产物
+  const readBuildInfo = function () {
+    try { return JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'BUILD-INFO.json'), 'utf8')); } catch (e) { return null; }
+  };
   on('GET', '/api/version/check', function (req, res, url) {
     const force = url.searchParams.get('force') === '1';
     checkUpdate(rootConfig, force).then(function (r) {
       let cur = '0.0.0';
       try { cur = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')).version || cur; } catch(e){noteFail('/api/version/check',e);}
       const newer = r.remote ? compareVersions(r.remote.version, cur) > 0 : false;
-      return json(res, 200, { ok: r.ok, current: cur, newer: newer, remote: r.remote, source: r.source });
+      const flavor = updateinfo.flavorOf(readBuildInfo());
+      // entries = "这次更新会带来什么": 只列比当前版本新的历史条目(界面不用自己做版本数学)
+      const entries = r.remote ? updateinfo.newerEntries(r.remote, cur, compareVersions) : [];
+      const base = { ok: r.ok, current: cur, newer: newer, remote: r.remote, source: r.source, flavor: flavor, entries: entries, asset: null, assetSource: '', publishedAt: '', problems: [] };
+      if (!newer) return json(res, 200, base);
+      // 产物信息(体积/下载地址/哈希)是**可选增强**: 国内网络下 GitHub API 经常不通,
+      // 拿不到也要能看"更新内容"与"打开下载页" —— 所以这里失败只记一条提示, 不改变 ok/newer。
+      return fetchReleaseInfo(r.remote.version, flavor, (rootConfig.update || {})).then(function (info) {
+        if (info) { base.asset = info.asset; base.assetSource = info.source; base.publishedAt = info.publishedAt; }
+        else base.problems.push('没取到产物信息(GitHub API 不通?), 可点"打开下载页"手动下载');
+        return json(res, 200, base);
+      }, function (e) {
+        base.problems.push('产物信息获取失败: ' + String(e.message));
+        return json(res, 200, base);
+      });
     }).catch(function (e) { return json(res, 200, { ok: false, error: String(e.message) }); });
     return;
   });
@@ -354,7 +373,14 @@ function effPluginSec() {
           if (o.market.indexUrl !== undefined) rootConfig.market.indexUrl = String(o.market.indexUrl || '');
           if (o.market.revokeUrl !== undefined) rootConfig.market.revokeUrl = String(o.market.revokeUrl || '');
         }
-        // 启动彩蛋开关(M-20260911-50): 只合并白名单字段, played 记录允许测试页重置
+        // 更新源可自定义(国内镜像/内网目录, 与市场同口径): 只收白名单字段, 空串=回落官方默认源
+        // 注: 这是"检查更新"的取数源, 不影响 releaseUrl 白名单 —— 镜像给不了可点的钓鱼链接(仍会被丢弃)
+        if (o.update !== undefined && o.update && typeof o.update === 'object') {
+          if (!rootConfig.update || typeof rootConfig.update !== 'object') rootConfig.update = {};
+          if (o.update.mirror !== undefined) rootConfig.update.mirror = String(o.update.mirror || '');
+          if (o.update.timeoutMs !== undefined) { const t = Number(o.update.timeoutMs); if (isFinite(t) && t >= 0 && t <= 60000) rootConfig.update.timeoutMs = Math.round(t); }
+        }
+        // 启动彩蛋开关(M-20260911-50): 只合并白名单字段,  played 记录允许测试页重置
         if (o.efx !== undefined && o.efx && typeof o.efx === 'object') {
           const e = efxCfg();
           if (o.efx.enabled !== undefined) e.enabled = !!o.efx.enabled;

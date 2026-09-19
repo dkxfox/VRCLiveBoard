@@ -41,6 +41,20 @@ try {
 } catch (e) { _cnRow = ['启动横幅代号', 'src/main.js', null, 'CHECK FAIL: ' + e.message]; }
 rows.push(_cnRow);
 
+// 更新说明一致性(2026-09-19, 检查更新 L1): version.json 的 history 里必须有**当前版本**那一条 ——
+//   否则用户点"检查更新"会看到"有新版本、却没有更新内容"(或显示上一版的旧内容), 而这在发布前完全看不出来。
+let _updRow = null;
+try {
+  const vjU = JSON.parse(read('version.json'));
+  const hist = Array.isArray(vjU.history) ? vjU.history : [];
+  const hit = hist.filter((e) => e && String(e.version) === pkg)[0];
+  if (!hist.length) _updRow = ['更新说明', 'version.json', null, 'history 为空(检查更新显示不出内容)'];
+  else if (!hit) _updRow = ['更新说明', 'version.json', String(hist[0].version || ''), 'history 缺少当前版本 ' + pkg + ' 这一条'];
+  else if (!Array.isArray(hit.notes) || !hit.notes.filter(Boolean).length) _updRow = ['更新说明', 'version.json', pkg, '当前版本的 notes 为空'];
+  else _updRow = ['更新说明', 'version.json', pkg + ' (' + hit.notes.filter(Boolean).length + ' 条)', 'OK'];
+} catch (e) { _updRow = ['更新说明', 'version.json', null, 'CHECK FAIL: ' + e.message]; }
+rows.push(_updRow);
+
 const bad = rows.filter((r) => r[3] !== 'OK');
 if (process.argv.includes('--json')) console.log(JSON.stringify({ package: pkg, rows }, null, 2));
 else {

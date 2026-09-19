@@ -153,6 +153,53 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     ok(ocrMod.promptModeOf({ vision: { promptMode: 'weird' } }) === 'full', 'promptModeOf 对非法值回落到 full');
   } catch (e) { ok(false, '截图翻译设置落盘用例异常: ' + e.message); }
 
+  // ⑨ 检查更新 L1(2026-09-19 用户拍板"先走 L1"): 更新内容走 version.json(本地镜像替代真实网络),
+  //   产物体积/哈希是可选的 GitHub API 增强 —— 拉不到必须优雅降级, 不能让"检查更新"整体失败。
+  try {
+    const http = require('http');
+    const os = require('os');
+    const U = require(path.join(ROOT, 'src', 'updateinfo.js'));
+    ok(U.officialUrl('https://github.com/dkxfox/VRCLiveBoard/releases/tag/v1.4.1') && !U.officialUrl('https://github.com/evil/VRCLiveBoard/releases') && !U.officialUrl('https://github.com/dkxfox/VRCLiveBoard"><img onerror=x>'), '更新链接白名单: 官方通过 / 他人仓库与注入串被拒');
+    const hh = U.normalizeHistory({ history: [{ version: '1.0.0', notes: ['a'] }, { version: 'x.y' }, 'junk', { version: '2.0.0', notes: new Array(20).fill(new Array(300).join('长')) }] });
+    ok(hh.length === 2 && hh[0].version === '2.0.0', '历史条目: 非法项丢弃 + 按版本从新到旧排序');
+    ok(hh[1].notes.length <= U.MAX_NOTES && hh[1].notes[0].length <= U.MAX_NOTE_LEN, '单条版本的说明数量与长度被裁剪');
+    ok(U.flavorOf({ kind: 'lite' }) === 'lite' && U.flavorOf(null) === 'source', '安装口味识别(BUILD-INFO.kind)');
+    ok(U.pickAsset([{ name: 'VRCLiveBoard-Lite-RequiresNode-v9.zip', size: 1, browser_download_url: 'https://evil.example.com/x' }], 'lite') === null, '非白名单下载地址的产物被丢弃');
+    ok(U.hashFromSums(new Array(65).join('a') + '  X.zip', 'X.zip').length === 64 && U.formatBytes(8302068) === '7.9 MB', '校验和解析 + 体积格式化');
+    // 本地镜像: 9.9.9 比当前高, 带两条历史(含一条非法版本号) —— 让检查更新真的走一遍完整链路
+    const upub = path.join(os.tmpdir(), 'vrcb-upd-gate');
+    fs.rmSync(upub, { recursive: true, force: true }); fs.mkdirSync(upub, { recursive: true });
+    fs.writeFileSync(path.join(upub, 'version.json'), JSON.stringify({
+      version: '9.9.9', codename: '夹具', published: '2026-09-19',
+      note: '夹具更新说明', releaseUrl: 'https://github.com/dkxfox/VRCLiveBoard/releases/tag/v9.9.9',
+      history: [
+        { version: '9.9.9', date: '2026-09-19', notes: ['夹具第一条说明', '夹具第二条说明'] },
+        { version: '9.9.8', date: '2026-09-18', notes: ['更早的一条'] },
+        { version: 'x.y', notes: ['非法版本号'] }
+      ]
+    }), 'utf8');
+    const usrv = http.createServer(function (rq, rs) {
+      const rel = String(rq.url || '/').split('?')[0].replace(/^\/+/, '');
+      const f = path.join(upub, rel);
+      if (rel && f.indexOf(upub) === 0 && fs.existsSync(f)) { rs.writeHead(200, { 'Content-Type': 'application/json' }); return fs.createReadStream(f).pipe(rs); }
+      rs.writeHead(404); rs.end('no');
+    });
+    const uport = PORT + 2;
+    await new Promise(function (r2) { usrv.listen(uport, '127.0.0.1', r2); });
+    await req('/api/config', { method: 'POST', body: JSON.stringify({ update: { mirror: 'http://127.0.0.1:' + uport + '/version.json' } }) });
+    const j1 = JSON.parse((await req('/api/version/check?force=1')).body.toString('utf8'));
+    ok(j1.ok === true && j1.newer === true && j1.remote && j1.remote.version === '9.9.9', '检查更新: 更高版本被发现 [cur=' + j1.current + ' 来源=' + String(j1.source || '').slice(-26) + ']');
+    ok((j1.entries || []).length === 2 && j1.entries[0].version === '9.9.9' && j1.entries[0].notes.length === 2, '更新内容: 只列比当前新的条目(非法版本被丢弃)');
+    ok(j1.flavor === 'source', '安装口味回传(source: 源码/工作树运行)');
+    ok(Array.isArray(j1.problems) && (j1.asset === null || typeof j1.asset === 'object'), '产物信息缺失时优雅降级(ok/newer 不受影响)');
+    // 注入型 releaseUrl: 只有镜像可用时整条必须被丢弃(不能变成可点的"下载页")
+    fs.writeFileSync(path.join(upub, 'version.json'), JSON.stringify({ version: '9.9.10', releaseUrl: 'https://evil.example.com/x', history: [{ version: '9.9.10', notes: ['坏'] }] }), 'utf8');
+    const j2 = JSON.parse((await req('/api/version/check?force=1')).body.toString('utf8'));
+    ok(!(j2.remote && String(j2.remote.releaseUrl).indexOf('evil') >= 0), '注入型 releaseUrl 不会进入界面(整条被丢弃)');
+    await req('/api/config', { method: 'POST', body: JSON.stringify({ update: { mirror: '' } }) });
+    if (usrv) usrv.close();
+  } catch (e) { ok(false, '检查更新用例异常: ' + e.message); }
+
   // ⑩ 包/树一致性(M-20260911-52): 同一份用例既能跑工作树也能跑发布包 ——
   //   发布包与工作树的差别只有"配置里有没有注入彩蛋事件"与"素材在不在包里", 所以按根目录的实际情况断言。
   //   必须排在 ⑧ 之前: ⑧ 的收尾会把内存里的 specialEvents 清空(恢复原状), 之后再看就不是"出厂配置"了。

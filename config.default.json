@@ -23,7 +23,8 @@
                     "showConsole":  true
                 },
     "update":  {
-                   "mirror":  ""
+                   "mirror":  "",
+                   "timeoutMs":  0
                },
     "autostart":  false,
     "sources":  {

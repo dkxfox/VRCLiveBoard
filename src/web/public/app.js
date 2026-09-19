@@ -116,7 +116,43 @@ if($('plgImport'))$('plgImport').onclick=async function(){var f=$('plgZip'),m=$(
 if($('plgRefresh'))$('plgRefresh').onclick=async function(){try{await fetch('/api/plugins/scan',{method:'POST',body:'{}'});}catch(e){apiFail('#plgRefresh',e);}loadPlugins();};
 if($('plgPrioReset'))$('plgPrioReset').onclick=async function(){try{var l=await (await fetch('/api/plugins')).json();var arr=Array.isArray(l)?l:(l.plugins||l.entries||[]);for(var i=0;i<arr.length;i++){await fetch('/api/plugins/config',{method:'POST',body:JSON.stringify({id:arr[i].id,cfg:{priority:null}})});}}catch(e){apiFail('#plgPrioReset',e);}loadPlugins();};
 (function(){fetch('/api/version').then(function(r){return r.json();}).then(function(j){var v=$('ver');if(v)v.textContent=tr('verLine')+(j.version||'')+tr('codeName');}).catch(function(e){apiFail('#ver',e);});
-  window.__checkUpdate=function(){fetch('/api/version/check').then(function(r){return r.json();}).then(function(j){var uh=$('updateHint');if(!uh||!j||!j.newer)return;var url=(j.remote&&j.remote.releaseUrl)||'';var ver=(j.remote&&j.remote.version)||'';if(!/^https:\/\//.test(url))return;uh.textContent='';var a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';a.style.color='var(--accent)';a.textContent=tr('updateNew').replace('{ver}',ver).replace('{name}','');uh.appendChild(a);}).catch(function(e){apiFail('#updateHint',e);});};
+  // 检查更新(L1, 2026-09-19): 页头按钮 + 更新面板。
+  //   更新内容走 jsDelivr 上的 version.json(国内可用), 产物体积/哈希走 GitHub API 的**可选增强** ——
+  //   拉不到就退化成"打开下载页", 不影响看到更新内容。远端文本一律用 textContent 渲染, 绝不拼 innerHTML。
+  var updData=null;
+  function updOfficial(u){return /^https:\/\/(github\.com\/dkxfox\/VRCLiveBoard|cdn\.jsdelivr\.net\/gh\/dkxfox\/VRCLiveBoard)(\/[A-Za-z0-9._~%\/-]*)?$/.test(String(u||''));}
+  function updBytes(n){n=Number(n)||0;if(n<=0)return '-';if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';if(n<1073741824)return (n/1048576).toFixed(1)+' MB';return (n/1073741824).toFixed(2)+' GB';}
+  function renderUpd(j){
+    var ti=$('updTitle'),ln=$('updLine'),nt=$('updNotes'),as=$('updAsset'),ms=$('updMsg'),op=$('updOpen');
+    var cur=(j&&j.current)||'',rem=(j&&j.remote)||null,nw=!!(j&&j.newer),ver=String((rem&&rem.version)||'');
+    if(ti)ti.textContent=nw?tr('updateNewTitle'):tr('updateUpTitle');
+    if(ln){var fl=(j&&j.flavor)==='lite'?tr('updateFlavorLite'):((j&&j.flavor)==='self-contained'?tr('updateFlavorSelf'):tr('updateFlavorSource'));ln.textContent=tr('updateCurrent')+' '+cur+(nw?(' → '+tr('updateLatest')+' '+ver+((rem&&rem.codename)?(' · '+rem.codename):'')):'')+' · '+fl;}
+    if(nt){nt.textContent='';if(nw){(j.entries||[]).forEach(function(e){var box=document.createElement('div');box.style.margin='0 0 8px';var hd=document.createElement('b');hd.textContent='v'+e.version+(e.date?(' · '+e.date):'');box.appendChild(hd);(e.notes||[]).forEach(function(n){var d=document.createElement('div');d.style.paddingLeft='12px';d.textContent='· '+n;box.appendChild(d);});nt.appendChild(box);});}}
+    if(as){if(j&&j.asset){as.textContent=j.asset.name+'\n'+tr('updateSize')+' '+updBytes(j.asset.bytes)+'  ·  SHA256 '+(j.asset.sha256||tr('updateNoSum'));}else if(nw){as.textContent=tr('updateManualHint');}else{as.textContent='';}}
+    if(ms)ms.textContent=(j&&j.problems&&j.problems.length)?j.problems.join(' / '):'';
+    if(op){var u=(j&&j.asset&&j.asset.url)||((rem&&rem.releaseUrl)||'');if(updOfficial(u)){op.setAttribute('href',u);op.style.display='';}else{op.removeAttribute('href');op.style.display='none';}}
+  }
+  function openUpd(){var m=$('updModal');if(!m)return;m.style.display='flex';renderUpd(updData);}
+  function closeUpd(){var m=$('updModal');if(m)m.style.display='none';}
+  window.__checkUpdate=function(force){
+    var btn=$('btnUpdate'),uh=$('updateHint');
+    // 注意: 这里不能同步用 tr() —— 取词函数定义在 app-security.js, 而它在 index.html 里排在 app.js 之后
+    // (G-BOOT 抓到过一次: 同步调用会让 app.js 顶层直接抛 "tr is not defined")。按钮文案由 data-t 初始渲染。
+    if(btn)btn.disabled=true;
+    return fetch('/api/version/check'+(force?'?force=1':'')).then(function(r){return r.json();}).then(function(j){
+      updData=j||null;
+      if(btn){btn.disabled=false;var nw=!!(j&&j.newer);btn.textContent=nw?tr('updateBtn'):tr('updateCheckBtn');if(nw)btn.classList.add('pri');else btn.classList.remove('pri');}
+      if(uh){uh.textContent='';if(j&&j.newer){var url=(j.remote&&j.remote.releaseUrl)||'';if(updOfficial(url)){var a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';a.style.color='var(--accent)';a.textContent=tr('updateNew').replace('{ver}',String((j.remote&&j.remote.version)||'')).replace('{name}','');uh.appendChild(a);}}}
+      return j;
+    }).catch(function(e){if(btn){btn.disabled=false;btn.textContent=tr('updateCheckBtn');}if(uh)uh.textContent=tr('updateFail');apiFail('#updateHint',e);});
+  };
+  (function(){
+    var b=$('btnUpdate');if(b)b.onclick=function(){openUpd();window.__checkUpdate(true).then(function(){renderUpd(updData);});};
+    var c=$('updClose');if(c)c.onclick=closeUpd;
+    var m=$('updModal');if(m)m.onclick=function(ev){if(ev.target===m)closeUpd();};
+    var rt=$('updRetry');if(rt)rt.onclick=function(){var ms=$('updMsg');if(ms)ms.textContent=tr('updateChecking');window.__checkUpdate(true).then(function(){renderUpd(updData);});};
+    var cp=$('updCopy');if(cp)cp.onclick=async function(){var s=(updData&&updData.asset&&updData.asset.sha256)||'';var ms=$('updMsg');if(!s){if(ms)ms.textContent=tr('updateNoSum');return;}try{await navigator.clipboard.writeText(s);if(ms)ms.textContent=tr('updateCopied');}catch(e){if(ms)ms.textContent=tr('updateNoSum');}};
+  })();
   // 6 小时复查一次(M-20260911-33): 旧版有轮询, 新版移植时只在加载时查一次 —— 挂机用户永远看不到新版本提示
   window.__checkUpdate();setInterval(window.__checkUpdate, 6*3600*1000);})();
 // 体检报告(M-20260911-33): 旧版复制的是格式化体检报告(/api/health), 新版退化成 /api/ports/check 的原始 JSON
