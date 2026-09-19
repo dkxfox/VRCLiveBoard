@@ -214,6 +214,9 @@ function checkCaptureReply(reply, winTitle) {
   if (t === 'OK') return true;
   if (t.indexOf('NO-WINDOW') >= 0) throw new Error('未找到窗口: ' + (winTitle || 'VRChat'));
   if (t.indexOf('NO-REGION') >= 0) throw new Error('截图区域未设置, 请到高级设置里用可视化工具调整');
+  // 拍到空画面(2026-09-19): PrintWindow 对最小化/被完全遮挡的窗口可能返回"全黑但成功" ——
+  // 助手会校验并升级(恢复/抬窗/屏幕拷贝), 全都无效时回这个码。这里必须报错, 绝不能拿空图去 OCR。
+  if (t.indexOf('EMPTY-CAPTURE') >= 0) throw new Error('没拍到 VRChat 画面(窗口最小化或被完全遮挡): ' + t.replace(/^.*EMPTY-CAPTURE:?\s*/, '').slice(0, 120));
   if (t.indexOf('CAPTURE-FAIL') >= 0) throw new Error('截图失败: ' + t.replace(/^.*CAPTURE-FAIL:?\s*/, '').slice(0, 120));
   throw new Error('截图助手返回了无法识别的内容: ' + (t.slice(0, 80) || '(空)'));
 }
