@@ -75,6 +75,8 @@ function manifestUrls(cfg) {
     if (!s || !/version\.json/i.test(s)) continue;
     list.push(s.replace(/version\.json/i, 'docs/RELEASE-ASSETS.json'));
   }
+  // raw 排在 jsDelivr 前面: 发布后 jsDelivr 有缓存(会拿到上一版哈希), raw 是实时的
+  list.sort(function (a, b) { return (a.indexOf('raw.githubusercontent') >= 0 ? 0 : 1) - (b.indexOf('raw.githubusercontent') >= 0 ? 0 : 1); });
   return list;
 }
 async function manifestLookup(version, flavor, cfg, timeoutMs) {
@@ -92,45 +94,60 @@ async function manifestLookup(version, flavor, cfg, timeoutMs) {
   }
   return null;
 }
+// GitHub API 一路(体积/下载页 + SHA256SUMS 直链, 后者可能被重置)
+async function apiLookup(version, flavor, timeoutMs) {
+  const url = 'https://api.github.com/repos/dkxfox/VRCLiveBoard/releases/tags/v' + encodeURIComponent(String(version));
+  try {
+    const r = await fetch(url, {
+      headers: { 'User-Agent': 'VRCLiveBoard', Accept: 'application/vnd.github+json' },
+      signal: AbortSignal.timeout(timeoutMs)
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const asset = UPDATEINFO.pickAsset(j && j.assets, flavor);
+    if (!asset) return null;
+    // 注意: 同源校验只防传输损坏/截断, 防不了"发布源被投毒" —— 要防那个得引入内置公钥签名(L3 决策点)。
+    try {
+      const sums = (j.assets || []).filter(function (a) { return /SHA256SUMS/i.test(String(a && a.name)); })[0];
+      if (sums && UPDATEINFO.officialUrl(sums.browser_download_url)) {
+        for (let i = 0; i < 2 && !asset.sha256; i++) {   // 直链时通时断(实测 ECONNRESET): 重试一次再放弃
+          try {
+            const rs = await fetch(sums.browser_download_url, { signal: AbortSignal.timeout(timeoutMs) });
+            if (rs.ok) asset.sha256 = UPDATEINFO.hashFromSums(await rs.text(), asset.name);
+          } catch (e2) { /* 下一轮或放弃 */ }
+        }
+      }
+    } catch (e) { /* 哈希拿不到不影响展示体积与下载页 */ }
+    return { asset: asset, publishedAt: String((j && j.published_at) || '') };
+  } catch (e) { return null; }
+}
 async function fetchReleaseInfo(version, flavor, cfg) {
   const key = String(version) + '|' + String(flavor);
   const now = Date.now();
   const hit = assetCache[key];
   if (hit && now - hit.at < (hit.value ? ASSET_OK_TTL_MS : ASSET_FAIL_TTL_MS)) return hit.value;
   const timeoutMs = Number((cfg && cfg.timeoutMs) || 0) || 6000;
-  // ① 仓库产物清单优先: 经 jsDelivr/raw 分发(国内可达)且自带校验和 —— 实测 GitHub 的
-  //    releases/download 直链会被重置, 校验和经常取不到, 而它是用户核对下载物的唯一依据。
-  let value = await manifestLookup(version, flavor, cfg, timeoutMs);
-  if (value) { assetCache[key] = { value: value, at: now }; return value; }
-  // ② 退回 GitHub API: 官方体积与下载页稳定可得; 校验和可能缺失(界面会提示"可到发布页查看")
-  const api = 'https://api.github.com/repos/dkxfox/VRCLiveBoard/releases/tags/v' + encodeURIComponent(String(version));
-  try {
-    const r = await fetch(api, {
-      headers: { 'User-Agent': 'VRCLiveBoard', Accept: 'application/vnd.github+json' },
-      signal: AbortSignal.timeout(timeoutMs)
-    });
-    if (r.ok) {
-      const j = await r.json();
-      const asset = UPDATEINFO.pickAsset(j && j.assets, flavor);
-      if (asset) {
-        // 哈希取自同一 release 的 SHA256SUMS 资产(约 200 字节)。注意: 同源校验只防传输损坏/截断,
-        // 防不了"发布源被投毒" —— 要防那个得引入内置公钥签名, 属 L3 的决策点(已记录在案)。
-        try {
-          const sums = (j.assets || []).filter(function (a) { return /SHA256SUMS/i.test(String(a && a.name)); })[0];
-          if (sums && UPDATEINFO.officialUrl(sums.browser_download_url)) {
-            // 直链时通时断(实测 ECONNRESET): 重试一次再放弃, 拿不到不影响展示体积与下载页
-            for (let i = 0; i < 2 && !asset.sha256; i++) {
-              try {
-                const rs = await fetch(sums.browser_download_url, { signal: AbortSignal.timeout(timeoutMs) });
-                if (rs.ok) asset.sha256 = UPDATEINFO.hashFromSums(await rs.text(), asset.name);
-              } catch (e2) { /* 下一轮或放弃 */ }
-            }
-          }
-        } catch (e) { /* 哈希拿不到不影响展示体积与下载链接 */ }
-        value = { asset: asset, publishedAt: String((j && j.published_at) || ''), source: 'github-api' };
-      }
-    }
-  } catch (e) { value = null; }
+  // 两路同时取, 互相校验:
+  //   ① 仓库产物清单(docs/RELEASE-ASSETS.json, 经 raw/jsDelivr): 国内可达且自带校验和, 但**可能滞后**
+  //      —— jsDelivr 对仓库文件有缓存, 发布后短时间内会拿到"上一版"的哈希(2026-09-19 实测踩到);
+  //   ② GitHub API: 官方体积与下载页稳定可得, 但 SHA256SUMS 直链在国内常被重置(实测 ECONNRESET)。
+  // 规则: **只有两路体积一致时才采信清单里的校验和** —— 错误的校验和比没有更糟(用户会以为下载物损坏)。
+  const both = await Promise.all([
+    manifestLookup(version, flavor, cfg, timeoutMs),
+    apiLookup(version, flavor, timeoutMs)
+  ]);
+  const mf = both[0], ap = both[1];
+  let value = null;
+  if (ap && mf) {
+    const a = ap.asset, m = mf.asset;
+    const sameSize = !!(a.bytes && m.bytes && a.bytes === m.bytes);
+    if (sameSize && m.sha256) a.sha256 = m.sha256;
+    value = { asset: a, publishedAt: ap.publishedAt || mf.publishedAt, source: sameSize && m.sha256 ? 'github-api+manifest' : 'github-api' };
+  } else if (ap) {
+    value = { asset: ap.asset, publishedAt: ap.publishedAt, source: 'github-api' };
+  } else if (mf) {
+    value = { asset: mf.asset, publishedAt: mf.publishedAt, source: 'repo-manifest' };
+  }
   assetCache[key] = { value: value, at: now };
   return value;
 }

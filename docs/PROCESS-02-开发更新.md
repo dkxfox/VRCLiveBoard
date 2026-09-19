@@ -190,6 +190,7 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke
 5. 确认 `dist\公开版\` 只有本次版本的 zip(新 make-dist 会在开跑时清掉旧包与旧校验和);
 6. 在 `version.json` 的 `history` 里**追加当前版本那一条**(更新内容: 用户点「检查更新」看到的就是它)——
    GVER 会拦: history 缺当前版本时门禁直接 FAIL(2026-09-19 起)。
+7. 打包后把真实体积与 SHA256 追记到 `docs/RELEASE-ASSETS.json`(检查更新的校验和从这里取 —— GitHub 的 releases/download 直链在国内常被重置); 该文件在 docs/ 内, 属绑定检查容忍的追记提交。
 
 ### 8.4 发布验证(2026-09-12)
 
