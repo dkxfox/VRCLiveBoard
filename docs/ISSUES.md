@@ -720,4 +720,5 @@
 - 验证: ① 接口实测: `GET /models` = deepseek-flash / deepseek-v4-pro; 图片请求两者 200、`deepseek-v4.1-flash` 400、旧名 `deepseek-v4-flash-vision-exp` 200 但别名到 deepseek-flash; ② 端到端实测(用户密钥 + 合成英文图): full 与 smart 两档各约 1.5s, 行为与设计一致( smart 跳过 Join/世界名/UI 标签, 只翻简介/规则/作者公告并保留 SDK 2.0 原词); ③ 门禁 14 PASS + 隔离冒烟 15/15。
 - 教训: **外部标识符(模型名/URL/参数名)必须对着真实接口验一次再写进默认值**; 手边就有密钥, 一次 `/models` 就能避免。“能用 ≠ 名字对”(旧名是被别名过去的)。
 - 关联: DEV-NOTES 181(更正 177)
+- 补充(2026-09-19, 用户提醒我查官网后核对): 官网模型表写明 **deepseek-v4-pro 不支持 Vision**, 且思考模式默认开启(effort=high) —— 实测同图 关闭思考 1.0s/41 token vs 默认 5.0s/1126 token(思考占 1077), v4-pro 直接回“图片无法显示”。已按文档改为: 视觉请求默认关闭思考(官方域名; 第三方端点默认不带该字段, 可用 ocrtl.vision.thinking 覆盖)=见 DEV-NOTES 182。
 - 状态: FIXED(待用户实机确认)

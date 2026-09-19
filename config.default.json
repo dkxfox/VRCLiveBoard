@@ -91,6 +91,7 @@
                                  "apiKey":  "",
                                  "model":  "deepseek-flash",
                                  "promptMode":  "full",
+                                 "thinking":  "auto",
                                  "targetLang":  "zh"
                              },
                   "security":  {

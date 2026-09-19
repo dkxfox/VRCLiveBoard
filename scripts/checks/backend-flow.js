@@ -151,6 +151,21 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     ok(pFull.indexOf('JSON') >= 0 && pSmart.indexOf('JSON') >= 0, '两档都保留 JSON 输出契约');
     ok(mk('smart', false).indexOf('安全规则') < 0, '关闭防注入后不再带安全规则(与既有口径一致)');
     ok(ocrMod.promptModeOf({ vision: { promptMode: 'weird' } }) === 'full', 'promptModeOf 对非法值回落到 full');
+    // 视觉请求体(2026-09-19 按官方文档逐条核对): 图片只在 user 消息(官方: system 带图=400);
+    // 思考模式官方默认开启且 effort=high, 实测同图 关闭=1.0s/41 token、默认=5.0s/1126 token(思考占 1077)
+    // -> 官方域名默认关掉; 但该字段非 OpenAI 标准, 第三方/本地端点可能不认, 所以那里默认不带。
+    const pv1 = ocrMod.buildVisionPayloads({ apiBase: 'https://api.deepseek.com', model: 'deepseek-flash', targetLang: 'zh' }, { promptDefense: true }, 'QUJD');
+    ok(pv1.length === 2 && !!pv1[0].response_format && !pv1[1].response_format, '视觉请求两次尝试: 先 json_object 再自由文本');
+    ok(!!(pv1[0].thinking && pv1[0].thinking.type === 'disabled'), '官方域名默认关闭思考模式(省时省钱, 避免思维链吃光输出预算)');
+    const vmsgs = pv1[0].messages || [];
+    ok(vmsgs.length === 2 && vmsgs[0].role === 'system' && vmsgs[1].role === 'user', '视觉请求消息结构: system + user');
+    ok(vmsgs[0] && JSON.stringify(vmsgs[0]).indexOf('image_url') < 0 && JSON.stringify(vmsgs[1]).indexOf('image_url') >= 0, '图片只在 user 消息里(官方: system 带图会 400)');
+    const pv2 = ocrMod.buildVisionPayloads({ apiBase: 'http://127.0.0.1:11434/v1', model: 'qwen-vl' }, {}, 'QUJD');
+    ok(!pv2[0].thinking, '本地/第三方端点默认不带 thinking 字段(可能不认而回 400)');
+    const pv3 = ocrMod.buildVisionPayloads({ apiBase: 'http://127.0.0.1:11434/v1', model: 'qwen-vl', thinking: 'enabled' }, {}, 'QUJD');
+    ok(!!(pv3[0].thinking && pv3[0].thinking.type === 'enabled'), '用户显式指定时即便自定义端点也带 thinking');
+    const pv4 = ocrMod.buildVisionPayloads({ apiBase: 'https://api.deepseek.com', model: 'm', targetLang: 'zh' }, { jsonMode: false }, 'QUJD');
+    ok(pv4.length === 1 && !pv4[0].response_format, '关闭 JSON 模式时只发一次自由文本');
   } catch (e) { ok(false, '截图翻译设置落盘用例异常: ' + e.message); }
 
   // ⑨ 检查更新 L1(2026-09-19 用户拍板"先走 L1"): 更新内容走 version.json(本地镜像替代真实网络),

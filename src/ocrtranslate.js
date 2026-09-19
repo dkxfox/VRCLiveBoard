@@ -86,28 +86,47 @@ function buildVisionSystemPrompt(cfg) {
   sys += '输出格式(严格遵守 JSON): {"translation":"译文"}\n' + '如果图片里没有可翻译的文字, 输出 {"translation":""}。';
   return sys;
 }
-async function visionTranslate(cfg, pngPath) {
-  const v = cfg.vision;
-  const b64 = fs.readFileSync(pngPath).toString('base64');
-  const sec = cfg.security || {};
-  const sys = buildVisionSystemPrompt(cfg);
+// 视觉请求体构造(纯函数, 便于门禁断言)。官方文档(2026-09-19 核对 https://api-docs.deepseek.com/zh-cn/guides/vision):
+//   ① 图片只能放在 user 消息里 —— system/assistant 带图会被回 400;
+//   ② 思考模式**默认开启**且 effort=high。实测同一张图: 关闭思考 1.0s / 41 输出 token,
+//      默认 5.0s / 1126 token(其中思考占 1077) —— 截图翻译不需要思考, 又慢又贵, 还会把输出预算吃光
+//      (max_tokens 用尽时 content 为空, 表现为"视觉模型返回为空")。
+//   但 thinking 不是 OpenAI 标准字段: 本地/第三方端点(vLLM/LM Studio)可能不认而回 400,
+//   所以只在官方域名或用户显式指定时才带它(thinking: auto | disabled | enabled)。
+function buildVisionPayloads(v, sec, b64) {
+  v = v || {}; sec = sec || {};
   const messages = [
-    { role: 'system', content: sys },
+    { role: 'system', content: buildVisionSystemPrompt({ vision: v, security: sec }) },
     { role: 'user', content: [
       { type: 'image_url', image_url: { url: 'data:image/png;base64,' + b64 } },
       { type: 'text', text: '请翻译图片中的文字。' }
     ]}
   ];
+  let host = '';
+  try { host = new URL(String(v.apiBase || '')).hostname.toLowerCase(); } catch (e) { host = ''; }
+  const mode = String(v.thinking || 'auto');
+  const official = /(^|\.)deepseek\.com$/.test(host);
+  const send = (mode === 'enabled' || mode === 'disabled') || (mode === 'auto' && official);
+  const think = { type: mode === 'enabled' ? 'enabled' : 'disabled' };
+  const mk = function (extra) {
+    const p = { model: v.model, messages: messages, max_tokens: 4096, stream: false };
+    if (send) p.thinking = think;
+    return Object.assign(p, extra || {});
+  };
+  // 两次尝试: 1) json_object 严格 JSON; 2) 去掉约束重试(接口不支持或模型输出被推理吃光时兜底)
+  const list = [mk({ response_format: { type: 'json_object' } }), mk()];
+  if (sec.jsonMode === false) list.splice(0, 1);
+  return list;
+}
+async function visionTranslate(cfg, pngPath) {
+  const v = cfg.vision;
+  const b64 = fs.readFileSync(pngPath).toString('base64');
+  const sec = cfg.security || {};
   const base = String(v.apiBase).replace(/\/+$/, '') + '/chat/completions';
   const headers = { 'Content-Type': 'application/json' };
   if (v.apiKey) headers['Authorization'] = 'Bearer ' + v.apiKey;
   const timeout = AbortSignal.timeout(120000);
-  // 两次尝试: 1) json_object 严格 JSON; 2) 去掉约束重试(接口不支持或模型输出被推理吃光时兜底)
-  const payloads = [
-    { model: v.model, messages: messages, max_tokens: 4096, stream: false, response_format: { type: 'json_object' } },
-    { model: v.model, messages: messages, max_tokens: 4096, stream: false }
-  ];
-  if (sec.jsonMode === false) payloads.splice(0, 1); // 关闭 JSON 结构化 → 只走自由文本
+  const payloads = buildVisionPayloads(v, sec, b64); // 关闭 JSON 结构化 → 只走自由文本
   let out = '', lastErr = '';
   for (const body of payloads) {
     const r = await fetch(base, { method: 'POST', headers: headers, body: JSON.stringify(body), signal: timeout });
@@ -431,4 +450,4 @@ function getLtStatus(cfg) {
     return { found: true, model: s.model, apiBaseHost: host, targetLang: s.targetLang };
   } catch (e) { return { found: false }; }
 }
-module.exports = { runOnce, getLtStatus, DEFAULT_BLOCK_WORDS, sanitizeTranslation, checkCaptureReply, captureWindow, buildVisionSystemPrompt, promptModeOf, PROMPT_MODES, visionTranslate };
+module.exports = { runOnce, getLtStatus, DEFAULT_BLOCK_WORDS, sanitizeTranslation, checkCaptureReply, captureWindow, buildVisionSystemPrompt, promptModeOf, PROMPT_MODES, visionTranslate, buildVisionPayloads };
