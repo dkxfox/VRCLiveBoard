@@ -342,6 +342,7 @@ async function runOnce(cfg, composer, logger, overrides) {
       logger.warn('[ocrtl] mode=vision 但视觉接口未配置, 已回退本地 OCR');
     }
     const useVision = visionOk && (cfg.mode === 'vision' || cfg.mode === 'auto');
+    let visionError = '';   // 视觉失败原因: 要通过结果回传给界面(2026-09-19: 只写日志时, 用户完全不知道在用 OCR)
     if (useVision) {
       state.phase = 'translate';
       try {
@@ -367,7 +368,11 @@ async function runOnce(cfg, composer, logger, overrides) {
         logger.info('[ocrtl][vision] 完成: ' + JSON.stringify(translated));
         return { ok: true, result: result, chunks: chunks.length, loops: loops };
       } catch (e) {
+        visionError = String(e.message);
         logger.warn('[ocrtl] 视觉模式失败,回退本地 OCR: ' + e.message);
+        // 让失败可见(2026-09-19 实测踩坑): 模型名写错会让接口回 400, 之后每次截图都静默走本地 OCR,
+        // 用户只能看到"翻译出来了但全是糊字" —— 这类配置错误必须当场说出来(接口的报错里就带支持列表)。
+        try { composer.pushTransient('视觉模型失败, 本次用本地 OCR: ' + visionError.slice(0, 70), 90, 9000); } catch (e2) {}
         // 保底: 走原 OCR 流程
       }
     }
@@ -386,6 +391,7 @@ async function runOnce(cfg, composer, logger, overrides) {
     const translated = settings ? await translateText(settings, ocrText) : null;
     state.phase = 'done';
     const result = { ocr: ocrText, translated: translated, model: settings ? settings.model : null, elapsedMs: Date.now() - t0, at: Date.now() };
+    if (visionError) result.visionError = visionError;   // 界面据此提示"视觉模型失败, 已回退本地 OCR"及其原因
     composer.ocrResult = result;
     const outText = translated || ocrText;
     const chunks = chunkText(outText, chunkMax(composer));
@@ -425,4 +431,4 @@ function getLtStatus(cfg) {
     return { found: true, model: s.model, apiBaseHost: host, targetLang: s.targetLang };
   } catch (e) { return { found: false }; }
 }
-module.exports = { runOnce, getLtStatus, DEFAULT_BLOCK_WORDS, sanitizeTranslation, checkCaptureReply, captureWindow, buildVisionSystemPrompt, promptModeOf, PROMPT_MODES };
+module.exports = { runOnce, getLtStatus, DEFAULT_BLOCK_WORDS, sanitizeTranslation, checkCaptureReply, captureWindow, buildVisionSystemPrompt, promptModeOf, PROMPT_MODES, visionTranslate };

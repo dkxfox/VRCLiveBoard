@@ -4,7 +4,7 @@ window.VRCB_LANG = {
 'zh-CN': {
 reloadBtn:'↻ 刷新界面', 
 navTitle:'快速导航', navStatus:'状态与发送', navMenu:'菜单', 
-visBasePh:'接口地址(如 https://api.deepseek.com)', visKeyPh:'密钥 sk-...(本地地址可留空)', visModelPh:'模型(如 deepseek-v4.1-flash)', 
+visBasePh:'接口地址(如 https://api.deepseek.com)', visKeyPh:'密钥 sk-...(本地地址可留空)', visModelPh:'模型(如 deepseek-flash)', 
 gateLocked:'已锁定, 请 {m} 分 {s} 秒后重试(开发者密码可立即解锁)', 
 transSysTitle:'翻译系统', transSysDesc:'语音翻译与截图翻译共用下面的翻译服务(LiveTranslate), 装一次两处受益。', transVoice:'语音翻译(字幕)', transVoiceDesc:'把 LiveTranslate 实时听译的译文自动同步到头顶聊天框(需在环境检测里装好并开启一个翻译)。', transShot:'截图翻译', advGeneral:'常规', advNetwork:'网络端口', advSecurity:'安全与权限', advLog:'日志与信息', gateLv0:'开关类无需密码', gateLv1:'一级密码(高级设置)', gateLv2:'开发者一次性密码(整表编辑)', moveUp:'上移', moveDown:'下移', dupPage:'复制本页', curFrom:'来源: ', curPrio:' · 优先级 ', curLeft:' · 剩余 ', curLeftS:' 秒', srcTransient:'临时文本', cfgBackupTitle:'配置备份与恢复', cfgExport:'导出我的配置', cfgImport:'导入配置', cfgImportOk:'已导入, 点「快速重启」生效(重启前勿做其它保存)', cfgImportFail:'导入失败: ', cfgImportBad:'文件内容不是有效配置', diagCopy:'复制报告', appTitle:'VRCLiveBoard 控制台', subtitle:'电脑状态 / 媒体 / 公告板 / 翻译字幕 → VRChat 聊天框(OSC) · 代号 星光',
 vrcChecking:'检测 VRChat OSC 中...', vrcOn:'VRChat 已连接 | OSC 已开启(端口 ', vrcUnknown:'VRChat 运行中,OSC 状态无法从日志判断(以游戏内实际显示为准)', vrcWarn:'VRChat 运行中,但 OSC 未开启(游戏内 Options → OSC → Enabled)', vrcOff:'VRChat 未运行(日志未更新)', vrcLastOn:'VRChat 未运行(上次会话 OSC 已开启)', vrcLastOff:'VRChat 未运行(上次会话 OSC 未开启)',
@@ -22,7 +22,7 @@ advTitle:'高级设置(一般不用动)', portsOsc:'OSC 发送端口:', portsApp
 'zh-TW': {
 reloadBtn:'↻ 重新整理', 
 navTitle:'快速導覽', navStatus:'狀態與傳送', navMenu:'選單', 
-visBasePh:'介面位址(如 https://api.deepseek.com)', visKeyPh:'金鑰 sk-...(本地位址可留空)', visModelPh:'模型(如 deepseek-v4.1-flash)', 
+visBasePh:'介面位址(如 https://api.deepseek.com)', visKeyPh:'金鑰 sk-...(本地位址可留空)', visModelPh:'模型(如 deepseek-flash)', 
 gateLocked:'已鎖定, 請 {m} 分 {s} 秒後重試(開發者密碼可立即解鎖)', 
 transSysTitle:'翻譯系統', transSysDesc:'語音翻譯與截圖翻譯共用下面的翻譯服務(LiveTranslate), 裝一次兩處受益。', transVoice:'語音翻譯(字幕)', transVoiceDesc:'把 LiveTranslate 即時聽譯的譯文自動同步到頭頂聊天框(需在環境偵測裡裝好並開啟一個翻譯)。', transShot:'截圖翻譯', advGeneral:'常規', advNetwork:'網路連接埠', advSecurity:'安全與權限', advLog:'日誌與資訊', gateLv0:'開關類無需密碼', gateLv1:'一級密碼(進階設定)', gateLv2:'開發者一次性密碼(整表編輯)', moveUp:'上移', moveDown:'下移', dupPage:'複製本頁', curFrom:'來源: ', curPrio:' · 優先級 ', curLeft:' · 剩餘 ', curLeftS:' 秒', srcTransient:'臨時文字', cfgBackupTitle:'設定備份與恢復', cfgExport:'匯出我的設定', cfgImport:'匯入設定', cfgImportOk:'已匯入, 點「快速重啟」生效(重啟前勿做其它儲存)', cfgImportFail:'匯入失敗: ', cfgImportBad:'檔案內容不是有效設定', diagCopy:'複製報告', appTitle:'VRCLiveBoard 控制台', subtitle:'電腦狀態 / 媒體 / 公告板 / 翻譯字幕 → VRChat 聊天框(OSC) · 代號 星光',
 vrcChecking:'偵測 VRChat OSC 中...', vrcOn:'VRChat 已連線 | OSC 已開啟(連接埠 ', vrcUnknown:'VRChat 執行中,OSC 狀態無法從日誌判斷(以遊戲內實際顯示為準)', vrcWarn:'VRChat 執行中,但 OSC 未開啟(遊戲內 Options → OSC → Enabled)', vrcOff:'VRChat 未執行(日誌未更新)', vrcLastOn:'VRChat 未執行(上次工作階段 OSC 已開啟)', vrcLastOff:'VRChat 未執行(上次工作階段 OSC 未開啟)',
@@ -40,7 +40,7 @@ advTitle:'進階設定(一般不用動)', portsOsc:'OSC 傳送埠:', portsApply:
 'en': {
 reloadBtn:'↻ Reload UI', 
 navTitle:'Quick nav', navStatus:'Status & send', navMenu:'Menu', 
-visBasePh:'API base (e.g. https://api.deepseek.com)', visKeyPh:'Key sk-... (empty for local)', visModelPh:'Model (e.g. deepseek-v4.1-flash)', 
+visBasePh:'API base (e.g. https://api.deepseek.com)', visKeyPh:'Key sk-... (empty for local)', visModelPh:'Model (e.g. deepseek-flash)', 
 gateLocked:'Locked; retry in {m}m {s}s (a developer code unlocks instantly)', 
 transSysTitle:'Translation system', transSysDesc:'Voice translation and screenshot translation share the service below (LiveTranslate) — install once, both work.', transVoice:'Voice translation (subtitles)', transVoiceDesc:'Syncs LiveTranslate live transcripts to your chatbox (install it in Environment Check and start a translation there first).', transShot:'Screenshot translation', advGeneral:'General', advNetwork:'Network ports', advSecurity:'Security & access', advLog:'Logs & info', gateLv0:'Toggles need no password', gateLv1:'Level-1 password (advanced)', gateLv2:'Developer one-time code (full edit)', moveUp:'Move up', moveDown:'Move down', dupPage:'Duplicate page', curFrom:'Source: ', curPrio:' · Priority ', curLeft:' · Left ', curLeftS:' s', srcTransient:'Temporary text', cfgBackupTitle:'Config backup & restore', cfgExport:'Export my config', cfgImport:'Import config', cfgImportOk:'Imported; click Quick Restart (save nothing before restart)', cfgImportFail:'Import failed: ', cfgImportBad:'Not a valid config', diagCopy:'Copy report', appTitle:'VRCLiveBoard Console', subtitle:'PC status / Media / Boards / Subtitles → VRChat chatbox (OSC) · Codename Starlight',
 vrcChecking:'Detecting VRChat OSC...', vrcOn:'VRChat connected | OSC enabled (port ', vrcUnknown:'VRChat running, OSC state unknown from log (trust the in-game display)', vrcWarn:'VRChat running, but OSC disabled (in-game Options → OSC → Enabled)', vrcOff:'VRChat not running (log stale)', vrcLastOn:'VRChat not running (last session OSC was on)', vrcLastOff:'VRChat not running (last session OSC was off)',
