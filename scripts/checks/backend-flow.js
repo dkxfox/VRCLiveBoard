@@ -205,7 +205,12 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     const j1 = JSON.parse((await req('/api/version/check?force=1')).body.toString('utf8'));
     ok(j1.ok === true && j1.newer === true && j1.remote && j1.remote.version === '9.9.9', '检查更新: 更高版本被发现 [cur=' + j1.current + ' 来源=' + String(j1.source || '').slice(-26) + ']');
     ok((j1.entries || []).length === 2 && j1.entries[0].version === '9.9.9' && j1.entries[0].notes.length === 2, '更新内容: 只列比当前新的条目(非法版本被丢弃)');
-    ok(j1.flavor === 'source', '安装口味回传(source: 源码/工作树运行)');
+    // 口味必须与"这份安装"相符: 工作树没有 BUILD-INFO -> source; 发布包内有 kind -> self-contained/lite。
+    // (2026-09-19 6b 步抓到: 原先写死 source, 在解包后的发布包里必挂 —— 同一条用例要能在两种环境跑。)
+    let bi = null;
+    try { bi = JSON.parse(fs.readFileSync(path.join(ROOT, 'BUILD-INFO.json'), 'utf8')); } catch (e) { bi = null; }
+    const expectFlavor = bi && bi.kind === 'lite' ? 'lite' : (bi && bi.kind === 'self-contained' ? 'self-contained' : 'source');
+    ok(j1.flavor === expectFlavor, '安装口味回传(' + j1.flavor + ', 期望 ' + expectFlavor + (bi ? (' — 包内 BUILD-INFO.kind=' + bi.kind) : ' — 工作树无 BUILD-INFO') + ')');
     ok(Array.isArray(j1.problems) && (j1.asset === null || typeof j1.asset === 'object'), '产物信息缺失时优雅降级(ok/newer 不受影响)');
     // 注入型 releaseUrl: 只有镜像可用时整条必须被丢弃(不能变成可点的"下载页")
     fs.writeFileSync(path.join(upub, 'version.json'), JSON.stringify({ version: '9.9.10', releaseUrl: 'https://evil.example.com/x', history: [{ version: '9.9.10', notes: ['坏'] }] }), 'utf8');

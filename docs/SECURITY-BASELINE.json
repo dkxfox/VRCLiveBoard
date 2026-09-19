@@ -1,7 +1,9 @@
 {
   "surface": {
     "domains": [
+      "api-docs.deepseek.com",
       "api.deepseek.com",
+      "api.github.com",
       "api.open-meteo.com",
       "bootstrap.pypa.io",
       "cdn.jsdelivr.net",
