@@ -142,7 +142,11 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     ok(pFull !== pSmart, '两档提示词内容不同(全量 vs 智能)');
     ok(pFull.indexOf('所有可读文字都要翻译') >= 0, '全量档要求翻画面所有文字');
     ok(pSmart.indexOf('简介与说明') >= 0 && pSmart.indexOf('作者留言') >= 0, '智能档写明要翻的正文类型(简介/说明/作者留言/公告)');
-    ok(pSmart.indexOf('界面元素') >= 0 && pSmart.indexOf('玩家名') >= 0 && pSmart.indexOf('装饰性文字') >= 0, '智能档写明忽略清单(界面/玩家名/装饰文字)');
+    ok(pSmart.indexOf('平台界面与系统提示') >= 0 && pSmart.indexOf('玩家名') >= 0 && pSmart.indexOf('装饰性文字') >= 0, '智能档写明忽略清单(平台界面/玩家名/装饰文字)');
+    ok(pSmart.indexOf('名词性标签') >= 0 && pSmart.indexOf('按键提示') >= 0, '智能档忽略名词性标签与按键提示(33 张截图判读得出)');
+    ok(pSmart.indexOf('网址、二维码') >= 0 && pSmart.indexOf('话题标签') >= 0, '智能档忽略网址与话题标签, 专有名词保留原文');
+    ok(pSmart.indexOf('世界内的规则与玩法引导') >= 0, '智能档把世界内规则/玩法引导纳入翻译范围');
+    ok(pSmart.indexOf('空结果在这一档是正常') >= 0, '智能档明确空结果是正常结果(避免为了有输出硬翻)');
     ok(pFull.indexOf('待翻译的原文') >= 0 && pSmart.indexOf('待翻译的原文') >= 0, '防注入安全规则两档都在(范围不削弱底线)');
     ok(pFull.indexOf('JSON') >= 0 && pSmart.indexOf('JSON') >= 0, '两档都保留 JSON 输出契约');
     ok(mk('smart', false).indexOf('安全规则') < 0, '关闭防注入后不再带安全规则(与既有口径一致)');
