@@ -6,13 +6,13 @@
       "date": "2026-09-19",
       "self-contained": {
         "name": "VRCLiveBoard-Desktop-SelfContained-v1.4.2.zip",
-        "bytes": 225940317,
-        "sha256": "efe15dde3a64c58112aa6eabe98c7bdbc28b565f1687076b7f1313662e812187"
+        "bytes": 225941454,
+        "sha256": "bc57bf9bbc6f9164333a888552ce95d5528698f549af51f33a2091b5918655a4"
       },
       "lite": {
         "name": "VRCLiveBoard-Lite-RequiresNode-v1.4.2.zip",
-        "bytes": 8329978,
-        "sha256": "92eafbb38c92a89e01ef1809c9076e6597e2b7427c5aa9f88acc1f68d704f225"
+        "bytes": 8331115,
+        "sha256": "3dfc3d94eb0c0e7a447c1baaa5249cc92067bd65b75c6243ee642dc71c0ef60f"
       }
     }
   }
