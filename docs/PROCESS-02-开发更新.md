@@ -245,3 +245,12 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke
 - 产物: `VRCLiveBoard-Desktop-SelfContained-v1.4.1.zip`(215.45MB) + `VRCLiveBoard-Lite-RequiresNode-v1.4.1.zip`(7.92MB) + `SHA256SUMS-v1.4.1.txt`; 审计 10 步全 PASS。
 - **Release 已上线**: https://github.com/dkxfox/VRCLiveBoard/releases/tag/v1.4.1 (3 资产, GitHub digest 与本地一致, `latest` = v1.4.1)。
 - 提醒: 官方插件「好友欢迎」升到 1.3.2 —— 用户在插件页**重新授权一次**即可(授权哈希含插件目录与权限声明)。
+
+### 8.8 1.4.2 发布(2026-09-19 · 检查更新 + 截图翻译)
+
+- 触发: 用户要"检查更新按钮 + 自动识别更新内容", 拍板先做 L1(检查与展示, 不做自动替换); 随后并入截图翻译两档提示词、截图健壮性、视觉链路按官方文档校正。
+- 另出 **1.4.1 旧编号测试包**(`dist\_旧编号测试包-1.4.1\`): 供用户装上后验证"检测更新"这一路。用户实机确认: **功能通过**。
+- 定稿前共**三轮**打包审计(每轮都重审; 第一轮在 6b 与攻击面基线各 FAIL 一处, 修复后重打重审): 线上资产最终替换为定稿包。
+- **正式出厂物(定稿)**: 自包含 225943015 B / `a5e1cbca…` + 精简 8332675 B / `fa06244d…`, 包内 `BUILD-INFO.commit = 4ac7255`(= 打包时 HEAD); 解包直读验证互校代码确实在包内; Release 资产替换后 GitHub digest 与本地 SHA256SUMS 一致。
+- **Release 已上线**: https://github.com/dkxfox/VRCLiveBoard/releases/tag/v1.4.2 (3 资产, latest=v1.4.2)。
+- 新增发布动作(已写进检查清单第 7 条): 打包后把真实体积与 SHA256 追记到 `docs/RELEASE-ASSETS.json`(客户端经 raw/jsDelivr 读取, 因为 GitHub 的 releases/download 直链在国内常被重置) —— 该文件在 `docs/` 内, 属绑定检查容忍的追记提交。
