@@ -88,7 +88,8 @@
                   "vision":  {
                                  "apiBase":  "https://api.deepseek.com",
                                  "apiKey":  "",
-                                 "model":  "deepseek-v4-flash-vision-exp",
+                                 "model":  "deepseek-v4.1-flash",
+                                 "promptMode":  "full",
                                  "targetLang":  "zh"
                              },
                   "security":  {

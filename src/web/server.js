@@ -317,7 +317,7 @@ function effPluginSec() {
     const swf = (rootConfig.chatbox && rootConfig.chatbox.swearFilter) || {};
     // 空安全: 配置段缺失时宁可给空值, 也不能让这个高频接口抛未捕获异常(整个服务会因此不回包)
     const pgCfg = (rootConfig.sources && rootConfig.sources.pages) || {};
-    return json(res, 200, { pages: pgCfg.pages || [], rotationMs: pgCfg.rotationMs, sources: srcs, autostart: autostart, desktop: { showConsole: !((rootConfig.desktop || {}).showConsole === false) }, lang: (rootConfig.web && rootConfig.web.lang) || 'zh-CN', ocrtl: { delayMs: (rootConfig.ocrtl || {}).delayMs || 5000, displayMs: (rootConfig.ocrtl || {}).displayMs || 8000, loops: (rootConfig.ocrtl || {}).loops || 2, mode: (rootConfig.ocrtl || {}).mode || 'auto', vision: { apiBase: v.apiBase || '', model: v.model || 'deepseek-v4-flash-vision-exp', hasKey: !!v.apiKey, targetLang: v.targetLang || 'zh' }, capture: { mode: cap.mode || 'window', windowTitle: cap.windowTitle || 'VRChat', region: cap.region || { x: 0, y: 0, w: 0, h: 0 } }, security: { promptDefense: sec.promptDefense !== false, jsonMode: sec.jsonMode !== false, outputSanitize: sec.outputSanitize !== false, extraPrompt: sec.extraPrompt || '', blockWords: sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS } }, swearFilter: { enabled: swf.enabled !== false, words: swf.words && swf.words.length ? swf.words : swearfilter.DEFAULTS }, pluginsSecurity: effPluginSec(), branding: (rootConfig.branding || 'default'), specialEvents: (rootConfig.specialEvents || []), efx: { enabled: efxCfg().enabled, oncePerDay: efxCfg().oncePerDay, splashMaxMs: efxCfg().splashMaxMs }, market: { indexUrl: ((rootConfig.market || {}).indexUrl || ''), revokeUrl: ((rootConfig.market || {}).revokeUrl || ''), installed: rootConfig.marketInstalled || {} } });
+    return json(res, 200, { pages: pgCfg.pages || [], rotationMs: pgCfg.rotationMs, sources: srcs, autostart: autostart, desktop: { showConsole: !((rootConfig.desktop || {}).showConsole === false) }, lang: (rootConfig.web && rootConfig.web.lang) || 'zh-CN', ocrtl: { delayMs: (rootConfig.ocrtl || {}).delayMs || 5000, displayMs: (rootConfig.ocrtl || {}).displayMs || 8000, loops: (rootConfig.ocrtl || {}).loops || 2, mode: (rootConfig.ocrtl || {}).mode || 'auto', vision: { apiBase: v.apiBase || '', model: v.model || 'deepseek-v4.1-flash', hasKey: !!v.apiKey, targetLang: v.targetLang || 'zh', promptMode: (v.promptMode === 'smart' ? 'smart' : 'full') }, capture: { mode: cap.mode || 'window', windowTitle: cap.windowTitle || 'VRChat', region: cap.region || { x: 0, y: 0, w: 0, h: 0 } }, security: { promptDefense: sec.promptDefense !== false, jsonMode: sec.jsonMode !== false, outputSanitize: sec.outputSanitize !== false, extraPrompt: sec.extraPrompt || '', blockWords: sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS } }, swearFilter: { enabled: swf.enabled !== false, words: swf.words && swf.words.length ? swf.words : swearfilter.DEFAULTS }, pluginsSecurity: effPluginSec(), branding: (rootConfig.branding || 'default'), specialEvents: (rootConfig.specialEvents || []), efx: { enabled: efxCfg().enabled, oncePerDay: efxCfg().oncePerDay, splashMaxMs: efxCfg().splashMaxMs }, market: { indexUrl: ((rootConfig.market || {}).indexUrl || ''), revokeUrl: ((rootConfig.market || {}).revokeUrl || ''), installed: rootConfig.marketInstalled || {} } });
   });
   const route_v1_chatbox = function (req, res, url) {
     return readBody(req, function (body) {
@@ -597,6 +597,9 @@ function effPluginSec() {
         if (o.apiKey !== undefined) v.apiKey = String(o.apiKey || '');
         if (o.model !== undefined) v.model = String(o.model || '');
         if (o.targetLang !== undefined) v.targetLang = String(o.targetLang || 'zh');
+        // 翻译范围两档(2026-09-12): full=画面全部文字 / smart=只翻关键正文(简介、说明、作者留言)
+        // 白名单校验: 非法值忽略(与上面 mode 同口径), 免得把拼错的值写进配置
+        if (o.promptMode !== undefined && ['full', 'smart'].indexOf(String(o.promptMode)) >= 0) v.promptMode = String(o.promptMode);
         // 识别方式与三个参数同样落盘(M-20260911-23): 面板上这些值都读自 config, 只读不写
         // 就是"改了等于没改", 重启回默认(用户报"识别方式不会随着重启保存")。
         const clampN = function (n, lo, hi, dft) { const x = Number(n); return isFinite(x) ? Math.min(hi, Math.max(lo, x)) : dft; };
@@ -606,7 +609,7 @@ function effPluginSec() {
         if (o.loops !== undefined) c.loops = Math.round(clampN(o.loops, 1, 10, c.loops || 2));
         persist();
         // 回传生效值, 让界面显示的就是真正存下来的(越界会被夹回来)
-        return json(res, 200, { ok: true, ocrtl: { mode: c.mode || 'auto', delayMs: c.delayMs || 5000, displayMs: c.displayMs || 8000, loops: c.loops || 2 } });
+        return json(res, 200, { ok: true, ocrtl: { mode: c.mode || 'auto', delayMs: c.delayMs || 5000, displayMs: c.displayMs || 8000, loops: c.loops || 2, promptMode: (v.promptMode === 'smart' ? 'smart' : 'full') } });
       } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
     });
   });

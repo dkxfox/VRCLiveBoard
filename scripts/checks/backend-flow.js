@@ -108,6 +108,7 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
   try {
     const cfgPath = path.join(ROOT, 'config.json');
     const readCfg = async function () { return JSON.parse((await req('/api/config')).body.toString('utf8')); };
+    ok((await readCfg()).ocrtl.vision.promptMode === 'full', '翻译范围默认 full(全量: 老用户行为不变)');
     const r7 = await req('/api/ocrtl-vision', { method: 'POST', body: JSON.stringify({ mode: 'vision', loops: 99, delayMs: 1 }) });
     const j7 = JSON.parse(r7.body.toString('utf8'));
     ok(r7.status === 200 && j7.ok === true, '保存截图翻译设置接口 200');
@@ -124,6 +125,28 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     ok((await readCfg()).ocrtl.mode === 'vision', '非法识别方式被忽略(仍是 vision)');
     await req('/api/ocrtl-vision', { method: 'POST', body: JSON.stringify({ mode: 'auto', loops: 2, delayMs: 5000, displayMs: 8000 }) });
     ok((await readCfg()).ocrtl.mode === 'auto', '用例结束后恢复默认 auto');
+    // 翻译范围两档(2026-09-12): 写进去 / 落盘 / 非法值被忽略 / 用完恢复
+    const rS = await req('/api/ocrtl-vision', { method: 'POST', body: JSON.stringify({ promptMode: 'smart' }) });
+    const jS = JSON.parse(rS.body.toString('utf8'));
+    ok(rS.status === 200 && jS.ocrtl && jS.ocrtl.promptMode === 'smart', '切到智能档并回传生效值');
+    ok((await readCfg()).ocrtl.vision.promptMode === 'smart', '智能档进入运行中的配置');
+    if (fs.existsSync(cfgPath)) ok(JSON.parse(fs.readFileSync(cfgPath, 'utf8')).ocrtl.vision.promptMode === 'smart', '智能档已落盘 config.json');
+    await req('/api/ocrtl-vision', { method: 'POST', body: JSON.stringify({ promptMode: 'weird' }) });
+    ok((await readCfg()).ocrtl.vision.promptMode === 'smart', '非法范围值被忽略(仍是 smart)');
+    await req('/api/ocrtl-vision', { method: 'POST', body: JSON.stringify({ promptMode: 'full' }) });
+    ok((await readCfg()).ocrtl.vision.promptMode === 'full', '用例结束后恢复 full');
+    // 提示词形状(M-20260912-xx): 两档必须真的不同, 且范围不影响防注入底线
+    const ocrMod = require(path.join(ROOT, 'src', 'ocrtranslate.js'));
+    const mk = function (mode, defend) { return ocrMod.buildVisionSystemPrompt({ vision: { targetLang: 'zh', promptMode: mode }, security: { promptDefense: defend !== false } }); };
+    const pFull = mk('full'), pSmart = mk('smart');
+    ok(pFull !== pSmart, '两档提示词内容不同(全量 vs 智能)');
+    ok(pFull.indexOf('所有可读文字都要翻译') >= 0, '全量档要求翻画面所有文字');
+    ok(pSmart.indexOf('简介与说明') >= 0 && pSmart.indexOf('作者留言') >= 0, '智能档写明要翻的正文类型(简介/说明/作者留言/公告)');
+    ok(pSmart.indexOf('界面元素') >= 0 && pSmart.indexOf('玩家名') >= 0 && pSmart.indexOf('装饰性文字') >= 0, '智能档写明忽略清单(界面/玩家名/装饰文字)');
+    ok(pFull.indexOf('待翻译的原文') >= 0 && pSmart.indexOf('待翻译的原文') >= 0, '防注入安全规则两档都在(范围不削弱底线)');
+    ok(pFull.indexOf('JSON') >= 0 && pSmart.indexOf('JSON') >= 0, '两档都保留 JSON 输出契约');
+    ok(mk('smart', false).indexOf('安全规则') < 0, '关闭防注入后不再带安全规则(与既有口径一致)');
+    ok(ocrMod.promptModeOf({ vision: { promptMode: 'weird' } }) === 'full', 'promptModeOf 对非法值回落到 full');
   } catch (e) { ok(false, '截图翻译设置落盘用例异常: ' + e.message); }
 
   // ⑩ 包/树一致性(M-20260911-52): 同一份用例既能跑工作树也能跑发布包 ——
