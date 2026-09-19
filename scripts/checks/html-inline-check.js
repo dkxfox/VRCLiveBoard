@@ -150,4 +150,13 @@ const tabOn = [...styleText.matchAll(/\.tab\.on\s*\{([^}]*)\}/g)].map((x) => x[1
 if (!/background\s*:/.test(tabOn)) { console.log('  FAIL 缺少 tab 选中态样式(.tab.on 必须设置 background —— 否则分不清当前在哪个页签)'); fail++; }
 else console.log('  OK   页签选中态有实心高亮(.tab.on 设了 background)');
 
+// 说明文案位契约(审计 AUDIT-20260911-03 第 30 行; 2026-09-12 补齐): 这 13 段说明文字曾经"键还在、页面却没占位" ——
+//   lang.js 里躺着键, index.html 里没有 data-t 元素, 于是用户完全看不到说明, 而当时所有门禁都是绿的:
+//   GI18NU 只查"页面/JS 引用的键是否存在", 不查"字典里的键有没有家"(单向)。
+//   这类丢失没有任何报错, 只有肉眼看界面才能发现 —— 这里把清单固化成页面契约。
+const descKeys = ['transSysDesc', 'ocrDesc', 'visGuideLocal', 'envDesc', 'prioExplain', 'plgDesc', 'showConsoleDesc', 'advGameHint', 'advBoxHint', 'advHttpHint', 'diagHint', 'transVoiceDesc', 'ocrLtNote'];
+const noHome = descKeys.filter((k) => html.indexOf('data-t="' + k + '"') < 0);
+if (noHome.length) { console.log('  FAIL 说明文案没有页面占位(键在字典里, 用户看不到): ' + noHome.join(', ')); fail++; }
+else console.log('  OK   ' + descKeys.length + ' 段说明文案都有页面占位(data-t)');
+
 process.exit(fail ? 1 : 0);

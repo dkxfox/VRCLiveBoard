@@ -63,7 +63,7 @@ if($('pgPrev'))$('pgPrev').onclick=function(){if(pages.length)curIdx=(curIdx-1+p
 if($('pgNext'))$('pgNext').onclick=function(){if(pages.length)curIdx=(curIdx+1)%pages.length;renderBoard();};
 if($('addPage'))$('addPage').onclick=function(){pages.push({text:tr('newPageText')});curIdx=pages.length-1;renderBoard();};
 if($('bdAdd'))$('bdAdd').onclick=function(){pages.push({text:tr('newPageText')});curIdx=pages.length-1;renderBoard();};
-if($('bdSave'))$('bdSave').onclick=async function(){pages[curIdx].text=$('bdText').value;try{var r=await fetch('/api/config',{method:'POST',body:JSON.stringify({pages:pages})});var j=await r.json();if(!j.ok)note(tr('saveFail'),'warn');else note(tr('savedOk'),'ok');}catch(e){note(tr('saveFail'),'warn');}renderBoard();};
+if($('bdSave'))$('bdSave').onclick=async function(){pages[curIdx].text=$('bdText').value;try{var r=await fetch('/api/config',{method:'POST',body:JSON.stringify({pages:pages})});var j=await r.json();if(!j.ok)note(tr('saveFail'),'warn');else note(tr('savedOk')+(j.pageCount!=null?j.pageCount:pages.length)+tr('savedOk2'),'ok');}catch(e){note(tr('saveFail'),'warn');}renderBoard();};
 // ===== 公告板补接线(M-20260907-01 批 A) =====
 function applyBdPrevWidth(){var w=$('bdWidth'),p=$('bdPrev');if(!w||!p)return;var n=Math.max(8,Math.min(144,Math.round(Number(w.value)||28)));w.value=n;p.style.width=n+'ch';p.style.maxWidth='100%';}
 if($('boardEdit'))$('boardEdit').onclick=function(){var em=$('editMode');if(!em)return;var show=em.hidden;em.hidden=!show;this.classList.toggle('on',show);
@@ -195,8 +195,8 @@ function renderSrcTable(force){var tb=$('srcRows');if(!tb)return;
   if(!force&&ae&&tb.contains&&tb.contains(ae))return;               // 正在表格里编辑: 等这一次过去, 下次轮询再更新
   tb._sig=sig;tb.innerHTML='';(window._srcs||[]).forEach(function(x){var rowEl=document.createElement('tr');var td1=document.createElement('td');srcTok(td1,x);var td2=document.createElement('td');td2.textContent=tr(NM(x.id));var td3=document.createElement('td');var sm=(x.id==='media'&&x.helperRunning!==undefined)?(' · '+(x.helperRunning?tr('smtcRun'):tr('smtcDown'))):'';td3.textContent=tr(DSC(x.id))+sm+(x.lastError?(' · '+String(x.lastError).slice(0,60)):'');var td4=document.createElement('td');var pi=document.createElement('input');pi.type='number';pi.value=x.priority;pi.style.width='62px';pi.onchange=async function(){try{await fetch('/api/sources',{method:'POST',body:JSON.stringify({id:x.id,priority:Number(pi.value)||0})});}catch(e){apiFail('sec-sources',e);}pollStatus();};td4.appendChild(pi);rowEl.appendChild(td1);rowEl.appendChild(td2);rowEl.appendChild(td3);rowEl.appendChild(td4);tb.appendChild(rowEl);});}
 function setDot(id,cls){var e=$(id);if(e)e.className='dot '+(cls||'');}
-async function pollStatus(){try{
-  var s=await (await fetch('/api/status')).json();var v=s.vrc||{};
+async function pollStatus(){var s=null;try{
+  s=await (await fetch('/api/status')).json();var v=s.vrc||{};
   window._vrcRunning=!!(v.running&&v.oscEnabled);window._srcs=s.sources||[];renderSrcTable();try{applyAnim();}catch(e){} // 运行状态变了要重判"游戏时自动停用动效"(M-20260911-18)
   document.querySelectorAll('.sw[data-src]').forEach(function(sw){var src=window._srcs.find(function(x){return x.id===sw.dataset.src;});if(src)sw.classList.toggle('on',!!src.enabled);});
   var ccur=$('curChat');if(ccur&&s.current&&s.current.text!=null)ccur.textContent=s.current.text;
@@ -205,10 +205,13 @@ async function pollStatus(){try{
   setDot('oscDot',v.oscEnabled?'on':'');$('oscText').textContent=v.oscEnabled?tr('oscOn'):tr('oscOff');
   var pc=await (await fetch('/api/ports/check')).json();var u=pc.udp9000||{};
   if(u.occupied){var nm=u.name||'';var isV=nm.indexOf('VRChat')>=0;setDot('udpDot',isV?'on':'off');$('udpText').textContent=isV?tr('udpVrc'):(tr('udpBusy')+': '+nm);}else{setDot('udpDot','');$('udpText').textContent=tr('udpFree');}
-}catch(e){var cm=$('curMeta');if(cm){var cc=s.current||{};cm.textContent=cc.sourceId?(String(NM(cc.sourceId))+' · '+(cc.priority!=null?cc.priority:'-')+(cc.ttlUntil?(' · '+Math.max(0,Math.round((cc.ttlUntil-Date.now())/1000))+'s'):'')):'';}
+}catch(e){apiFail('#udpText',e);return;}
+  // 以下三段必须在**正常路径**上跑: 2026-09-12 发现它们被插进了上面的 catch 分支(只有接口抛异常才执行)
+  //   → 截图倒计时/当前来源/端口信息三项"已修复"实际从未生效(插入位置错 ≠ 语法错误, 门禁全绿也看不出来)
+  var cm=$('curMeta');if(cm){var cc=s.current||{};cm.textContent=cc.sourceId?(tr('curFrom')+tr(NM(cc.sourceId))+(cc.priority!=null?(tr('curPrio')+cc.priority):'')+(cc.ttlUntil?(tr('curLeft')+Math.max(0,Math.round((cc.ttlUntil-Date.now())/1000))+tr('curLeftS')):'')):'';}
   var oc=s.ocrState;if(oc&&oc.phase==='countdown'&&oc.countdown>0)shotHint(tr('ocrRunning')+' '+oc.countdown,true);
   try{var pp=await (await fetch('/api/ports')).json();var w=pp.web||{};var cu=$('consoleUrl');if(cu)cu.textContent='http://'+(w.host||'127.0.0.1')+':'+(w.actual||w.port||'');var pi2=$('portsInfo');if(pi2)pi2.textContent=(tr('portsWeb')||'Web')+' '+(w.actual||w.port||'-')+' · '+(tr('portsOsc')||'OSC')+' '+(((pp.osc||{}).port)||'-');}catch(e2){apiFail('#consoleUrl',e2);}
-  apiFail('#udpText',e);}}
+}
 document.querySelectorAll('.sw[data-src]').forEach(function(sw){sw.addEventListener('click',async function(){sw.classList.toggle('on');try{await fetch('/api/sources',{method:'POST',body:JSON.stringify({id:sw.dataset.src,enabled:sw.classList.contains('on')})});}catch(e){apiFail('#udpText',e);}pollStatus();});});
 if($('diagBtn'))$('diagBtn').onclick=async function(){var out=$('diagOut'),cp=$('diagCopy');if(out){out.style.display='block';out.textContent='…';}try{var j=await (await fetch('/api/diagnose')).json();if(out)out.textContent=JSON.stringify(j,null,2);if(cp)cp.style.display='inline-block';}catch(e){if(out)out.textContent=tr('diagFail')+e.message;}};
 if($('healthRefresh'))$('healthRefresh').onclick=pollStatus;

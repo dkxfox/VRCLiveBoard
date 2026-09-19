@@ -1,4 +1,4 @@
-﻿# 门禁有效性自测(红队夹具): 往临时副本注入已知故障, 确认每个门禁**真的会 FAIL**
+﻿ 门禁有效性自测(红队夹具): 往临时副本注入已知故障, 确认每个门禁**真的会 FAIL**
 # 为什么需要它: config.json.bak 泄密的根因不是"没有扫描器", 而是"扫描器有盲区却没人发现"。
 #              检查器本身必须被检查 —— 这是流程 3 的第一道工序。
 # 用法: powershell -File scripts\checks\gate-selftest.ps1
@@ -61,6 +61,12 @@ Run-Case '英文语言包缺一个键' 'scripts\checks\i18n-check.js' {
 
 Run-Case '控制台内联脚本语法错误' 'scripts\checks\html-inline-check.js' {
   Add-Content -Path (Join-Path $tmp 'src\web\public\index.html') -Value '<script>function broken( {</script>' -Encoding UTF8
+} @('src\web\public\index.html')
+
+Run-Case '说明文案的页面占位被删掉' 'scripts\checks\html-inline-check.js' {
+  $p = Join-Path $tmp 'src\web\public\index.html'
+  $t = [IO.File]::ReadAllText($p)
+  [IO.File]::WriteAllText($p, $t.Replace('<div class="sub" data-t="advGameHint" style="font-size:12px;margin-bottom:2px"></div>', ''), (New-Object Text.UTF8Encoding($false)))
 } @('src\web\public\index.html')
 
 Run-Case '插件被复制出第二份源码' 'scripts\checks\plugin-check.js' {
