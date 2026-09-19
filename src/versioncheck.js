@@ -67,14 +67,43 @@ async function checkUpdate(config, force) {
 const ASSET_OK_TTL_MS = 6 * 60 * 60 * 1000;
 const ASSET_FAIL_TTL_MS = 10 * 60 * 1000;
 const assetCache = Object.create(null);
+// 产物清单的 URL 由 version.json 的源改写而来(同一条 CDN 链路, 不引入新的域名)
+function manifestUrls(cfg) {
+  const list = [];
+  const mirror = (cfg && typeof cfg.mirror === 'string') ? cfg.mirror : '';
+  for (const s of [mirror].concat(DEF_SOURCES)) {
+    if (!s || !/version\.json/i.test(s)) continue;
+    list.push(s.replace(/version\.json/i, 'docs/RELEASE-ASSETS.json'));
+  }
+  return list;
+}
+async function manifestLookup(version, flavor, cfg, timeoutMs) {
+  for (const u of manifestUrls(cfg)) {
+    try {
+      const r = await fetch(u + (u.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now(), { signal: AbortSignal.timeout(timeoutMs) });
+      if (!r.ok) continue;
+      const j = await r.json();
+      const hit = UPDATEINFO.assetFromManifest(j, version, flavor);
+      if (hit) {
+        const v = (j.versions || {})[String(version)] || {};
+        return { asset: hit, publishedAt: String(v.date || ''), source: 'repo-manifest' };
+      }
+    } catch (e) {}
+  }
+  return null;
+}
 async function fetchReleaseInfo(version, flavor, cfg) {
   const key = String(version) + '|' + String(flavor);
   const now = Date.now();
   const hit = assetCache[key];
   if (hit && now - hit.at < (hit.value ? ASSET_OK_TTL_MS : ASSET_FAIL_TTL_MS)) return hit.value;
   const timeoutMs = Number((cfg && cfg.timeoutMs) || 0) || 6000;
+  // ① 仓库产物清单优先: 经 jsDelivr/raw 分发(国内可达)且自带校验和 —— 实测 GitHub 的
+  //    releases/download 直链会被重置, 校验和经常取不到, 而它是用户核对下载物的唯一依据。
+  let value = await manifestLookup(version, flavor, cfg, timeoutMs);
+  if (value) { assetCache[key] = { value: value, at: now }; return value; }
+  // ② 退回 GitHub API: 官方体积与下载页稳定可得; 校验和可能缺失(界面会提示"可到发布页查看")
   const api = 'https://api.github.com/repos/dkxfox/VRCLiveBoard/releases/tags/v' + encodeURIComponent(String(version));
-  let value = null;
   try {
     const r = await fetch(api, {
       headers: { 'User-Agent': 'VRCLiveBoard', Accept: 'application/vnd.github+json' },
@@ -89,8 +118,13 @@ async function fetchReleaseInfo(version, flavor, cfg) {
         try {
           const sums = (j.assets || []).filter(function (a) { return /SHA256SUMS/i.test(String(a && a.name)); })[0];
           if (sums && UPDATEINFO.officialUrl(sums.browser_download_url)) {
-            const rs = await fetch(sums.browser_download_url, { signal: AbortSignal.timeout(timeoutMs) });
-            if (rs.ok) asset.sha256 = UPDATEINFO.hashFromSums(await rs.text(), asset.name);
+            // 直链时通时断(实测 ECONNRESET): 重试一次再放弃, 拿不到不影响展示体积与下载页
+            for (let i = 0; i < 2 && !asset.sha256; i++) {
+              try {
+                const rs = await fetch(sums.browser_download_url, { signal: AbortSignal.timeout(timeoutMs) });
+                if (rs.ok) asset.sha256 = UPDATEINFO.hashFromSums(await rs.text(), asset.name);
+              } catch (e2) { /* 下一轮或放弃 */ }
+            }
           }
         } catch (e) { /* 哈希拿不到不影响展示体积与下载链接 */ }
         value = { asset: asset, publishedAt: String((j && j.published_at) || ''), source: 'github-api' };

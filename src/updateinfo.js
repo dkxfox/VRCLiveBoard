@@ -82,6 +82,33 @@ function hashFromSums(text, fileName) {
   const m = re.exec(String(text || ''));
   return m ? m[1].toLowerCase() : '';
 }
+// 仓库产物清单(docs/RELEASE-ASSETS.json, 经 jsDelivr/raw 分发): GitHub 的 releases/download 直链在国内
+// 经常被重置(2026-09-19 实测 ECONNRESET), 而校验和是用户核对下载物的唯一依据 —— 所以把它放在仓库文件里。
+// 该文件在打包后由发布流程追记(docs/ 内的改动不影响"包与提交绑定"的审计口径)。
+function normalizeAssets(j) {
+  const out = {};
+  const src = (j && typeof j === 'object' && j.assets && typeof j.assets === 'object') ? j.assets : {};
+  for (const flavor of ['self-contained', 'lite']) {
+    const a = src[flavor];
+    if (!a || typeof a !== 'object') continue;
+    const name = cleanText(a.name, 120);
+    const re = ASSET_PATTERNS[flavor];
+    if (!name || !re || !re.test(name)) continue;
+    const bytes = Number(a.bytes) || 0;
+    const sha = String(a.sha256 || '').toLowerCase();
+    out[flavor] = { name: name, bytes: bytes, url: '', sha256: /^[a-f0-9]{64}$/.test(sha) ? sha : '' };
+  }
+  return out;
+}
+// 从远端信息里取某个版本+口味的产物(优先仓库清单, 拿不到就返回 null 让调用方退回 GitHub API)
+function assetFromManifest(manifest, version, flavor) {
+  const v = manifest && manifest.versions && manifest.versions[String(version)];
+  if (!v) return null;
+  const hit = normalizeAssets({ assets: v })[flavor];
+  if (!hit) return null;
+  hit.url = '';
+  return hit;
+}
 function formatBytes(n) {
   const b = Number(n) || 0;
   if (b <= 0) return '';
@@ -90,4 +117,4 @@ function formatBytes(n) {
   if (b < 1024 * 1024 * 1024) return (b / 1024 / 1024).toFixed(1) + ' MB';
   return (b / 1024 / 1024 / 1024).toFixed(2) + ' GB';
 }
-module.exports = { officialUrl, cleanText, normalizeHistory, newerEntries, flavorOf, pickAsset, hashFromSums, formatBytes, compareVersions, MAX_HISTORY, MAX_NOTES, MAX_NOTE_LEN };
+module.exports = { officialUrl, cleanText, normalizeHistory, newerEntries, flavorOf, pickAsset, hashFromSums, formatBytes, compareVersions, normalizeAssets, assetFromManifest, MAX_HISTORY, MAX_NOTES, MAX_NOTE_LEN };
