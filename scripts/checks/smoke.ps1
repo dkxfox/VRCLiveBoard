@@ -1,4 +1,4 @@
-﻿# G4 隔离冒烟: 把当前工作树(或一个 zip)复制到临时目录, 用测试端口真实启动并打端点
+﻿#G4 隔离冒烟: 把当前工作树(或一个 zip)复制到临时目录, 用测试端口真实启动并打端点
 # 纪律: 永远不碰用户实例 19190; 用 config.default.json 而非用户 config.json; 跑完清端口清临时目录
 # 用法:
 #   powershell -File scripts\checks\smoke.ps1                      # 测当前工作树, 端口 19250
@@ -42,6 +42,8 @@ $cfg.web.port = $Port
 $cfg.web.openBrowser = $false
 [System.IO.File]::WriteAllText($cfgPath, ($cfg | ConvertTo-Json -Depth 24), (New-Object System.Text.UTF8Encoding($false)))
 $env:VRCB_USER_DATA = Join-Path $tmp '.userdata'
+# 无人值守: 涉及"打开文件夹"的接口只回路径不弹窗(否则每次跑冒烟都会在用户桌面弹出资源管理器)
+$env:VRCB_NO_SHELL = '1'
 
 $pkgVer = (Get-Content (Join-Path $tmp 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json).version
 $proc = Start-Process -FilePath 'node' -ArgumentList 'src/main.js' -WorkingDirectory $tmp -PassThru -WindowStyle Hidden

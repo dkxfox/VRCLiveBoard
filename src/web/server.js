@@ -570,6 +570,23 @@ function effPluginSec() {
       } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
     });
   });
+  // 打开插件文件夹(2026-09-19 用户建议): 参数为空 —— 只开固定的 <程序目录>/plugins,
+  // 不接受任何路径(否则等于给了一个"打开任意路径"的接口)。VRCB_NO_SHELL=1 时只回路径不弹窗
+  // (门禁/无人值守环境用: 否则每次跑冒烟都会在用户桌面弹出资源管理器)。
+  on('POST', '/api/plugins/open-dir', function (req, res, url) {
+    try {
+      const dir = path.join(projectRoot, 'plugins');
+      if (!fs.existsSync(dir)) return json(res, 400, { ok: false, error: '插件目录不存在' });
+      if (process.env.VRCB_NO_SHELL === '1') return json(res, 200, { ok: true, dir: dir, skipped: true });
+      if (process.env.VRCB_EMBEDDED === '1') {
+        try { require('electron').shell.openPath(dir); } catch (e) { noteFail('/api/plugins/open-dir', e); }
+      } else {
+        spawn('cmd.exe', ['/c', 'start', '', dir], { windowsHide: true, detached: true }).unref();
+      }
+      logger.info('[plugins] 打开插件文件夹: ' + dir);
+      return json(res, 200, { ok: true, dir: dir });
+    } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
+  });
   // 插件市场(1.4.0 MVP, M-20260911-51): 目录与吊销来自 GitHub + jsDelivr(与 versioncheck 同源双源/白名单),
   // 安装永远走 manager.importZip(解包防线 + id 白名单)与既有的红窗审批 —— 市场不绕过任何一道门槛
   on('GET', '/api/market', function (req, res, url) {

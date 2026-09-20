@@ -104,6 +104,18 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     }
   } catch (e) { ok(false, '插件删除用例异常: ' + e.message); }
 
+  // ⑦a 打开插件文件夹(2026-09-19 用户建议): 只开固定目录, **不收任何路径参数**; 无人值守时不弹窗
+  try {
+    const rp1 = await req('/api/plugins/open-dir', { method: 'POST', body: JSON.stringify({ path: 'C:\\Windows' }) });
+    const jp1 = JSON.parse(rp1.body.toString('utf8'));
+    ok(rp1.status === 200 && jp1.ok === true, '打开插件文件夹接口可用');
+    ok(String(jp1.dir || '').replace(/\\/g, '/').toLowerCase().indexOf('/plugins') >= 0, '只返回程序目录下的 plugins(' + String(jp1.dir || '').slice(-24) + ')');
+    ok(String(jp1.dir || '').indexOf('Windows') < 0, '传入的 path 参数被忽略(接口不接受任意路径)');
+    ok(jp1.skipped === true, '无人值守模式(VRCB_NO_SHELL=1)只回路径不弹窗');
+    const rp2 = await req('/api/plugins/open-dir', { method: 'GET' });
+    ok(rp2.status === 404, '该动作只走 POST(GET 不匹配)');
+  } catch (e) { ok(false, '插件文件夹接口用例异常: ' + e.message); }
+
   // ⑦ 截图翻译设置落盘(M-20260911-23): 面板上的识别方式与参数都读自 config, 必须能写回去(否则重启回默认)
   try {
     const cfgPath = path.join(ROOT, 'config.json');

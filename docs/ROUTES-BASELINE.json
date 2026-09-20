@@ -11,6 +11,7 @@
     "POST /api/swearfilter": "开关零级; addWords 一级",
     "GET /api/special/video": "只服务工程内 assets/ 下的文件(路径围栏, 见 M-20260911-02)",
     "POST /api/plugins/remove": "递归删除插件目录; 按 F-20260903-01 §1.7 属零级(威胁模型明确不防本机所有者)",
+    "POST /api/plugins/open-dir": "打开插件文件夹(资源管理器): **不接受任何路径参数**, 只开 <程序目录>/plugins; 零级(仅唤起本机窗口, 不改数据)",
     "POST /api/fe-err": "前端错误上报入口(只写日志), 零级",
     "POST /v1/chatbox": "外部推送文本入口(本地), 与 /api/chatbox 同一处理器",
     "GET /api/efx/boot": "启动彩蛋决策(设计稿 §4 状态机): 只读判定 + 写回\"已播\"状态; 零级, 但带跨站围栏(与 POST /api/config 同口径: 防恶意网页替用户消耗掉彩蛋); ?date= 供开发测试页模拟日期, ?dry=1 只问不记",
@@ -192,6 +193,11 @@
     {
       "m": "POST",
       "p": "/api/plugins/call",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/plugins/open-dir",
       "level": 0
     },
     {
