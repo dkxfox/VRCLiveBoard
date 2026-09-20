@@ -254,3 +254,10 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke
 - **正式出厂物(定稿)**: 自包含 225943015 B / `a5e1cbca…` + 精简 8332675 B / `fa06244d…`, 包内 `BUILD-INFO.commit = 4ac7255`(= 打包时 HEAD); 解包直读验证互校代码确实在包内; Release 资产替换后 GitHub digest 与本地 SHA256SUMS 一致。
 - **Release 已上线**: https://github.com/dkxfox/VRCLiveBoard/releases/tag/v1.4.2 (3 资产, latest=v1.4.2)。
 - 新增发布动作(已写进检查清单第 7 条): 打包后把真实体积与 SHA256 追记到 `docs/RELEASE-ASSETS.json`(客户端经 raw/jsDelivr 读取, 因为 GitHub 的 releases/download 直链在国内常被重置) —— 该文件在 `docs/` 内, 属绑定检查容忍的追记提交。
+
+### 8.9 1.4.3 补丁发布(2026-09-20)
+
+- 触发: 用户报"插件卡片少了优先级设定框"(真因: 输入框被放在会被整块重写的折叠设置区里, 建好就被抹掉 —— 与 M-20260911-47 同一个坑) + 用户建议"打开插件文件夹"按钮。两者攒成一个补丁。
+- 产物: 自包含 225946814 B / `aee8cd4e…` + 精简 8336474 B / `520e6f48…`; **审计 10 步全 PASS**(6b 两份各 15/15); Release https://github.com/dkxfox/VRCLiveBoard/releases/tag/v1.4.3 (3 资产, latest=v1.4.3)。
+- 发布后追记 `docs/RELEASE-ASSETS.json`(1.4.3 条目, 保留 1.4.2 供旧客户端查询); 更新检测终验: 两口味哈希正确, 来源 `github-api+manifest`。
+- 备注: 包内日期字段为 2026-09-19(升版时未跨天刷新), 实际发布 2026-09-20 —— 仅日期字段偏差, 其余一致。
