@@ -1,0 +1,25 @@
+{
+  "id": "bilibili-live",
+  "name": "B站直播互动",
+  "version": "0.1.0",
+  "author": "VRCLiveBoard 官方",
+  "description": "(占位, 未实现) 接入哔哩哔哩直播: 弹幕/礼物/醒目留言/上舰等事件联动 VRChat 聊天框与 OSC",
+  "api": "2.0.0",
+  "permissions": {
+    "network": [
+      "live-open.biliapi.com",
+      "api.live.bilibili.com",
+      "api.bilibili.com"
+    ],
+    "filesystem": {
+      "read": [],
+      "write": []
+    },
+    "process": false,
+    "ports": []
+  },
+  "dependencies": {},
+  "conflicts": [],
+  "exclusive": [],
+  "loadOrder": 90
+}
