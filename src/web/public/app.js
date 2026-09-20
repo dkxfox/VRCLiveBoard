@@ -200,17 +200,34 @@ function plgCard(p){var en=!!(p.enabled||p.run),ap=!!p.approved;var d=document.c
     var dbHost = d.querySelector('.plgcard-ctrl') || pbody || d;
     dbHost.appendChild(db);
   }
-  // 优先级输入(M-20260911-40): 旧版每行一个优先级输入框, 新版只剩一键重置
+  // 优先级输入(M-20260919-03): 改前它被塞进 .plgcard-body(可折叠的设置区), 而 loadPlgSettings 一进设置区
+  // 就用 innerHTML 重写整块 —— 输入框先被建出来、随即被抹掉, 用户看到的就是"没有优先级设定框"。
+  // 与删除按钮同一个教训(M-20260911-47): 卡片级控件必须挂 .plgcard-ctrl(卡片头常显区), 不能放进会被重渲染的折叠区。
+  var prioHost = d.querySelector('.plgcard-ctrl') || pbody || d;
+  var pwrap = document.createElement('span');
+  pwrap.className = 'row';
+  pwrap.style.cssText = 'gap:4px;align-items:center;margin-right:6px';
+  var plb = document.createElement('span'); plb.className = 'sub'; plb.textContent = tr('thPrio');
+  var pin = document.createElement('input');
+  pin.type = 'number'; pin.min = '-999'; pin.max = '999'; pin.step = '1'; pin.style.width = '64px';
+  pin.value = (p.priority == null ? '' : p.priority);
+  pin.placeholder = tr('plgPrioPh');
+  pin.title = tr('plgPrioHint');
+  pin.onchange = function () {
+    var raw = String(pin.value == null ? '' : pin.value).trim();
+    // 留空 = 交回插件自带默认(与旧版同口径: 空 -> priority:null); 非数字按 0, 并夹到后端同样的范围
+    var cfg = (raw === '') ? { priority: null } : { priority: Math.min(999, Math.max(-999, Math.round(Number(raw) || 0))) };
+    fetch('/api/plugins/config', { method: 'POST', body: JSON.stringify({ id: p.id, cfg: cfg }) })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (j && j.ok === false) { note(tr('opFail') + ': ' + (j.error || ''), 'warn'); return; }
+        note(tr('plgPrioSaved'), 'ok');
+        loadPlugins();
+      })
+      .catch(function (e) { apiFail('#plugCards', e); });
+  };
+  pwrap.appendChild(plb); pwrap.appendChild(pin); prioHost.appendChild(pwrap);
   if (pbody) {
-    var pin = document.createElement('input'); pin.type = 'number'; pin.value = (p.priority == null ? '' : p.priority); pin.style.width = '64px'; pin.title = 'priority';
-    pin.onchange = function () {
-      var n = Number(this.value) || 0;
-      fetch('/api/plugins/config', { method: 'POST', body: JSON.stringify({ id: p.id, cfg: { priority: n } }) })
-        .then(function (r) { return r.json(); })
-        .then(function (j) { if (j && j.ok === false) note(tr('opFail') + ': ' + (j.error || ''), 'warn'); else note(tr('savedOk'), 'ok'); })
-        .catch(function (e) { apiFail('#plugCards', e); });
-    };
-    pbody.insertBefore(pin, pbody.firstChild);
     // 第三方面板(M-20260911-40): 用沙箱 iframe 承载插件自带页面 —— 绝不把插件 HTML 直接 innerHTML 进控制台(存储型 XSS)
     if (p.hasPanel || p.panel) {
       var pn = document.createElement('button'); pn.className = 'small gray'; pn.textContent = tr('btnOpenPage'); pn.style.marginLeft = '6px';

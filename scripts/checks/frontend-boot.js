@@ -195,6 +195,25 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
   else if (!rowsEl.children.length) problems.push('数据源表格 #srcRows 渲染后仍为空(渲染函数可能被异常打断)');
   const plgEl = byId['plugCards'];
   if (plgEl && !plgEl.children.length) problems.push('插件卡片 #plugCards 渲染后仍为空');
+  // 卡片级控件必须在**卡片头**(.plgcard-ctrl, 常显) —— 不能塞进会被 loadPlgSettings 用 innerHTML 重写的
+  // 折叠设置区(M-20260919-03: 优先级输入框就是这样"建好了又被抹掉", 用户看到的是"没有优先级设定框";
+  // 同一个坑 M-20260911-47 已经踩过一次: 删除按钮当时也在折叠区里, 不展开根本看不到)。
+  try {
+    if (typeof sb.plgCard !== 'function') problems.push('plgCard 未导出(无法断言插件卡片控件布局)');
+    else {
+      const cardEl = sb.plgCard({ id: 'plg-prio-probe', name: 'probe', version: '1.0.0', approved: true, enabled: true, priority: null });
+      const ctrl = cardEl.querySelector('.plgcard-ctrl');
+      const found = [];
+      (function walk(el, depth) {
+        if (!el || !el.children || depth > 2) return;
+        for (const c of el.children) { if (c.tagName === 'INPUT') found.push(c); walk(c, depth + 1); }
+      })(ctrl, 0);
+      if (!found.length) problems.push('插件卡片的卡片头里没有优先级输入框(控件被挂到了会被重渲染的折叠区?)');
+      else if (!String(found[0].placeholder || '').length) problems.push('优先级输入框没有占位提示(留空 = 插件自带默认)');
+      else if (String(found[0].title || '').indexOf('优先级') < 0 && String(found[0].title || '').length < 4) problems.push('优先级输入框缺少说明性 title');
+    }
+  } catch (e) { problems.push('插件卡片控件断言异常: ' + e.message); }
+
   // 启动动画(默认/皮肤路径走 simpleBoot): 图标是异步取的, 必须等它就绪再整体淡入,
   // 否则会出现"文字先到、图标后蹦"(M-20260911-10)
   try {
