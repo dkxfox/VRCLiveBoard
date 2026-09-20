@@ -1,7 +1,20 @@
 {
   "说明": "发布产物清单(经 jsDelivr/raw 分发给客户端): GitHub 的 releases/download 直链在国内常被重置, 所以校验和放这里。每次发布后由发布流程追记(docs/ 内的提交不影响包与提交绑定的审计口径)。",
-  "updatedAt": "2026-09-19",
+  "updatedAt": "2026-09-20",
   "versions": {
+    "1.4.3": {
+      "date": "2026-09-20",
+      "self-contained": {
+        "name": "VRCLiveBoard-Desktop-SelfContained-v1.4.3.zip",
+        "bytes": 225946814,
+        "sha256": "aee8cd4e11f28441445192bd98d909364a29e343625e3f715e537ae5d66a75c9"
+      },
+      "lite": {
+        "name": "VRCLiveBoard-Lite-RequiresNode-v1.4.3.zip",
+        "bytes": 8336474,
+        "sha256": "520e6f4859b72b5b1bfc8caab75a5e88183667a6c00ae34f9424bd2aad592dab"
+      }
+    },
     "1.4.2": {
       "date": "2026-09-19",
       "self-contained": {
