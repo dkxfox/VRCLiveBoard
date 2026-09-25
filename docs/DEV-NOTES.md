@@ -958,6 +958,14 @@
   - 体积基线同步更新(`docs/SECURITY-BASELINE.json` 的 zipVolumes: Desktop 1341/226064954、Lite 163/8454614), asOf 里写明"变了什么、为什么、无移除"。
 - **两次自己制造又自己修掉的坑(诚实记录)**: ① 修 `make-dist.ps1` 时我的 TS 转义把反斜杠吃掉(`'plugins\' ` 变成 `'plugins'`), 排除逻辑静默失效 —— 靠"重打包后条目数没变"发现; ② 该脚本原本**无 BOM**(约定 ASCII only), 我加了中文注释又经 edit 工具写出 BOM-less UTF-8 → PS 5.1 按 GBK 解析报语法错; 最终解法是**补 UTF-8 BOM**(与编码门禁对 ps1 的要求一致), 注释同时改回英文以尊重原约定。首发打包还因为"改完代码没重打"被审计抓到一次(BUILD-INFO.commit 5ab4673 ≠ HEAD de534eb, 且差异含 1 个非 docs 文件)—— 这条**正是审计该拦的**。
 - 待用户/下一步: ① 用户确认包功能(装包 → 启用 B站插件 → 红窗授权 → 填四参数 → 测试连接 → 开播验证); ② 确认后再发布(需要用户把 GitHub 令牌写进 TEMP 文件, 我静默上传 3 个资产并核对 `latest`); ③ 发布后把本次结论回填 `docs/PROCESS-02-开发更新.md` §8.11。
+
+## 214. 1.4.4 正式发布(2026-09-25, 用户"发布, 令牌在桌面")
+- 用户指令后立即发布: 令牌在桌面 GitHub令牌.txt(读法与上次一致: 去 BOM、只取 ghp_ 那一行、**只回显前缀**)。
+- **上线结果**: Release v1.4.4(id 396491367) https://github.com/dkxfox/VRCLiveBoard/releases/tag/v1.4.4 —— 3 个资产全部 201 上传成功, **GitHub digest 与本地 SHA256SUMS 逐份一致**(Desktop 090fccaa…, Lite e8042a67…, SUMS 50ab710b…), latest 已指向 v1.4.4。
+- **令牌纪律执行**: 上传脚本用完即删(**临时脚本**与**桌面令牌文件**都已删除, 仓库里没有任何令牌痕迹, git status 干净)。**建议用户顺手把该令牌吊销/轮换一次** —— 它曾以明文放在桌面。
+- Release 说明沿用 version.json 的 1.4.4 条目(9 条), 并把 SHA256SUMS-v1.4.4.txt 全文贴进说明里公示(按 PROCESS-03 3C 的口径)。
+- 结论已回填 docs/PROCESS-02-开发更新.md 的 8.11 节(产物/审计/上线/打包侧修复/令牌纪律/遗留)。
+- 用户侧待办: 实机验证包功能(装包 → 启用 B站插件 → 红窗授权 → 填四参数 → 测试连接 → 开播看弹幕); 有问题按 ISSUES 流程登记。
 ## 211. 待修补 1~2 落地: i18n 取词归位 + 通用插件生命周期用例(2026-09-25, 用户"开始吧")
 - **① `tr` 根因已除**(M-20260925-05 → FIXED): 取词函数与"当前语言码"从 `app-security.js`(在 app.js **之后**执行)搬到 **`lang.js`**(`<head>` 里最先加载) —— `window.tr`/`window.t`/`window.__lang(next)`; app-security.js 改为 `const tr = window.tr` + `langGet()/langSet()`(语言切换与初始化照旧, 只是不再自己持有状态)。GBOOT 新增断言: **"lang.js 执行后 tr 必须立刻可用且能取到文案"**(实机症状"Promise拒绝: tr is not defined"从此有门禁守着)。
   - 顺带修了门禁自身的洞: 前端桩件的阶段 2~8 原来**只跑 ui 文件不跑 lang.js**(因为 `_ui-files.js` 故意排除词库), 靠 app-security.js 自带 tr 才没暴露; 现在统一 `runUi(沙箱, 文件)` 先跑 lang.js —— 这正是"依赖后加载脚本"这类问题会在门禁里假绿的原因。
