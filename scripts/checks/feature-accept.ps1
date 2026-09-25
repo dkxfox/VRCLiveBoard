@@ -1,4 +1,4 @@
-# 功能验收: 从功能卡(docs/FEATURES/F-*.md)里抽出 ASSERT 行, 批量跑隔离冒烟
+﻿# 功能验收: 从功能卡(docs/FEATURES/F-*.md)里抽出 ASSERT 行, 批量跑隔离冒烟
 # 功能卡里的写法(每行一条):
 #   - ASSERT: 名字|/api/路径|期望正则
 # 用法: powershell -File scripts\checks\feature-accept.ps1 -Card docs\FEATURES\F-20260901-01-xxx.md [-Port 19260]

@@ -235,9 +235,9 @@ function plgCard(p){var en=!!(p.enabled||p.run),ap=!!p.approved;var d=document.c
       .catch(function (e) { apiFail('#plugCards', e); });
   };
   pwrap.appendChild(plb); pwrap.appendChild(pin); prioHost.appendChild(pwrap);
-  // 第三方面板按钮**已摘除**(2026-09-25, ISSUES M-20260920-01): 新版控制台里 index.html 没有
-  // plgPanelOverlay / plgPanelFrame 容器, 面板路由又只回 JSON(没有渲染壳与 api 桥) —— 按下去什么都不会发生。
-  // "用户看得见、点了没反应"比"没有这个按钮"更糟, 所以先摘掉; 插件设置一律走 manifest.settings(见 PLUGIN-DEV.md)。
+  // 第三方面板按钮**已摘除**(2026-09-25, ISSUES M-20260920-01): 容器在, 但 `GET /api/plugins/panel` 只回 JSON
+  // (缺 HTML 渲染壳与 api 桥), 点开只会在 iframe 里看到一段 JSON —— 与其让用户以为坏了, 不如摘掉按钮 + 给一行说明。
+  // 插件设置一律走 manifest.settings(见 PLUGIN-DEV.md); 想恢复面板能力要另立功能卡。
   if (pbody && (p.hasPanel || p.panel) && p.enabled && !(Array.isArray(p.settingsUi) && p.settingsUi.length)) {
     var pnote = document.createElement('span'); pnote.className = 'sub'; pnote.textContent = tr('plgPanelGone');
     pbody.appendChild(pnote);
@@ -510,7 +510,10 @@ function guideHide(){var ov=$('guideOverlay');if(ov)ov.hidden=true;try{var no=$(
 function capInfoShow(){fetch('/api/config').then(function(r){return r.json();}).then(function(c){var cap=((c.ocrtl||{}).capture)||{};var el=$('capInfo');if(!el)return;var md=cap.mode||'window';var key=md==='region'?'capModeReg':(md==='screen'?'capModeScr':'capModeWin');var s=tr(key);if(md==='region'){var rg=cap.region||{};s+=' '+(rg.w>0?((rg.x||0)+','+(rg.y||0)+' '+(rg.w||0)+'x'+(rg.h||0)):tr('capNoRegion'));}el.textContent=s;}).catch(function(e){apiFail('#capInfo',e);});}
 capInfoShow();
 // 插件面板关闭(M-20260911-40): 关闭时把 iframe 置空, 避免残留页面在后台继续跑
-// 面板关闭逻辑已随"死按键"一起摘除(2026-09-25): 容器本来就不存在, 这段只是历史残留。
+// 面板关闭(2026-09-25 复核后保留): 事实是**容器就在 index.html 里**(#plgPanelOverlay + 沙箱 iframe #plgPanelFrame),
+// 缺的是 `GET /api/plugins/panel` 的**HTML 渲染壳与 api 桥**(现在只回 JSON, iframe 里只会看到一段 JSON),
+// 所以"打开页面"按钮已摘除、只留一行说明; 但关闭按钮仍然要有反应 —— 万一面板被别的方式打开, 用户得能关掉它。
+(function(){var c=$('plgPanelClose');if(!c)return;c.onclick=function(){var ov=$('plgPanelOverlay'),fr=$('plgPanelFrame');if(ov)ov.hidden=true;if(fr)fr.src='about:blank';};})();
 
 // init
 
