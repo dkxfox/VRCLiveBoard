@@ -4,12 +4,13 @@
 //   window.t 兼容别名在这里赋值, theme.js 的显示名依赖它。
 // ===== 安全与权限(旧版套皮) =====
 const T = window.VRCB_LANG || { 'zh-CN': {} };
-
-let lang = 'zh-CN';
-function tr(k) { const d = T[lang] || T['zh-CN']; return (d[k] !== undefined) ? d[k] : (T['zh-CN'][k] !== undefined ? T['zh-CN'][k] : k); }
-window.t = tr; // 兼容: index.html 内联块仍在用 window.t 取词(待内联块迁出后删除, 见 M-20260911-03)
+// tr / t / 当前语言码都来自 lang.js(<head> 最先加载) —— 这里不再重复定义(2026-09-25 归位, M-20260925-05):
+// app.js 会在本文件执行**之前**就可能调用 tr(), 所以取词必须比 app.js 更早就位。
+const tr = window.tr;
+function langGet() { return window.__lang(); }
+function langSet(v) { return window.__lang(v); }
 function applyLang() {
-  document.documentElement.lang = lang;
+  document.documentElement.lang = langGet();
   document.querySelectorAll('[data-t]').forEach(function (el) { el.textContent = tr(el.getAttribute('data-t')); });
   document.querySelectorAll('[data-t-ph]').forEach(function (el) { el.placeholder = tr(el.getAttribute('data-t-ph')); }); document.querySelectorAll('[data-tt]').forEach(function (el) { el.title = tr(el.getAttribute('data-tt')); }); try{buildBdVar();}catch(e){apiFail('applyLang',e);}
 }
@@ -153,8 +154,8 @@ try{gateRender();}catch(e){apiFail('sec-gate',e);}
 try{psLoad();}catch(e){apiFail('sec-gate',e);}
 
 // 语言切换
-if($('langSel'))$('langSel').onchange=function(){lang=this.value;try{fetch('/api/lang',{method:'POST',body:JSON.stringify({lang:lang})});}catch(e){apiFail('#langSel',e);}reRenderAll();};
+if($('langSel'))$('langSel').onchange=function(){langSet(this.value);try{fetch('/api/lang',{method:'POST',body:JSON.stringify({lang:lang})});}catch(e){apiFail('#langSel',e);}reRenderAll();};
 
 // 语言加载(读回保存的语言)
-(async function(){try{var _c=await (await fetch('/api/config')).json();lang=(_c&&_c.lang)||'zh-CN';var _ls=$('langSel');if(_ls)_ls.value=lang;reRenderAll();}catch(e){apiFail('#langSel',e);}})();
+(async function(){try{var _c=await (await fetch('/api/config')).json();langSet((_c&&_c.lang)||'zh-CN');var _ls=$('langSel');if(_ls)_ls.value=langGet();reRenderAll();}catch(e){apiFail('#langSel',e);}})();
 

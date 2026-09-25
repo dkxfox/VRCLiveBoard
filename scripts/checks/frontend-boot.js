@@ -124,11 +124,23 @@ function makeSandbox() {
   return sb;
 }
 const problems = [];
+// 2026-09-25: 每个沙箱都要先执行 lang.js —— 浏览器里它在 <head> 最先加载, 而 app.js/app-security.js 都依赖 tr()。
+// (此前阶段 2/3 只跑 ui 文件, 靠 app-security.js 自己定义 tr 才没暴露; tr 归位到 lang.js 后必须显式补上。)
+const LANG_SRC = fs.readFileSync(path.join(PUB, 'lang.js'), 'utf8');
+function runUi(sbx, files) { vm.runInNewContext(LANG_SRC, sbx, { filename: 'lang.js' }); for (const fp of files) vm.runInNewContext(fs.readFileSync(fp, 'utf8'), sbx, { filename: path.basename(fp) }); return sbx; }
 const sb = makeSandbox();
 const rejections = [];
 process.on('unhandledRejection', function (e) { rejections.push(e && e.message ? e.message : String(e)); });
 try {
   vm.runInNewContext(fs.readFileSync(path.join(PUB, 'lang.js'), 'utf8'), sb, { filename: 'lang.js' });
+  // 取词函数必须在这一刻就可用(lang.js 在 <head> 最先加载): app.js 会在 app-security.js 之前就有可能调 tr,
+  // 而 app-security.js 才是最后执行的那个 —— 2026-09-25 实机症状就是 "[前端] Promise拒绝: tr is not defined"。
+  {
+    const trEarly = sb.window && sb.window.tr;
+    if (typeof trEarly !== 'function') problems.push('lang.js 执行后 tr 还不可用(app.js 比它晚、却又依赖它)');
+    else if (trEarly('bootTagline') === 'bootTagline') problems.push('lang.js 执行后 tr 取不到文案(词典没生效?)');
+    else if (sb.window.t !== sb.window.tr) problems.push('lang.js 没把 window.t 指向同一个取词函数(兼容别名丢了)');
+  }
   // 执行顺序 = index.html 里 script src 的真实顺序(app.js 先定义 $/feErr, 主题与动效在其后)
   const { uiJsOrder } = require('./_ui-files.js');
   for (const fp of uiJsOrder(ROOT)) {
@@ -320,13 +332,13 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
     const { uiJsOrder: order2 } = require('./_ui-files.js'); // 上面那个在 try 块作用域里, 这里重新取
     const sb2 = makeSandbox();
     sb2.localStorage.setItem('vrcbAnimMaster', '1');
-    for (const fp of order2(ROOT)) vm.runInNewContext(fs.readFileSync(fp, 'utf8'), sb2, { filename: path.basename(fp) });
+    runUi(sb2, order2(ROOT));
     if (!sb2.document.body.classList.contains('no-anim')) problems.push('已保存的"关闭动效"在页面加载时没有被应用(主开关只存不读)');
   } catch (e) { problems.push('动效开关断言异常: ' + e.message); }
   // 主题持久化(M-20260911-19): 点选要写盘, 重开要恢复(此前 theme.js 无条件 setTheme('blue'), 重启即回默认)
   try {
     const { uiJsOrder: order3 } = require('./_ui-files.js');
-    const loadInto = function (sbx) { for (const fp of order3(ROOT)) vm.runInNewContext(fs.readFileSync(fp, 'utf8'), sbx, { filename: path.basename(fp) }); return sbx; };
+    const loadInto = function (sbx) { return runUi(sbx, order3(ROOT)); };
     const base = loadInto(makeSandbox());
     if (typeof base.setTheme !== 'function') problems.push('theme.js 未导出 setTheme');
     else {
@@ -351,7 +363,7 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
         if (String(u).indexOf('/api/ocrtl') >= 0) return { ok: true, status: 200, json: async () => payload, text: async () => JSON.stringify(payload) };
         return defFetch(u, o);
       };
-      for (const fp of order4(ROOT)) vm.runInNewContext(fs.readFileSync(fp, 'utf8'), s, { filename: path.basename(fp) });
+      runUi(s, order4(ROOT));
       return s;
     };
     const okSb = mk({ ok: true, result: { ocr: 'OCR原文内容', translated: '译文内容', model: 'test-model' } });
@@ -382,7 +394,7 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
     const calls = [];
     const def5 = s5.fetch;
     s5.fetch = async function (u, o) { calls.push({ url: String(u), opt: o || {} }); return def5(u, o); };
-    for (const fp of order5(ROOT)) vm.runInNewContext(fs.readFileSync(fp, 'utf8'), s5, { filename: path.basename(fp) });
+    runUi(s5, order5(ROOT));
     const modeSel = s5.document.getElementById('transMode');
     if (!modeSel) problems.push('index.html 缺少 #transMode(识别方式)');
     else if (typeof modeSel.onchange !== 'function') problems.push('#transMode 未接线(改了识别方式不会落盘, 重启回默认)');
@@ -402,7 +414,7 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
   try {
     const { uiJsOrder: order6 } = require('./_ui-files.js');
     const s6 = makeSandbox();
-    for (const fp of order6(ROOT)) vm.runInNewContext(fs.readFileSync(fp, 'utf8'), s6, { filename: path.basename(fp) });
+    runUi(s6, order6(ROOT));
     const el6 = s6.document.getElementById('note');
     if (!el6) problems.push('index.html 缺少 #note(页内提示条)');
     else if (typeof s6.note !== 'function') problems.push('app.js 未定义 note()(页内提示)');
@@ -416,7 +428,7 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
   try {
     const { uiJsOrder: order7 } = require('./_ui-files.js');
     const s7 = makeSandbox();
-    for (const fp of order7(ROOT)) vm.runInNewContext(fs.readFileSync(fp, 'utf8'), s7, { filename: path.basename(fp) });
+    runUi(s7, order7(ROOT));
     const nameKey = { 'friend-welcome': 'plgNameFriendWelcome', 'netease-lyrics': 'plgNameNetease' };
     const hp = { id: 'netease-lyrics', name: 'netease-lyrics', version: '1.1.3', permissions: { process: true }, description: 'x' };
     let allowed = 0;
@@ -443,7 +455,7 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
   try {
     const { uiJsOrder: order8 } = require('./_ui-files.js');
     const s8 = makeSandbox();
-    for (const fp of order8(ROOT)) vm.runInNewContext(fs.readFileSync(fp, 'utf8'), s8, { filename: path.basename(fp) });
+    runUi(s8, order8(ROOT));
     s8.pages = [{ text: '第一行很长很长\n第二行' }, { text: '短' }];
     s8.renderBoard();
     const list = s8.document.getElementById('edlist');

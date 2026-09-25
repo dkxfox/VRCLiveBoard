@@ -805,7 +805,7 @@
 - 验证: `FAIL 外部域名 新增: api.live.bilibili.com, live-open.biliapi.com`(人工复核后进基线: 域名 14 → **16**, `updatedAt` → 2026-09-25), 其余类别全部 OK。
 
 ## M-20260925-05 【C3】i18n 取词函数 `tr` 在加载期不可用(app.js 依赖后加载的 app-security.js)(本轮实机发现)
-- 状态: PARTIAL(兜底已加; **根因未除**)
+- 状态: **FIXED**(2026-09-25 根因已除: `tr`/`t`/语言码归位 `lang.js`(head 最先加载), app-security.js 只留 `langGet/langSet`; GBOOT 加断言"lang.js 执行后 tr 立刻可用"; 前端桩件阶段 2~8 的沙箱统一补跑 lang.js)
 - 严重度: C3(实机日志 `[前端] Promise拒绝: tr is not defined`)
 - 现象: 页面加载期的异步路径(微任务/立刻返回的 fetch 回调)调 `tr()` 抛 ReferenceError → 某处文案不更新, 只留一条 Promise 拒绝。
 - 根因: `function tr()` 定义在 **app-security.js**, 而它在 app.js **之后**执行; GBOOT 原来只拦"顶层同步调用", 异步路径是漏网。
@@ -814,7 +814,7 @@
 - 关联: DEV-NOTES 208
 
 ## M-20260925-06 【C3】隔离冒烟的"插件生命周期"用例只覆盖了 1 个插件(本轮新建, 泛化待做)
-- 状态: PARTIAL(bilibili-live 已覆盖; 其余 4 个官方插件没有)
+- 状态: **FIXED**(2026-09-25: `plugin-behavior.js` 新增"通用插件生命周期"块, 遍历 `plugins/` 全部 5 个插件跑 factory→apply→dispose, 断言"不抛错 / 数据源 enabled+priority+getText 齐 / dispose 后定时器全取消"; 结果 45 PASS / 0 FAIL)
 - 严重度: C3(本轮正是这类缺口放过了"数据源没 enabled")
 - 现状: `backend-flow.js` ⑦c 只对 `bilibili-live` 跑"批准→启用→调接口→停用→再启用", 并断言"数据源已注册/停用后接口不可调"。
 - 待修: 泛化成遍历 `plugins/` —— 每个插件至少断言: 工厂 apply/dispose 不抛错、启用后列表 enabled、停用后接口 400、注册的数据源 `enabled` 为真(后者用假 ctx 在 plugin-behavior.js 做即可)。

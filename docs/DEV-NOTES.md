@@ -943,3 +943,9 @@
   6. **minApp 强制**(市场安装): 客户端目前只展示不强制, 建议 1.4.4 补上, 并在市场卡片提示"需要 1.4.4"。
   7. **流程缺口**: "插件市场发布"没写进 PROCESS-02(§3 只提 `dist/插件更新包`)→ 补一节(生成包/合并 index/minApp 声明/6h 缓存说明); 另可考虑给 G2 或 gate-selftest 加一条"新增脚本文件是否该进 pack-exclude"的提醒。
 - 诚实记录: 这 14 项里**有 5 项是"我自己引入又被自己的检查抓到"**(BOM 三次、假通过、扫描面、OSC 出口、--only 抹目录), 说明"审计器也要被审计"这条不是空话; 另有 3 项(设置不生效、数据源没 enabled、弹幕被挡)是**实机才暴露**的, 离线 319 条断言当时全绿 —— 这也是为什么这一轮把"插件单测纳入 GPLUG + 隔离实例生命周期用例"当成主要产出。
+## 211. 待修补 1~2 落地: i18n 取词归位 + 通用插件生命周期用例(2026-09-25, 用户"开始吧")
+- **① `tr` 根因已除**(M-20260925-05 → FIXED): 取词函数与"当前语言码"从 `app-security.js`(在 app.js **之后**执行)搬到 **`lang.js`**(`<head>` 里最先加载) —— `window.tr`/`window.t`/`window.__lang(next)`; app-security.js 改为 `const tr = window.tr` + `langGet()/langSet()`(语言切换与初始化照旧, 只是不再自己持有状态)。GBOOT 新增断言: **"lang.js 执行后 tr 必须立刻可用且能取到文案"**(实机症状"Promise拒绝: tr is not defined"从此有门禁守着)。
+  - 顺带修了门禁自身的洞: 前端桩件的阶段 2~8 原来**只跑 ui 文件不跑 lang.js**(因为 `_ui-files.js` 故意排除词库), 靠 app-security.js 自带 tr 才没暴露; 现在统一 `runUi(沙箱, 文件)` 先跑 lang.js —— 这正是"依赖后加载脚本"这类问题会在门禁里假绿的原因。
+- **② 插件生命周期用例泛化**(M-20260925-06 → FIXED): `plugin-behavior.js` 新增"通用插件生命周期"块, 遍历 `plugins/` 的 **5 个插件**跑 `factory → apply → dispose`, 断言: 不抛错 / 注册的数据源都可用(`enabled` 为真、`priority` 是数字、有 `getText`)/ dispose 后定时器全部取消。结果 **45 PASS / 0 FAIL**(netease-lyrics、scheduled-board、weather-board 各取消 1 个定时器, bilibili-live 注册 1 个数据源)。
+  - 说明(诚实): 隔离实例里的"启用→调接口→停用"深度用例仍只对 bilibili-live 跑(其余 4 个在真实例里启用会触发真实网络/进程副作用, 不适合放进门禁); 假 ctx 这一层已经覆盖"注册了却永不生效"这一类问题。
+- 证据: `frontend-boot.js` 干净通过(**stderr 无残留报错**, 之前每次都有 tr/lang 的 TypeError); `plugin-behavior.js` 45/0; 门禁 `-Smoke` 见下。

@@ -4,6 +4,7 @@
 // 按钮动作名不对齐)只能靠人工发现 —— 本会话就漏过三个。这里用**假 ctx** 把插件工厂跑起来做行为断言。
 // 用法: node scripts/checks/plugin-behavior.js   (退出码 0 = 通过)
 const path = require('path');
+const fs = require('fs');   // 2026-09-25: 通用插件生命周期用例要遍历 plugins/
 const ROOT = path.resolve(__dirname, '..', '..');
 let pass = 0, fail = 0, skip = 0;
 function ok(cond, msg) { if (cond) { console.log('  PASS ' + msg); pass++; } else { console.log('  FAIL ' + msg); fail++; } }
@@ -207,6 +208,45 @@ function loadPlugin(id) {
     c3.dispose();
     global.fetch = savedFetch; global.WebSocket = savedWS;
   } catch (e) { ok(false, 'CDP 生命周期用例异常: ' + e.message); }
+
+  // ===== 通用插件生命周期(2026-09-25, M-20260925-06)=====
+  // 遍历 plugins/ 里每个插件, 用同一个"够用的假 ctx"跑 factory → apply → dispose, 断言三件事:
+  //   ① 不抛错 ② 注册的数据源可用(enabled 为真 / priority 是数字 / 有 getText) ③ dispose 后定时器都被取消。
+  // 起因: B站插件"数据源没 enabled → 永远不轮询"那类问题当时只对那一个插件有断言; 现在每个插件都过一遍。
+  (function () {
+    const PLUGINS = path.join(ROOT, 'plugins');
+    let ids = [];
+    try {
+      ids = fs.readdirSync(PLUGINS).filter(function (n) {
+        return fs.existsSync(path.join(PLUGINS, n, 'index.js')) && fs.existsSync(path.join(PLUGINS, n, 'manifest.json'));
+      }).sort();
+    } catch (e) { ok(false, '读取 plugins/ 失败: ' + e.message); return; }
+    ok(ids.length >= 5, '插件目录里有可跑的插件(' + ids.length + ' 个: ' + ids.join(', ') + ')');
+    for (const id of ids) {
+      const calls = { sources: [], timers: 0, cancels: 0 };
+      const ctx = {
+        id: id, config: {}, logger: { info: function () {}, warn: function () {} },
+        events: { on: function () {}, off: function () {}, every: function () { calls.timers += 1; return function () { calls.cancels += 1; }; } },
+        chatbox: { send: function () {}, showSequence: function () { return Promise.resolve(); }, current: function () { return null; } },
+        registerSource: function (src) { calls.sources.push(src); return src; },
+        http: { request: function () { return Promise.resolve({ status: 200, text: function () { return Promise.resolve('{}'); } }); } },
+        fs: { read: function () { return ''; }, write: function () {} },
+        exec: { run: function () { return { on: function () {}, kill: function () {} }; } },
+        plugins: { composer: { unregisterSource: function () {} } },
+        media: { state: function () { return null; } }
+      };
+      let api = null, threw = '';
+      try { api = require(path.join(PLUGINS, id, 'index.js'))(ctx); } catch (e) { threw = 'factory: ' + e.message; }
+      if (!threw) { try { if (api && typeof api.apply === 'function') api.apply(); } catch (e) { threw = 'apply: ' + e.message; } }
+      if (!threw) { try { if (api && typeof api.dispose === 'function') api.dispose(); } catch (e) { threw = 'dispose: ' + e.message; } }
+      ok(!threw, id + ': 工厂/apply/dispose 不抛错' + (threw ? ' -> ' + String(threw).slice(0, 90) : ''));
+      const bad = calls.sources.filter(function (s) {
+        return !s || s.enabled === false || typeof s.getText !== 'function' || !isFinite(Number(s.priority));
+      });
+      ok(bad.length === 0, id + ': 注册的数据源都可用(enabled 为真 / priority 数字 / 有 getText)' + (bad.length ? ' -> ' + JSON.stringify(bad.map(function (s) { return s && s.id; })) : ''));
+      ok(calls.timers === 0 || calls.cancels >= calls.timers, id + ': dispose 后定时器全部取消(' + calls.cancels + '/' + calls.timers + ')');
+    }
+  })();
 
   console.log('[plugin-behavior] pass=' + pass + ' fail=' + fail + (skip ? (' skip=' + skip) : ''));
   process.exitCode = fail ? 1 : 0;
