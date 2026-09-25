@@ -237,6 +237,21 @@ function push(ws, raw) { ws.onmessage({ data: F.encode(F.OP.MESSAGE, raw) }); }
     await p.dispose();
   }
 
+  // ---- ⑦ 高价值"保持展示"(SC 持久化): 端到端 + 可热改(2026-09-25 用户要求) ----
+  {
+    const h = mkCtx(Object.assign({}, CREDS, { scHoldMs: 60000 }));
+    const p = plugin(h.ctx);
+    await p.apply();
+    await sleep(30);
+    push(socks[socks.length - 1], { cmd: 'LIVE_OPEN_PLATFORM_SUPER_CHAT', data: { uname: '恰恰doro', message: '感谢叔叔的15抽成', rmb: 30, open_id: 'o9' } });
+    ok(h.calls.sent.length === 1 && h.calls.sent[0].opts.ttlMs === 60000, 'SC 按 scHoldMs(60 秒)推上去: 这段时间内保持展示');
+    ok(p.api.status().queue.holdKind === 'SUPER_CHAT' && p.api.status().queue.holdUntil > 0, 'status 能看到"正在保持展示哪一类、到什么时候"');
+    h.ctx.config.giftHoldMs = 45000; h.ctx.config.holdEnabled = true;
+    const eff = p.api.reloadConfig().effective;
+    ok(eff.giftHoldMs === 45000 && eff.holdEnabled === true, '保持展示的时长可热改(reloadConfig 立刻生效, 不用重启插件)');
+    await p.dispose();
+  }
+
   console.log('  ---- ' + pass + ' PASS / ' + fail + ' FAIL ----');
   process.exitCode = fail ? 1 : 0;
 })().catch(function (e) { console.log('  FAIL 插件契约单测异常: ' + (e && e.stack || e)); process.exitCode = 1; });

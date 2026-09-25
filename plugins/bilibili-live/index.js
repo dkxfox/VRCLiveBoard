@@ -79,7 +79,7 @@ module.exports = function (ctx) {
       basePriority: Number(c.priority) || B.DEFAULT_CFG.basePriority
     };
     // 策略层的可调项也透传(config.json 里设了就得生效: 队列时效/上限/让路地板/聚合窗口…)
-    for (const k of ['preemptBackground', 'respectPriority', 'protectSources', 'queueMax', 'highValueQueueMax', 'danmakuQueueTtlMs', 'aggregateWindowMs', 'aggregateFormat', 'aggregateKinds', 'stuckEscapeMs']) {
+    for (const k of ['preemptBackground', 'respectPriority', 'protectSources', 'queueMax', 'highValueQueueMax', 'danmakuQueueTtlMs', 'aggregateWindowMs', 'aggregateFormat', 'aggregateKinds', 'stuckEscapeMs', 'holdEnabled', 'scHoldMs', 'giftHoldMs', 'guardHoldMs']) {
       if (ctx.config && ctx.config[k] !== undefined) bcfg[k] = ctx.config[k];
     }
     if (c.priority !== null && c.priority !== undefined && Number(c.priority)) {
@@ -107,7 +107,12 @@ module.exports = function (ctx) {
   // 当前**真正生效**的配置(排查"设置好像没生效"就看它)
   function effectiveCfg() {
     const c = bridge ? bridge.cfg() : bridgeCfg();
-    return { showUname: !!c.showUname, prefix: String(c.prefix || ''), throttleMs: Number(c.throttleMs), ttlMs: Number(c.ttlMs), basePriority: Number(c.basePriority), stuckEscapeMs: Number(c.stuckEscapeMs), kinds: c.kinds };
+    return {
+      showUname: !!c.showUname, prefix: String(c.prefix || ''), throttleMs: Number(c.throttleMs), ttlMs: Number(c.ttlMs),
+      basePriority: Number(c.basePriority), stuckEscapeMs: Number(c.stuckEscapeMs),
+      holdEnabled: c.holdEnabled !== false, scHoldMs: Number(c.scHoldMs), giftHoldMs: Number(c.giftHoldMs), guardHoldMs: Number(c.guardHoldMs),
+      kinds: c.kinds
+    };
   }
 
   function wsFactory(url) {

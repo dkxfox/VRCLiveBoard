@@ -28,6 +28,10 @@
     { "key": "prefix", "label": "文案前缀", "type": "text", "default": "" },
     { "key": "throttleMs", "label": "两条消息最小间隔(毫秒)", "type": "number", "default": 1500 },
     { "key": "ttlMs", "label": "普通消息显示时长(毫秒)", "type": "number", "default": 8000 },
+    { "key": "holdEnabled", "label": "高价值消息保持展示(SC/礼物/上舰)", "type": "bool", "default": true, "hint": "开启后按下面的时长把 SC/礼物/上舰留在屏上, 期间弹幕排队等它" },
+    { "key": "scHoldMs", "label": "醒目留言保持时长(毫秒)", "type": "number", "default": 15000 },
+    { "key": "giftHoldMs", "label": "礼物保持时长(毫秒)", "type": "number", "default": 15000 },
+    { "key": "guardHoldMs", "label": "上舰保持时长(毫秒)", "type": "number", "default": 15000 },
     { "key": "maxLen", "label": "单条最大字数", "type": "number", "default": 100 }
   ],
   "dependencies": {},

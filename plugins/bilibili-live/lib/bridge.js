@@ -30,7 +30,11 @@ const DEFAULT_CFG = {
   throttleMs: 1500,           // 两条消息之间至少间隔(与 09 的 C 段一致)
   stuckEscapeMs: 20000,       // 被同一个"非保护来源"挡住超过这么久就抢一次(0=关); 免得弹幕一条条过期丢掉
   ttlMs: 8000,                // 普通消息显示时长
-  highValueTtlMs: 15000,      // SC / 礼物 / 上舰 显示时长
+  highValueTtlMs: 15000,      // SC / 礼物 / 上舰 的基础显示时长(保持展示关掉时就用它)
+  holdEnabled: true,          // **保持展示(持久化)开关**: 开着时高价值消息按各自的 hold 时长留在屏上
+  scHoldMs: 15000,            // 醒目留言保持展示时长(0 = 用基础时长)
+  giftHoldMs: 15000,          // 礼物保持展示时长(0 = 用基础时长)
+  guardHoldMs: 15000,         // 上舰保持展示时长(0 = 用基础时长)
   forceHighValue: true,       // 高价值用 force 推(绕过 composer 自身的发送间隔; 我们已自节流)
   // 内容
   blockedWords: [],           // 屏蔽词(命中替换成 maskWith; 整条都是屏蔽词就丢弃)
@@ -56,9 +60,17 @@ function priorityFor(kind, cfg) {
   if (dflt === undefined) return base;
   return base + (dflt - P.DEFAULT_PRIORITY.DANMAKU);
 }
+// 高价值消息的"保持展示"时长(2026-09-25 用户要求: SC 留言持久化, 其它礼物也能各设时长)
+const HOLD_MS_KEY = { SUPER_CHAT: 'scHoldMs', GIFT: 'giftHoldMs', GUARD: 'guardHoldMs' };
 function ttlFor(kind, cfg) {
   const c = cfgOf(cfg);
-  return P.isHighValue(kind) ? Number(c.highValueTtlMs) : Number(c.ttlMs);
+  if (!P.isHighValue(kind)) return Number(c.ttlMs);
+  if (c.holdEnabled !== false) {
+    const key = HOLD_MS_KEY[kind];
+    const ms = key ? Number(c[key]) : NaN;
+    if (isFinite(ms) && ms > 0) return ms;
+  }
+  return Number(c.highValueTtlMs);
 }
 // 事件的"内容主体"(弹幕是原文; 其它类型用 events.defaultText 的整句)
 function bodyOf(ev) {
@@ -103,16 +115,20 @@ function createBridge(opts) {
   let cfg = cfgOf(o.cfg);
   const log = function (m) { try { if (o.log) o.log(String(m)); } catch (e) {} };
   const onDrop = function (item, why) { try { if (o.onDrop) o.onDrop(item, why); } catch (e) {} };
-  const state = { agg: {}, queue: [], pending: null, lastPushAt: -Infinity, lastPushedText: '', sent: 0, lastBlockLog: 0 };
+  const state = { agg: {}, queue: [], pending: null, lastPushAt: -Infinity, lastPushedText: '', sent: 0, lastBlockLog: 0, holdUntil: 0, holdKind: '' };
   const stats = { received: 0, shown: 0, queued: 0, dropped: 0, aggregated: 0, masked: 0, ignored: 0, filteredLen: 0 };
   const current = typeof o.current === 'function' ? o.current : function () { return null; };
 
-  function ownOnScreen() {                     // 屏幕上是"我们自己刚发的那条"吗?
+  function ownOnScreen(now) {                   // 屏幕上是"我们自己刚发的那条"吗?
     const cur = current() || null;
-    return !!(cur && cur.sourceId === 'transient' && state.lastPushedText && cur.text === state.lastPushedText);
+    if (!(cur && cur.sourceId === 'transient' && state.lastPushedText && cur.text === state.lastPushedText)) return false;
+    // **保持展示窗口内, 自己那条高价值消息照样算占屏**: 否则下一条弹幕(75)会立刻把 SC/礼物顶掉,
+    // 用户要的"这段时间内保持展示"就没了。窗口结束后自动恢复"自己不算挡自己"。
+    if (state.holdUntil && Number(now) < Number(state.holdUntil)) return false;
+    return true;
   }
   function decide(item, now) {
-    if (ownOnScreen()) return { action: 'show', reason: 'own-transient' };   // 别把自己挡死(规则①)
+    if (ownOnScreen(now)) return { action: 'show', reason: 'own-transient' };   // 别把自己挡死(规则①)
     const d = P.decideDisplay({ current: current(), priority: item.priority, cfg: cfg, now: now });
     // 卡死保护: 被同一个"非保护来源"挡住太久(默认 20 秒)就抢一次 —— 否则弹幕只会一条条过期丢掉。
     // 来源保护(截图翻译/翻译字幕)永远不抢: 那是用户明确要求"不许打断"的。
@@ -137,6 +153,9 @@ function createBridge(opts) {
     o.push(item.text, item.priority, item.ttlMs, force);
     state.lastPushAt = now;                     // 用调用方给的逻辑时间(不是墙上时钟) —— 否则节流算不准
     state.lastPushedText = item.text;
+    // 高价值消息记下"保持展示到什么时候"; 开关关掉时 = 不守(下一条消息过了节流就能把它顶掉, 即老行为)
+    state.holdUntil = (cfg.holdEnabled !== false && P.isHighValue(item.kind)) ? Number(now) + (Number(item.ttlMs) || 0) : 0;
+    state.holdKind = P.isHighValue(item.kind) ? item.kind : '';
     state.sent += 1; stats.shown += 1;
     log('显示[' + item.kind + '/' + item.priority + '] ' + why + ': ' + item.text);
   }
@@ -216,7 +235,7 @@ function createBridge(opts) {
     // 配置热更新(设置面板改完直接生效, 不用重建桥)
     setCfg: function (next) { cfg = cfgOf(next); return cfg; },
     cfg: function () { return cfg; },
-    queue: function () { return { pending: state.pending, waiting: state.queue.length }; },
+    queue: function () { return { pending: state.pending, waiting: state.queue.length, holdKind: state.holdKind, holdUntil: state.holdUntil }; },
     stats: function () { return Object.assign({}, stats, { waiting: state.queue.length, sent: state.sent }); }
   };
 }

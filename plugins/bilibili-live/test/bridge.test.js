@@ -41,9 +41,10 @@ function makeBridge(cfg, extra) {
   const r2 = h.br.handleRaw(sc(30, '这个真好用'), T);
   ok(r2.action === 'show' && h.c.sent[1].text === 'SC ¥30 老板: 这个真好用', 'SC: 文案带金额与昵称');
   ok(h.c.sent[1].priority === 88 && h.c.sent[1].ttlMs === 15000 && h.c.sent[1].force === true, 'SC: 优先级 88 / 15 秒 / force(高价值要立刻出)');
+  const hG = makeBridge({});            // 单独一个桥: 默认开了"保持展示", SC 会把紧随其后的礼物挡在队列里(见下面的保持展示用例)
   T += 2000;
-  h.br.handleRaw(gift('辣条', 5), T);
-  ok(h.c.sent[2].priority === 80 && h.c.sent[2].text === '送礼的 投喂 辣条×5', '礼物: 优先级 80 + 现成文案');
+  hG.br.handleRaw(gift('辣条', 5), T);
+  ok(hG.c.sent[0].priority === 80 && hG.c.sent[0].text === '送礼的 投喂 辣条×5', '礼物: 优先级 80 + 现成文案');
 }
 
 // ---- 重复弹幕聚合(666 -> 666×N) ----
@@ -196,6 +197,45 @@ function makeBridge(cfg, extra) {
   ok(B.allMasked('傻傻', '******', {}) === true && B.allMasked('你好', '你好', {}) === false && B.allMasked('傻x', '***x', {}) === false, 'allMasked: 只有"整条都是掩码"才算, 混了正常字就不算');
   ok(h.br.cfg().throttleMs === 1500 && h.br.cfg().queueMax === 20 && h.br.cfg().respectPriority === 85, 'cfg(): 桥自己的默认值与策略层默认值合并正确');
   ok(P.isHighValue('SUPER_CHAT') && !P.isHighValue('DANMAKU'), '(与策略层一致)高价值定义');
+  // 高价值"保持展示"(持久化): SC/礼物/上舰各自可设时长, 期间弹幕不许顶掉它 —— 2026-09-25 用户要求
+  {
+    const h = makeBridge({ scHoldMs: 60000, giftHoldMs: 30000, ttlMs: 8000 });
+    h.br.handleRaw(sc(30, '感谢叔叔的15抽成', '恰恰doro'), T);
+    ok(h.c.sent[0].ttlMs === 60000, 'SC: 保持展示时长按 scHoldMs(60 秒)推上去');
+    ok(h.br.queue().holdUntil === T + 60000 && h.br.queue().holdKind === 'SUPER_CHAT', '队列状态里能看到"保持展示到什么时候/哪一类"');
+    T += 10000;                                   // SC 还挂着的时候来一条弹幕
+    const r = h.br.handleRaw(danmu('发了', '恰恰doro'), T);
+    ok(h.c.sent.length === 1 && r.action === 'queue' && r.reason === 'respect-transient', '保持展示期间弹幕**不会**顶掉 SC(排队, 原因 respect-transient)');
+    T += 3000;
+    h.br.tick(T);
+    ok(h.c.sent.length === 1, '保持展示窗口内 tick 也不会把它换掉(tick 没事干)');
+    T += 50000;                                   // 越过 60 秒窗口(此时弹幕已超过 30 秒时效)
+    h.br.tick(T);
+    ok(h.c.sent.length === 1 && h.br.stats().dropped >= 1, '保持展示比弹幕时效还长时: 排队弹幕会过期丢弃(要保持久就得同时调 danmakuQueueTtlMs)');
+    // 短保持(3 秒)时: 窗口结束后排队的弹幕还在时效内 -> 正常补发
+    const hShort = makeBridge({ scHoldMs: 3000 });
+    hShort.br.handleRaw(sc(30, '短保持', '甲'), T);
+    T += 1000;
+    hShort.br.handleRaw(danmu('等一会儿', '乙'), T);
+    T += 2500;
+    hShort.br.tick(T);
+    ok(hShort.c.sent.length === 2 && hShort.c.sent[1].text === '乙: 等一会儿', '短保持窗口结束后: 排队的弹幕立刻补发(没被丢掉)');
+    const h2 = makeBridge({ holdEnabled: false, scHoldMs: 60000 });
+    h2.br.handleRaw(sc(30, '开关关掉', '甲'), T);
+    ok(h2.c.sent[0].ttlMs === 15000, '保持展示开关关掉: 回到基础时长 highValueTtlMs(15 秒)');
+    T += 2000;
+    const rOff = h2.br.handleRaw(danmu('开关关掉后的弹幕', '甲'), T);
+    ok(h2.c.sent.length === 2 && rOff.action === 'show', '开关关掉后不守屏: 下一条消息过了节流就能显示(老行为)');
+    const h3 = makeBridge({ giftHoldMs: 30000 });
+    h3.br.handleRaw(gift('辣条', 5, '甲'), T);
+    ok(h3.c.sent[0].ttlMs === 30000, '礼物: 也能单独设保持时长(giftHoldMs)');
+    const h4 = makeBridge({ scHoldMs: 0 });
+    h4.br.handleRaw(sc(30, '零时长', '甲'), T);
+    ok(h4.c.sent[0].ttlMs === 15000, 'scHoldMs=0 表示"不特别保持", 用基础时长');
+    const h5 = makeBridge({ guardHoldMs: 45000 });          // 单独一个桥(高价值会把后面的挡在队列里)
+    h5.br.handleRaw({ cmd: 'GUARD_BUY', data: { username: '甲', guard_level: 3, num: 1, price: 138000 } }, T);
+    ok(h5.c.sent[0].ttlMs === 45000, '上舰: guardHoldMs 同样生效');
+  }
   // 卡死保护: 被同一个"非保护来源"挡住太久就抢一次(否则弹幕只会一条条过期丢掉) —— 2026-09-25 用户实机
   {
     const h = makeBridge({ stuckEscapeMs: 5000 });
