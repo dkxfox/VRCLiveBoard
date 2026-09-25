@@ -141,6 +141,42 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     ok(raw3.indexOf('SMOKE-FAKE-SECRET') < 0, '整个插件列表响应里搜不到密钥原文');
   } catch (e) { ok(false, '插件设置字段用例异常: ' + e.message); }
 
+  // ⑦c 插件完好性(2026-09-25): 在**隔离实例**里把 B站插件真的走一遍生命周期 ——
+  //     批准 → 启用(没有凭据时必须不联网) → 调它的接口 → 停用 → 再启用。
+  //     专抓"只有实机才发现"的三类问题: 数据源没注册/没 enabled、没凭据却去连接、停用没清理。
+  try {
+    const callApi = async function (method, args) {
+      const r = await req('/api/plugins/call', { method: 'POST', body: JSON.stringify({ id: 'bilibili-live', method: method, args: args || {} }) });
+      let j = null; try { j = JSON.parse(r.body.toString('utf8')); } catch (e) {}
+      return { status: r.status, json: j };
+    };
+    const plugEntry = async function () {
+      const list = JSON.parse((await req('/api/plugins')).body.toString('utf8'));
+      return (list.plugins || []).find(function (p) { return p && p.id === 'bilibili-live'; });
+    };
+    ok((await req('/api/plugins/approve', { method: 'POST', body: JSON.stringify({ id: 'bilibili-live' }) })).status === 200, '插件完好性: 批准 B站插件(写入授权哈希)');
+    ok((await req('/api/plugins/enable', { method: 'POST', body: JSON.stringify({ id: 'bilibili-live' }) })).status === 200, '插件完好性: 启用成功(工厂 apply 没抛错)');
+    ok((await plugEntry()).enabled === true, '插件完好性: 插件列表里显示已启用');
+    const st = await callApi('status');
+    ok(st.status === 200 && st.json && st.json.running === false, '插件完好性: 没有凭据时不会去连接(running=false)');
+    // 注意: 上一个用例(⑦b)已经写过假的 app_id/secret, 所以这里断言"至少还缺 access_key_id"而不是"缺四个"
+    ok(st.json && Array.isArray(st.json.missing) && st.json.missing.length >= 1 && st.json.missing.indexOf('access_key_id') >= 0,
+      '插件完好性: status 如实报出还缺哪些参数(至少含 access_key_id)');
+    ok(st.json && st.json.room && st.json.room.sourceOn === true, '插件完好性: 直播间信息数据源已注册(sourceOn=true)');
+    const pv = await callApi('preview', { text: '隔离实例自检' });
+    ok(pv.status === 200 && pv.json && pv.json.ok === true && pv.json.action === 'show' && String(pv.json.text).indexOf('隔离实例自检') >= 0, '插件完好性: 预览接口可用(假事件走完整管线, 文案回到调用方)');
+    const pvsc = await callApi('preview', { kind: 'SUPER_CHAT', text: '30' });
+    ok(pvsc.status === 200 && pvsc.json && String(pvsc.json.text).indexOf('SC ¥30') === 0, '插件完好性: 预览 SC 也照常(高价值优先级)');
+    const tst = await callApi('test');
+    ok(tst.status === 200 && tst.json && tst.json.ok === false && Array.isArray(tst.json.missing), '插件完好性: 缺凭据时「测试连接」直接拒绝(不会偷偷发网络请求)');
+    ok((await callApi('no-such-method')).status === 400, '插件完好性: 未声明的方法被拒(400)');
+    ok((await req('/api/plugins/disable', { method: 'POST', body: JSON.stringify({ id: 'bilibili-live' }) })).status === 200, '插件完好性: 停用成功(dispose 没抛错)');
+    ok((await plugEntry()).enabled === false, '插件完好性: 插件列表里显示已停用(数据源随插件生命周期摘掉)');
+    ok((await callApi('status')).status === 400, '插件完好性: 停用后接口不可再调(插件已卸载)');
+    ok((await req('/api/plugins/enable', { method: 'POST', body: JSON.stringify({ id: 'bilibili-live' }) })).status === 200, '插件完好性: 再次启用正常(反复启用/停用无残留)');
+    await req('/api/plugins/disable', { method: 'POST', body: JSON.stringify({ id: 'bilibili-live' }) });
+  } catch (e) { ok(false, '插件完好性用例异常: ' + e.message); }
+
   // ⑦ 截图翻译设置落盘(M-20260911-23): 面板上的识别方式与参数都读自 config, 必须能写回去(否则重启回默认)
   try {
     const cfgPath = path.join(ROOT, 'config.json');

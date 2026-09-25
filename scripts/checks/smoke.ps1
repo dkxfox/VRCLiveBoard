@@ -40,6 +40,9 @@ $cfgPath = Join-Path $tmp 'config.json'
 $cfg = Get-Content $cfgPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $cfg.web.port = $Port
 $cfg.web.openBrowser = $false
+# 隔离实例的 OSC 绝不能打到用户的 VRChat(9000): 换成一个没人监听的端口,
+# 这样任何 fixture(现在的/以后的)推聊天框文本都不会外溢到用户眼前(2026-09-25 加, 为"插件完好性"用例铺路)
+$cfg.osc.port = $Port + 9
 [System.IO.File]::WriteAllText($cfgPath, ($cfg | ConvertTo-Json -Depth 24), (New-Object System.Text.UTF8Encoding($false)))
 $env:VRCB_USER_DATA = Join-Path $tmp '.userdata'
 # 无人值守: 涉及"打开文件夹"的接口只回路径不弹窗(否则每次跑冒烟都会在用户桌面弹出资源管理器)

@@ -1,7 +1,7 @@
 {
   "id": "bilibili-live",
   "name": "B站直播互动",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "VRCLiveBoard 官方",
   "description": "接入哔哩哔哩直播开放平台: 弹幕/礼物/醒目留言/上舰实时联动 VRChat 聊天框(支持抢占、排队、聚合与屏蔽词)",
   "api": "2.0.0",
