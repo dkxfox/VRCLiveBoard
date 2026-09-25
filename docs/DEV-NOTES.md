@@ -949,6 +949,15 @@
 - **⑤ 断言引号坑修掉**(M-20260925-07): `feature-accept.ps1` 把断言**base64** 后经 `-AssertB64` 传给 `smoke.ps1` 解码, 引号与竖线不再经过命令行解析层; 功能卡里那条正则已改回自然的 `"id":"bilibili-live"`, 复跑 **19 PASS / 0 FAIL**。
 - 证据: 功能卡验收 19/0; `dep-audit` 输出如上; 门禁见下。**注意**: 本次又踩了一次"改 ps1 吃掉 BOM"(smoke.ps1), 已按老办法字节级补回(第 4 次了 —— 改 ps1 后必须验首三字节)。
 - 剩余待修补: ⑥ `minApp` 客户端强制(随 1.4.4 一并做)、⑦ "插件市场发布"写进 PROCESS-02; 之后就是 **1.4.4 发版准备**(版本号/版本说明/使用说明/DOC-BASELINE/打包/审计/体积基线)。
+## 213. 1.4.4 打包 + 发布前审计: AUDIT PASS(途中修掉一个"开发文件进包"的真问题)(2026-09-25, 用户"先打包审计, 发布等一会")
+- 范围: ③~⑦ 修补收尾后按 PROCESS-02 §5 / PROCESS-03 3B 走 **打包 → 发布前审计(十步)**; 发布**暂停**, 等用户确认包功能。
+- **产物**: `dist/公开版/VRCLiveBoard-Desktop-SelfContained-v1.4.4.zip`(215.59 MB, sha256 `090fccaa…`)与 `VRCLiveBoard-Lite-RequiresNode-v1.4.4.zip`(8.06 MB, sha256 `e8042a67…`) + `SHA256SUMS-v1.4.4.txt`; 审计报告 `审计报告-AUDIT-20260925-173918.txt`。
+- **审计结论: AUDIT PASS —— 可以发布**。十步逐项 PASS: 0 门禁有效性自测(红队 10 类故障) / 0a 打包脚本 BOM+解析 / 1 机密扫描(工作区 + **git 历史**) / 2 攻击面基线 / 3 授权体系状态 / 4 依赖审计(**npm audit 真的跑起来了: 0/0/0/0** + 8 项产物哈希) / 5 常规门禁 14 PASS / 6 隔离冒烟 15/15 / **6b 产物级验收(解包后再跑一遍冒烟)** / 7 发布包审计(体积与基线一致 + SHA256 清单) / 8 git 同步。
+- **途中发现并修掉的真问题(打包侧)**: `官方可选插件/`(用户误删后的恢复备份)那条路径**不遵守 pack-exclude** —— 它对该插件做整目录 robocopy, 于是 `plugins/bilibili-live/test/` 的 **11 个开发文件**(含假 WebSocket 服务器与 `child_process` 调用)**被打进了发布包**(首打包实测 entries=1352)。
+  - 修: `make-dist.ps1` 的备份拷贝也按 `pack-exclude.json` 排除该插件相关条目 → 重打后 `entries=1341/163`(相对 v1.4.2 的 1319/141 **正好 +22** = 插件本体 11 + 备份副本 11), 包内 `bilibili-live/test` 条目 **0 个**;
+  - 体积基线同步更新(`docs/SECURITY-BASELINE.json` 的 zipVolumes: Desktop 1341/226064954、Lite 163/8454614), asOf 里写明"变了什么、为什么、无移除"。
+- **两次自己制造又自己修掉的坑(诚实记录)**: ① 修 `make-dist.ps1` 时我的 TS 转义把反斜杠吃掉(`'plugins\' ` 变成 `'plugins'`), 排除逻辑静默失效 —— 靠"重打包后条目数没变"发现; ② 该脚本原本**无 BOM**(约定 ASCII only), 我加了中文注释又经 edit 工具写出 BOM-less UTF-8 → PS 5.1 按 GBK 解析报语法错; 最终解法是**补 UTF-8 BOM**(与编码门禁对 ps1 的要求一致), 注释同时改回英文以尊重原约定。首发打包还因为"改完代码没重打"被审计抓到一次(BUILD-INFO.commit 5ab4673 ≠ HEAD de534eb, 且差异含 1 个非 docs 文件)—— 这条**正是审计该拦的**。
+- 待用户/下一步: ① 用户确认包功能(装包 → 启用 B站插件 → 红窗授权 → 填四参数 → 测试连接 → 开播验证); ② 确认后再发布(需要用户把 GitHub 令牌写进 TEMP 文件, 我静默上传 3 个资产并核对 `latest`); ③ 发布后把本次结论回填 `docs/PROCESS-02-开发更新.md` §8.11。
 ## 211. 待修补 1~2 落地: i18n 取词归位 + 通用插件生命周期用例(2026-09-25, 用户"开始吧")
 - **① `tr` 根因已除**(M-20260925-05 → FIXED): 取词函数与"当前语言码"从 `app-security.js`(在 app.js **之后**执行)搬到 **`lang.js`**(`<head>` 里最先加载) —— `window.tr`/`window.t`/`window.__lang(next)`; app-security.js 改为 `const tr = window.tr` + `langGet()/langSet()`(语言切换与初始化照旧, 只是不再自己持有状态)。GBOOT 新增断言: **"lang.js 执行后 tr 必须立刻可用且能取到文案"**(实机症状"Promise拒绝: tr is not defined"从此有门禁守着)。
   - 顺带修了门禁自身的洞: 前端桩件的阶段 2~8 原来**只跑 ui 文件不跑 lang.js**(因为 `_ui-files.js` 故意排除词库), 靠 app-security.js 自带 tr 才没暴露; 现在统一 `runUi(沙箱, 文件)` 先跑 lang.js —— 这正是"依赖后加载脚本"这类问题会在门禁里假绿的原因。
