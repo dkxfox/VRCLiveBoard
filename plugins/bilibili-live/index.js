@@ -79,7 +79,7 @@ module.exports = function (ctx) {
       basePriority: Number(c.priority) || B.DEFAULT_CFG.basePriority
     };
     // 策略层的可调项也透传(config.json 里设了就得生效: 队列时效/上限/让路地板/聚合窗口…)
-    for (const k of ['preemptBackground', 'respectPriority', 'protectSources', 'queueMax', 'highValueQueueMax', 'danmakuQueueTtlMs', 'aggregateWindowMs', 'aggregateFormat', 'aggregateKinds']) {
+    for (const k of ['preemptBackground', 'respectPriority', 'protectSources', 'queueMax', 'highValueQueueMax', 'danmakuQueueTtlMs', 'aggregateWindowMs', 'aggregateFormat', 'aggregateKinds', 'stuckEscapeMs']) {
       if (ctx.config && ctx.config[k] !== undefined) bcfg[k] = ctx.config[k];
     }
     if (c.priority !== null && c.priority !== undefined && Number(c.priority)) {
@@ -107,7 +107,7 @@ module.exports = function (ctx) {
   // 当前**真正生效**的配置(排查"设置好像没生效"就看它)
   function effectiveCfg() {
     const c = bridge ? bridge.cfg() : bridgeCfg();
-    return { showUname: !!c.showUname, prefix: String(c.prefix || ''), throttleMs: Number(c.throttleMs), ttlMs: Number(c.ttlMs), basePriority: Number(c.basePriority), kinds: c.kinds };
+    return { showUname: !!c.showUname, prefix: String(c.prefix || ''), throttleMs: Number(c.throttleMs), ttlMs: Number(c.ttlMs), basePriority: Number(c.basePriority), stuckEscapeMs: Number(c.stuckEscapeMs), kinds: c.kinds };
   }
 
   function wsFactory(url) {
@@ -243,6 +243,8 @@ module.exports = function (ctx) {
           lastError: status.lastError, since: status.since, stopReason: status.stopReason,
           queue: bridge ? bridge.queue() : { pending: null, waiting: 0 },
           effective: bridge ? effectiveCfg() : null,
+          // 当前占屏的是谁(排查"弹幕被挡住"用: sourceId/priority/text)
+          screen: (function () { try { const c = ctx.chatbox.current(); return c ? { sourceId: c.sourceId, priority: c.priority, text: String(c.text || '').slice(0, 40), ttlUntil: c.ttlUntil, at: c.at } : null; } catch (e) { return null; } })(),
           stats: bridge ? bridge.stats() : null,
           key: keyHint(credsOf().accessKeyId),
           missing: missingCreds(credsOf()).map(function (k) { return CRED_LABELS[k]; })

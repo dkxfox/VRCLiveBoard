@@ -72,8 +72,13 @@ function decideDisplay(opts) {
   const cfg = cfgOf(opts && opts.cfg);
   const cur = (opts && opts.current) || null;
   const priority = Number(opts && opts.priority);
+  const now = Number(opts && opts.now) || Date.now();
   if (!cur || !cur.sourceId) return { action: 'show', reason: 'no-current' };              // 空场, 直接显示
   if (cur.sourceId === 'transient') {
+    // **过期的临时文本只是残影**: composer 每秒会把过期的 transient 从候选里过滤掉, 但 composer.current 不会清空 ——
+    // 于是"上一屏那条早就过期了"仍然显示为占屏者。我们再为它让路就会死锁: 我们等它让位, 而它永远不会让
+    // (2026-09-25 用户实机: 一连串 "等不到上屏: lower-priority" 丢弃)。
+    if (cur.ttlUntil && Number(cur.ttlUntil) < now) return { action: 'show', reason: 'stale-transient' };
     // 只有"优先级不够"这一种情况需要让路; transient 也可能是我们自己(同优先级 tie 会让我们先到先得, 不抢自己)
     if (Number(cur.priority) >= cfg.respectPriority) return { action: 'queue', reason: 'respect-transient' };
   } else {

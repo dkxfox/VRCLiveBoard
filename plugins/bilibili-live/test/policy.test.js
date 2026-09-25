@@ -19,6 +19,11 @@ const rOcr = P.decideDisplay({ current: { sourceId: 'ocrregion', priority: 45 },
 ok(rOcr.action === 'queue' && rOcr.reason === 'protect-source:ocrregion', '弹幕 vs 截图区域(来源保护) -> 排队, 不抢');
 ok(P.decideDisplay({ current: { sourceId: 'transient', priority: 90 }, priority: 75, cfg: {} }).reason === 'respect-transient', '弹幕 vs 插件欢迎(transient 90) -> 排队(优先级地板)');
 ok(P.decideDisplay({ current: { sourceId: 'transient', priority: 85 }, priority: 95, cfg: {} }).action === 'queue', '硬规则: 当前显示优先级 >= 85 时一律让路(手动结果优先; 想抢就调低 respectPriority)');
+// 过期的临时文本只是"残影"(composer 会过滤掉过期 transient, 但 current 不清空) —— 继续让路会死锁(2026-09-25 实机)
+const T0 = 2000000;
+ok(P.decideDisplay({ current: { sourceId: 'transient', priority: 99, ttlUntil: T0 - 1 }, priority: 75, cfg: {}, now: T0 }).reason === 'stale-transient', '过期的临时文本不再挡路(stale-transient): 否则"我们等它让位, 它永远不让"');
+ok(P.decideDisplay({ current: { sourceId: 'transient', priority: 99, ttlUntil: T0 + 5000 }, priority: 75, cfg: {}, now: T0 }).reason === 'respect-transient', '还没过期的 99 优先级仍然让路(行为不变)');
+ok(P.decideDisplay({ current: { sourceId: 'pages', priority: 5 }, priority: 75, cfg: {}, now: T0 }).reason === 'preempt', '数据源没有 ttlUntil 字段 -> 不受"残影"判断影响(照旧抢占)');
 
 // ① 开关: 关掉"中断其它功能"就一律排队
 ok(P.decideDisplay({ current: { sourceId: 'pages', priority: 5 }, priority: 75, cfg: { preemptBackground: false } }).reason === 'preempt-disabled', 'preemptBackground=false -> 连公告板也不抢(一律排队)');

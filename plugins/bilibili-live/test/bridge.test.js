@@ -196,6 +196,31 @@ function makeBridge(cfg, extra) {
   ok(B.allMasked('傻傻', '******', {}) === true && B.allMasked('你好', '你好', {}) === false && B.allMasked('傻x', '***x', {}) === false, 'allMasked: 只有"整条都是掩码"才算, 混了正常字就不算');
   ok(h.br.cfg().throttleMs === 1500 && h.br.cfg().queueMax === 20 && h.br.cfg().respectPriority === 85, 'cfg(): 桥自己的默认值与策略层默认值合并正确');
   ok(P.isHighValue('SUPER_CHAT') && !P.isHighValue('DANMAKU'), '(与策略层一致)高价值定义');
+  // 卡死保护: 被同一个"非保护来源"挡住太久就抢一次(否则弹幕只会一条条过期丢掉) —— 2026-09-25 用户实机
+  {
+    const h = makeBridge({ stuckEscapeMs: 5000 });
+    h.c.current = { sourceId: 'pages', priority: 90, ttlUntil: 0 };   // 90 的公告板长期占屏(比我们高)
+    h.br.handleRaw(danmu('被挡住的', '甲'), T);
+    ok(h.c.sent.length === 0 && h.br.queue().waiting === 1, '(前提)被 90 优先级来源挡下 -> 排队');
+    h.br.tick(T + 1000);
+    ok(h.c.sent.length === 0, '才等 1 秒: 还老实排队(不抢)');
+    const r = h.br.tick(T + 6000);
+    ok(r.action === 'show' && r.reason.indexOf('stuck-escape') >= 0 && h.c.sent[0].text === '甲: 被挡住的', '等超过 stuckEscapeMs(5 秒) -> 抢一次并说明原因(不再默默丢)');
+    const h2 = makeBridge({ stuckEscapeMs: 5000 });
+    h2.c.current = { sourceId: 'livetranslate', priority: 40, ttlUntil: 0 };   // 来源保护
+    h2.br.handleRaw(danmu('字幕期间', '甲'), T);
+    h2.br.tick(T + 60000);
+    ok(h2.c.sent.length === 0, '来源保护(截图翻译/翻译字幕)**永远不抢**, 卡死保护也不越过它');
+    const h3 = makeBridge({ stuckEscapeMs: 0 });
+    h3.c.current = { sourceId: 'pages', priority: 90, ttlUntil: 0 };
+    h3.br.handleRaw(danmu('关掉保护', '甲'), T);
+    h3.br.tick(T + 60000);
+    ok(h3.c.sent.length === 0, 'stuckEscapeMs=0 时完全关掉卡死保护');
+    const h4 = makeBridge({});
+    h4.c.current = { sourceId: 'transient', priority: 99, text: '很久以前的公告', ttlUntil: T - 1000 };
+    const r4 = h4.br.handleRaw(danmu('残影之后', '甲'), T);
+    ok(r4.action === 'show' && r4.reason === 'stale-transient' && h4.c.sent.length === 1, '上一屏是**已过期**的临时文本时: 直接显示(不再死等)');
+  }
   // 返回值要带 text(设置面板的"预览"要显示到底推了什么); bypassThrottle 只给显式预览用
   const hp = makeBridge({});
   const p1 = hp.br.handleRaw(danmu('预览一', '甲'), T);

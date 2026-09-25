@@ -28,6 +28,7 @@ const DEFAULT_CFG = {
   unameSep: ': ',
   // 节奏
   throttleMs: 1500,           // 两条消息之间至少间隔(与 09 的 C 段一致)
+  stuckEscapeMs: 20000,       // 被同一个"非保护来源"挡住超过这么久就抢一次(0=关); 免得弹幕一条条过期丢掉
   ttlMs: 8000,                // 普通消息显示时长
   highValueTtlMs: 15000,      // SC / 礼物 / 上舰 显示时长
   forceHighValue: true,       // 高价值用 force 推(绕过 composer 自身的发送间隔; 我们已自节流)
@@ -102,7 +103,7 @@ function createBridge(opts) {
   let cfg = cfgOf(o.cfg);
   const log = function (m) { try { if (o.log) o.log(String(m)); } catch (e) {} };
   const onDrop = function (item, why) { try { if (o.onDrop) o.onDrop(item, why); } catch (e) {} };
-  const state = { agg: {}, queue: [], pending: null, lastPushAt: -Infinity, lastPushedText: '', sent: 0 };
+  const state = { agg: {}, queue: [], pending: null, lastPushAt: -Infinity, lastPushedText: '', sent: 0, lastBlockLog: 0 };
   const stats = { received: 0, shown: 0, queued: 0, dropped: 0, aggregated: 0, masked: 0, ignored: 0, filteredLen: 0 };
   const current = typeof o.current === 'function' ? o.current : function () { return null; };
 
@@ -110,9 +111,26 @@ function createBridge(opts) {
     const cur = current() || null;
     return !!(cur && cur.sourceId === 'transient' && state.lastPushedText && cur.text === state.lastPushedText);
   }
-  function decide(item) {
+  function decide(item, now) {
     if (ownOnScreen()) return { action: 'show', reason: 'own-transient' };   // 别把自己挡死(规则①)
-    return P.decideDisplay({ current: current(), priority: item.priority, cfg: cfg });
+    const d = P.decideDisplay({ current: current(), priority: item.priority, cfg: cfg, now: now });
+    // 卡死保护: 被同一个"非保护来源"挡住太久(默认 20 秒)就抢一次 —— 否则弹幕只会一条条过期丢掉。
+    // 来源保护(截图翻译/翻译字幕)永远不抢: 那是用户明确要求"不许打断"的。
+    const esc = Number(cfg.stuckEscapeMs) || 0;
+    if (d.action === 'queue' && esc > 0 && item.waitedSince && (now - item.waitedSince) >= esc &&
+        !/^protect-source/.test(d.reason) && d.reason !== 'preempt-disabled') {
+      return { action: 'show', reason: 'stuck-escape:' + d.reason };
+    }
+    return d;
+  }
+  // 排队时把"被谁挡着"写进日志(限频 10 秒一次): 用户看到丢弃就能知道原因, 不用再猜
+  function logBlocked(item, reason, now) {
+    if (now - state.lastBlockLog < 10000) return;
+    state.lastBlockLog = now;
+    const cur = current() || {};
+    log('排队中(等不到上屏: ' + reason + ', ' + item.kind + ') 当前占屏: ' + (cur.sourceId || '?') + '/' +
+        (cur.priority === undefined ? '?' : cur.priority) + ' "' + String(cur.text || '').slice(0, 24) + '"' +
+        (cur.ttlUntil ? ' (有效期到 ' + new Date(Number(cur.ttlUntil)).toLocaleTimeString() + ')' : ''));
   }
   function doPush(item, why, now) {
     const force = !!cfg.forceHighValue && P.isHighValue(item.kind);
@@ -123,6 +141,7 @@ function createBridge(opts) {
     log('显示[' + item.kind + '/' + item.priority + '] ' + why + ': ' + item.text);
   }
   function enqueue(item, why, now) {
+    if (!item.waitedSince) item.waitedSince = now;      // 记下"从什么时候开始等", 卡死保护要用
     const r = P.enqueue(state.queue, item, cfg, now);
     state.queue = r.queue; stats.queued += 1;
     for (const d of r.dropped) { stats.dropped += 1; onDrop(d, 'queue-full'); log('丢弃(队列满, ' + d.kind + '): ' + d.text); }
@@ -131,7 +150,8 @@ function createBridge(opts) {
   // 单条文本的处置: 能发就发, 否则排队(高价值的"先出"由 policy.dequeue 保证, 不在这里插队)
   // bypassThrottle: 只给"用户手动点预览"这类显式动作(否则第一次点预览会被节流排队, 看起来像坏了)
   function route(item, now, bypassThrottle) {
-    const dec = decide(item);
+    const dec = decide(item, now);
+    if (dec.action !== 'show') logBlocked(item, dec.reason, now);
     const throttleOk = !!bypassThrottle || now - state.lastPushAt >= Number(cfg.throttleMs);
     if (dec.action === 'show' && !state.pending && throttleOk) { doPush(item, dec.reason, now); return { action: 'show', reason: dec.reason, text: item.text }; }
     const why = dec.action === 'show' ? (state.pending ? 'slot-busy' : 'throttled') : dec.reason;
@@ -182,9 +202,10 @@ function createBridge(opts) {
         const it = state.pending;
         if (it.expireAt && it.expireAt <= t) { stats.dropped += 1; onDrop(it, 'expired', { why: it.why }); log('丢弃(过期, 等不到上屏: ' + (it.why || '未知') + ', ' + it.kind + '): ' + it.text); state.pending = null; return { action: 'drop', reason: 'expired' }; }
         if (t - state.lastPushAt >= Number(cfg.throttleMs)) {
-          const dec = decide(it);
+          const dec = decide(it, t);
           if (dec.action === 'show') { state.pending = null; doPush(it, 'drain:' + dec.reason, t); return { action: 'show', reason: 'drain:' + dec.reason }; }
           it.why = dec.reason;                                  // 记下来: 过期时日志能说清是谁挡着
+          logBlocked(it, dec.reason, t);
           return { action: 'wait', reason: dec.reason };
         }
         it.why = 'throttled';
