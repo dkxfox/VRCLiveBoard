@@ -832,3 +832,11 @@
 - 证据: 插件离线单测 **166 条全绿**(frame 11 / policy 20 / official 24 / session 16 / events 45 / bridge 50); GPLUG `OK bilibili-live v0.2.0 (api 2.0.0, 授权哈希 …)`, 0 FAIL; 常规门禁 14 PASS + 隔离冒烟 15/15。
 - 诚实记录(**两处自查发现, 都登记成 ISSUES**): ① 控制台「打开页面」(第三方面板)是**死按键** —— `app.js` 取的 `plgPanelOverlay`/`plgPanelFrame` 在 `index.html` 里根本不存在(新版控制台重写时丢的), 面板路由又只回 JSON、没有"渲染壳 + api 桥", 所以 weather-board 等官方插件的面板其实一样打不开(M-20260920-01); B站插件因此改走"卡片里的设置字段"绕开。② 占位 `index.js` 的导出形状(`{onLoad,onUnload}`)其实**不符合插件契约**, README 里那句"拷进 plugins/ 能正常加载"从未真正验证过 —— 已改正并登记 M-20260920-02。
 - 下一步(步 7b): 控制台按 `manifest.settings` 渲染掩码输入框 + 「测试连接」按钮(复用已有 `/api/plugins/config` 与 `/api/plugins/call` 两条路由, **不新增路由**), 补三语 i18n 与门禁断言; 之后请用户启用插件、填四个参数、点「测试连接」, 再开播验证头顶弹幕。
+## 198. B站插件 步 7b: 新版控制台接上插件设置 UI(掩码 + 测试连接) + engines 提到 >=22(2026-09-20, 用户"把UI接进来…旧版UI不继续开发")
+- 用户决定: **只做新版控制台**(旧版不再开发); `engines.node` 提到 **`>=22`**(全局 WebSocket 与既有歌词插件本就要求); 插件功能先做全, 用户随后简单试。
+- 产出 1(设置字段机制): `manager.status()` 按 `manifest.settings` 生成 `settingsUi`(纯函数 `settingsUiOf` 已导出便于门禁断言)+ `apiMethods`; **`secret:true` 的字段只回 `set` 布尔标记, 取值永不回传浏览器**。`POST /api/plugins/config` 按 schema 归一: 密钥留空 = 不修改, number/bool 按声明类型收敛, schema 外的键(卡片优先级)原样通过。
+- 产出 2(前端): `app.js` 新增通用渲染器 `plgFieldRow`/`plgSettingsForm`, `loadPlugins()` 为声明了 settings 的插件挂上 `window.__plgset_<id>`(与既有官方插件面板同一套钩子); 保存/测试连接复用已有两条路由(**不新增路由**); 插件提供的 label/hint 一律 `esc()`、值用 DOM API 赋值(manifest 是外部输入, 不许拼 HTML)。新增 10 个三语 i18n 键。
+- 产出 3(插件侧): `api.test` 通过后按 `autoStart` 顺手开始接收(用户"填完点一下就有效果"), 返回值带 `started`; `status.shown` 改取**桥的统计**(排队补发不经过 onEvent, 自己数会漏 —— 单测抓出来的)。
+- 证据: 新增 `plugins/bilibili-live/test/index.test.js` —— 用假 ctx + **假 WebSocket** 把真实插件对象整条链路跑通(apply → 官方 start → op=7/op=8 认证 → 收弹幕 → events → bridge → ctx.chatbox), **27 PASS**; 插件七文件合计 **193 条断言**全绿。门禁: `-Smoke` **15 PASS / 0 FAIL**, 其中 `[backend-flow] pass=115 fail=0`(较上轮 105 正好 +10 = 本轮新增的密钥掩码/留空不改/类型归一/响应里搜不到密钥原文), GBOOT(frontend-boot DOM 桩件)新增断言: 密钥渲染成 password 且**不回显值**、bool 勾选、有 `api.test` 才出现「测试连接」、插件 label 里的 HTML 必须被转义。
+- 诚实记录: ① 设计上"密钥永不回传"是**服务端**保证(前端拿不到就没法泄漏); ② 测试连接的按钮只在插件**已启用**时出现(插件模块是 enable 时才 require 的, 而联网本身也要先授权) —— 这不是 bug, 是"先授权再填参数"的顺序, 已写进插件 README; ③ 旧版控制台(备份目录)不再同步任何改动。
+- 下一步(用户试): 控制台启用 B站插件 → 授权 → 插件设置里填四个参数 → 点「测试连接」→ 开播刷一条弹幕, 看聊天框里是否出现 `昵称: 内容`。

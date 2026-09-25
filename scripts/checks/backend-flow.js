@@ -116,6 +116,31 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     ok(rp2.status === 404, '该动作只走 POST(GET 不匹配)');
   } catch (e) { ok(false, '插件文件夹接口用例异常: ' + e.message); }
 
+  // ⑦b 插件设置字段(2026-09-20): manifest.settings → 控制台自动渲染。三条必须成立的约定:
+  //     ① 密钥字段**永不回传值**(只给"有没有填过"); ② 密钥留空保存 = 不修改; ③ number/bool 按声明类型归一。
+  try {
+    const readPlugins = async function () { return JSON.parse((await req('/api/plugins')).body.toString('utf8')); };
+    const byId = function (list, id) { return (list.plugins || []).find(function (p) { return p && p.id === id; }); };
+    const field = function (bl, k) { return (bl.settingsUi || []).find(function (f) { return f.key === k; }); };
+    let bl = byId(await readPlugins(), 'bilibili-live');
+    ok(!!bl && Array.isArray(bl.settingsUi) && bl.settingsUi.length >= 4, '声明 settings 的插件带回了设置字段列表');
+    const secs = (bl.settingsUi || []).filter(function (f) { return f.secret; });
+    ok(secs.length === 3, 'B站插件有 3 个密钥字段(实际 ' + secs.length + ')');
+    ok(secs.every(function (f) { return f.value === undefined && typeof f.set === 'boolean'; }), '密钥字段只回"有没有填过", **不回传值**');
+    ok(field(bl, 'appId') && field(bl, 'appId').secret === undefined, 'app_id 不是密钥字段(可回显)');
+    await req('/api/plugins/config', { method: 'POST', body: JSON.stringify({ id: 'bilibili-live', cfg: { accessKeyId: '', appId: 'SMOKE-APP', throttleMs: '2000', showUname: 'false' } }) });
+    bl = byId(await readPlugins(), 'bilibili-live');
+    ok(field(bl, 'accessKeyId').set === false, '密钥字段传空串 = 不修改(不会被写成空值)');
+    ok(field(bl, 'appId').value === 'SMOKE-APP', '普通字段正常保存并回显');
+    ok(field(bl, 'throttleMs').value === 2000 && typeof field(bl, 'throttleMs').value === 'number', 'number 字段被归一成数字');
+    ok(field(bl, 'showUname').value === false, 'bool 字段被归一成布尔');
+    await req('/api/plugins/config', { method: 'POST', body: JSON.stringify({ id: 'bilibili-live', cfg: { accessKeySecret: 'SMOKE-FAKE-SECRET' } }) });
+    const raw3 = (await req('/api/plugins')).body.toString('utf8');
+    const bl3 = byId(JSON.parse(raw3), 'bilibili-live');
+    ok(field(bl3, 'accessKeySecret').set === true && field(bl3, 'accessKeySecret').value === undefined, '密钥保存后只说"已保存", 值仍然不回传');
+    ok(raw3.indexOf('SMOKE-FAKE-SECRET') < 0, '整个插件列表响应里搜不到密钥原文');
+  } catch (e) { ok(false, '插件设置字段用例异常: ' + e.message); }
+
   // ⑦ 截图翻译设置落盘(M-20260911-23): 面板上的识别方式与参数都读自 config, 必须能写回去(否则重启回默认)
   try {
     const cfgPath = path.join(ROOT, 'config.json');

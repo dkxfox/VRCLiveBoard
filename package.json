@@ -12,7 +12,7 @@
     "selftest": "powershell -NoProfile -ExecutionPolicy Bypass -File \"%npm_package_json%\\..\\scripts\\checks\\gate-selftest.ps1\""
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "dependencies": {
     "@tesseract.js-data/chi_sim": "^1.0.0",

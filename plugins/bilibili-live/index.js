@@ -163,7 +163,10 @@ module.exports = function (ctx) {
           let ended = false;
           try { await OF.endSession(cr, st.gameId, o); ended = true; } catch (e) { warn('结束场次失败: ' + e.message); }
           log('测试连接成功(场次 ' + st.gameId + ', 用时 ' + (Date.now() - t0) + 'ms)');
-          return { ok: true, gameId: st.gameId, hosts: st.hosts.length, authBody: !!st.authBody, ended: ended, ms: Date.now() - t0, key: keyHint(cr.accessKeyId) };
+          // 测试通过 + 开了自动连接 + 还没在跑 -> 顺手开始接收(用户"填完点一下就能看到效果")
+          let started = false;
+          if (cfg().autoStart && !status.running) { const r = await start(); started = !!(r && r.ok); }
+          return { ok: true, gameId: st.gameId, hosts: st.hosts.length, authBody: !!st.authBody, ended: ended, ms: Date.now() - t0, key: keyHint(cr.accessKeyId), started: started };
         } catch (e) {
           const msg = String((e && e.message) || e);
           status.lastError = msg; warn('测试连接失败: ' + msg);
@@ -176,7 +179,8 @@ module.exports = function (ctx) {
       status: function () {
         return {
           running: status.running, authed: !!(sess && sess.state && sess.state.authed), gameId: status.gameId,
-          events: status.events, shown: status.shown, ignored: status.ignored,
+          // shown 直接取桥的统计: 桥才知道"真正推上去几条"(排队补发的那些不经过 onEvent, 自己数会漏)
+          events: status.events, shown: bridge ? bridge.stats().shown : status.shown, ignored: status.ignored,
           lastError: status.lastError, since: status.since, stopReason: status.stopReason,
           queue: bridge ? bridge.queue() : { pending: null, waiting: 0 },
           stats: bridge ? bridge.stats() : null,

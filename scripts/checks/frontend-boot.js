@@ -214,6 +214,32 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
     }
   } catch (e) { problems.push('插件卡片控件断言异常: ' + e.message); }
 
+  // 通用插件设置表单(2026-09-20): manifest.settings 由控制台自动渲染 —— 密钥不回显、bool/number 形状对、label 转义
+  try {
+    if (typeof sb.plgSettingsForm !== 'function') problems.push('plgSettingsForm 未导出(通用插件设置表单没有实现)');
+    else {
+      const host = el('div');
+      sb.plgSettingsForm({ id: 'probe', apiMethods: ['test', 'status'], settingsUi: [
+        { key: 'apiKey', label: 'API Key', type: 'password', secret: true, set: true, hint: 'hint' },
+        { key: 'uname', label: '<img src=x onerror=alert(1)>', type: 'text', value: 'A1' },
+        { key: 'ms', label: 'ms', type: 'number', value: 1500 },
+        { key: 'on', label: 'on', type: 'bool', value: true }
+      ] }, host);
+      const inputs = [], btns = [], spans = [];
+      (function walk(n, d) { if (!n || !n.children || d > 3) return; for (const c of n.children) { if (c.tagName === 'INPUT') inputs.push(c); else if (c.tagName === 'BUTTON') btns.push(c); else if (c.tagName === 'SPAN') spans.push(c); walk(c, d + 1); } })(host, 0);
+      if (inputs.length !== 4) problems.push('设置表单没有渲染出 4 个输入框(实际 ' + inputs.length + ')');
+      const pw = inputs.filter(function (i) { return i.type === 'password'; });
+      if (pw.length !== 1) problems.push('密钥字段没有渲染成 password 输入框');
+      else if (!String(pw[0].placeholder || '').length) problems.push('密钥输入框缺少"已保存/未填写"占位提示');
+      else if (pw[0].value) problems.push('密钥输入框回显了值(密钥不能进前端)');
+      const chk = inputs.filter(function (i) { return i.type === 'checkbox'; });
+      if (chk.length !== 1 || chk[0].checked !== true) problems.push('bool 字段没有渲染成已勾选的复选框');
+      if (!btns.some(function (x) { return String(x.textContent || '').indexOf('测试') >= 0; })) problems.push('有 api.test 的插件没有出现「测试连接」按钮');
+      if (spans.some(function (x) { return String(x.innerHTML || '').indexOf('<img') >= 0; })) problems.push('插件 label 里的 HTML 没有被转义(manifest 是外部输入)');
+      if (!spans.some(function (x) { return String(x.innerHTML || '').indexOf('&lt;img') >= 0; })) problems.push('转义后的 label 没出现在表单里(转义函数可能没接上)');
+    }
+  } catch (e) { problems.push('插件设置表单断言异常: ' + e.message); }
+
   // 启动动画(默认/皮肤路径走 simpleBoot): 图标是异步取的, 必须等它就绪再整体淡入,
   // 否则会出现"文字先到、图标后蹦"(M-20260911-10)
   try {

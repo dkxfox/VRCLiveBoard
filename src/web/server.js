@@ -565,7 +565,23 @@ function effPluginSec() {
       try {
         const o = JSON.parse(body || '{}');
         const entry = pluginManager.entries.find(function (e) { return e.id === o.id; });
-        if (entry) { entry.settings = entry.settings || {}; Object.assign(entry.settings, o.cfg || {}); rootConfig.plugins = rootConfig.plugins || {}; rootConfig.plugins[o.id] = entry.settings; persist(); }
+        if (entry) {
+          // 按 manifest.settings 归一(2026-09-20): ① secret 字段传空串 = "不改"(界面不回显密钥, 用户只填想改的);
+          // ② number/bool 按声明类型收敛, 免得字符串/undefined 进配置; ③ 不在 schema 里的键(如卡片优先级)原样通过。
+          const schema = Array.isArray(entry.manifest.settings) ? entry.manifest.settings : [];
+          const patch = {};
+          const cfg = o.cfg || {};
+          for (const k of Object.keys(cfg)) {
+            const f = schema.find(function (x) { return x && x.key === k; });
+            const v = cfg[k];
+            if (f && f.secret && (v === '' || v === null || v === undefined)) continue;   // 留空 = 不修改
+            if (f && f.type === 'number') { const n = Number(v); patch[k] = isFinite(n) ? n : (Number(f.default) || 0); continue; }
+            if (f && f.type === 'bool') { patch[k] = !!(v === true || v === 'true' || v === 1 || v === '1'); continue; }
+            patch[k] = (typeof v === 'string') ? v.trim() : v;
+          }
+          entry.settings = entry.settings || {}; Object.assign(entry.settings, patch);
+          rootConfig.plugins = rootConfig.plugins || {}; rootConfig.plugins[o.id] = entry.settings; persist();
+        }
         return json(res, 200, { ok: true });
       } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
     });

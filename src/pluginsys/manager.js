@@ -37,6 +37,35 @@ const vrclog = require('./vrclog');
 
 // 插件管理器: 扫描 plugins/<id>/(manifest.json + index.js), 生命周期与能力注入
 const API_MAJOR = '2';
+// manifest.settings → 控制台要渲染的字段列表(纯函数, 便于门禁直接断言):
+//   type: text / password / number / bool; secret=true 的字段**只给 set 标记**, 取值一律不给前端。
+function settingsUiOf(schema, settings) {
+  const list = Array.isArray(schema) ? schema : [];
+  const s = settings || {};
+  const out = [];
+  for (const f of list) {
+    if (!f || !f.key) continue;
+    const type = String(f.type || 'text');
+    const item = { key: String(f.key), label: String(f.label || f.key), type: type, hint: f.hint ? String(f.hint) : '' };
+    if (f.secret) {
+      item.secret = true;
+      const v = s[f.key];
+      item.set = !(v === undefined || v === null || v === '');
+    } else if (type === 'bool') {
+      const v = s[f.key];
+      item.value = (v === undefined || v === null) ? (f.default !== undefined ? !!f.default : false) : !!v;
+    } else if (type === 'number') {
+      const v = Number(s[f.key]);
+      const has = !(s[f.key] === undefined || s[f.key] === null || s[f.key] === '');
+      item.value = has && isFinite(v) ? v : (f.default !== undefined ? f.default : 0);
+    } else {
+      const v = s[f.key];
+      item.value = (v === undefined || v === null) ? (f.default !== undefined ? f.default : '') : String(v);
+    }
+    out.push(item);
+  }
+  return out;
+}
 class PluginManager {
   constructor(opts) {
     this.root = opts.root;
@@ -315,7 +344,11 @@ class PluginManager {
           conflicts: conf[e.id] || [],
           hasPanel: !!(e.plugin && e.plugin.panel),
           hasPage: !!(e.plugin && e.plugin.page),
-          priority: (e.settings && e.settings.priority != null) ? e.settings.priority : null
+          priority: (e.settings && e.settings.priority != null) ? e.settings.priority : null,
+          // 设置字段(2026-09-20): 由 manifest.settings 声明, 控制台据此自动渲染输入框。
+          // **secret 字段只回 set(有没有填过), 绝不回传值** —— 否则密钥会出现在浏览器/DOM 里。
+          settingsUi: settingsUiOf(e.manifest.settings, e.settings),
+          apiMethods: (e.plugin && e.plugin.api) ? Object.keys(e.plugin.api) : []
         };
       }),
       audit: perms.audit()
@@ -372,4 +405,4 @@ class PluginManager {
     return { title: entry.plugin.panel.title || entry.manifest.name, html: entry.plugin.panel.html(entry.settings) || '' };
   }
 }
-module.exports = { PluginManager, API_MAJOR };
+module.exports = { PluginManager, API_MAJOR, settingsUiOf };

@@ -3,7 +3,7 @@
 // 用子进程逐个跑 —— 每个测试自带 PASS/FAIL 计数与退出码, 这里只汇总(子进程输出原样透传, 免得互相盖掉)。
 const { spawnSync } = require('child_process');
 const path = require('path');
-const FILES = ['frame.test.js', 'policy.test.js', 'official.test.js', 'events.test.js', 'session.test.js', 'bridge.test.js'];
+const FILES = ['frame.test.js', 'policy.test.js', 'official.test.js', 'events.test.js', 'session.test.js', 'bridge.test.js', 'index.test.js'];
 let failed = 0;
 for (const f of FILES) {
   console.log('== ' + f);

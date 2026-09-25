@@ -239,7 +239,10 @@ function plgCard(p){var en=!!(p.enabled||p.run),ap=!!p.approved;var d=document.c
   }
  return d;}
 function renderPlgCards(){var el=$('plugCards');if(!el)return;el.innerHTML='';if(!plgArr.length){el.innerHTML='<div class="sub">'+tr('plgNoPlugins')+'</div>';return;}plgArr.forEach(function(p){el.appendChild(plgCard(p));});}
-async function loadPlugins(){try{var r=await fetch('/api/plugins');var list=await r.json();plgArr=Array.isArray(list)?list:(list.plugins||list.entries||[]);renderPlgCards();if(typeof syncQuickPlg==='function')syncQuickPlg();}catch(e){apiFail('loadPlugins',e);}}
+async function loadPlugins(){try{var r=await fetch('/api/plugins');var list=await r.json();plgArr=Array.isArray(list)?list:(list.plugins||list.entries||[]);
+  // 声明了 manifest.settings 的插件 → 挂上通用设置渲染器(loadPlgSettings 按 __plgset_<id> 找它)
+  plgArr.forEach(function(p){if(p&&Array.isArray(p.settingsUi)&&p.settingsUi.length){window['__plgset_'+String(p.id||'').replace(/-/g,'_')]=plgSettingsForm;}});
+  renderPlgCards();if(typeof syncQuickPlg==='function')syncQuickPlg();}catch(e){apiFail('loadPlugins',e);}}
 function loadPlgSettings(p,body){if(!(p.enabled||p.run)){body.innerHTML='<div class="sub" style="margin:8px 0;color:var(--warn)">'+tr('plgNotEnabled')+'</div>';return;}if(!p.approved){body.innerHTML='<div class="sub" style="margin:8px 0;color:var(--warn)">'+tr('plgNotApproved')+'</div>';return;}body.innerHTML='<div class="sub" style="margin:8px 0">'+tr('plgLoading')+'</div>';var fn=window['__plgset_'+String(p.id||'').replace(/-/g,'_')];if(typeof fn==='function'){fn(p,body);}else{body.innerHTML='<div class="sub" style="margin:8px 0">'+tr('plgPerms')+': '+esc(plgPermsDesc(p))+'</div><div class="sub">'+tr('plgSettingsPending')+'</div>';}}
 // ===== 数据源/状态 =====
 function NM(id){return ({hardware:'srcHW',media:'srcMedia',pages:'srcPages',livetranslate:'srcLive',ocrregion:'srcOcr'})[id]||id;}
@@ -397,6 +400,39 @@ function tblRows(body,sel,cols,rows,keys){
     tb.appendChild(rowEl);});
 }
 function plugCall(id,method,args){return fetch('/api/plugins/call',{method:'POST',body:JSON.stringify({id:id,method:method,args:args||{}})}).then(function(r){return r.json();});}
+// ===== 通用插件设置(2026-09-20, 新版控制台唯一路径) =====
+// manifest.settings 声明字段 → 控制台自动渲染。三条硬约定:
+//   ① secret 字段的值**服务端从不回传**(只有一个"已保存/未填写"占位提示), 留空保存 = 不修改;
+//   ② 插件提供的 label/hint 是外部输入 → 一律 esc() 后再进 DOM, 避免 manifest 里塞 HTML;
+//   ③ 值用 DOM API 赋(value/checked), 不做字符串拼 HTML。
+function plgFieldRow(f){
+  var row=document.createElement('div');row.className='row';row.style.margin='6px 0';row.style.alignItems='center';
+  var lab=document.createElement('span');lab.className='sub';lab.style.minWidth='170px';lab.innerHTML=esc(f.label||f.key);row.appendChild(lab);
+  var inp=document.createElement('input');
+  if(f.type==='bool'){inp.type='checkbox';inp.checked=!!f.value;}
+  else{inp.type=(f.type==='number')?'number':(f.secret?'password':'text');inp.style.width=(f.type==='number')?'96px':'240px';if(!f.secret)inp.value=(f.value==null?'':f.value);if(f.secret)inp.placeholder=f.set?tr('plgSecretSet'):tr('plgSecretEmpty');}
+  inp.setAttribute('data-plgk',f.key);row.appendChild(inp);
+  if(f.hint){var h=document.createElement('span');h.className='sub';h.style.marginLeft='8px';h.style.opacity='0.75';h.innerHTML=esc(f.hint);row.appendChild(h);}
+  return row;
+}
+function plgSettingsForm(p,body){
+  var fields=Array.isArray(p.settingsUi)?p.settingsUi:[];
+  body.innerHTML='';
+  var head=document.createElement('div');head.className='sub';head.style.margin='0 0 6px';head.textContent=tr('plgSetTitle');body.appendChild(head);
+  if(!fields.length){var none=document.createElement('div');none.className='sub';none.textContent=tr('plgNoFields');body.appendChild(none);return;}
+  fields.forEach(function(f){body.appendChild(plgFieldRow(f));});
+  var bar=document.createElement('div');bar.className='row';bar.style.marginTop='8px';
+  var bSave=document.createElement('button');bSave.className='small';bSave.textContent=tr('btnSave');bar.appendChild(bSave);
+  var bTest=null;
+  if((p.apiMethods||[]).indexOf('test')>=0){bTest=document.createElement('button');bTest.className='small gray';bTest.textContent=tr('plgTestBtn');bar.appendChild(bTest);}
+  var msg=document.createElement('span');msg.className='sub';msg.style.marginLeft='8px';bar.appendChild(msg);
+  body.appendChild(bar);
+  function collect(){var cfg={};Array.prototype.forEach.call(body.querySelectorAll('[data-plgk]'),function(el){var k=el.getAttribute('data-plgk');cfg[k]=(el.type==='checkbox')?el.checked:el.value;});return cfg;}
+  function save(){return fetch('/api/plugins/config',{method:'POST',body:JSON.stringify({id:p.id,cfg:collect()})}).then(function(r){return r.json();});}
+  function markSaved(){Array.prototype.forEach.call(body.querySelectorAll('input[type=password][data-plgk]'),function(el){el.value='';el.placeholder=tr('plgSecretSet');});}
+  bSave.onclick=function(){msg.style.color='';msg.textContent=tr('plgSaving');save().then(function(j){if(j&&j.ok){markSaved();msg.textContent=tr('plgSetSaved');}else{msg.textContent=tr('failed')+': '+((j&&j.error)||'');}}).catch(function(e){msg.textContent=tr('failed')+': '+e.message;});};
+  if(bTest)bTest.onclick=function(){msg.style.color='';msg.textContent=tr('plgTesting');save().then(function(){return plugCall(p.id,'test',{});}).then(function(j){if(j&&j.ok){markSaved();msg.textContent=tr('plgTestOk').replace('{game}',(j.gameId||'-')).replace('{ms}',String(j.ms||0))+(j.started?' '+tr('plgTestStarted'):'');}else{msg.style.color='var(--warn)';msg.textContent=tr('plgTestFail')+': '+((j&&j.error)||'');}}).catch(function(e){msg.style.color='var(--warn)';msg.textContent=tr('plgTestFail')+': '+e.message;});};
+}
 function xlsxReady(id,cb){if(window.XLSX)return cb();var s=document.createElement('script');s.src='/api/plugins/asset?id='+id+'&file=vendor/xlsx.full.min.js';s.onload=function(){cb();};s.onerror=function(){};document.head.appendChild(s);}
 function exportAoa(id,sheet,aoa,fn){xlsxReady(id,function(){if(!window.XLSX)return;var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),sheet);XLSX.writeFile(wb,fn);});}
 // 好友欢迎
