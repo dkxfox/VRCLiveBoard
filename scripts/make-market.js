@@ -18,6 +18,9 @@ const PKGS = path.join(MARKET, 'packages');
 const REPO = 'dkxfox/VRCLiveBoard';
 const RAW_BASE = 'https://cdn.jsdelivr.net/gh/' + REPO + '@main/market/packages/';
 
+// 2026-09-25: 打包排除清单同样读 scripts/pack-exclude.json —— 之前只排了 data/ 与 node_modules/,
+// 于是 plugins/bilibili-live/test/(300+ 条断言 + 假服务器, 且用到 child_process)**会被发给用户**。
+const PE = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts', 'pack-exclude.json'), 'utf8'));
 const args = process.argv.slice(2);
 function arg(name, def) { const i = args.indexOf('--' + name); return i >= 0 ? (args[i + 1] || '') : def; }
 const TIER = String(arg('tier', 'official'));
@@ -47,7 +50,17 @@ for (const id of ids) {
   const zip = path.join(PKGS, id + '-' + version + '.zip');
   if (!DRY) {
     fs.rmSync(zip, { force: true });
-    execFileSync('tar', ['-a', '-c', '-f', zip, '--exclude=data', '--exclude=node_modules', '-C', dir, '.'], { windowsHide: true });
+    // 排除项 = data/ + node_modules/ + pack-exclude 里针对本插件的条目(形如 plugins/<id>/xxx)
+    const prefix = 'plugins/' + id + '/';
+    const extra = [];
+    for (const d of (PE.dirs || [])) {
+      const s = String(d).replace(/\\/g, '/');
+      if (s.toLowerCase().indexOf(prefix.toLowerCase()) === 0) extra.push(s.slice(prefix.length).replace(/\/+$/, ''));
+    }
+    const tarArgs = ['-a', '-c', '-f', zip, '--exclude=data', '--exclude=node_modules']
+      .concat(extra.map(function (e) { return '--exclude=./' + e; }))
+      .concat(['-C', dir, '.']);
+    execFileSync('tar', tarArgs, { windowsHide: true });
   }
   const size = DRY ? 0 : fs.statSync(zip).size;
   const hash = DRY ? '0'.repeat(64) : sha256File(zip);
@@ -62,13 +75,24 @@ for (const id of ids) {
   });
   console.log((DRY ? '[dry] ' : '  ok  ') + id + ' @' + version + '  ' + Math.round(size / 1024) + 'KB  ' + hash.slice(0, 12) + '…');
 }
-const index = { schema: 1, updated: new Date().toISOString().slice(0, 10), note: '插件目录: 由 scripts/make-market.js 生成, 请勿手改(改插件的 manifest 后重新生成)。tier: official=官方 / reviewed=已审核第三方 / experimental=实验区(默认最严策略)。', items: items };
+// 2026-09-25: --only 只处理点名插件, 但**不能**因此把目录里其它插件删掉 —— 原来直接 items: items,
+// 等于"新增一个插件会把其余全部下线"。这里与已有 index 合并(点名的覆盖, 其余的按原顺序保留)。
+let merged = items;
+const indexPath = path.join(MARKET, 'index.json');
+if (only.length && fs.existsSync(indexPath)) {
+  const old = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+  const byId = {};
+  for (const it of items) byId[it.id] = it;
+  merged = (old.items || []).map(function (it) { return byId[it.id] || it; });   // 点名的换成新条目, 其余原样保留
+  for (const it of items) if (!(old.items || []).some(function (o) { return o.id === it.id; })) merged.push(it);
+}
+const index = { schema: 1, updated: new Date().toISOString().slice(0, 10), note: '插件目录: 由 scripts/make-market.js 生成, 请勿手改(改插件的 manifest 后重新生成)。tier: official=官方 / reviewed=已审核第三方 / experimental=实验区(默认最严策略)。', items: merged };
 if (!DRY) {
   fs.writeFileSync(path.join(MARKET, 'index.json'), JSON.stringify(index, null, 2) + '\n', 'utf8');
   const rv = path.join(MARKET, 'revoke.json');
   if (!fs.existsSync(rv)) fs.writeFileSync(rv, JSON.stringify({ schema: 1, updated: new Date().toISOString().slice(0, 10), note: '吊销列表: 命中即由客户端拒绝安装并提示原因(开放的安全阀)。', revoked: [] }, null, 2) + '\n', 'utf8');
   const total = items.reduce(function (s, x) { return s + x.size; }, 0);
-  console.log('market/index.json 写入: ' + items.length + ' 条 / 合计 ' + (total / 1048576).toFixed(2) + ' MB');
+  console.log('market/index.json 写入: ' + merged.length + ' 条(本次打包 ' + items.length + ' 个)/ 合计 ' + (total / 1048576).toFixed(2) + ' MB');
 } else {
   console.log(JSON.stringify(index, null, 1).slice(0, 600) + '\n…(dry run, 未写入)');
 }

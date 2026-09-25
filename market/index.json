@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-09-12",
+  "updated": "2026-09-25",
   "note": "插件目录: 由 scripts/make-market.js 生成, 请勿手改(改插件的 manifest 后重新生成)。tier: official=官方 / reviewed=已审核第三方 / experimental=实验区(默认最严策略)。",
   "items": [
     {
@@ -127,6 +127,44 @@
       "changelog": "",
       "publishedAt": "2026-09-12",
       "minApp": "1.4.0"
+    },
+    {
+      "id": "bilibili-live",
+      "name": "B站直播互动",
+      "author": {
+        "id": "vrcliveboard",
+        "name": "VRCLiveBoard 官方",
+        "contact": "https://github.com/dkxfox/VRCLiveBoard"
+      },
+      "version": "0.3.0",
+      "api": "2.0.0",
+      "tier": "official",
+      "summary": "接入哔哩哔哩直播开放平台: 弹幕/礼物/醒目留言/上舰实时联动 VRChat 聊天框(支持抢占、排队、聚合与屏蔽词)",
+      "tags": [
+        "直播",
+        "B站",
+        "弹幕",
+        "互动"
+      ],
+      "url": "https://cdn.jsdelivr.net/gh/dkxfox/VRCLiveBoard@main/market/packages/bilibili-live-0.3.0.zip",
+      "sha256": "e54fb7e1d5893d046aef4d886b6b0c0f3911ae00b4968fc89f1f3f205e4f8ab4",
+      "size": 40231,
+      "permissions": {
+        "network": [
+          "live-open.biliapi.com",
+          "chat.bilibili.com",
+          "api.live.bilibili.com"
+        ],
+        "filesystem": {
+          "read": [],
+          "write": []
+        },
+        "process": false,
+        "ports": []
+      },
+      "changelog": "0.3.0: 高价值消息保持展示(SC/礼物/上舰逐类时长)、直播间信息展示(标题/房间号/热度开关)、设置改完即时生效; 修复场次解析/结束场次/断线重开局/弹幕被占屏者挡住等 8 处问题。**需重新红窗授权一次**。",
+      "publishedAt": "2026-09-25",
+      "minApp": "1.4.4"
     }
   ]
 }
