@@ -4,11 +4,13 @@
       "api-docs.deepseek.com",
       "api.deepseek.com",
       "api.github.com",
+      "api.live.bilibili.com",
       "api.open-meteo.com",
       "bootstrap.pypa.io",
       "cdn.jsdelivr.net",
       "geocoding-api.open-meteo.com",
       "github.com",
+      "live-open.biliapi.com",
       "music.163.com",
       "nodejs.org",
       "raw.githubusercontent.com",
@@ -39,6 +41,15 @@
         "src/sources/media.js",
         "src/web/server.js"
       ],
+      "spawn(": [
+        "plugins/netease-lyrics/index.js",
+        "src/capturehost.js",
+        "src/main.js",
+        "src/ocrtranslate.js",
+        "src/pluginsys/manager.js",
+        "src/sources/media.js",
+        "src/web/server.js"
+      ],
       "execFile": [
         "plugins/netease-lyrics/index.js",
         "plugins/ocrregion.js",
@@ -52,24 +63,14 @@
         "src/sources/media.js",
         "src/web/server.js"
       ],
-      "spawn(": [
-        "plugins/netease-lyrics/index.js",
-        "src/capturehost.js",
-        "src/main.js",
-        "src/ocrtranslate.js",
-        "src/pluginsys/manager.js",
-        "src/sources/media.js",
-        "src/web/server.js"
-      ],
       "fs.rmSync": [
         "electron/userdata-cleanup.js",
         "src/pluginsys/manager.js",
         "src/web/server.js"
       ]
-    },
-    "updatedAt": "2026-09-12"
+    }
   },
-  "updatedAt": "2026-09-11",
+  "updatedAt": "2026-09-25",
   "zipVolumes": {
     "asOf": "v1.4.2 (2026-09-19 正式打包; 差异逐条复核: 相对 v1.4.1 只新增 src/updateinfo.js 一个进包文件 -> 条目 +1; 字节增长来自该文件与随包的 DEV-NOTES/前端资源改动, 无移除)",
     "Lite-RequiresNode": {

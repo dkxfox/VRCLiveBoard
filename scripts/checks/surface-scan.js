@@ -10,6 +10,24 @@ const BASELINE = path.join(ROOT, 'docs', 'SECURITY-BASELINE.json');
 const SCAN_DIRS = ['src', 'plugins', 'electron'];
 const SCAN_ROOT_FILES = ['启动.bat', '启动桌面版.bat', 'config.default.json'];
 const SKIP_DIR = new Set(['node_modules', 'vendor', '.git']);
+// 2026-09-25 审计修正(**扫描器自身的盲区**): 上面写着"只扫会随包出厂的代码", 但实际只跳过了 node_modules/vendor/.git,
+// 于是 plugins/<id>/test 这类**永不进包**的开发文件也被算进攻击面 —— 结果是最新的 B站插件一上来就报
+// "新增域名 i0.hdslb.com / x"(测试夹具里的假 URL)和"新增 child_process"(测试汇总脚本), 全是噪音。
+// 真正进包与否的**唯一来源**是 scripts/pack-exclude.json(打包脚本就用它), 这里改成读它。
+const PE = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts', 'pack-exclude.json'), 'utf8'));
+const EX_DIR = (PE.dirs || []).map((d) => String(d).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase());
+const EX_FILE = (PE.files || []).map((f) => String(f).replace(/\\/g, '/').toLowerCase());
+function isExcluded(rel) {
+  const r = String(rel).replace(/\\/g, '/').toLowerCase();
+  for (const d of EX_DIR) if (r === d || r.startsWith(d + '/')) return true;
+  for (const f of EX_FILE) {
+    const base = r.split('/').pop();
+    if (!f.includes('*')) { if (r === f || base === f) return true; continue; }
+    const re = new RegExp('^' + f.split('*').map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[^/]*') + '$');
+    if (re.test(base)) return true;
+  }
+  return false;
+}
 const DANGEROUS = ['child_process', 'spawn(', 'execFile', 'eval(', 'new Function', 'fs.rmSync', 'shell: true'];
 
 function collect() {
@@ -19,8 +37,10 @@ function collect() {
     if (!fs.existsSync(abs)) continue;
     (function walk(dir) {
       for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-        if (e.isDirectory()) { if (SKIP_DIR.has(e.name)) continue; walk(path.join(dir, e.name)); }
-        else if (/\.(js|cjs|mjs|ps1|bat|py|html|json)$/i.test(e.name)) files.push(path.join(dir, e.name));
+        const full = path.join(dir, e.name);
+        if (isExcluded(path.relative(ROOT, full))) continue;          // 不进包的东西不算出厂攻击面
+        if (e.isDirectory()) { if (SKIP_DIR.has(e.name)) continue; walk(full); }
+        else if (/\.(js|cjs|mjs|ps1|bat|py|html|json)$/i.test(e.name)) files.push(full);
       }
     })(abs);
   }

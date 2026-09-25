@@ -8,7 +8,21 @@
 // 依赖注入(便于离线单测): wsFactory / postHeartbeat / postEnd / onEvent / onLog / 各时长。
 const F = require('./frame.js');
 
+// 弹幕服务器白名单(2026-09-25 安全审计): 服务器地址是 start 响应给的**外部输入**, 而认证帧里带着 auth_body(令牌)。
+// 不校验的话, 被篡改的响应就能让我们把令牌发到任意 wss:// 主机 —— 所以只允许官方弹幕域名(*.chat.bilibili.com)
+// 和本机回环(单测用假服务器; 回环不会外泄到本机之外)。
+const DEFAULT_ALLOW_HOSTS = ['chat.bilibili.com', '127.0.0.1', 'localhost', '::1'];
+function hostAllowed(url, allow) {
+  let h = '';
+  try { h = new URL(String(url)).hostname.toLowerCase(); } catch (e) { return false; }
+  return (allow || DEFAULT_ALLOW_HOSTS).some(function (r) {
+    const rr = String(r).toLowerCase();
+    return rr === '*' || h === rr || h.endsWith('.' + rr);
+  });
+}
 const DEFAULTS = {
+  allowHosts: DEFAULT_ALLOW_HOSTS,
+  maxBufBytes: 8 * 1024 * 1024,   // 接收缓冲上限(半包拼不起来时不能无限涨)
   wsHeartbeatMs: 30000,
   projectHeartbeatMs: 20000,
   authTimeoutMs: 10000,
@@ -71,6 +85,11 @@ function createSession(opts) {
     if (state.stopped) return;
     const h = host();
     if (!h) return scheduleReconnect('no-host');
+    if (!hostAllowed(h, o.allowHosts)) {            // 白名单外: 绝不把认证帧发出去
+      state.lastError = '弹幕服务器不在白名单: ' + h;
+      log('拒绝连接(白名单外, 可能是响应被篡改): ' + h);
+      return scheduleReconnect('host-not-allowed');
+    }
     state.connections += 1;
     try { ws = o.wsFactory(h); } catch (e) { state.lastError = String(e.message); return scheduleReconnect('factory:' + e.message); }
     try { ws.binaryType = 'arraybuffer'; } catch (e) {}   // 关键: 默认收到的是 Blob, 解不了帧
@@ -94,9 +113,16 @@ function createSession(opts) {
       else if (data && typeof data.arrayBuffer === 'function') chunk = Buffer.from(await data.arrayBuffer());
       if (!chunk) return;
       buf = Buffer.concat([buf, chunk]);
+      if (buf.length > Number(o.maxBufBytes)) {        // 半包拼不起来(或对方灌数据)时不能无限涨
+        log('接收缓冲超限(' + buf.length + ' 字节), 断开重连');
+        buf = Buffer.alloc(0);
+        try { if (ws) ws.close(); } catch (e) {}
+        return;
+      }
       const dec = F.decodeWithRest(buf);
       buf = dec.rest;
       for (const f of dec.frames) {
+        if (f.error) log('帧异常(' + f.error + ', op=' + f.op + ')');   // 超长帧/解压失败/压缩炸弹都从这里可见
         if (f.op === F.OP.AUTH_REPLY) {
           if (authTimer) { clearTimeout(authTimer); authTimer = null; }
           state.authed = true; state.attempts = 0;
@@ -141,4 +167,4 @@ function createSession(opts) {
   };
 }
 
-module.exports = { createSession: createSession, DEFAULTS: DEFAULTS };
+module.exports = { createSession: createSession, DEFAULTS: DEFAULTS, hostAllowed: hostAllowed, DEFAULT_ALLOW_HOSTS: DEFAULT_ALLOW_HOSTS };

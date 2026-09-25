@@ -44,7 +44,7 @@ if (process.argv.includes('--update-baseline')) {
   process.exit(0);
 }
 const base = (JSON.parse(fs.readFileSync(BASELINE, 'utf8')).supplyChain) || { dependencies: {}, artifacts: {} };
-let fail = 0;
+let fail = 0, warn = 0;
 console.log('[GDEP dep-audit] 依赖 ' + Object.keys(cur.dependencies).length + ' 个 / 受监控产物 ' + Object.keys(cur.artifacts).length + ' 项');
 
 for (const [name, ver] of Object.entries(cur.dependencies)) {
@@ -75,11 +75,20 @@ if (!process.argv.includes('--no-npm')) {
     const msg = String(e.stdout || e.message || '');
     try {
       const j = JSON.parse(msg);
-      const v = (j.metadata && j.metadata.vulnerabilities) || {};
-      const bad = (v.critical || 0) + (v.high || 0);
-      console.log('  ' + (bad ? 'FAIL' : 'OK  ') + ' npm audit: 严重 ' + (v.critical || 0) + ' / 高危 ' + (v.high || 0) + ' / 中 ' + (v.moderate || 0) + ' / 低 ' + (v.low || 0));
-      if (bad) fail++;
-    } catch (e2) { console.log('  WARN npm audit 未能执行(离线?): ' + msg.split('\n')[0].slice(0, 120)); }
+      // 2026-09-25 审计修正(**假通过**): npm 失败时会回 {"error":{"code":"ENOLOCK",...}}, 这时 j.metadata 是 undefined,
+      // 旧写法把 {} 当成"0 个漏洞"直接打 OK —— 实际上审计**根本没跑**。这类"扫描器说自己绿了"比漏报更危险。
+      const v = j && j.metadata && j.metadata.vulnerabilities;
+      if (!v) {
+        const why = (j && j.error && (j.error.code + ': ' + j.error.summary)) || '返回里没有 metadata.vulnerabilities';
+        console.log('  WARN npm audit 没有给出结果(' + String(why).slice(0, 100) + ') —— 这条不算通过, 需人工确认');
+        warn++;
+      } else {
+        const bad = (v.critical || 0) + (v.high || 0);
+        console.log('  ' + (bad ? 'FAIL' : 'OK  ') + ' npm audit: 严重 ' + (v.critical || 0) + ' / 高危 ' + (v.high || 0) + ' / 中 ' + (v.moderate || 0) + ' / 低 ' + (v.low || 0));
+        if (bad) fail++;
+      }
+    } catch (e2) { console.log('  WARN npm audit 未能执行(离线?): ' + msg.split('\n')[0].slice(0, 120)); warn++; }
   }
 }
+if (warn) console.log('  ---- ' + warn + ' WARN(要人工确认, 不算通过也不算失败) ----');
 process.exit(fail ? 1 : 0);

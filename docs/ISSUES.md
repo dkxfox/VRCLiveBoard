@@ -767,3 +767,39 @@
 - 验证: `node scripts/checks/plugin-check.js` → `OK bilibili-live v0.2.0 (api 2.0.0, 授权哈希 bilibili-live@0.2.0|2.0.0|cc04ae4c...)`; 插件离线单测 166 条全绿。
 - 教训: **"文件放对了"不等于"契约对"** —— 契约类的东西要对着规范逐字写, 并且让门禁覆盖得到(现在由 GPLUG 覆盖)。
 - 关联: DEV-NOTES 197
+
+## M-20260925-01 【C3·审计器自身】dep-audit 的 npm audit 是**假通过**(ENOLOCK 被当成"0 漏洞")(PROCESS-03 3A 发现)
+- 状态: FIXED(假通过已消除; 让 npm audit 真正可跑需用户决定加不加根 lockfile)
+- 严重度: C3(依赖侧防线形同虚设, 但不直接可利用)
+- 来源: 2026-09-25 走 PROCESS-03 3A 时, 注意到 dep-audit 打印 OK 而其 stderr 里有 npm 报错
+- 现象: `node scripts/checks/dep-audit.js` 打印 `OK npm audit: 严重 0 / 高危 0 / 中 0 / 低 0`, 但 npm 实际**没跑成功**。
+- 根因: 本机工作区在 UNC 路径上且**仓库根没有 package-lock.json**, `npm audit --json` 回 `{"error":{"code":"ENOLOCK",...}}` 并退出 1; dep-audit 的 catch 分支解析该 JSON 后取 `j.metadata.vulnerabilities`(**不存在**)→ 得到 `{}` → 当成"0 个漏洞"打 OK。**扫描器说自己绿了, 比漏报更危险**。
+- 改动: `scripts/checks/dep-audit.js` catch 分支: 没有 `metadata.vulnerabilities` 就报 **WARN + 原因**, 不再算通过(新增 warn 计数与汇总行)。
+- 验证: 复跑输出 `WARN npm audit 没有给出结果(ENOLOCK: This command requires an existing lockfile.) —— 这条不算通过, 需人工确认` + `---- 1 WARN ----`; 依赖清单与 8 项受监控产物哈希仍 OK。
+- 待用户决定: 是否在仓库根生成 `package-lock.json`(能让 npm audit 真正可跑、安装可复现; 但新增一个仓库/随包文件, 属 A0 决策)。
+- 关联: DEV-NOTES 208; PROCESS-03 §0「审计器本身也要被审计」
+
+## M-20260925-02 【C2·已修】弹幕服务器地址未做白名单校验 —— 认证令牌可能被发到任意主机(PROCESS-03 3A 发现)
+- 状态: FIXED
+- 严重度: C2(令牌外泄的前提是 start 响应被篡改, 但代价高、修起来便宜)
+- 来源: 审计新插件代码时自查(manifest 声明的域名只对 `ctx.http.request` 生效, WebSocket 不受门禁约束)
+- 现象: `session.js` 直接用 start 响应里的 `host_server_url_list` 建连接; 而**认证帧里带 auth_body(令牌)** —— 被篡改/劫持的响应就能把令牌发到 `wss://evil.example.com`。
+- 根因: 动态返回的服务器地址是**外部输入**, 原实现照单全收(`07-接入实现要点.md` 里其实写过"需白名单校验", 但没实现)。
+- 改动: `session.js` 新增 `hostAllowed()` 与 `allowHosts`(默认 `*.chat.bilibili.com` + 本机回环); 白名单外**不建连接**、记 `lastError` 并写日志; 纯函数导出便于断言。
+- 验证: 新增 9 条单测 —— 官方域名/子域/回环放行; 陌生域名拒绝; **伪造后缀 `chat.bilibili.com.evil.com` 拒绝**(按域名边界匹配); 白名单外主机 wsFactory **一次都没被调用**。
+- 残余边界(诚实): 框架层仍不会拦"插件自己 new WebSocket(...) 去别处" —— 本次是**插件自己**加了闸; 要框架级强制需另立卡。
+
+## M-20260925-03 【C3·已修】帧解析缺三道闸: 压缩炸弹 / 超长帧 / 缓冲无限涨(PROCESS-03 3A 发现)
+- 状态: FIXED
+- 严重度: C3(内存类 DoS; 触发前提是服务端被控制或数据被篡改)
+- 根因: 帧头长度由对端说了算; `brotliDecompressSync` 无上限(几百 KB 可解出几百 MB); 压缩帧可嵌套; `session` 接收缓冲无上限。
+- 改动: `frame.js` 三道闸 —— ①单帧声明长度上限 8MB(`too-large` 错误帧, 不去分配内存)②解压后上限 4MB(`maxOutputLength`, 抛错即当坏帧)③压缩嵌套 ≤3 层; `session.js` 加 8MB 接收缓冲上限(超限断开重连)并把错误帧写进日志。
+- 验证: `frame.test.js` 新增 4 条(超长帧 / 真·压缩炸弹 / 5 层嵌套 / **正常一层压缩仍照常展开**), 既有用例全绿。
+
+## M-20260925-04 【C4·已修】surface-scan 扫描器盲区: 把"永不进包"的测试文件算进了出厂攻击面(PROCESS-03 3A 发现)
+- 状态: FIXED
+- 严重度: C4(扫描器噪音, 会逼着基线无意义扩容或被忽略)
+- 现象: 报 `新增域名 i0.hdslb.com, x` 与 `新增危险API child_process: plugins/bilibili-live/test/run-all.js` —— 全是测试夹具里的假 URL 与测试汇总脚本。
+- 根因: 脚本注释写着"只扫会随包出厂的代码", 实现却只跳过 `node_modules/vendor/.git`, 不知道 `scripts/pack-exclude.json`(打包脚本用的唯一排除清单)。
+- 改动: 读 `pack-exclude.json` 的 dirs/files 并在遍历时跳过; 复跑后只剩两个**真实**新增域名。
+- 验证: `FAIL 外部域名 新增: api.live.bilibili.com, live-open.biliapi.com`(人工复核后进基线: 域名 14 → **16**, `updatedAt` → 2026-09-25), 其余类别全部 OK。

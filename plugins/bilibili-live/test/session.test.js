@@ -9,6 +9,33 @@ function ok(cond, msg) { if (cond) { pass++; console.log('  PASS ' + msg); } els
 function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 const AUTH = JSON.stringify({ roomid: 12345, uid: 0, protover: 3, platform: 'web', key: 'FAKE-AUTH-BODY' });
 
+// ⓪ 安全审计(2026-09-25): 弹幕服务器白名单 —— 认证帧里带 auth_body(令牌), 绝不能发到任意主机
+{
+  const S = require('../lib/session.js');
+  ok(S.hostAllowed('wss://zj-cn-live-comet.chat.bilibili.com:443/sub') === true, '白名单: 官方弹幕域名(*.chat.bilibili.com)放行');
+  ok(S.hostAllowed('wss://chat.bilibili.com/sub') === true, '白名单: 裸域名放行');
+  ok(S.hostAllowed('ws://127.0.0.1:19250/sub') === true && S.hostAllowed('ws://localhost/sub') === true, '白名单: 本机回环放行(单测用假服务器)');
+  ok(S.hostAllowed('wss://evil.example.com/sub') === false, '白名单: 陌生域名拒绝');
+  ok(S.hostAllowed('wss://chat.bilibili.com.evil.com/sub') === false, '白名单: 伪造后缀(chat.bilibili.com.evil.com)拒绝 —— 后缀匹配必须按域名边界');
+  ok(S.hostAllowed('not a url') === false && S.hostAllowed('') === false, '白名单: 解析不出主机名的拒绝');
+}
+(async function () {
+  // 白名单外的主机: 一次都不许连(否则等于把令牌递给对方)
+  let factoryCalls = 0;
+  const logs = [];
+  const s = createSession({
+    hosts: ['wss://evil.example.com/sub'], authBody: AUTH, gameId: 'G-EVIL',
+    wsFactory: function (u) { factoryCalls += 1; return new WebSocket(u); },
+    backoffBaseMs: 20, backoffMaxMs: 40, jitterRatio: 0,
+    onLog: function (m) { logs.push(m); }
+  });
+  s.start();
+  await sleep(200);
+  ok(factoryCalls === 0, '白名单外主机: 根本没建立连接(wsFactory 没被调用)');
+  ok(logs.join(' ').indexOf('白名单') >= 0, '并且在日志里说明原因(排查时看得见)');
+  ok(s.state.lastError.indexOf('白名单') >= 0, 'lastError 也记下来了(界面/状态能看到)');
+  await s.stop();
+})();
 // ① 正常路径: 认证 → 双心跳 → 收消息(含半包)
 (async function () {
   let lastApi = null, projBeats = 0;
