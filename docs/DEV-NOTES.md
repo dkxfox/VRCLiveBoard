@@ -897,3 +897,10 @@
 - 开关: `showRoomTitle` / `showRoomId` / `showRoomPopularity`(默认 开/开/关)+ `roomInfoPrefix` / `roomInfoPriority` / `roomInfoIntervalMs`; 三个开关全关时**把数据源摘掉**(不留空源)。
 - 证据: 插件离线单测 **302 条全绿**(新增 roominfo 17 条 + settings 19 条; index 47→57: 注册数据源/优先级间隔/房间号来自 anchor_info/开播事件带标题/关标题即时生效/全关摘源/热度开关走公开接口且格式化成 4.6万)。
 - 我的建议(还没做, 等用户挑): ① 界面化那 13 个 config-only 键(尤其 `danmakuQueueTtlMs`/`blockedWords`); ② 一键"暂停推送/静音"开关 + 控制台状态卡(收到/显示/排队/丢弃计数、当前占屏者); ③ 弹幕过滤细化(忽略纯表情弹幕、超长弹幕、只放行含关键词的弹幕); ④ 礼物 → OSC 动作映射(玩法层, 见 `05-玩法与架构.md`); ⑤ 上舰/SC 播报模板可配(现在文案是写死的格式)。
+## 206. B站插件: 修"房间号/标题不显示" —— 插件注册的数据源从来没有 enabled + 把插件单测纳入门禁(2026-09-25, 用户实机)
+- 现象(用户原话): 「房间号和标题不显示」。
+- 根因(**插件 API 的一个缺口**): `src/composer.js` 的 tick 与候选收集都要求 `src.enabled` 为真(`if (!src.enabled) continue`), 而 `docs/PLUGIN-DEV.md` 里 `ctx.registerSource` 的契约只写了 `{id, priority, intervalMs, getText}`, **没提 enabled**, 管理器的 `registerSource` 也没替插件补默认值 —— 于是插件注册的数据源**永远不会被轮询**, 自然什么都不显示。B站插件是第一个用 `registerSource` 的插件, 所以这个缺口一直没暴露。
+- 改动: ① **应用侧**(`src/pluginsys/manager.js`): `if (src.enabled === undefined) src.enabled = true;` —— 注册即启用(插件要关就在源里自己写 false); ② **插件侧**显式写 `enabled: true`(用户手上那版程序还没这个默认值, 这样只重启插件就能立刻好), 热更新时也补上; ③ 默认优先级 8 → **12**(原来比"电脑状态 10"还低, 基本轮不到它; 现在在电脑状态之上、歌曲 30 之下, 可用 `roomInfoPriority` 调); ④ 第一次产出文案时打一条 `直播间信息: …` 日志 —— 数据通没通一眼可见。
+- 固化(**门禁升级**): GPLUG 现在除了 manifest 契约, 还会跑插件自带的离线单测(`plugins/bilibili-live/test/run-all.js`), 失败即门禁失败。以前 300+ 条断言从不进门禁, 结果实机上连着踩的坑(设置不生效 / 弹幕被挡 / 这次的没 enabled)本该由它们抓住; 现在抓住的第一个就是本次改动引起的断言过期(优先级 8→12), 说明这条链路真的通了。
+- 证据: 插件离线单测 **305 条全绿**(index 57→59: 数据源必须 enabled、提供 getText); GPLUG 输出里能看到 `OK 插件离线单测通过`; 门禁 14/15 PASS(含冒烟)。
+- 诚实记录: 这是**应用侧契约缺一环 + 插件照着文档写**共同造成的 —— 文档只列了四个字段, 我就只写了四个字段, 谁都没错, 但功能就是死的。教训: **凡是"注册后要持续被轮询/回调"的东西, 契约里必须写清"开关字段"**, 或者由框架给默认值。已把默认值补在框架侧, 并在 `PLUGIN-DEV.md` 里注明。

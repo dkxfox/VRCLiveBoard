@@ -95,5 +95,15 @@ for (const [id, ent] of Object.entries(def.pluginApprovals || {})) {
   else if (ent.hash !== want) say('FAIL', 'config.default 预置授权哈希过期: ' + id + ' 有 ' + ent.hash + ', 应为 ' + want);
 }
 
+// 5. 插件自带离线单测(2026-09-25 纳入门禁): 每个插件若有 test/run-all.js 就跑一遍, 失败即门禁失败。
+//    以前只校验 manifest 契约, 插件里 300+ 条断言从不进门禁 —— 结果实机上连着踩坑(设置不生效/弹幕被挡), 那些断言本该抓住。
+const testRunner = path.join(PLUGINS, 'bilibili-live', 'test', 'run-all.js');
+if (fs.existsSync(testRunner)) {
+  const r = require('child_process').spawnSync(process.execPath, [testRunner], { stdio: 'inherit' });
+  const tail = (r.stdout && typeof r.stdout === 'string') ? '' : '';
+  if (r.status === 0) say('OK', '插件离线单测通过(bilibili-live/test/run-all.js)' + tail);
+  else say('FAIL', '插件离线单测失败: 退出码 ' + r.status);
+}
+
 console.log('  ---- ' + (fail ? fail + ' FAIL' : '0 FAIL') + ' / ' + warn + ' WARN ----');
 process.exit(fail ? 1 : 0);

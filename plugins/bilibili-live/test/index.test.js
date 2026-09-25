@@ -266,7 +266,9 @@ function push(ws, raw) { ws.onmessage({ data: F.encode(F.OP.MESSAGE, raw) }); }
     await sleep(30);
     ok(h.calls.sources.length === 1 && h.calls.sources[0].id === 'roominfo', '开启房间信息: 注册了一个数据源(低优先级, 走现成的 composer 数据源机制)');
     const src = h.calls.sources[0];
-    ok(src.priority === 8 && src.intervalMs === 60000, '数据源优先级/刷新间隔按设置(默认 8 / 60 秒)');
+    ok(src.priority === 12 && src.intervalMs === 60000, '数据源优先级/刷新间隔按设置(默认 12 / 60 秒)');
+    ok(src.enabled === true, '数据源**必须是 enabled**(composer 只轮询 enabled 的源; 2026-09-25 实机"房间号/标题不显示"就是漏了它)');
+    ok(typeof src.getText === 'function', '数据源提供 getText');
     let txt = String(await src.getText());
     ok(txt.indexOf('房间 123') >= 0 && txt.indexOf('【直播间】') === 0, '房间号来自官方 start 的 anchor_info -> 文案 "【直播间】房间 123"');
     push(socks[socks.length - 1], { cmd: 'LIVE_OPEN_PLATFORM_LIVE_START', data: { title: '今晚打游戏', area_name: '虚拟主播' } });

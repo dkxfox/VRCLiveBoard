@@ -73,7 +73,8 @@ ctx 能力清单:
 - ctx.http.request(url, options): fetch 包装,受 network 权限门禁。
 - ctx.fs.read/write(path): 受 filesystem 权限门禁。
 - ctx.exec.run(cmd, args): 受 process 权限门禁。
-- ctx.registerSource(src): 注册长期数据源 {id, priority, intervalMs, getText}。
+- ctx.registerSource(src): 注册长期数据源 {id, priority, intervalMs, getText}(**注册即启用**; 要临时停就在源对象上设 `enabled:false`)。
+  注意: 主程序只轮询 `enabled` 为真的源 —— 旧版程序不会替你补这个默认值, 写插件时建议显式带上 `enabled: true`。
 - ctx.plugins: 插件管理器(查询其他插件状态)。
 
 所有经 ctx 的敏感调用都会记入 logs\plugin-audit.log(审计)。

@@ -24,7 +24,7 @@ const DEFAULTS = {
   showRoomId: true,           // 显示房间号(官方 start 的 anchor_info 一定有)
   showRoomPopularity: false,  // 显示热度: **官方通道不提供**, 打开才会去请求公开网页接口(默认关)
   roomInfoPrefix: '【直播间】',
-  roomInfoPriority: 8,        // 低优先级: 只在没有别的可显示时才轮到它
+  roomInfoPriority: 12,       // 默认比"电脑状态(10)"高一点、"歌曲(30)"低: 会显示, 但抢不过歌曲/翻译这类
   roomInfoIntervalMs: 60000,  // 多久刷新一次(热度)
   priority: null,             // 卡片里的优先级(填了就对整插件统一生效, 见 makeBridge)
   showUname: true,
@@ -43,7 +43,7 @@ module.exports = function (ctx) {
   let anchorOpenId = '', anchorUid = 0;
   // 直播间信息(展示用): 房间号来自 start 的 anchor_info, 标题来自开播事件/公开接口, 热度只可能来自公开接口
   const room = { roomId: 0, roomName: '', title: '', area: '', popularity: 0 };
-  let roomSrc = null;
+  let roomSrc = null, lastRoomText = '';
   const status = { running: false, authed: false, gameId: '', events: 0, shown: 0, ignored: 0, selfSkipped: 0, lastError: '', since: 0, stopReason: '' };
   // 是不是"主播自己发的消息": 开放平台用 open_id 标识用户(**没有 uid**), 所以先比 open_id, 再退化比 uid
   function isSelf(raw) {
@@ -115,7 +115,9 @@ module.exports = function (ctx) {
           }
         } catch (e) { /* 拉不到热度就不显示那一段, 不打扰 */ }
       }
-      return R.buildRoomInfoText({ roomId: room.roomId, title: room.title, popularity: room.popularity }, c) || null;
+      const text = R.buildRoomInfoText({ roomId: room.roomId, title: room.title, popularity: room.popularity }, c) || null;
+      if (text && text !== lastRoomText) { lastRoomText = text; log('直播间信息: ' + text); }   // 打过一次就说明数据通了
+      return text;
     })();
   }
   // 公开网页房间信息接口(非开放平台): 只读、无需登录, 拿热度/标题 —— 只有打开"显示热度"开关才会用到
@@ -129,13 +131,15 @@ module.exports = function (ctx) {
     const c = cfg();
     const on = !!(c.showRoomTitle || c.showRoomId || c.showRoomPopularity);
     if (on && !roomSrc) {
-      roomSrc = { id: 'roominfo', priority: Number(c.roomInfoPriority) || 8, intervalMs: Number(c.roomInfoIntervalMs) || 60000, getText: roomInfoText };
+      // enabled 必须显式给: composer 只轮询 enabled 的源(旧版程序不会替插件补这个默认值)
+      roomSrc = { id: 'roominfo', enabled: true, priority: Number(c.roomInfoPriority) || 12, intervalMs: Number(c.roomInfoIntervalMs) || 60000, getText: roomInfoText };
       roomSrc._key = ctx.id + ':roominfo';
       try { ctx.registerSource(roomSrc); log('直播间信息展示已开启(优先级 ' + roomSrc.priority + ', 每 ' + Math.round(roomSrc.intervalMs / 1000) + ' 秒刷新)'); } catch (e) { warn('注册直播间信息源失败: ' + e.message); roomSrc = null; }
       return;
     }
     if (!roomSrc) return;
-    roomSrc.priority = Number(c.roomInfoPriority) || 8;
+    roomSrc.enabled = true;
+    roomSrc.priority = Number(c.roomInfoPriority) || 12;
     roomSrc.intervalMs = Number(c.roomInfoIntervalMs) || 60000;
     if (!on) {
       try { if (ctx.plugins && ctx.plugins.composer) ctx.plugins.composer.unregisterSource(roomSrc._key); } catch (e) {}

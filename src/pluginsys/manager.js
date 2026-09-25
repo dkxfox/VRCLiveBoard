@@ -267,6 +267,9 @@ class PluginManager {
         }
       },
       registerSource: function (src) {
+        // 2026-09-25 实机踩坑: composer.tick 会跳过没有 enabled 的源, 而插件文档里的注册契约({id,priority,intervalMs,getText})
+        // 没提 enabled —— 于是插件注册的源**永远不轮询**("房间号/标题不显示"就是这个原因)。这里给个默认: 注册即启用。
+        if (src.enabled === undefined) src.enabled = true;
         src.id = entry.id + ':' + (src.id || 'src');
         entry.runtimeSources.push(src);
         self.composer.registerSource(src);
