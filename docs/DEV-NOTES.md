@@ -795,3 +795,9 @@
 - 记录: 新增 `10-抢占与队列策略.md`(规则表 + 决策表 + 配置字段 + **已知限制 4 条**), `09` 追加 C2 配置段, README 补目录; 门禁 14 PASS, 工作区干净。
 - 已知限制(诚实): ① composer 没有"移除已压入临时文本"的 API → 聚合是"首次原文 + 窗口后计数"两条, 不是实时跳数; ② 高价值最长等待 = 当前显示剩余时长; ③ 队列只在内存(重启即丢, 与项目"不采集不落库"口径一致); ④ "当前显示优先级 ≥85 一律让路"是刻意硬规则(手动结果优先), 想抢就调低 `respectPriority`。
 - 下一步: 步 3 签名与 HTTP 构造(假密钥单测) → 步 4 wss + 认证 + 双心跳(本地假服务器) → 步 5 CMD 归一化 → 步 6 接聊天框(策略层已就绪)。
+## 193. B站插件 步 3: 官方通道签名与请求构造 + 24 条假密钥单测(2026-09-20, 用户"composer那就不改了继续")
+- 用户决定: **不动 composer 核心** —— 聚合因此定为"首次原文 + 窗口后计数"两条(见条目 192 的已知限制), 不再讨论实时跳数。
+- 产出: `lib/official.js`(纯函数 + 极薄发送层, 零依赖) —— `signHeaders`(六个 `x-bili-*` 头按固定顺序拼签名串 → HMAC-SHA256(secret) → Authorization) / `buildStartBody`(code+app_id) / `buildHeartbeatBody`(game_id) / `buildRequest`(组装但不发送) / `redactHeaders`(**日志脱敏**: key 只留前 4 位、绝不输出 secret 与完整签名) / `parseResponse`(code≠0 抛错带 code/message) / `normalizeStart`(返回字段 snake/camel 双兼容) / `startSession`/`heartbeatSession`/`endSession`。
+- 证据: `lib/official.test.js` **24 PASS / 0 FAIL**(**假密钥**, 不需要也不应该用真凭据): 签名串逐字正确(六行/顺序/秒级时间戳) / 头顺序契约 / Authorization 独立复算一致 / content-md5 / 固定值 method+version / Content-Type+Accept / **头与签名串都不含 secret** / **脱敏摘要不含 secret 也不含完整签名** / start 体 app_id 为数字 / 非法 app_id 与缺身份码拒构造 / 心跳体 / 端点与方式 / **URL 干净(凭据只在头, 不进 URL)** / 未知端点拒 / 缺凭据拒 / code=0 取 data / 非 0 码抛错 / 非 JSON 明确报错 / 字段名双兼容 / 空返回不崩。
+- 三个模块累计 **55 条离线断言**(frame 11 + policy 20 + official 24), 全部零依赖、不联网、不需要凭据。
+- 下一步(步 4): wss 连接 + 认证帧 + **双心跳(连接 30s / 项目 20s)** + 重连退避 —— 用**本地假服务器**(自己按同一套帧协议应答)来测, 仍然不需要真凭据。
