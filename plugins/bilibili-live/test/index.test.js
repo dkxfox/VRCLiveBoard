@@ -25,7 +25,8 @@ function mkCtx(cfg) {
         calls.http.push({ url: url, headers: (opts && opts.headers) || {}, body: (opts && opts.body) || '' });
         const isStart = url.indexOf('/start') >= 0;
         const data = isStart
-          ? { code: 0, data: { game_id: 'GAME-TEST-1', host_server_url_list: ['wss://fake.chat.bilibili.com/sub'], auth_body: 'FAKE-AUTH-BODY', anchor_info: { uid: 42, open_id: 'anchor-open', room_id: 123, uname: '测试主播' } } }
+          // 真实形状(2026-09-25 实机 + blivedm 印证): game_info / websocket_info(wss_link, auth_body) / anchor_info
+          ? { code: 0, data: { game_info: { game_id: 'GAME-TEST-1' }, websocket_info: { wss_link: ['wss://fake.chat.bilibili.com/sub'], auth_body: 'FAKE-AUTH-BODY' }, anchor_info: { uid: 42, open_id: 'anchor-open', room_id: 123, uname: '测试主播' } } }
           : { code: 0, data: {} };
         return Promise.resolve({ status: 200, text: function () { return Promise.resolve(JSON.stringify(data)); } });
       }

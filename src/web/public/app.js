@@ -20,6 +20,12 @@ function apiFail(where,err){
 // 传了 target 就写进那个元素(例如 #plgMsg); 确认类交互仍然用 confirm()。
 var _noteTimer=0;
 function note(text,kind,target){var m=target?$(target):$("note");if(!m)return;m.textContent=String(text==null?"":text);try{m.style.color=(kind==="warn")?"var(--warn)":((kind==="ok")?"var(--ok)":"");}catch(e){}m.hidden=false;if(target)return;try{clearTimeout(_noteTimer);}catch(e){}_noteTimer=setTimeout(function(){m.hidden=true;},4000);}
+// tr 由 app-security.js 提供, 而那个脚本在 app.js **之后**才执行: 微任务里(或立刻返回的 fetch 回调里)调 tr 会撞
+// "tr is not defined"(2026-09-25 实机日志: [前端] Promise拒绝)。这里先放一个兜底(按原键显示 + 提醒一次),
+// app-security.js 执行时会用真正的 tr 覆盖掉它; 真正要修的是"别在加载期同步用 tr"。
+if (typeof window.tr !== 'function') {
+  window.tr = function (k) { try { if (!window.__trFallbackLogged) { window.__trFallbackLogged = 1; console.warn('[i18n] tr 还没就绪(app-security.js 未执行), 先按原键显示: ' + String(k)); } } catch (e) {} return String(k); };
+}
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 // tabs
 document.querySelectorAll('#tabs .tab').forEach(function(tab){tab.onclick=function(){document.querySelectorAll('#tabs .tab').forEach(function(x){x.classList.remove('on');});document.querySelectorAll('[id^=tab-]').forEach(function(p){p.hidden=true;});tab.classList.add('on');var p=$('tab-'+tab.dataset.tab);if(p)p.hidden=false;};});

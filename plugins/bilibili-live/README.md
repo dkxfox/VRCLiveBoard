@@ -25,4 +25,4 @@
 
 ## 依赖与自检
 - 零第三方依赖: 只用 Node 内置 `WebSocket`(需要 Node 21+, 推荐 22)、`zlib`(含 brotli)、`crypto`、`fetch`;
-- **仓库里**可离线自检(不需要凭据、不联网): `node plugins/bilibili-live/test/run-all.js` —— 帧 11 + 策略 20 + 签名 24 + 连接层 16 + 事件模型 45 + 聊天框桥 50 = **166 条断言**(`test/` 不随发布包出厂)。
+- **仓库里**可离线自检(不需要凭据、不联网): `node plugins/bilibili-live/test/run-all.js` —— 帧 11 + 策略 20 + 签名 33 + 连接层 16 + 事件模型 59 + 聊天框桥 50 + 插件契约 33 = **222 条断言**(`test/` 不随发布包出厂)。

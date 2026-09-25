@@ -52,6 +52,14 @@ function buildHeartbeatBody(gameId) {
   if (!gameId) throw new Error('缺少 game_id');
   return JSON.stringify({ game_id: String(gameId) });
 }
+// end 的请求体是 {app_id, game_id}(2026-09-25 查实: blivedm _end_game 传的就是这两个);
+// 心跳只带 game_id —— 两者**不是**同一个体, 别复用。
+function buildEndBody(appId, gameId) {
+  if (!gameId) throw new Error('缺少 game_id');
+  const n = Number(appId);
+  if (!Number.isFinite(n) || n <= 0) throw new Error('app_id 无效');
+  return JSON.stringify({ app_id: n, game_id: String(gameId) });
+}
 
 // 组装一个完整请求(不发送, 便于单测与日志脱敏)
 function buildRequest(path, bodyStr, creds, opts) {
@@ -91,12 +99,17 @@ function parseResponse(text) {
 // 顶层那套 room_owner_* 只是老写法, 两个都认)。主播 open_id 用来识别"主播自己发的弹幕"。
 function normalizeStart(data) {
   const d = data || {};
-  const hosts = d.host_server_url_list || d.hostServerUrlList || [];
+  // 真实形状(2026-09-25 实机 + blivedm _parse_start_game 印证):
+  //   data.game_info.game_id / data.websocket_info.wss_link[] / data.websocket_info.auth_body / data.anchor_info.*
+  // 扁平那套(game_id / host_server_url_list / auth_body)只作兼容保留。
+  const gi = (d.game_info && typeof d.game_info === 'object') ? d.game_info : {};
+  const ws = (d.websocket_info && typeof d.websocket_info === 'object') ? d.websocket_info : {};
+  const hosts = ws.wss_link || ws.wssLink || d.host_server_url_list || d.hostServerUrlList || [];
   const ai = (d.anchor_info && typeof d.anchor_info === 'object') ? d.anchor_info : {};
   return {
-    gameId: d.game_id || d.gameId || '',
+    gameId: gi.game_id || gi.gameId || d.game_id || d.gameId || '',
     hosts: Array.isArray(hosts) ? hosts.slice() : [],
-    authBody: d.auth_body || d.authBody || '',
+    authBody: ws.auth_body || ws.authBody || d.auth_body || d.authBody || '',
     roomId: Number(ai.room_id || d.room_id || d.roomId || 0) || 0,
     roomOwnerUid: Number(ai.uid || d.room_owner_uid || d.roomOwnerUid || 0) || 0,
     roomOwnerOpenId: String(ai.open_id || d.room_owner_open_id || d.roomOwnerOpenId || '') || '',
@@ -119,14 +132,33 @@ async function postJson(path, bodyStr, creds, opts) {
 }
 async function startSession(creds, appId, code, opts) {
   const r = await postJson('start', buildStartBody(appId, code), creds, opts);
-  return normalizeStart(r.data);
+  const st = normalizeStart(r.data);
+  if (!st.gameId || !st.hosts.length || !st.authBody) {
+    // 诊断只带**键名**(响应里可能有 auth_body 这类令牌, 绝不能进日志)
+    const keys = Object.keys(r.data || {}).join(',') || '(空)';
+    const e = new Error('start 成功但没有场次信息(data 键: ' + keys + ') —— 常见原因: 主播还没开播, 或该项目在本房间还有场次没结束');
+    e.emptyStart = true; e.dataKeys = keys;
+    throw e;
+  }
+  return st;
 }
-async function heartbeatSession(creds, gameId, opts) { return postJson('heartbeat', buildHeartbeatBody(gameId), creds, opts); }
-async function endSession(creds, gameId, opts) { return postJson('end', buildHeartbeatBody(gameId), creds, opts); }
+async function heartbeatSession(creds, gameId, opts) {
+  if (!gameId) return { skipped: true, reason: 'no-game-id' };       // 没有场次号就别发(否则平台只会回"缺少 game_id")
+  return postJson('heartbeat', buildHeartbeatBody(gameId), creds, opts);
+}
+async function endSession(creds, gameId, opts) {
+  if (!gameId) return { skipped: true, reason: 'no-game-id' };       // 同上: 结束场次前先确认有场次号
+  try {
+    return await postJson('end', buildEndBody(creds && creds.appId, gameId), creds, opts);
+  } catch (e) {
+    if (e && (e.code === 7000 || e.code === 7003)) return { closed: true };   // 项目已经关了 = 也算结束成功
+    throw e;
+  }
+}
 
 module.exports = {
   BASE: BASE, PATHS: PATHS, HEADER_ORDER: HEADER_ORDER,
-  md5Hex: md5Hex, signHeaders: signHeaders, buildStartBody: buildStartBody, buildHeartbeatBody: buildHeartbeatBody,
+  md5Hex: md5Hex, signHeaders: signHeaders, buildStartBody: buildStartBody, buildHeartbeatBody: buildHeartbeatBody, buildEndBody: buildEndBody,
   buildRequest: buildRequest, redactHeaders: redactHeaders, parseResponse: parseResponse, normalizeStart: normalizeStart,
   postJson: postJson, startSession: startSession, heartbeatSession: heartbeatSession, endSession: endSession
 };

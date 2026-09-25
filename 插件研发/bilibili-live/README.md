@@ -29,7 +29,7 @@
 | --- | --- | --- |
 | `lib/frame.js` | 帧编解码: 16 字节头 + zlib/brotli 递归展开 + 半包 | 11 |
 | `lib/policy.js` | 显示策略 + **唯一的 CMD → 事件类别表** | 20 |
-| `lib/official.js` | 官方签名(六头 HMAC-SHA256)、start/heartbeat/end 构造、日志脱敏 | 24 |
+| `lib/official.js` | 官方签名(六头 HMAC-SHA256)、start/heartbeat/end 构造(真实响应形状)、日志脱敏 | 33 |
 | `lib/session.js` | wss + op=7 认证 + 双心跳(30s/20s)+ 退避重连 + 关闭看门狗 | 16 |
 | `lib/events.js` | CMD → 统一事件模型(宽容读取, 未知归 UNKNOWN) | 45 |
 | `lib/bridge.js` | 事件 → 聊天框: 文案/屏蔽词/截断/聚合/抢占/排队/节流 | 50 |
