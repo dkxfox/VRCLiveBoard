@@ -128,5 +128,29 @@ ok(E.defaultText(wc) === '' && E.defaultText(unk) === '' && E.defaultText(null) 
 ok(P.isHighValue(E.normalize(SC).kind) && P.isHighValue(E.normalize(GUARD).kind) && P.isHighValue(E.normalize(GIFT).kind), '高价值防丢: SC/上舰/礼物在策略层被认作高价值');
 ok(P.priorityOf(E.normalize(GUARD).kind, {}) === 92 && P.priorityOf(E.normalize(SC).kind, {}) === 88 && P.priorityOf(E.normalize(DANMU_LEGACY).kind, {}) === 75, '优先级: 上舰 92 > SC 88 > 弹幕 75(与条目 192 的拍板一致)');
 
+// ---- 开放平台(2026-09-20 查实: CMD 名与字段都与网页协议不同, 少了这段上播后一条都显示不出来) ----
+const OPDM = { cmd: 'LIVE_OPEN_PLATFORM_DM', data: { uname: '观众子', open_id: 'open-abc', msg: '开放平台弹幕', guard_level: 3, fans_medal_name: '牌子', fans_medal_level: 9, dm_type: 0, reply_uname: '某人' } };
+const od = E.normalize(OPDM);
+ok(od.kind === 'DANMAKU' && od.text === '@某人 开放平台弹幕', '开放平台弹幕: LIVE_OPEN_PLATFORM_DM 归一成 DANMAKU, 回复某人加 @前缀');
+ok(od.uname === '观众子' && od.openId === 'open-abc' && od.guardLevel === 3, '开放平台弹幕: uname / open_id(**没有 uid**) / 舰长等级');
+ok(od.medal && od.medal.level === 9 && od.medal.name === '牌子', '开放平台弹幕: fans_medal_* 进粉丝牌');
+ok(E.normalize({ cmd: 'LIVE_OPEN_PLATFORM_DM_MIRROR', data: { msg: '跨房', uname: 'x' } }).mirror === true, '跨房弹幕(_MIRROR): 标 mirror(可能缺字段)');
+const oe = E.normalize({ cmd: 'LIVE_OPEN_PLATFORM_DM', data: { uname: '表情党', msg: '', dm_type: 1, emoji_img_url: 'https://x/e.png' } });
+ok(oe.kind === 'DANMAKU' && oe.dmType === 1 && oe.emojiUrl.indexOf('e.png') > 0 && E.defaultText(oe) === '', '表情弹幕(dm_type=1, 无文字): 标出 dmType/表情图, 文案为空 -> 上层自动忽略');
+const og = E.normalize({ cmd: 'LIVE_OPEN_PLATFORM_SEND_GIFT', data: { uname: '送礼的', open_id: 'o2', gift_name: '辣条', gift_num: 5, price: 100, paid: true, combo_gift: true } });
+ok(og.kind === 'GIFT' && og.gift.name === '辣条' && og.gift.num === 5 && og.gift.combo === true && og.gift.paid === true, '开放平台礼物: gift_num / combo_gift / paid');
+const oguard = E.normalize({ cmd: 'LIVE_OPEN_PLATFORM_GUARD', data: { user_info: { uname: '舰长丙', open_id: 'o3' }, guard_level: 3, guard_num: 1, guard_unit: '月', price: 138000 } });
+ok(oguard.kind === 'GUARD' && oguard.uname === '舰长丙' && oguard.guard.num === 1 && oguard.guard.unit === '月', '开放平台上舰: user_info.uname + guard_num/guard_unit');
+const osc = E.normalize({ cmd: 'LIVE_OPEN_PLATFORM_SUPER_CHAT', data: { uname: '老板', message: '支持', rmb: 30, start_time: 100, end_time: 160 } });
+ok(osc.kind === 'SUPER_CHAT' && osc.superchat.price === 30 && osc.superchat.durationSec === 60 && osc.text === '支持', '开放平台 SC: 金额叫 rmb, 时长由 start/end_time 算出来');
+const osd = E.normalize({ cmd: 'LIVE_OPEN_PLATFORM_SUPER_CHAT_DEL', data: { message_ids: [1, 2] } });
+ok(osd.kind === 'SUPER_CHAT' && osd.deleted === true && osd.superchat.messageIds.length === 2, '开放平台撤回 SC(叫 _DEL 不是 _DELETE): 标 deleted');
+const ol = E.normalize({ cmd: 'LIVE_OPEN_PLATFORM_LIKE', data: { uname: '点赞的', like_text: '为主播点赞了', like_count: 7 } });
+ok(ol.kind === 'LIKE' && ol.like.clicked === true && ol.like.count === 7 && E.defaultText(ol) === '点赞的 为主播点赞了', '开放平台点赞: like_text/like_count');
+ok(E.normalize({ cmd: 'LIVE_OPEN_PLATFORM_LIVE_ROOM_ENTER', data: { uname: '进房的', open_id: 'o4' } }).kind === 'ENTER', '开放平台进房 -> ENTER');
+ok(E.normalize({ cmd: 'LIVE_OPEN_PLATFORM_LIVE_START', data: {} }).kind === 'LIVE' && E.normalize({ cmd: 'LIVE_OPEN_PLATFORM_LIVE_END', data: {} }).kind === 'LIVE', '开放平台开播/下播 -> LIVE');
+ok(P.kindOf('LIVE_OPEN_PLATFORM_INTERACTION_END') === 'SESSION_END', '平台停推通知 -> SESSION_END(插件据此重新开局)');
+ok(P.kindOf('LIVE_OPEN_PLATFORM_DM') === 'DANMAKU' && P.kindOf('LIVE_OPEN_PLATFORM_SEND_GIFT') === 'GIFT' && P.kindOf('LIVE_OPEN_PLATFORM_GUARD') === 'GUARD' && P.kindOf('LIVE_OPEN_PLATFORM_SUPER_CHAT') === 'SUPER_CHAT', '策略层认全了开放平台的五个 CMD 名(单一来源)');
+
 console.log('  ---- ' + pass + ' PASS / ' + fail + ' FAIL ----');
 process.exitCode = fail ? 1 : 0;

@@ -70,6 +70,10 @@ const n2 = O.normalizeStart({ gameId: 'G2', hostServerUrlList: ['wss://x'], auth
 ok(n1.gameId === 'G2' && n1.hosts.length === 1 && n1.authBody === 'B' && n1.roomOwnerUid === 7, 'snake_case 返回被归一化');
 ok(n2.gameId === 'G2' && n2.hosts.length === 1, 'camelCase 返回也能读(字段名兜底)');
 ok(O.normalizeStart(null).hosts.length === 0, '空返回不崩(降级为空列表)');
+// 主播信息在 anchor_info 里(2026-09-20 查实; blivedm 也读这个) —— 插件用它识别"主播自己的弹幕"
+const n3 = O.normalizeStart({ game_id: 'G3', host_server_url_list: ['wss://x'], auth_body: 'C', anchor_info: { uid: 12345, open_id: 'anchor-open-1', room_id: 67890, uname: '主播名' } });
+ok(n3.roomOwnerUid === 12345 && n3.roomOwnerOpenId === 'anchor-open-1' && n3.roomId === 67890 && n3.roomOwnerName === '主播名', 'start 返回: 从 anchor_info 取主播 uid/open_id/房间号/昵称');
+ok(O.normalizeStart({ game_id: 'G4', room_owner_uid: 7, room_owner_open_id: 'legacy' }).roomOwnerOpenId === 'legacy', '老写法(顶层 room_owner_*)仍然认');
 
 console.log('  ---- ' + pass + ' PASS / ' + fail + ' FAIL ----');
 process.exitCode = fail ? 1 : 0;

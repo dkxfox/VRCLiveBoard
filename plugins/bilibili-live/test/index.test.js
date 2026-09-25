@@ -25,7 +25,7 @@ function mkCtx(cfg) {
         calls.http.push({ url: url, headers: (opts && opts.headers) || {}, body: (opts && opts.body) || '' });
         const isStart = url.indexOf('/start') >= 0;
         const data = isStart
-          ? { code: 0, data: { game_id: 'GAME-TEST-1', host_server_url_list: ['wss://fake.chat.bilibili.com/sub'], auth_body: 'FAKE-AUTH-BODY' } }
+          ? { code: 0, data: { game_id: 'GAME-TEST-1', host_server_url_list: ['wss://fake.chat.bilibili.com/sub'], auth_body: 'FAKE-AUTH-BODY', anchor_info: { uid: 42, open_id: 'anchor-open', room_id: 123, uname: '测试主播' } } }
           : { code: 0, data: {} };
         return Promise.resolve({ status: 200, text: function () { return Promise.resolve(JSON.stringify(data)); } });
       }
@@ -129,6 +129,36 @@ function push(ws, raw) { ws.onmessage({ data: F.encode(F.OP.MESSAGE, raw) }); }
     const p = plugin(h.ctx);
     const t = await p.api.test();
     ok(t.ok === true && !t.started && p.api.status().running === false, 'autoStart=false 时测试连接不会顺手开始接收');
+  }
+
+  // ---- ④ 开放平台链路 + 主播自己的消息(2026-09-20: 官方通道 CMD 名与网页不同, 且会推回主播自己的弹幕) ----
+  {
+    const h = mkCtx(CREDS);
+    const p = plugin(h.ctx);
+    await p.apply();
+    await sleep(30);
+    const ws = socks[socks.length - 1];
+    push(ws, { cmd: 'LIVE_OPEN_PLATFORM_DM', data: { uname: '观众子', open_id: 'open-viewer', msg: '来自开放平台' } });
+    ok(h.calls.sent.length === 1 && h.calls.sent[0].text === '观众子: 来自开放平台', '开放平台弹幕(LIVE_OPEN_PLATFORM_DM)能一路推到聊天框');
+    push(ws, { cmd: 'LIVE_OPEN_PLATFORM_DM', data: { uname: '测试主播', open_id: 'anchor-open', msg: '我自己说的话' } });
+    ok(h.calls.sent.length === 1 && p.api.status().selfSkipped === 1, '主播自己发的消息默认被忽略(开放平台靠 open_id 认人, 不是 uid)');
+    ok(h.calls.logs.concat(h.calls.warns).join(' ').indexOf('已忽略主播自己发的消息') >= 0, '忽略时给一次性提示(否则用户会以为插件坏了)');
+    push(ws, { cmd: 'LIVE_OPEN_PLATFORM_SUPER_CHAT', data: { uname: '老板', message: '支持一下', rmb: 30, start_time: 100, end_time: 160, open_id: 'open-boss' } });
+    await sleep(1600); h.calls.ticks[0]();
+    const scl = h.calls.sent[h.calls.sent.length - 1];
+    ok(scl.text.indexOf('SC ¥30') === 0, '开放平台 SC(金额字段叫 rmb)也认得');
+    push(ws, { cmd: 'LIVE_OPEN_PLATFORM_INTERACTION_END', data: { game_id: 'GAME-TEST-1' } });
+    ok(p.api.status().running === false && h.calls.warns.join(' ').indexOf('平台主动停止推送') >= 0, '平台停推通知: 结束当前场次并提示会重新开局');
+    await p.dispose();
+  }
+  {
+    const h = mkCtx(Object.assign({}, CREDS, { ignoreSelf: false }));
+    const p = plugin(h.ctx);
+    await p.apply();
+    await sleep(30);
+    push(socks[socks.length - 1], { cmd: 'LIVE_OPEN_PLATFORM_DM', data: { uname: '测试主播', open_id: 'anchor-open', msg: '我自己说的话' } });
+    ok(h.calls.sent.length === 1 && h.calls.sent[0].text === '测试主播: 我自己说的话', '关掉"忽略主播自己"后, 自己的消息也会上聊天框(可配置)');
+    await p.dispose();
   }
 
   console.log('  ---- ' + pass + ' PASS / ' + fail + ' FAIL ----');

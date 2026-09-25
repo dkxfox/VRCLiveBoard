@@ -16,6 +16,7 @@ const CRED_KEYS = ['accessKeyId', 'accessKeySecret', 'appId', 'roomOwnerAuthCode
 const CRED_LABELS = { accessKeyId: 'access_key_id', accessKeySecret: 'access_key_secret', appId: 'app_id', roomOwnerAuthCode: '主播身份码' };
 const DEFAULTS = {
   autoStart: true,            // 启用插件时自动开始接收(凭据齐全才连)
+  ignoreSelf: true,           // 不转发**主播自己发的**消息(开放平台靠 open_id 认人; 想让自己也上聊天框就关掉)
   priority: null,             // 卡片里的优先级(填了就对整插件统一生效, 见 makeBridge)
   showUname: true,
   prefix: '',
@@ -28,8 +29,28 @@ const DEFAULTS = {
 };
 
 module.exports = function (ctx) {
-  let sess = null, bridge = null, stopTick = null, starting = false;
-  const status = { running: false, authed: false, gameId: '', events: 0, shown: 0, ignored: 0, lastError: '', since: 0, stopReason: '' };
+  let sess = null, bridge = null, stopTick = null, starting = false, restartTimer = null;
+  let anchorOpenId = '', anchorUid = 0;
+  const status = { running: false, authed: false, gameId: '', events: 0, shown: 0, ignored: 0, selfSkipped: 0, lastError: '', since: 0, stopReason: '' };
+  // 是不是"主播自己发的消息": 开放平台用 open_id 标识用户(**没有 uid**), 所以先比 open_id, 再退化比 uid
+  function isSelf(raw) {
+    const d = (raw && raw.data && typeof raw.data === 'object') ? raw.data : {};
+    const oid = String(d.open_id || d.openId || '');
+    if (oid && anchorOpenId && oid === anchorOpenId) return true;
+    const uid = Number(d.uid || 0);
+    if (uid && anchorUid && uid === anchorUid) return true;
+    return false;
+  }
+  // 平台主动停止推送(通常是心跳超时): 结束当前场次, 等一会儿重新 start
+  function scheduleRestart(ms) {
+    if (restartTimer) return;
+    restartTimer = setTimeout(async function () {
+      restartTimer = null;
+      await stop('interaction-end');
+      if (cfg().autoStart) await start();
+    }, ms || 5000);
+    if (restartTimer.unref) restartTimer.unref();
+  }
 
   function cfg() {
     const c = Object.assign({}, DEFAULTS, ctx.config || {});
@@ -91,13 +112,26 @@ module.exports = function (ctx) {
       const st = await OF.startSession(cr, cr.appId, cr.roomOwnerAuthCode, o);
       if (!st.hosts.length || !st.authBody) throw new Error('开放平台没有返回弹幕服务器地址或 auth_body');
       bridge = makeBridge();
+      anchorOpenId = String(st.roomOwnerOpenId || ''); anchorUid = Number(st.roomOwnerUid || 0);
       sess = createSession({
         hosts: st.hosts, authBody: st.authBody, gameId: st.gameId,
         wsFactory: wsFactory,
         postHeartbeat: function (g) { return OF.heartbeatSession(cr, g, o); },
         postEnd: function (g) { return OF.endSession(cr, g, o); },
         onEvent: function (raw) {
+          const cmdName = String((raw && raw.cmd) || '').toUpperCase();
+          if (cmdName === 'LIVE_OPEN_PLATFORM_INTERACTION_END') {      // 平台停推(常见于心跳超时)
+            warn('平台主动停止推送, 5 秒后重新开启场次');
+            status.running = false;
+            scheduleRestart(5000);
+            return;
+          }
           status.events += 1;
+          if (cfg().ignoreSelf && isSelf(raw)) {
+            status.selfSkipped += 1;
+            if (status.selfSkipped === 1) log('已忽略主播自己发的消息(想让自己也上聊天框, 就把插件设置里的"忽略主播自己发的消息"关掉)');
+            return;
+          }
           const r = bridge.handleRaw(raw);
           if (r.action === 'show') status.shown += 1;
           else if (r.action === 'ignore') status.ignored += 1;
@@ -119,6 +153,7 @@ module.exports = function (ctx) {
   }
   async function stop(why) {
     if (stopTick) { try { stopTick(); } catch (e) {} stopTick = null; }
+    if (restartTimer) { clearTimeout(restartTimer); restartTimer = null; }
     const s = sess; sess = null;
     if (s) { try { await s.stop(); } catch (e) { warn('收尾失败: ' + e.message); } }
     if (status.running) log('已停止接收' + (why ? '(' + why + ')' : ''));
@@ -180,7 +215,7 @@ module.exports = function (ctx) {
         return {
           running: status.running, authed: !!(sess && sess.state && sess.state.authed), gameId: status.gameId,
           // shown 直接取桥的统计: 桥才知道"真正推上去几条"(排队补发的那些不经过 onEvent, 自己数会漏)
-          events: status.events, shown: bridge ? bridge.stats().shown : status.shown, ignored: status.ignored,
+          events: status.events, shown: bridge ? bridge.stats().shown : status.shown, ignored: status.ignored, selfSkipped: status.selfSkipped,
           lastError: status.lastError, since: status.since, stopReason: status.stopReason,
           queue: bridge ? bridge.queue() : { pending: null, waiting: 0 },
           stats: bridge ? bridge.stats() : null,

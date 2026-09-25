@@ -87,15 +87,20 @@ function parseResponse(text) {
   return j.data || {};
 }
 // start 的成功返回: 字段名兼容 snake_case 与 camelCase
+// 主播信息在 **data.anchor_info** 里(2026-09-20 查实: blivedm open_live.py 读 data['anchor_info']['uid'|'open_id'|'room_id'];
+// 顶层那套 room_owner_* 只是老写法, 两个都认)。主播 open_id 用来识别"主播自己发的弹幕"。
 function normalizeStart(data) {
   const d = data || {};
   const hosts = d.host_server_url_list || d.hostServerUrlList || [];
+  const ai = (d.anchor_info && typeof d.anchor_info === 'object') ? d.anchor_info : {};
   return {
     gameId: d.game_id || d.gameId || '',
     hosts: Array.isArray(hosts) ? hosts.slice() : [],
     authBody: d.auth_body || d.authBody || '',
-    roomOwnerUid: d.room_owner_uid || d.roomOwnerUid || 0,
-    roomOwnerOpenId: d.room_owner_open_id || d.roomOwnerOpenId || ''
+    roomId: Number(ai.room_id || d.room_id || d.roomId || 0) || 0,
+    roomOwnerUid: Number(ai.uid || d.room_owner_uid || d.roomOwnerUid || 0) || 0,
+    roomOwnerOpenId: String(ai.open_id || d.room_owner_open_id || d.roomOwnerOpenId || '') || '',
+    roomOwnerName: String(ai.uname || d.room_owner_uname || '') || ''
   };
 }
 

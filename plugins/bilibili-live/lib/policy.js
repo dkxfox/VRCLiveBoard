@@ -49,6 +49,15 @@ function kindOf(cmd) {
   if (c === 'LIVE' || c === 'ROOM_CHANGE' || c === 'ANCHOR_LOT_START' || c === 'ANCHOR_LOT_END') return 'LIVE';
   if (c === 'PREPARING') return 'PREPARING';
   if (c === 'ROOM_BLOCK_MSG' || c === 'ROOM_KICKOUT') return 'BLOCKED';
+  // ---- 开放平台专用 CMD 名(2026-09-20 查实: 官方开放平台与网页协议**不同名**, 来源 blivedm handlers.py 的 _CMD_CALLBACK_DICT) ----
+  if (c === 'LIVE_OPEN_PLATFORM_DM' || c === 'LIVE_OPEN_PLATFORM_DM_MIRROR') return 'DANMAKU';   // 后者=跨房弹幕, 可能缺字段
+  if (c === 'LIVE_OPEN_PLATFORM_SEND_GIFT') return 'GIFT';
+  if (c === 'LIVE_OPEN_PLATFORM_GUARD') return 'GUARD';
+  if (c === 'LIVE_OPEN_PLATFORM_SUPER_CHAT' || c === 'LIVE_OPEN_PLATFORM_SUPER_CHAT_DEL') return 'SUPER_CHAT';
+  if (c === 'LIVE_OPEN_PLATFORM_LIKE') return 'LIKE';
+  if (c === 'LIVE_OPEN_PLATFORM_LIVE_ROOM_ENTER') return 'ENTER';
+  if (c === 'LIVE_OPEN_PLATFORM_LIVE_START' || c === 'LIVE_OPEN_PLATFORM_LIVE_END') return 'LIVE';
+  if (c === 'LIVE_OPEN_PLATFORM_INTERACTION_END') return 'SESSION_END';   // 服务器主动停推(通常心跳超时)-> 要重新 start
   return 'UNKNOWN';
 }
 function isHighValue(kind) { return !!HIGH_VALUE[kind]; }

@@ -23,6 +23,7 @@
     { "key": "appId", "label": "app_id(互玩项目 ID)", "type": "text", "hint": "在开放平台创建项目后得到" },
     { "key": "roomOwnerAuthCode", "label": "主播身份码", "type": "password", "secret": true, "hint": "用开播账号登录幻星 play-live.bilibili.com, 点右侧「身份码」" },
     { "key": "autoStart", "label": "启用后自动连接", "type": "bool", "default": true },
+    { "key": "ignoreSelf", "label": "忽略主播自己发的消息", "type": "bool", "default": true, "hint": "开放平台会把你自己发的弹幕也推回来, 默认不转发到聊天框" },
     { "key": "showUname", "label": "弹幕带昵称", "type": "bool", "default": true },
     { "key": "prefix", "label": "文案前缀", "type": "text", "default": "" },
     { "key": "throttleMs", "label": "两条消息最小间隔(毫秒)", "type": "number", "default": 1500 },

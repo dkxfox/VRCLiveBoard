@@ -56,10 +56,14 @@ function normalize(raw) {
   const ev = {
     kind: P.kindOf(cmd), cmd: cmd,
     uid: u.uid, uname: u.uname, face: u.face,
+    // openId: 开放平台用 open_id 标识用户(**没有 uid**), 识别"主播自己发的弹幕"就靠它
+    openId: str(pick(d, ['open_id', 'openId'])),
     text: '', guardLevel: num(pick(d, ['guard_level', 'guardLevel'])), medal: null,
     gift: null, superchat: null, guard: null, interact: null,
     watched: null, onlineRank: null, roomStats: null, like: null,
-    deleted: /_DELETE$/.test(cmd),                 // SC 被撤回
+    isAdmin: !!num(pick(d, ['is_admin', 'isAdmin'])),
+    mirror: /_MIRROR$/.test(cmd),                  // 跨房弹幕(可能缺字段)
+    deleted: /_DELETE$/.test(cmd) || /_DEL$/.test(cmd),   // SC 被撤回(网页叫 _DELETE, 开放平台叫 _DEL)
     protobuf: !!(raw.dm_v2 || d.pb || raw.pb),     // 新版把业务字段塞进 protobuf(base64), 这里只标记不解析
     ts: Date.now(), raw: raw
   };
@@ -75,22 +79,34 @@ function normalize(raw) {
       const m = pick(info[0][15], ['user.medal', 'medal']);
       if (m && typeof m === 'object') ev.medal = { level: num(pick(m, ['level', 'medal_level'])), name: str(pick(m, ['name', 'medal_name'])) };
     }
+    // 开放平台弹幕: 字段是平铺的(msg/uname/fans_medal_*/dm_type/emoji_img_url), 且**表情弹幕没有文字**
+    if (!ev.medal) {
+      const ml = num(pick(d, ['fans_medal_level'])), mn = str(pick(d, ['fans_medal_name']));
+      if (ml || mn) ev.medal = { level: ml, name: mn };
+    }
+    ev.dmType = num(pick(d, ['dm_type', 'dmType']));
+    ev.emojiUrl = str(pick(d, ['emoji_img_url', 'emojiImgUrl']));
+    const replyTo = str(pick(d, ['reply_uname', 'replyUname']));
+    if (replyTo) ev.text = '@' + replyTo + ' ' + ev.text;   // 回复某人(官方通道有这条)
   } else if (ev.kind === 'GIFT') {
     const combo = cmd === 'COMBO_SEND';
     ev.gift = {
       name: str(pick(d, ['giftName', 'gift_name'])),
-      num: num(pick(d, combo ? ['combo_num', 'num'] : ['num', 'combo_num'])) || 1,
+      num: num(pick(d, combo ? ['combo_num', 'num'] : ['num', 'combo_num', 'gift_num'])) || 1,
       coinType: str(pick(d, ['coin_type', 'coinType'])),
       price: num(pick(d, ['price'])),
       totalCoin: num(pick(d, ['total_coin', 'totalCoin'])),
-      combo: combo
+      paid: pick(d, ['paid']) === undefined ? null : !!pick(d, ['paid']),
+      combo: combo || !!pick(d, ['combo_gift', 'comboGift'])
     };
     ev.text = ev.gift.name;
   } else if (ev.kind === 'SUPER_CHAT') {
+    const st = num(pick(d, ['start_time', 'startTime'])), en = num(pick(d, ['end_time', 'endTime']));
     ev.superchat = {
-      price: num(pick(d, ['price'])),
-      durationSec: num(pick(d, ['time', 'duration'])),
-      bgColor: str(pick(d, ['background_bottom_color', 'background_color', 'backgroundBottomColor']))
+      price: num(pick(d, ['price', 'rmb'])),          // 开放平台叫 rmb, 网页叫 price
+      durationSec: num(pick(d, ['time', 'duration'])) || ((en > st) ? (en - st) : 0),
+      bgColor: str(pick(d, ['background_bottom_color', 'background_color', 'backgroundBottomColor'])),
+      messageIds: Array.isArray(d.message_ids) ? d.message_ids.slice() : []
     };
     ev.text = str(pick(d, ['message']));
   } else if (ev.kind === 'GUARD') {
@@ -99,8 +115,8 @@ function normalize(raw) {
     ev.guard = {
       level: level,
       name: str(pick(d, ['role_name', 'gift_name'])) || guardName(level),
-      num: num(pick(d, ['num'])) || 1,
-      unit: str(pick(d, ['unit'])),
+      num: num(pick(d, ['num', 'guard_num'])) || 1,        // 开放平台叫 guard_num
+      unit: str(pick(d, ['unit', 'guard_unit'])),          // 开放平台叫 guard_unit(可能是"*3天"这种)
       price: num(pick(d, ['price']))
     };
   } else if (ev.kind === 'INTERACT') {
@@ -119,7 +135,11 @@ function normalize(raw) {
   } else if (ev.kind === 'ROOM_STATS') {
     ev.roomStats = { fans: num(pick(d, ['fans'])), fansClub: num(pick(d, ['fans_club', 'fansClub'])) };
   } else if (ev.kind === 'LIKE') {
-    ev.like = { clicked: cmd === 'LIKE_INFO_V3_CLICK', count: num(pick(d, ['click_count', 'clickCount'])) };
+    ev.like = {
+      clicked: cmd === 'LIKE_INFO_V3_CLICK' || cmd === 'LIVE_OPEN_PLATFORM_LIKE',
+      count: num(pick(d, ['click_count', 'clickCount', 'like_count', 'likeCount'])),
+      text: str(pick(d, ['like_text', 'likeText']))       // 开放平台自带"为主播点赞了"这类文案
+    };
   }
   return ev;
 }
@@ -135,7 +155,7 @@ function defaultText(ev) {
   if (ev.kind === 'GUARD') return who + ' 开通' + (ev.guard.name || '') + (ev.guard.num > 1 ? '×' + ev.guard.num : '');
   if (ev.kind === 'INTERACT') return who + ev.interact.name;
   if (ev.kind === 'ENTER') return '欢迎 ' + who + ' 进入直播间';
-  if (ev.kind === 'LIKE') return who + ' 点赞了直播间';
+  if (ev.kind === 'LIKE') return (ev.like && ev.like.text) ? (who ? who + ' ' : '') + ev.like.text : who + ' 点赞了直播间';
   return '';
 }
 
