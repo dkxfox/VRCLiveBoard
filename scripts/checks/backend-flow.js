@@ -472,6 +472,18 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
       ok(pick(m).revoked === true && /gate revoke/.test(pick(m).revokeReason || ''), '吊销列表命中 → 界面可见(revoked + 原因)');
       inst = JSON.parse((await req('/api/market/install', { method: 'POST', body: JSON.stringify({ id: 'market-test' }) })).body.toString('utf8'));
       ok(inst.ok === false && /吊销/.test(inst.error || ''), '被吊销的插件拒绝安装');
+
+      // 最低程序版本(2026-09-25): 目录写 minApp 高于当前程序时 —— 界面标记不可装 + 安装接口必须拒
+      // (注意: 上面那条吊销用例把 market-test 拉黑了, 这里要先清掉吊销, 否则拦下来的是"被吊销"而不是"版本不够")
+      fs.writeFileSync(path.join(pub, 'revoke.json'), JSON.stringify({ schema: 1, revoked: [] }), 'utf8');
+      fs.writeFileSync(path.join(pub, 'index.json'), JSON.stringify({ schema: 1, items: [Object.assign({}, item, { minApp: '99.0.0' })] }), 'utf8');
+      m = await mref();
+      ok(pick(m).installable === false && /99\.0\.0/.test(pick(m).blockedReason || ''), 'minApp 高于当前程序: 条目被标记不可安装(附原因)' + (pick(m).installable === false ? '' : ' —— 实得 installable=' + pick(m).installable));
+      const blocked = JSON.parse((await req('/api/market/install', { method: 'POST', body: JSON.stringify({ id: 'market-test' }) })).body.toString('utf8'));
+      ok(blocked.ok === false && /99\.0\.0/.test(blocked.error || ''), 'minApp 不满足时安装接口直接拒绝(不只靠界面拦)');
+      fs.writeFileSync(path.join(pub, 'index.json'), JSON.stringify({ schema: 1, items: [item] }), 'utf8');
+      m = await mref();
+      ok(pick(m).installable === true, 'minApp 不高于当前程序(或没写)时可安装');
       // 坏目录条目: 非白名单域名必须被丢(防投毒)
       fs.writeFileSync(path.join(pub, 'index.json'), JSON.stringify({ schema: 1, items: [Object.assign({}, item, { url: 'https://evil.example.com/x.zip' })] }), 'utf8');
       m = await mref();

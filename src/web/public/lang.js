@@ -86,6 +86,8 @@ advTitle:'Advanced (usually untouched)', portsOsc:'OSC send port:', portsApply:'
   window.t = window.tr;                                  // 兼容别名(index.html 内联块 / theme.js 用)
   window.__lang = function (next) { if (next !== undefined && next !== null && next !== '') code = String(next); return code; };
 })();
+// 市场: 最低程序版本不满足(2026-09-25)
+(function(){var N=JSON.parse('{"zh-CN":{"mktNeedApp":"需要程序 {v} 或更高版本"},"zh-TW":{"mktNeedApp":"需要程式 {v} 或更高版本"},"en":{"mktNeedApp":"Requires app {v} or newer"}}');for(var L in N){for(var k in N[L]){(window.VRCB_LANG[L]=window.VRCB_LANG[L]||{})[k]=N[L][k];}}})();
 // 面板按钮摘除后的说明(2026-09-25)
 (function(){var N=JSON.parse('{"zh-CN":{"plgPanelGone":"这个插件带的旧式页面面板在本版控制台打不开(缺渲染壳); 设置请用下面的字段。"},"zh-TW":{"plgPanelGone":"這個外掛附帶的舊式頁面面板在本版控制台打不開(缺渲染殼); 設定請用下面的欄位。"},"en":{"plgPanelGone":"This plugin ships a legacy page panel that this console build cannot render (no shell yet); use the fields below instead."}}');for(var L in N){for(var k in N[L]){(window.VRCB_LANG[L]=window.VRCB_LANG[L]||{})[k]=N[L][k];}}})();
 // 通用插件设置字段(2026-09-20)

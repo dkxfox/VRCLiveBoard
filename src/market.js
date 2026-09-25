@@ -74,6 +74,7 @@ function validateIndex(j, opts) {
     items.push({
       id: id, name: String((it && it.name) || id), version: version, tier: tier, summary: String((it && it.summary) || ''),
       url: url, sha256: hash, size: size, api: String((it && it.api) || ''), minApp: String((it && it.minApp) || ''),
+      installable: appOk(String((it && it.minApp) || '')), blockedReason: appBlockReason(String((it && it.minApp) || '')),
       tags: Array.isArray(it && it.tags) ? it.tags.slice(0, 8).map(String) : [],
       permissions: (it && it.permissions && typeof it.permissions === 'object') ? it.permissions : {},
       author: (it && it.author && typeof it.author === 'object') ? { id: String(it.author.id || ''), name: String(it.author.name || ''), contact: String(it.author.contact || '') } : { id: '', name: String((it && it.author) || ''), contact: '' },
@@ -82,6 +83,15 @@ function validateIndex(j, opts) {
   }
   return { items: items, problems: problems, schema: Number((j && j.schema) || 0), updated: String((j && j.updated) || '') };
 }
+// 最低程序版本(2026-09-25, ISSUES M-20260925-08 的延伸): 目录条目可以写 minApp —— 低于它的客户端
+// 之前**照样能装**(字段只展示不强制), 装完才发现功能对不上(例: B站插件依赖 1.4.4 才有的设置字段渲染器)。
+function appVersion() { try { return String(require('../package.json').version || '0.0.0'); } catch (e) { return '0.0.0'; } }
+function appBlockReason(minApp) {
+  const need = String(minApp || '');
+  if (!need) return '';
+  return compareVersions(appVersion(), need) < 0 ? ('需要程序 ' + need + ' 及以上(当前 ' + appVersion() + ')') : '';
+}
+function appOk(minApp) { return !appBlockReason(minApp); }
 function validateRevoke(j) {
   const out = [];
   if (!j || typeof j !== 'object') return out;
@@ -145,7 +155,9 @@ function mergeWithInstalled(catalog, plugins) {
       installed: !!inst, installedVersion: inst ? String(inst.version || '') : '', installedApproved: inst ? !!inst.approved : false,
       enabled: inst ? !!inst.enabled : false,
       updateAvailable: !!(inst && cmp > 0), upToDate: !!(inst && cmp === 0), downgrade: !!(inst && cmp < 0),
-      revoked: !!rev, revokeReason: rev ? rev.reason : ''
+      revoked: !!rev, revokeReason: rev ? rev.reason : '',
+      installable: appOk(it.minApp), blockedReason: appBlockReason(it.minApp)   // 低于最低程序版本: 界面不给按钮, 安装接口也会拒
+
     };
   });
   // 本地有、目录没有的(自装/已下架)也列出来, 否则用户会以为插件消失了
@@ -186,6 +198,9 @@ async function install(config, pluginManager, id, wantVersion) {
     if (wantVersion && String(wantVersion) !== item.version) return { ok: false, error: '目录里没有该版本(最新 ' + item.version + ')' };
     const rev = isRevoked(cat.revoke || [], item.id, item.version);
     if (rev) return { ok: false, error: '该插件已被吊销, 拒绝安装: ' + (rev.reason || '') };
+    // 最低程序版本(2026-09-25): 界面已经不给按钮, 这里再挡一次 —— 接口不能只靠前端守
+    const blocked = appBlockReason(item.minApp);
+    if (blocked) return { ok: false, error: blocked };
     const dl = await downloadVerified(item, Number((config && config.market && config.market.timeoutMs) || 0) || 60000);
     if (!dl.ok) { cleanup(dl.file); return dl; }
     let r;

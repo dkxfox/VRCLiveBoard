@@ -529,6 +529,7 @@ function mktRow(it){
   var d=document.createElement('div');d.className='edrow';d.style.alignItems='flex-start';
   var right;
   if(it.revoked)right='<span style="color:var(--err);font-size:12px">'+esc(tr('mktRevoked'))+'</span>';
+  else if(it.installable===false)right='<span class="sub" style="font-size:12px;color:var(--warn)">'+esc(tr('mktNeedApp').replace('{v}',String(it.minApp||'?')))+'</span>';   // 2026-09-25: 低于最低程序版本 -> 不给安装按钮
   else if(!it.installed)right='<button class="small pri" data-mkt="1" data-id="'+esc(it.id)+'">'+esc(tr('mktInstall'))+'</button>';
   else if(it.updateAvailable)right='<button class="small pri" data-mkt="1" data-id="'+esc(it.id)+'">'+esc(tr('mktUpdate'))+' '+esc(it.version)+'</button>';
   else right='<span class="sub" style="font-size:12px">'+esc(tr('mktInstalled'))+(it.installedApproved?'':(' · '+esc(tr('mktNeedApproval'))))+'</span>';
