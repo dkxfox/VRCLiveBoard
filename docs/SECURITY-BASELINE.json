@@ -72,14 +72,14 @@
   },
   "updatedAt": "2026-09-25",
   "zipVolumes": {
-    "asOf": "v1.4.2 (2026-09-19 正式打包; 差异逐条复核: 相对 v1.4.1 只新增 src/updateinfo.js 一个进包文件 -> 条目 +1; 字节增长来自该文件与随包的 DEV-NOTES/前端资源改动, 无移除)",
+    "asOf": "v1.4.4 (2026-09-25 正式打包; 差异逐条复核: 相对 v1.4.2 的 1319/225938784 与 141/8328445, 本次条目 +22 = 新增官方插件「B站直播互动」11 个文件(manifest/index/lib×7/README/CHANGELOG) + 恢复备份里的同一份 11 个文件; 字节 +126169 来自插件本体与随包文档(DEV-NOTES/ISSUES/PLUGIN-DEV/使用说明/版本说明/README/version.json), 无任何移除。 另记: 打包时发现「官方可选插件」恢复备份没遵守 pack-exclude, 曾把该插件的 test/ 11 个开发文件(含假服务器与 child_process 调用)打进包 —— 首次打包 entries=1352, 修 make-dist 后重打才得到本基线数字(entries=1341/163, test/ 0 个))",
     "Lite-RequiresNode": {
-      "entries": 141,
-      "bytes": 8328445
+      "entries": 163,
+      "bytes": 8454615
     },
     "Desktop-SelfContained": {
-      "entries": 1319,
-      "bytes": 225938784
+      "entries": 1341,
+      "bytes": 226064953
     }
   },
   "supplyChain": {

@@ -115,7 +115,28 @@ function Copy-OfficialPlugins($stageDir) {
   $n = 0
   foreach ($d in @(Get-ChildItem (Join-Path $p 'plugins') -Directory)) {
     if ($d.Name -eq 'conflict-test') { continue }   # 开发自测夹具(全权限), 不进包(2026-09-11 审计 H2)
-    robocopy $d.FullName (Join-Path $optDir $d.Name) /E /NFL /NDL /NJH /NJS | Out-Null
+    # 2026-09-25 audit fix: the restore-backup must honour pack-exclude too. The main copy skipped
+    # plugins/<id>/test, but this backup used a plain recursive robocopy, so dev-only test files
+    # (fake server + child_process usage) shipped inside the backup (measured in the 1.4.4 build:
+    # 11 files under <backup>/bilibili-live/test). Exclude the same entries here.
+    $rel = 'plugins\' + $d.Name
+    $plugXd = @()
+    foreach ($x in @($pe.dirs)) {
+      $xs = ([string]$x).Replace('/', '\')
+      if ($xs.StartsWith($rel + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
+        $plugXd += (Join-Path $d.FullName $xs.Substring($rel.Length).TrimStart('\'))
+      }
+    }
+    $plugXf = @()
+    foreach ($x in @($pe.files)) {
+      $xs = ([string]$x).Replace('/', '\')
+      if ($xs.StartsWith($rel + '\', [System.StringComparison]::OrdinalIgnoreCase)) { $plugXf += (Split-Path $xs -Leaf) }
+    }
+    if ($plugXd.Count) {
+      if ($plugXf.Count) { robocopy $d.FullName (Join-Path $optDir $d.Name) /E /NFL /NDL /NJH /NJS /XD $plugXd /XF $plugXf | Out-Null }
+      else { robocopy $d.FullName (Join-Path $optDir $d.Name) /E /NFL /NDL /NJH /NJS /XD $plugXd | Out-Null }
+    }
+    else { robocopy $d.FullName (Join-Path $optDir $d.Name) /E /NFL /NDL /NJH /NJS | Out-Null }
     $n++
   }
   Write-Output ('official plugin backups: ' + $n + ' 个 -> ' + $optName + '\')
