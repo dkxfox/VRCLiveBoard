@@ -8,7 +8,8 @@
   "permissions": {
     "network": [
       "live-open.biliapi.com",
-      "chat.bilibili.com"
+      "chat.bilibili.com",
+      "api.live.bilibili.com"
     ],
     "filesystem": {
       "read": [],
@@ -32,7 +33,13 @@
     { "key": "scHoldMs", "label": "醒目留言保持时长(毫秒)", "type": "number", "default": 15000 },
     { "key": "giftHoldMs", "label": "礼物保持时长(毫秒)", "type": "number", "default": 15000 },
     { "key": "guardHoldMs", "label": "上舰保持时长(毫秒)", "type": "number", "default": 15000 },
-    { "key": "maxLen", "label": "单条最大字数", "type": "number", "default": 100 }
+    { "key": "maxLen", "label": "单条最大字数", "type": "number", "default": 100 },
+    { "key": "showRoomTitle", "label": "显示直播间标题", "type": "bool", "default": true, "hint": "标题来自官方开播事件; 打开下面「显示热度」时会用公开接口取到更准的标题" },
+    { "key": "showRoomId", "label": "显示房间号", "type": "bool", "default": true, "hint": "房间号来自官方 start 返回, 一定有" },
+    { "key": "showRoomPopularity", "label": "显示观看热度", "type": "bool", "default": false, "hint": "官方开放平台不提供热度, 打开后会用公开网页接口(api.live.bilibili.com)只读获取人气值" },
+    { "key": "roomInfoPrefix", "label": "直播间信息前缀", "type": "text", "default": "【直播间】" },
+    { "key": "roomInfoPriority", "label": "直播间信息优先级", "type": "number", "default": 8, "hint": "低优先级: 只在没有别的可显示时才轮到它(公告板是 5)" },
+    { "key": "roomInfoIntervalMs", "label": "直播间信息刷新间隔(毫秒)", "type": "number", "default": 60000 }
   ],
   "dependencies": {},
   "conflicts": [],

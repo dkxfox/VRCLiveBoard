@@ -11,9 +11,12 @@ function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 const CREDS = { accessKeyId: 'AKID12345678', accessKeySecret: 'SECRET-VALUE-XYZ', appId: '9999999999', roomOwnerAuthCode: 'AUTH-CODE-ABC' };
 
 function mkCtx(cfg) {
-  const calls = { http: [], sent: [], ticks: [], logs: [], warns: [], stopped: 0 };
+  const calls = { http: [], sent: [], ticks: [], logs: [], warns: [], stopped: 0, sources: [], unregistered: [] };
   const ctx = {
+    id: 'bilibili-live',
     config: Object.assign({}, cfg),
+    registerSource: function (src) { calls.sources.push(src); return src; },
+    plugins: { composer: { unregisterSource: function (id) { calls.unregistered.push(id); } } },
     logger: { info: function (m) { calls.logs.push(String(m)); }, warn: function (m) { calls.warns.push(String(m)); } },
     chatbox: {
       send: function (text, opts) { calls.sent.push({ text: text, opts: opts || {} }); },
@@ -23,6 +26,9 @@ function mkCtx(cfg) {
     http: {
       request: function (url, opts) {
         calls.http.push({ url: url, headers: (opts && opts.headers) || {}, body: (opts && opts.body) || '' });
+        if (url.indexOf('api.live.bilibili.com') >= 0) {                 // 公开房间信息接口(只有"显示热度"才会请求)
+          return Promise.resolve({ status: 200, text: function () { return Promise.resolve(JSON.stringify({ code: 0, data: { room_id: 123, title: '更准的标题', online: 45678, live_status: 1, area_name: '虚拟主播' } })); } });
+        }
         const isStart = url.indexOf('/start') >= 0;
         const data = isStart
           // 真实形状(2026-09-25 实机 + blivedm 印证): game_info / websocket_info(wss_link, auth_body) / anchor_info
@@ -249,6 +255,42 @@ function push(ws, raw) { ws.onmessage({ data: F.encode(F.OP.MESSAGE, raw) }); }
     h.ctx.config.giftHoldMs = 45000; h.ctx.config.holdEnabled = true;
     const eff = p.api.reloadConfig().effective;
     ok(eff.giftHoldMs === 45000 && eff.holdEnabled === true, '保持展示的时长可热改(reloadConfig 立刻生效, 不用重启插件)');
+    await p.dispose();
+  }
+
+  // ---- ⑧ 直播间信息展示(标题/房间号/热度开关) ----
+  {
+    const h = mkCtx(CREDS);
+    const p = plugin(h.ctx);
+    await p.apply();
+    await sleep(30);
+    ok(h.calls.sources.length === 1 && h.calls.sources[0].id === 'roominfo', '开启房间信息: 注册了一个数据源(低优先级, 走现成的 composer 数据源机制)');
+    const src = h.calls.sources[0];
+    ok(src.priority === 8 && src.intervalMs === 60000, '数据源优先级/刷新间隔按设置(默认 8 / 60 秒)');
+    let txt = String(await src.getText());
+    ok(txt.indexOf('房间 123') >= 0 && txt.indexOf('【直播间】') === 0, '房间号来自官方 start 的 anchor_info -> 文案 "【直播间】房间 123"');
+    push(socks[socks.length - 1], { cmd: 'LIVE_OPEN_PLATFORM_LIVE_START', data: { title: '今晚打游戏', area_name: '虚拟主播' } });
+    txt = String(await src.getText());
+    ok(txt.indexOf('今晚打游戏') >= 0, '开播事件带来标题 -> 立刻出现在房间信息里');
+    ok(p.api.status().room.title === '今晚打游戏' && p.api.status().room.popularity === 0, 'status.room 能看到标题与热度(热度默认不取)');
+    h.ctx.config.showRoomTitle = false;
+    p.api.reloadConfig();
+    txt = String(await src.getText());
+    ok(txt.indexOf('今晚打游戏') < 0 && txt.indexOf('房间 123') >= 0, '关掉"显示标题" -> 立刻不再显示标题(热更新)');
+    h.ctx.config.showRoomId = false;
+    p.api.reloadConfig();
+    ok(p.api.status().room.sourceOn === false && h.calls.unregistered.length === 1, '三个开关全关 -> 数据源被摘掉(不占数据源列表)');
+    await p.dispose();
+  }
+  {
+    const h = mkCtx(Object.assign({}, CREDS, { showRoomPopularity: true }));
+    const p = plugin(h.ctx);
+    await p.apply();
+    await sleep(30);
+    const txt = String(await h.calls.sources[0].getText());
+    ok(h.calls.http.some(function (c) { return c.url.indexOf('api.live.bilibili.com') >= 0; }), '打开"显示热度": 请求公开房间信息接口');
+    ok(txt.indexOf('热度 4.6万') >= 0 && txt.indexOf('更准的标题') >= 0, '热度按人气值格式化(45678 -> 4.6万), 并顺手用更准的标题');
+    ok(txt.indexOf('虚拟主播') < 0, '(分区不在文案里, 只存着备用)');
     await p.dispose();
   }
 

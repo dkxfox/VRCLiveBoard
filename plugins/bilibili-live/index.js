@@ -11,6 +11,7 @@
 const { createSession } = require('./lib/session.js');
 const OF = require('./lib/official.js');
 const B = require('./lib/bridge.js');
+const R = require('./lib/roominfo.js');
 
 const CRED_KEYS = ['accessKeyId', 'accessKeySecret', 'appId', 'roomOwnerAuthCode'];
 const CRED_LABELS = { accessKeyId: 'access_key_id', accessKeySecret: 'access_key_secret', appId: 'app_id', roomOwnerAuthCode: '主播身份码' };
@@ -18,6 +19,13 @@ const DEFAULTS = {
   autoStart: true,            // 启用插件时自动开始接收(凭据齐全才连)
   ignoreSelf: true,           // 不转发**主播自己发的**消息(开放平台靠 open_id 认人; 想让自己也上聊天框就关掉)
   restartDelayMs: 5000,       // 平台停推后多久重新开局
+  // 直播间信息展示(2026-09-25 用户要求): 三个开关 + 前缀/优先级/刷新间隔
+  showRoomTitle: true,        // 显示直播间标题(来自官方开播事件; 打开"热度"时会用公开接口补更准的)
+  showRoomId: true,           // 显示房间号(官方 start 的 anchor_info 一定有)
+  showRoomPopularity: false,  // 显示热度: **官方通道不提供**, 打开才会去请求公开网页接口(默认关)
+  roomInfoPrefix: '【直播间】',
+  roomInfoPriority: 8,        // 低优先级: 只在没有别的可显示时才轮到它
+  roomInfoIntervalMs: 60000,  // 多久刷新一次(热度)
   priority: null,             // 卡片里的优先级(填了就对整插件统一生效, 见 makeBridge)
   showUname: true,
   prefix: '',
@@ -30,8 +38,12 @@ const DEFAULTS = {
 };
 
 module.exports = function (ctx) {
+  // (DEFAULTS 挂在函数上供契约测试读: 见 test/settings.test.js)
   let sess = null, bridge = null, stopTick = null, starting = false, restartTimer = null;
   let anchorOpenId = '', anchorUid = 0;
+  // 直播间信息(展示用): 房间号来自 start 的 anchor_info, 标题来自开播事件/公开接口, 热度只可能来自公开接口
+  const room = { roomId: 0, roomName: '', title: '', area: '', popularity: 0 };
+  let roomSrc = null;
   const status = { running: false, authed: false, gameId: '', events: 0, shown: 0, ignored: 0, selfSkipped: 0, lastError: '', since: 0, stopReason: '' };
   // 是不是"主播自己发的消息": 开放平台用 open_id 标识用户(**没有 uid**), 所以先比 open_id, 再退化比 uid
   function isSelf(raw) {
@@ -88,6 +100,48 @@ module.exports = function (ctx) {
     }
     return bcfg;
   }
+  // ===== 直播间信息展示 =====
+  // 注册/摘掉一个低优先级"数据源"(跟电脑状态/公告板同一套机制): 它不是弹幕, 只在没别的可显示时轮到它。
+  function roomInfoText() {
+    const c = cfg();
+    return (async function () {
+      if (c.showRoomPopularity && room.roomId) {
+        try {
+          const info = await fetchRoomInfo(room.roomId);
+          if (info) {
+            if (info.popularity) room.popularity = info.popularity;
+            if (info.title) room.title = info.title;          // 顺手用更准的标题(开播事件那一刻的标题可能已经改了)
+            if (info.areaName && !room.area) room.area = info.areaName;
+          }
+        } catch (e) { /* 拉不到热度就不显示那一段, 不打扰 */ }
+      }
+      return R.buildRoomInfoText({ roomId: room.roomId, title: room.title, popularity: room.popularity }, c) || null;
+    })();
+  }
+  // 公开网页房间信息接口(非开放平台): 只读、无需登录, 拿热度/标题 —— 只有打开"显示热度"开关才会用到
+  async function fetchRoomInfo(roomId) {
+    const url = 'https://api.live.bilibili.com/room/v1/Room/get_info?room_id=' + encodeURIComponent(String(roomId));
+    const res = await ctx.http.request(url, { method: 'GET' });
+    const text = await res.text();
+    return R.pickRoomInfo(JSON.parse(text));
+  }
+  function syncRoomSource() {
+    const c = cfg();
+    const on = !!(c.showRoomTitle || c.showRoomId || c.showRoomPopularity);
+    if (on && !roomSrc) {
+      roomSrc = { id: 'roominfo', priority: Number(c.roomInfoPriority) || 8, intervalMs: Number(c.roomInfoIntervalMs) || 60000, getText: roomInfoText };
+      roomSrc._key = ctx.id + ':roominfo';
+      try { ctx.registerSource(roomSrc); log('直播间信息展示已开启(优先级 ' + roomSrc.priority + ', 每 ' + Math.round(roomSrc.intervalMs / 1000) + ' 秒刷新)'); } catch (e) { warn('注册直播间信息源失败: ' + e.message); roomSrc = null; }
+      return;
+    }
+    if (!roomSrc) return;
+    roomSrc.priority = Number(c.roomInfoPriority) || 8;
+    roomSrc.intervalMs = Number(c.roomInfoIntervalMs) || 60000;
+    if (!on) {
+      try { if (ctx.plugins && ctx.plugins.composer) ctx.plugins.composer.unregisterSource(roomSrc._key); } catch (e) {}
+      roomSrc = null; log('直播间信息展示已关闭');
+    }
+  }
   // 配置热更新(2026-09-25 用户实机: "弹幕带昵称关了还带昵称") —— 桥在创建时**快照**了配置,
   // 设置面板保存只改了 ctx.config, 运行中的桥还拿着旧配置。所以每 tick(1 秒)与保存后都同步一次。
   function syncCfg() { if (bridge) bridge.setCfg(bridgeCfg()); }
@@ -140,6 +194,8 @@ module.exports = function (ctx) {
       // (2026-09-25 用户实机日志: 一串 "丢弃(expired)")。配置变化由 syncCfg() 负责。
       if (!bridge) bridge = makeBridge();
       anchorOpenId = String(st.roomOwnerOpenId || ''); anchorUid = Number(st.roomOwnerUid || 0);
+      room.roomId = Number(st.roomId || 0) || room.roomId;            // 房间号: 官方 start 就给, 一定有
+      room.roomName = String(st.roomOwnerName || room.roomName || '');
       sess = createSession({
         hosts: st.hosts, authBody: st.authBody, gameId: st.gameId,
         wsFactory: wsFactory,
@@ -154,6 +210,9 @@ module.exports = function (ctx) {
             return;
           }
           status.events += 1;
+          // 直播间信息: 开播事件带标题与分区(官方通道只有这一刻会给标题)
+          if (cmdName === 'LIVE_OPEN_PLATFORM_LIVE_START') { room.title = String((raw.data && raw.data.title) || room.title); room.area = String((raw.data && raw.data.area_name) || room.area); }
+          else if (cmdName === 'LIVE_OPEN_PLATFORM_LIVE_END') { room.popularity = 0; }
           if (cfg().ignoreSelf && isSelf(raw)) {
             status.selfSkipped += 1;
             if (status.selfSkipped === 1) log('已忽略主播自己发的消息(想让自己也上聊天框, 就把插件设置里的"忽略主播自己发的消息"关掉)');
@@ -179,6 +238,7 @@ module.exports = function (ctx) {
     } finally { starting = false; }
   }
   async function stop(why) {
+    // 注意: 数据源跟着插件生命周期(apply/dispose), 不跟着会话 —— 停止接收不该把"房间信息展示"也摘掉
     if (stopTick) { try { stopTick(); } catch (e) {} stopTick = null; }
     if (restartTimer) { clearTimeout(restartTimer); restartTimer = null; }
     const s = sess; sess = null;
@@ -208,6 +268,7 @@ module.exports = function (ctx) {
       const cr = credsOf();
       const miss = missingCreds(cr);
       log('插件已启用' + (miss.length ? '(还缺 ' + miss.map(function (k) { return CRED_LABELS[k]; }).join(' / ') + ')' : ''));
+      syncRoomSource();
       if (cfg().autoStart && !miss.length) start();
       else if (miss.length) warn('未自动连接: 请在插件设置里填全四个参数');
     },
@@ -239,7 +300,7 @@ module.exports = function (ctx) {
       start: start,
       stop: function () { return stop('manual'); },
       preview: preview,
-      reloadConfig: function () { syncCfg(); return { ok: true, effective: effectiveCfg() }; },
+      reloadConfig: function () { syncCfg(); syncRoomSource(); return { ok: true, effective: effectiveCfg() }; },
       status: function () {
         return {
           running: status.running, authed: !!(sess && sess.state && sess.state.authed), gameId: status.gameId,
@@ -250,6 +311,8 @@ module.exports = function (ctx) {
           effective: bridge ? effectiveCfg() : null,
           // 当前占屏的是谁(排查"弹幕被挡住"用: sourceId/priority/text)
           screen: (function () { try { const c = ctx.chatbox.current(); return c ? { sourceId: c.sourceId, priority: c.priority, text: String(c.text || '').slice(0, 40), ttlUntil: c.ttlUntil, at: c.at } : null; } catch (e) { return null; } })(),
+          room: { roomId: room.roomId, title: room.title, area: room.area, popularity: room.popularity, sourceOn: !!roomSrc,
+            text: R.buildRoomInfoText({ roomId: room.roomId, title: room.title, popularity: room.popularity }, cfg()) },
           stats: bridge ? bridge.stats() : null,
           key: keyHint(credsOf().accessKeyId),
           missing: missingCreds(credsOf()).map(function (k) { return CRED_LABELS[k]; })
@@ -258,3 +321,4 @@ module.exports = function (ctx) {
     }
   };
 };
+module.exports.DEFAULTS = DEFAULTS;
