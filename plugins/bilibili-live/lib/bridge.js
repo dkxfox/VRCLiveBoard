@@ -135,6 +135,7 @@ function createBridge(opts) {
     const throttleOk = !!bypassThrottle || now - state.lastPushAt >= Number(cfg.throttleMs);
     if (dec.action === 'show' && !state.pending && throttleOk) { doPush(item, dec.reason, now); return { action: 'show', reason: dec.reason, text: item.text }; }
     const why = dec.action === 'show' ? (state.pending ? 'slot-busy' : 'throttled') : dec.reason;
+    item.why = why;
     return enqueue(item, why, now);
   }
   function handleEvent(ev, now, opts) {
@@ -174,17 +175,19 @@ function createBridge(opts) {
       if (!state.pending) {
         const d = P.dequeue(state.queue, cfg, t);
         state.queue = d.queue;
-        for (const e of d.expired) { stats.dropped += 1; onDrop(e, 'expired'); log('丢弃(过期, ' + e.kind + '): ' + e.text); }
+        for (const e of d.expired) { stats.dropped += 1; onDrop(e, 'expired', { why: e.why }); log('丢弃(过期, 等不到上屏: ' + (e.why || '未知') + ', ' + e.kind + '): ' + e.text); }
         state.pending = d.item || null;
       }
       if (state.pending) {
         const it = state.pending;
-        if (it.expireAt && it.expireAt <= t) { stats.dropped += 1; onDrop(it, 'expired'); state.pending = null; return { action: 'drop', reason: 'expired' }; }
+        if (it.expireAt && it.expireAt <= t) { stats.dropped += 1; onDrop(it, 'expired', { why: it.why }); log('丢弃(过期, 等不到上屏: ' + (it.why || '未知') + ', ' + it.kind + '): ' + it.text); state.pending = null; return { action: 'drop', reason: 'expired' }; }
         if (t - state.lastPushAt >= Number(cfg.throttleMs)) {
           const dec = decide(it);
           if (dec.action === 'show') { state.pending = null; doPush(it, 'drain:' + dec.reason, t); return { action: 'show', reason: 'drain:' + dec.reason }; }
+          it.why = dec.reason;                                  // 记下来: 过期时日志能说清是谁挡着
           return { action: 'wait', reason: dec.reason };
         }
+        it.why = 'throttled';
         return { action: 'wait', reason: 'throttled' };
       }
       return { action: 'idle', reason: 'empty' };

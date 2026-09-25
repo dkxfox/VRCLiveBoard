@@ -187,6 +187,56 @@ function push(ws, raw) { ws.onmessage({ data: F.encode(F.OP.MESSAGE, raw) }); }
     await p.dispose();
   }
 
+  // ---- ⑥ 会话重开 + 丢弃原因(2026-09-25 实机: 一串 "丢弃(expired)") ----
+  {
+    const h = mkCtx(Object.assign({}, CREDS, { restartDelayMs: 10 }));
+    const p = plugin(h.ctx);
+    await p.apply();
+    await sleep(30);
+    const ws1 = socks[socks.length - 1];
+    push(ws1, { cmd: 'LIVE_OPEN_PLATFORM_DM', data: { uname: '观众', open_id: 'o1', msg: '重开前的消息' } });
+    ok(h.calls.sent.length === 1 && h.calls.sent[0].text === '观众: 重开前的消息', '(前提)第一条正常上屏');
+    // 平台停推 -> 10ms 后自动重开; 重开**不能**换桥
+    const socksBefore = socks.length;
+    push(ws1, { cmd: 'LIVE_OPEN_PLATFORM_INTERACTION_END', data: { game_id: 'GAME-TEST-1' } });
+    await sleep(80);
+    ok(socks.length === socksBefore + 1 && p.api.status().running === true, '平台停推后已自动重开(新连接)');
+    const tickNow = h.calls.ticks[h.calls.ticks.length - 1];     // 重开后注册的是新 tick
+    await sleep(1600); tickNow();                                // 过掉节流窗口
+    push(socks[socks.length - 1], { cmd: 'LIVE_OPEN_PLATFORM_DM', data: { uname: '观众', open_id: 'o1', msg: '重开后的消息' } });
+    ok(h.calls.sent.length === 2 && h.calls.sent[1].text === '观众: 重开后的消息', '重开之后弹幕照常上屏(**没被自己上一条挡住** —— 桥被复用, 记忆没丢)');
+    await p.dispose();
+  }
+  {
+    // 过期丢弃必须说明"等不到上屏的原因"(用户日志里只看到"丢弃"是没法排查的)
+    const h = mkCtx(Object.assign({}, CREDS, { showUname: false }));
+    const p = plugin(h.ctx);
+    await p.apply();
+    await sleep(30);
+    h.ctx.config.danmakuQueueTtlMs = 300;                                                        // 把 30 秒时效调短, 测试才跑得快
+    p.api.reloadConfig();
+    h.ctx.chatbox._cur = { sourceId: 'transient', priority: 99, text: '别人的高优先级公告' };   // 永久占屏
+    const ws = socks[socks.length - 1];
+    push(ws, { cmd: 'LIVE_OPEN_PLATFORM_DM', data: { uname: '观众', open_id: 'o2', msg: '会被挡住的' } });
+    ok(p.api.status().queue.waiting === 1, '(前提)被 99 优先级占屏挡下 -> 进排队');
+    for (let i = 0; i < 20; i++) { await sleep(40); h.calls.ticks[h.calls.ticks.length - 1](); }   // 熬过 300ms 时效
+    const dropMsg = h.calls.warns.concat(h.calls.logs).join(' | ');
+    ok(dropMsg.indexOf('丢弃') >= 0 && dropMsg.indexOf('respect-transient') >= 0, '过期丢弃的日志写明了等待原因(而不是只说"丢弃")');
+    await p.dispose();
+  }
+  {
+    // 已在接收时点"测试连接": 不该再开一个场次(平台会掐掉正在跑的, 导致反复重开 + 7010)
+    const h = mkCtx(CREDS);
+    const p = plugin(h.ctx);
+    await p.apply();
+    await sleep(30);
+    const startsBefore = h.calls.http.filter(function (c) { return c.url.indexOf('/start') >= 0; }).length;
+    const t = await p.api.test();
+    const startsAfter = h.calls.http.filter(function (c) { return c.url.indexOf('/start') >= 0; }).length;
+    ok(t.ok === true && t.already === true && startsAfter === startsBefore, '正在接收时「测试连接」直接返回"已在接收", 不再新开场次');
+    await p.dispose();
+  }
+
   console.log('  ---- ' + pass + ' PASS / ' + fail + ' FAIL ----');
   process.exitCode = fail ? 1 : 0;
 })().catch(function (e) { console.log('  FAIL 插件契约单测异常: ' + (e && e.stack || e)); process.exitCode = 1; });

@@ -17,6 +17,7 @@ const CRED_LABELS = { accessKeyId: 'access_key_id', accessKeySecret: 'access_key
 const DEFAULTS = {
   autoStart: true,            // 启用插件时自动开始接收(凭据齐全才连)
   ignoreSelf: true,           // 不转发**主播自己发的**消息(开放平台靠 open_id 认人; 想让自己也上聊天框就关掉)
+  restartDelayMs: 5000,       // 平台停推后多久重新开局
   priority: null,             // 卡片里的优先级(填了就对整插件统一生效, 见 makeBridge)
   showUname: true,
   prefix: '',
@@ -48,7 +49,7 @@ module.exports = function (ctx) {
       restartTimer = null;
       await stop('interaction-end');
       if (cfg().autoStart) await start();
-    }, ms || 5000);
+    }, ms || Number(cfg().restartDelayMs) || 5000);
     if (restartTimer.unref) restartTimer.unref();
   }
 
@@ -77,6 +78,10 @@ module.exports = function (ctx) {
       ttlMs: c.ttlMs, blockedWords: c.blockedWords, kinds: c.kinds,
       basePriority: Number(c.priority) || B.DEFAULT_CFG.basePriority
     };
+    // 策略层的可调项也透传(config.json 里设了就得生效: 队列时效/上限/让路地板/聚合窗口…)
+    for (const k of ['preemptBackground', 'respectPriority', 'protectSources', 'queueMax', 'highValueQueueMax', 'danmakuQueueTtlMs', 'aggregateWindowMs', 'aggregateFormat', 'aggregateKinds']) {
+      if (ctx.config && ctx.config[k] !== undefined) bcfg[k] = ctx.config[k];
+    }
     if (c.priority !== null && c.priority !== undefined && Number(c.priority)) {
       bcfg.sourcePriority = {};
       for (const k of ['DANMAKU', 'GIFT', 'SUPER_CHAT', 'GUARD', 'INTERACT', 'ENTER', 'LIKE']) bcfg.sourcePriority[k] = Number(c.priority);
@@ -92,7 +97,10 @@ module.exports = function (ctx) {
       push: function (text, priority, ttlMs, force) { ctx.chatbox.send(text, { priority: priority, ttlMs: ttlMs, force: force }); },
       current: function () { try { return ctx.chatbox.current(); } catch (e) { return null; } },
       log: function (m) { log(m); },
-      onDrop: function (item, why) { warn('丢弃(' + why + '): ' + item.text); }
+      onDrop: function (item, why, detail) {
+        // 丢弃必须可见, 而且要说明**为什么等不到上屏**(否则用户只看到"丢弃"没法排查)
+        warn('丢弃(' + why + (detail && detail.why ? ', 等不到上屏: ' + detail.why : '') + '): ' + item.text);
+      }
     });
   }
   function ensureBridge() { if (!bridge) bridge = makeBridge(); return bridge; }
@@ -122,7 +130,10 @@ module.exports = function (ctx) {
       const o = { fetchImpl: function (url, opts) { return ctx.http.request(url, opts); }, timeoutMs: Number(c.timeoutMs) || 10000 };
       const st = await OF.startSession(cr, cr.appId, cr.roomOwnerAuthCode, o);
       if (!st.hosts.length || !st.authBody) throw new Error('开放平台没有返回弹幕服务器地址或 auth_body');
-      bridge = makeBridge();
+      // 复用同一个桥: 会话重开(平台停推/重连)时**不能**换新桥 —— 换新桥会丢掉"自己刚推的那条文本"记忆,
+      // 于是还挂在屏上的自己的消息被当成"别人的同优先级占屏" -> 后面所有弹幕一直排队 -> 30 秒后整批过期丢弃
+      // (2026-09-25 用户实机日志: 一串 "丢弃(expired)")。配置变化由 syncCfg() 负责。
+      if (!bridge) bridge = makeBridge();
       anchorOpenId = String(st.roomOwnerOpenId || ''); anchorUid = Number(st.roomOwnerUid || 0);
       sess = createSession({
         hosts: st.hosts, authBody: st.authBody, gameId: st.gameId,
@@ -134,7 +145,7 @@ module.exports = function (ctx) {
           if (cmdName === 'LIVE_OPEN_PLATFORM_INTERACTION_END') {      // 平台停推(常见于心跳超时)
             warn('平台主动停止推送, 5 秒后重新开启场次');
             status.running = false;
-            scheduleRestart(5000);
+            scheduleRestart(Number(cfg().restartDelayMs) || 5000);
             return;
           }
           status.events += 1;
@@ -199,6 +210,7 @@ module.exports = function (ctx) {
     api: {
       // 「测试连接」: 完整走一遍 start → end(不建长连接), 用来验证四个参数与网络
       test: async function () {
+        if (status.running) return { ok: true, already: true, note: '正在接收中, 无需再测(凭据已生效)', gameId: status.gameId };
         const cr = credsOf();
         const miss = missingCreds(cr);
         if (miss.length) return { ok: false, error: '还缺: ' + miss.map(function (k) { return CRED_LABELS[k]; }).join(' / '), missing: miss };
