@@ -70,7 +70,7 @@ module.exports = function (ctx) {
   function warn(m) { try { ctx.logger.warn('[B站直播] ' + m); } catch (e) {} }
 
   // 桥: 卡片优先级填了 -> 整插件统一用它(否则各类型用默认偏移 弹幕75/礼物80/SC88/上舰92)
-  function makeBridge() {
+  function bridgeCfg() {
     const c = cfg();
     const bcfg = {
       showUname: c.showUname, prefix: c.prefix, maxLen: c.maxLen, throttleMs: c.throttleMs,
@@ -81,8 +81,14 @@ module.exports = function (ctx) {
       bcfg.sourcePriority = {};
       for (const k of ['DANMAKU', 'GIFT', 'SUPER_CHAT', 'GUARD', 'INTERACT', 'ENTER', 'LIKE']) bcfg.sourcePriority[k] = Number(c.priority);
     }
+    return bcfg;
+  }
+  // 配置热更新(2026-09-25 用户实机: "弹幕带昵称关了还带昵称") —— 桥在创建时**快照**了配置,
+  // 设置面板保存只改了 ctx.config, 运行中的桥还拿着旧配置。所以每 tick(1 秒)与保存后都同步一次。
+  function syncCfg() { if (bridge) bridge.setCfg(bridgeCfg()); }
+  function makeBridge() {
     return B.createBridge({
-      cfg: bcfg,
+      cfg: bridgeCfg(),
       push: function (text, priority, ttlMs, force) { ctx.chatbox.send(text, { priority: priority, ttlMs: ttlMs, force: force }); },
       current: function () { try { return ctx.chatbox.current(); } catch (e) { return null; } },
       log: function (m) { log(m); },
@@ -90,6 +96,11 @@ module.exports = function (ctx) {
     });
   }
   function ensureBridge() { if (!bridge) bridge = makeBridge(); return bridge; }
+  // 当前**真正生效**的配置(排查"设置好像没生效"就看它)
+  function effectiveCfg() {
+    const c = bridge ? bridge.cfg() : bridgeCfg();
+    return { showUname: !!c.showUname, prefix: String(c.prefix || ''), throttleMs: Number(c.throttleMs), ttlMs: Number(c.ttlMs), basePriority: Number(c.basePriority), kinds: c.kinds };
+  }
 
   function wsFactory(url) {
     if (typeof WebSocket !== 'function') throw new Error('当前运行环境没有全局 WebSocket(需要 Node 21+ / 22)');
@@ -139,7 +150,7 @@ module.exports = function (ctx) {
         onLog: function (m) { log(m); }
       });
       sess.start();
-      stopTick = ctx.events.every(1000, function () { try { bridge.tick(); } catch (e) { warn('tick 异常: ' + e.message); } });
+      stopTick = ctx.events.every(1000, function () { try { syncCfg(); bridge.tick(); } catch (e) { warn('tick 异常: ' + e.message); } });
       status.running = true; status.since = Date.now(); status.lastError = ''; status.stopReason = '';
       status.gameId = st.gameId;
       log('已开始接收(场次 ' + st.gameId + ', 弹幕服务器 ' + st.hosts.length + ' 个)');
@@ -211,6 +222,7 @@ module.exports = function (ctx) {
       start: start,
       stop: function () { return stop('manual'); },
       preview: preview,
+      reloadConfig: function () { syncCfg(); return { ok: true, effective: effectiveCfg() }; },
       status: function () {
         return {
           running: status.running, authed: !!(sess && sess.state && sess.state.authed), gameId: status.gameId,
@@ -218,6 +230,7 @@ module.exports = function (ctx) {
           events: status.events, shown: bridge ? bridge.stats().shown : status.shown, ignored: status.ignored, selfSkipped: status.selfSkipped,
           lastError: status.lastError, since: status.since, stopReason: status.stopReason,
           queue: bridge ? bridge.queue() : { pending: null, waiting: 0 },
+          effective: bridge ? effectiveCfg() : null,
           stats: bridge ? bridge.stats() : null,
           key: keyHint(credsOf().accessKeyId),
           missing: missingCreds(credsOf()).map(function (k) { return CRED_LABELS[k]; })

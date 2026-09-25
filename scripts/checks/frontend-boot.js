@@ -237,6 +237,8 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
       if (!btns.some(function (x) { return String(x.textContent || '').indexOf('测试') >= 0; })) problems.push('有 api.test 的插件没有出现「测试连接」按钮');
       if (spans.some(function (x) { return String(x.innerHTML || '').indexOf('<img') >= 0; })) problems.push('插件 label 里的 HTML 没有被转义(manifest 是外部输入)');
       if (!spans.some(function (x) { return String(x.innerHTML || '').indexOf('&lt;img') >= 0; })) problems.push('转义后的 label 没出现在表单里(转义函数可能没接上)');
+      // 保存后必须让插件重新读配置 —— 否则会出现"关了弹幕带昵称还带昵称"(2026-09-25 用户实机)
+      if (app.indexOf("plugCall(p.id,'reloadConfig'") < 0) problems.push('保存插件设置后没有调用 reloadConfig(改了设置要重启插件才生效, 用户会以为设置没用)');
     }
   } catch (e) { problems.push('插件设置表单断言异常: ' + e.message); }
 

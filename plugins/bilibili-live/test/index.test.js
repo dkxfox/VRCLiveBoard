@@ -162,6 +162,31 @@ function push(ws, raw) { ws.onmessage({ data: F.encode(F.OP.MESSAGE, raw) }); }
     await p.dispose();
   }
 
+  // ---- ⑤ 配置热更新(2026-09-25 用户实机: "弹幕带昵称关了还带昵称" —— 桥快照了旧配置) ----
+  {
+    const h = mkCtx(CREDS);
+    const p = plugin(h.ctx);
+    await p.apply();
+    await sleep(30);
+    const ws = socks[socks.length - 1];
+    push(ws, { cmd: 'LIVE_OPEN_PLATFORM_DM', data: { uname: '观众', open_id: 'o1', msg: '第一条' } });
+    ok(h.calls.sent.length === 1 && h.calls.sent[0].text === '观众: 第一条', '(前提)默认带昵称');
+    h.ctx.config.showUname = false;                       // 等价于"设置面板保存了"
+    const rc = p.api.reloadConfig();
+    ok(rc.ok === true && rc.effective.showUname === false, 'api.reloadConfig: 重新读配置, 并回报当前真正生效的值');
+    await sleep(1600); h.calls.ticks[0]();                 // 让节流窗口过去
+    push(ws, { cmd: 'LIVE_OPEN_PLATFORM_DM', data: { uname: '观众', open_id: 'o1', msg: '第二条' } });
+    ok(h.calls.sent.length === 2 && h.calls.sent[1].text === '第二条', '关掉"弹幕带昵称"后**不用重启插件**立即生效(第二条没有昵称)');
+    // 第二条路径: 前端没调 reloadConfig(比如直接改了 config.json), 每秒 tick 也会同步
+    h.ctx.config.showUname = true;
+    h.calls.ticks[0]();
+    await sleep(1600); h.calls.ticks[0]();
+    push(ws, { cmd: 'LIVE_OPEN_PLATFORM_DM', data: { uname: '观众', open_id: 'o1', msg: '第三条' } });
+    ok(h.calls.sent.length === 3 && h.calls.sent[2].text === '观众: 第三条', '改回去也一样: 每秒 tick 会自动同步配置(不依赖前端调用)');
+    ok(p.api.status().effective && p.api.status().effective.showUname === true, 'status.effective 报出真正生效的配置(排查"设置没生效"用)');
+    await p.dispose();
+  }
+
   console.log('  ---- ' + pass + ' PASS / ' + fail + ' FAIL ----');
   process.exitCode = fail ? 1 : 0;
 })().catch(function (e) { console.log('  FAIL 插件契约单测异常: ' + (e && e.stack || e)); process.exitCode = 1; });
