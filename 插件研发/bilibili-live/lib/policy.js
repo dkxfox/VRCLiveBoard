@@ -31,13 +31,25 @@ const DEFAULT_CFG = {
 };
 function cfgOf(cfg) { return Object.assign({}, DEFAULT_CFG, cfg || {}); }
 
+// CMD → 事件类别(**单一来源**: events.js 也用这张表, 免得两处各写一套)
+// 2026-09-20 步 5 补全: 原来"不认识的一律当弹幕"太危险(会把 WATCHED_CHANGE 之类也推到聊天框),
+// 现在不认识的归 'UNKNOWN'(step 6 只显示白名单内的类别)。
 function kindOf(cmd) {
   const c = String(cmd || '').toUpperCase();
-  if (c === 'SUPER_CHAT_MESSAGE' || c === 'SUPER_CHAT_MESSAGE_DELETE') return 'SUPER_CHAT';
+  if (c === 'SUPER_CHAT_MESSAGE' || c === 'SUPER_CHAT_MESSAGE_DELETE' || c === 'SUPER_CHAT_MESSAGE_JPN') return 'SUPER_CHAT';
   if (c === 'SEND_GIFT' || c === 'COMBO_SEND') return 'GIFT';
   if (c === 'GUARD_BUY' || c === 'USER_TOAST_MSG') return 'GUARD';
-  if (c === 'INTERACT_WORD') return 'INTERACT';
-  return 'DANMAKU';
+  if (c === 'INTERACT_WORD' || c === 'INTERACT_WORD_V2') return 'INTERACT';
+  if (c === 'DANMU_MSG') return 'DANMAKU';
+  if (c === 'WELCOME' || c === 'WELCOME_GUARD') return 'ENTER';
+  if (c === 'LIKE_INFO_V3_CLICK' || c === 'LIKE_INFO_V3_UPDATE') return 'LIKE';
+  if (c === 'WATCHED_CHANGE') return 'WATCHED';
+  if (c === 'ONLINE_RANK_COUNT' || c === 'ONLINE_RANK_V2' || c === 'ONLINE_RANK_TOP3') return 'ONLINE_RANK';
+  if (c === 'ROOM_REAL_TIME_MESSAGE_UPDATE') return 'ROOM_STATS';
+  if (c === 'LIVE' || c === 'ROOM_CHANGE' || c === 'ANCHOR_LOT_START' || c === 'ANCHOR_LOT_END') return 'LIVE';
+  if (c === 'PREPARING') return 'PREPARING';
+  if (c === 'ROOM_BLOCK_MSG' || c === 'ROOM_KICKOUT') return 'BLOCKED';
+  return 'UNKNOWN';
 }
 function isHighValue(kind) { return !!HIGH_VALUE[kind]; }
 function priorityOf(kind, cfg) {

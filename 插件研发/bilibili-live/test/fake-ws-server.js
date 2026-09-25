@@ -123,6 +123,8 @@ function createFakeServer(opts) {
     server.listen(0, '127.0.0.1', function () {
       state.port = server.address().port;
       state.url = 'ws://127.0.0.1:' + state.port + '/sub';
+      // 自引用(测试里写 srv.state.xxx) —— 必须是不可枚举的, 否则 JSON.stringify(state) 会撞循环引用报错
+      Object.defineProperty(state, 'state', { value: state, enumerable: false });
       state.close = function () { state.closed = true; for (const s of sockets) { try { s.destroy(); } catch (e) {} } try { server.close(); } catch (e) {} };
       resolve(state);
     });
