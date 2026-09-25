@@ -33,6 +33,23 @@
 - exclusive: 独占资源名(两个插件声明同一个资源会互相冲突,如 "chatbox.priority.90")。
 - loadOrder: 加载顺序,数字小先加载。
 
+## 声明设置字段(可选, 2026-09-20 新增)
+
+manifest 里可以声明 `settings` 数组, 控制台会在插件卡片里**自动渲染输入框**并保存到 `ctx.config`
+(不再依赖"插件自带 HTML 面板"—— 那条路的面板容器在 1.4.x 控制台里缺失, 见 ISSUES):
+
+```json
+"settings": [
+  { "key": "apiKey", "label": "API Key", "type": "password", "secret": true, "hint": "说明文字" },
+  { "key": "intervalMin", "label": "间隔(分钟)", "type": "number", "default": 15 },
+  { "key": "enabled", "label": "启用播报", "type": "bool", "default": true }
+]
+```
+
+- `type`: `text` / `password` / `number` / `bool`;
+- `secret: true` = 敏感值: **永远不会回传给浏览器**(界面只显示"已保存/未填写"), 留空保存表示"不修改"; 日志里也别打印它;
+- 保存走已有的 `POST /api/plugins/config`; 插件里用 `ctx.config.<key>` 读。
+
 ## index.js(能力注入 ctx)
 
 ```js
@@ -50,6 +67,8 @@ ctx 能力清单:
 - ctx.events.on/off('player.joined'|'player.left', fn): 玩家进出事件(日志监听,约 1.5s 延迟)。
 - ctx.events.every(ms, fn): 定时器,返回取消函数(停用插件时务必取消)。
 - ctx.chatbox.send(text, {priority, ttlMs, force}): 发送临时文本到聊天框(优先级越高越优先)。
+- ctx.chatbox.current(): 当前正在显示什么 `{text, sourceId, priority, ttlUntil, at}`(副本; 空场为 null)——
+  插件要"该抢占还是该排队"就得看它(2026-09-20 为 B站插件新增)。
 - ctx.chatbox.showSequence(chunks, {priority, eachMs, loops}): 按片轮巡展示,结束后自动恢复原状。
 - ctx.http.request(url, options): fetch 包装,受 network 权限门禁。
 - ctx.fs.read/write(path): 受 filesystem 权限门禁。

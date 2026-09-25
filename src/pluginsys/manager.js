@@ -162,6 +162,9 @@ class PluginManager {
         }
       },
       chatbox: {
+        // 当前正在显示什么(2026-09-20 为 B站插件新增): 插件要判断"该抢占还是该排队"就必须知道屏幕现状。
+        // 给的是**副本**, 免得插件改到 composer 的 current。
+        current: function () { return self.composer.current ? Object.assign({}, self.composer.current) : null; },
         send: function (text, opts) {
           opts = opts || {};
           const p = (entry.settings && entry.settings.priority != null) ? entry.settings.priority : (opts.priority || 80);

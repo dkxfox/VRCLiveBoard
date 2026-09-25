@@ -1,7 +1,7 @@
 'use strict';
 // 官方通道签名/请求构造单测(纯离线, 用**假密钥**: 不需要也不应该用真凭据): node lib/official.test.js
 const crypto = require('crypto');
-const O = require('./official.js');
+const O = require('../lib/official.js');
 let pass = 0, fail = 0;
 function ok(cond, msg) { if (cond) { pass++; console.log('  PASS ' + msg); } else { fail++; console.log('  FAIL ' + msg); } }
 

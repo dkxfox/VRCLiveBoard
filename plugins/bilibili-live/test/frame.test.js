@@ -3,7 +3,7 @@
 // 覆盖真实长连接会遇到的三类情况: ①普通帧 ②压缩帧里打包多条消息 ③半包
 const assert = require('assert');
 const zlib = require('zlib');
-const F = require('./frame.js');
+const F = require('../lib/frame.js');
 let pass = 0, fail = 0;
 function ok(cond, msg) { if (cond) { pass++; console.log('  PASS ' + msg); } else { fail++; console.log('  FAIL ' + msg); } }
 

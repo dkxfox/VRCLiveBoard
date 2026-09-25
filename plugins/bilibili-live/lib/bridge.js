@@ -126,17 +126,18 @@ function createBridge(opts) {
     const r = P.enqueue(state.queue, item, cfg, now);
     state.queue = r.queue; stats.queued += 1;
     for (const d of r.dropped) { stats.dropped += 1; onDrop(d, 'queue-full'); log('丢弃(队列满, ' + d.kind + '): ' + d.text); }
-    return { action: 'queue', reason: why };
+    return { action: 'queue', reason: why, text: item.text };
   }
   // 单条文本的处置: 能发就发, 否则排队(高价值的"先出"由 policy.dequeue 保证, 不在这里插队)
-  function route(item, now) {
+  // bypassThrottle: 只给"用户手动点预览"这类显式动作(否则第一次点预览会被节流排队, 看起来像坏了)
+  function route(item, now, bypassThrottle) {
     const dec = decide(item);
-    const throttleOk = now - state.lastPushAt >= Number(cfg.throttleMs);
-    if (dec.action === 'show' && !state.pending && throttleOk) { doPush(item, dec.reason, now); return { action: 'show', reason: dec.reason }; }
+    const throttleOk = !!bypassThrottle || now - state.lastPushAt >= Number(cfg.throttleMs);
+    if (dec.action === 'show' && !state.pending && throttleOk) { doPush(item, dec.reason, now); return { action: 'show', reason: dec.reason, text: item.text }; }
     const why = dec.action === 'show' ? (state.pending ? 'slot-busy' : 'throttled') : dec.reason;
     return enqueue(item, why, now);
   }
-  function handleEvent(ev, now) {
+  function handleEvent(ev, now, opts) {
     if (!ev) { stats.ignored += 1; return { action: 'ignore', reason: 'no-event' }; }
     stats.received += 1;
     if (!cfg.kinds || cfg.kinds[ev.kind] !== true) { stats.ignored += 1; return { action: 'ignore', reason: 'kind-off:' + ev.kind }; }
@@ -155,11 +156,11 @@ function createBridge(opts) {
       state.agg = a.map;
       if (a.action === 'hold') { stats.aggregated += 1; return { action: 'aggregate', reason: 'hold', text: a.display }; }
     }
-    return route({ kind: ev.kind, text: text, priority: priority, ttlMs: ttlFor(ev.kind, cfg), cmd: ev.cmd }, now);
+    return route({ kind: ev.kind, text: text, priority: priority, ttlMs: ttlFor(ev.kind, cfg), cmd: ev.cmd }, now, opts && opts.bypassThrottle);
   }
   return {
-    handleRaw: function (raw, now) { return handleEvent(E.normalize(raw), now === undefined ? Date.now() : now); },
-    handleEvent: function (ev, now) { return handleEvent(ev, now === undefined ? Date.now() : now); },
+    handleRaw: function (raw, now, opts) { return handleEvent(E.normalize(raw), now === undefined ? Date.now() : now, opts); },
+    handleEvent: function (ev, now, opts) { return handleEvent(ev, now === undefined ? Date.now() : now, opts); },
     // 每秒调一次(跟 composer.tick 同频): 冲刷聚合窗口 → 补计数 → 试着把待发的发出去
     tick: function (nowArg) {
       const t = nowArg === undefined ? Date.now() : nowArg;

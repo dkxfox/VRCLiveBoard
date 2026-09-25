@@ -103,7 +103,9 @@ function normalizeStart(data) {
 async function postJson(path, bodyStr, creds, opts) {
   const o = opts || {};
   const req = buildRequest(path, bodyStr, creds, o);
-  const res = await fetch(req.url, {
+  // fetchImpl 可注入: 插件里传 ctx.http.request(受权限门禁与审计), 单测里传假的
+  const doFetch = typeof o.fetchImpl === 'function' ? o.fetchImpl : fetch;
+  const res = await doFetch(req.url, {
     method: 'POST', headers: req.headers, body: req.body,
     signal: AbortSignal.timeout(Number(o.timeoutMs) || 10000)
   });

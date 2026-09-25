@@ -2,8 +2,8 @@
 // 连接层单测: 用 test/fake-ws-server.js 起**真**的本地 WebSocket 服务, 走真握手真 TCP, 但仍然不联网、不需要凭据。
 // 覆盖: 认证帧原文 / 认证成功 / 双心跳按配置发 / 消息派发 / 半包跨两个 WS 帧 / 认证超时重连 / 掉线重连 / 退避递增 / stop 收尾。
 const { createFakeServer, encodeFrame } = require('../test/fake-ws-server.js');
-const F = require('./frame.js');
-const { createSession } = require('./session.js');
+const F = require('../lib/frame.js');
+const { createSession } = require('../lib/session.js');
 let pass = 0, fail = 0;
 function ok(cond, msg) { if (cond) { pass++; console.log('  PASS ' + msg); } else { fail++; console.log('  FAIL ' + msg); } }
 function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }

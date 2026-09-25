@@ -5,8 +5,8 @@
 //   「参考」= 字段形态来自 02-社区协议.md 记录的 CMD 速查与参考实现(blivedm 等)的公开字段名;
 //   「合成」= 我按同一套约定"编"的(字段名对得上, 但没在真实流量里见过) —— 接真环境后要用真样例替换。
 // 官方开放平台沿用同一批 CMD, 但字段命名可能不同 → 所以断言只锁"宽容读取的结果", 不锁原始字段路径。
-const E = require('./events.js');
-const P = require('./policy.js');
+const E = require('../lib/events.js');
+const P = require('../lib/policy.js');
 let pass = 0, fail = 0;
 function ok(cond, msg) { if (cond) { pass++; console.log('  PASS ' + msg); } else { fail++; console.log('  FAIL ' + msg); } }
 

@@ -824,3 +824,11 @@
 - 两条**踩过才写下来**的规则(本轮先写错、被单测当场抓住): ① **自己刚发的那条不算挡自己** —— `composer.current` 只在真的发出去时更新、过期也不自动清空, 若把它当成"别人占着屏", 后面的弹幕会因为"优先级不高于它"**永远排队(饿死)**; ② **聚合窗口的键必须是弹幕原文**(不含昵称) —— 默认文案是"昵称: 文本", 拿它当键的话"很多人同时刷 666"永远聚不起来(每人昵称都不同)。另外修掉一个真 bug: 节流时间戳错用了墙上时钟(`nowFn()`)而不是调用方给的逻辑时间 —— 在可控时钟的单测里当场暴露(真环境里等价于"两个时间基准混用")。
 - 产出 2(文档): 新增 `11-接聊天框.md`(一条弹幕的旅程图 / 端口表 / 配置表 / 处置规则表 / 已知限制 4 条), README 的目录与状态同步更新。
 - 下一步(步 6b → 7): 把代码搬进 `plugins/bilibili-live/` 接真 API(`ctx.chatbox.send` + `ctx.events.every` + 官方 session 的 start/heartbeat/end), 再做设置面板(四个凭据掩码保存 + 「测试连接」), 一并过 GPLUG 门禁。
+## 197. B站插件 步 6b/7a: 代码搬进 plugins/ + 真 API 接线, 顺带发现控制台插件面板是死按键(2026-09-20, 用户"继续")
+- 背景: 之前代码都在 `插件研发/`(不随包出厂), 要真连就必须进 `plugins/`(插件管理器唯一扫描目录)。GPLUG 门禁规定 `plugins\` 是插件**唯一源**, 所以这次是 `git mv` **搬家**而不是复制两份。
+- 产出 1(搬家 + 接线): `plugins/bilibili-live/` —— manifest(id 与目录同名, api 2.0.0, **网络只声明 `live-open.biliapi.com` + `chat.bilibili.com`**, 新增 settings 字段声明) + `index.js`(真插件工厂: `apply` 自动连接 / `dispose` 收尾 / `api: test·start·stop·preview·status`) + `lib/` 六个模块 + `test/` 六个单测与假服务器; `插件研发/bilibili-live/` 只留 01~11 调研资料与 README(写明代码新位置)。
+- 产出 2(两处必要的小改): ① `official.postJson` 支持**注入 fetch** —— 插件里必须走 `ctx.http.request`(受域名白名单与审计), 不能裸 `fetch`; ② 插件 API 新增 `ctx.chatbox.current()`(composer.current 的**副本**)—— 桥要判断"该抢占还是该排队"必须知道屏幕现状, 这是插件机制第一次需要它。
+- 产出 3(设置字段**声明**能力): manifest 新增可选 `settings` 数组(`text`/`password`/`number`/`bool` + `secret` 标记 + hint/default), 由控制台自动渲染并写进 `ctx.config`; `secret:true` 的值**永不回传浏览器**(界面只说"已保存"), 留空保存 = 不修改。B站插件已按此声明四个凭据与显示参数(渲染 UI 是下一步 7b)。
+- 证据: 插件离线单测 **166 条全绿**(frame 11 / policy 20 / official 24 / session 16 / events 45 / bridge 50); GPLUG `OK bilibili-live v0.2.0 (api 2.0.0, 授权哈希 …)`, 0 FAIL; 常规门禁 14 PASS + 隔离冒烟 15/15。
+- 诚实记录(**两处自查发现, 都登记成 ISSUES**): ① 控制台「打开页面」(第三方面板)是**死按键** —— `app.js` 取的 `plgPanelOverlay`/`plgPanelFrame` 在 `index.html` 里根本不存在(新版控制台重写时丢的), 面板路由又只回 JSON、没有"渲染壳 + api 桥", 所以 weather-board 等官方插件的面板其实一样打不开(M-20260920-01); B站插件因此改走"卡片里的设置字段"绕开。② 占位 `index.js` 的导出形状(`{onLoad,onUnload}`)其实**不符合插件契约**, README 里那句"拷进 plugins/ 能正常加载"从未真正验证过 —— 已改正并登记 M-20260920-02。
+- 下一步(步 7b): 控制台按 `manifest.settings` 渲染掩码输入框 + 「测试连接」按钮(复用已有 `/api/plugins/config` 与 `/api/plugins/call` 两条路由, **不新增路由**), 补三语 i18n 与门禁断言; 之后请用户启用插件、填四个参数、点「测试连接」, 再开播验证头顶弹幕。

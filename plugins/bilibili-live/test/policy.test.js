@@ -1,7 +1,7 @@
 'use strict';
 // 显示策略单测(纯离线, 不需要凭据): node lib/policy.test.js
 // 对齐 2026-09-20 用户拍板的四条: ①可选中断 ②手动功能让路 ③高价值防丢 ④重复弹幕聚合
-const P = require('./policy.js');
+const P = require('../lib/policy.js');
 let pass = 0, fail = 0;
 function ok(cond, msg) { if (cond) { pass++; console.log('  PASS ' + msg); } else { fail++; console.log('  FAIL ' + msg); } }
 const T = 1000000;

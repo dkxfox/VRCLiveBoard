@@ -1,0 +1,36 @@
+{
+  "id": "bilibili-live",
+  "name": "B站直播互动",
+  "version": "0.2.0",
+  "author": "VRCLiveBoard 官方",
+  "description": "接入哔哩哔哩直播开放平台: 弹幕/礼物/醒目留言/上舰实时联动 VRChat 聊天框(支持抢占、排队、聚合与屏蔽词)",
+  "api": "2.0.0",
+  "permissions": {
+    "network": [
+      "live-open.biliapi.com",
+      "chat.bilibili.com"
+    ],
+    "filesystem": {
+      "read": [],
+      "write": []
+    },
+    "process": false,
+    "ports": []
+  },
+  "settings": [
+    { "key": "accessKeyId", "label": "access_key_id", "type": "text", "secret": true, "hint": "开放平台申请通过后邮件里的 access_key_id" },
+    { "key": "accessKeySecret", "label": "access_key_secret", "type": "password", "secret": true, "hint": "只保存在本机 config.json, 不会上传也不会进日志" },
+    { "key": "appId", "label": "app_id(互玩项目 ID)", "type": "text", "hint": "在开放平台创建项目后得到" },
+    { "key": "roomOwnerAuthCode", "label": "主播身份码", "type": "password", "secret": true, "hint": "用开播账号登录幻星 play-live.bilibili.com, 点右侧「身份码」" },
+    { "key": "autoStart", "label": "启用后自动连接", "type": "bool", "default": true },
+    { "key": "showUname", "label": "弹幕带昵称", "type": "bool", "default": true },
+    { "key": "prefix", "label": "文案前缀", "type": "text", "default": "" },
+    { "key": "throttleMs", "label": "两条消息最小间隔(毫秒)", "type": "number", "default": 1500 },
+    { "key": "ttlMs", "label": "普通消息显示时长(毫秒)", "type": "number", "default": 8000 },
+    { "key": "maxLen", "label": "单条最大字数", "type": "number", "default": 100 }
+  ],
+  "dependencies": {},
+  "conflicts": [],
+  "exclusive": [],
+  "loadOrder": 90
+}

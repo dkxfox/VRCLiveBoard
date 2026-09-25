@@ -1,8 +1,8 @@
 'use strict';
 // 事件 → 聊天框 的桥单测(纯离线, 不需要凭据): node lib/bridge.test.js
 // 用一个假 composer 端口(记录推送内容 + 维护 current), 不碰真的 OSC/聊天框。
-const B = require('./bridge.js');
-const P = require('./policy.js');
+const B = require('../lib/bridge.js');
+const P = require('../lib/policy.js');
 let pass = 0, fail = 0;
 function ok(cond, msg) { if (cond) { pass++; console.log('  PASS ' + msg); } else { fail++; console.log('  FAIL ' + msg); } }
 let T = 1000000;                                  // 可控时钟
@@ -196,6 +196,13 @@ function makeBridge(cfg, extra) {
   ok(B.allMasked('傻傻', '******', {}) === true && B.allMasked('你好', '你好', {}) === false && B.allMasked('傻x', '***x', {}) === false, 'allMasked: 只有"整条都是掩码"才算, 混了正常字就不算');
   ok(h.br.cfg().throttleMs === 1500 && h.br.cfg().queueMax === 20 && h.br.cfg().respectPriority === 85, 'cfg(): 桥自己的默认值与策略层默认值合并正确');
   ok(P.isHighValue('SUPER_CHAT') && !P.isHighValue('DANMAKU'), '(与策略层一致)高价值定义');
+  // 返回值要带 text(设置面板的"预览"要显示到底推了什么); bypassThrottle 只给显式预览用
+  const hp = makeBridge({});
+  const p1 = hp.br.handleRaw(danmu('预览一', '甲'), T);
+  const p2 = hp.br.handleRaw(danmu('预览二', '乙'), T + 100);
+  ok(p1.text === '甲: 预览一' && p2.text === '乙: 预览二' && p2.action === 'queue' && p2.reason === 'throttled', '返回值带 text; 节流内的第二条标 throttled');
+  const p3 = hp.br.handleRaw(danmu('预览三', '丙'), T + 200, { bypassThrottle: true });
+  ok(p3.action === 'show' && hp.c.sent.length === 2 && hp.c.sent[1].text === '丙: 预览三', 'bypassThrottle(手动预览): 立刻显示, 不排队');
 }
 
 console.log('  ---- ' + pass + ' PASS / ' + fail + ' FAIL ----');

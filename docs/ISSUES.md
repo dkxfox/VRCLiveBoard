@@ -744,3 +744,26 @@
 - 改动: ① 后端新增 `POST /api/plugins/open-dir` —— **不接受任何路径参数**, 只开 `<程序目录>/plugins`(否则等于对外提供了一个"打开任意路径"的接口); 桌面壳走 Electron `shell.openPath`, 纯 Node 走 `cmd /c start`(与既有 `/api/devdocs/open` 同一套做法); ② 插件卡新增「打开插件文件夹」按钮 + 成功/失败回执(三语); ③ 路由基线登记(level 0)并写明理由; ④ **无人值守护栏**: `VRCB_NO_SHELL=1` 时只回路径不弹窗 —— 否则每跑一次冒烟都会在用户桌面弹出资源管理器; 冒烟脚本已设该变量。
 - 验证: 门禁 14 PASS; 隔离冒烟 15/15(backend-flow 100 → **105 条**): 接口可用 / 只回 plugins 路径 / **传入 path 参数被忽略** / 无人值守 skipped=true / GET 不匹配 404; 使用说明第七节补了两行。
 - 关联: DEV-NOTES 186
+
+## M-20260920-01 控制台「打开页面」(第三方面板)是死按键 —— 面板容器在 1.4.x 控制台里缺失(开发 B站插件时自查)
+- 状态: OPEN(已被 B站插件绕开: 它的设置改走"插件卡片里的设置字段")
+- 严重度: S3(体验: 插件自带设置页打不开, 第三方插件的面板能力等于没有)
+- 来源: 做 B站插件设置界面时顺手核对 —— 点按钮 → 前端找不到容器
+- 现象: 插件卡片上的「打开页面」按钮点了没有任何反应。
+- 复现: 1. 启用任一带 `panel` 的插件(如 weather-board); 2. 在插件卡片点「打开页面」; 3. 期望弹出面板, 实际什么都不发生。
+- 根因: ① `app.js` 的处理器取 `plgPanelOverlay` / `plgPanelFrame`, 而这两个元素在 `index.html` 里**根本不存在**(新版控制台重写时丢了容器, 同类遗漏见 M-20260907-01「缺失面板类」), 处理器开头 `if (!ov || !fr) return;` 于是静默返回; ② `GET /api/plugins/panel` 只回 JSON(`{title, html}`), 没有把面板 HTML 渲染成 iframe 页面的壳, 也没有 `wxSaveAll` / `plgPickXlsx` 这类"面板内函数 → 插件 `api` 方法"的桥 —— 也就是说面板即便弹出来也调不到插件方法。
+- 影响面: 1.4.x 全版本; 官方 weather-board / friend-welcome / scheduled-board 与所有带面板的第三方插件。
+- 改动(本次**未修**, 只登记并绕开): B站插件不走面板, 改用 `manifest.settings` + 插件卡片自动渲染(见 DEV-NOTES 197); 面板本身两个选项: 补"容器 + 渲染壳 + api 桥", 或明确废弃并摘掉「打开页面」按钮。
+- 验证: 本次只做静态走查(`app.js:236` / `app.js:471` / `server.js:559`); 待修时补断言(点按钮必须出现 iframe 且能调到插件方法)。
+- 关联: DEV-NOTES 197; M-20260907-01(缺失面板类)
+
+## M-20260920-02 占位插件的 README 说"拷进 plugins/ 能正常加载", 其实导出形状不符合插件契约(自查)
+- 状态: FIXED
+- 严重度: S4(开发期误导, 不影响用户)
+- 来源: 自查(把占位代码搬进 `plugins/` 时)
+- 现象: `插件研发/bilibili-live/index.js` 导出的是 `{onLoad, onUnload}`, 而契约要的是 `module.exports = function (ctx) { return { apply, dispose, api, panel } }`。
+- 根因: 写占位骨架时按"类钩子"的直觉写的, 没对着 `docs/PLUGIN-DEV.md` 逐字核对导出形状; 而"能正常加载"**从未真正验证过** —— 门禁不扫 `插件研发/`(不随包出厂), 谁也没试过把它拷进 `plugins/`。
+- 改动: 代码搬进 `plugins/bilibili-live/` 并改成真正的插件工厂(`apply` / `dispose` / `api`), 从此由 GPLUG 门禁按同一套契约校验; 占位 README 里那句话已删掉。
+- 验证: `node scripts/checks/plugin-check.js` → `OK bilibili-live v0.2.0 (api 2.0.0, 授权哈希 bilibili-live@0.2.0|2.0.0|cc04ae4c...)`; 插件离线单测 166 条全绿。
+- 教训: **"文件放对了"不等于"契约对"** —— 契约类的东西要对着规范逐字写, 并且让门禁覆盖得到(现在由 GPLUG 覆盖)。
+- 关联: DEV-NOTES 197
