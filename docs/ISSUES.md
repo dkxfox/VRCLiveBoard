@@ -803,3 +803,34 @@
 - 根因: 脚本注释写着"只扫会随包出厂的代码", 实现却只跳过 `node_modules/vendor/.git`, 不知道 `scripts/pack-exclude.json`(打包脚本用的唯一排除清单)。
 - 改动: 读 `pack-exclude.json` 的 dirs/files 并在遍历时跳过; 复跑后只剩两个**真实**新增域名。
 - 验证: `FAIL 外部域名 新增: api.live.bilibili.com, live-open.biliapi.com`(人工复核后进基线: 域名 14 → **16**, `updatedAt` → 2026-09-25), 其余类别全部 OK。
+
+## M-20260925-05 【C3】i18n 取词函数 `tr` 在加载期不可用(app.js 依赖后加载的 app-security.js)(本轮实机发现)
+- 状态: PARTIAL(兜底已加; **根因未除**)
+- 严重度: C3(实机日志 `[前端] Promise拒绝: tr is not defined`)
+- 现象: 页面加载期的异步路径(微任务/立刻返回的 fetch 回调)调 `tr()` 抛 ReferenceError → 某处文案不更新, 只留一条 Promise 拒绝。
+- 根因: `function tr()` 定义在 **app-security.js**, 而它在 app.js **之后**执行; GBOOT 原来只拦"顶层同步调用", 异步路径是漏网。
+- 已做(兜底): app.js 顶部加 `window.tr` 兜底(按原键显示 + 英文 console 提醒一次), app-security.js 执行后用真 tr 覆盖。
+- 待修(**根因**): 把取词函数与词典初始化从 app-security.js 挪到 lang.js(或独立 `i18n.js`, 排在 app.js 之前), app-security.js 只留安全策略; GBOOT 补断言"app.js 执行前 tr 必须已可用"。
+- 关联: DEV-NOTES 208
+
+## M-20260925-06 【C3】隔离冒烟的"插件生命周期"用例只覆盖了 1 个插件(本轮新建, 泛化待做)
+- 状态: PARTIAL(bilibili-live 已覆盖; 其余 4 个官方插件没有)
+- 严重度: C3(本轮正是这类缺口放过了"数据源没 enabled")
+- 现状: `backend-flow.js` ⑦c 只对 `bilibili-live` 跑"批准→启用→调接口→停用→再启用", 并断言"数据源已注册/停用后接口不可调"。
+- 待修: 泛化成遍历 `plugins/` —— 每个插件至少断言: 工厂 apply/dispose 不抛错、启用后列表 enabled、停用后接口 400、注册的数据源 `enabled` 为真(后者用假 ctx 在 plugin-behavior.js 做即可)。
+- 关联: DEV-NOTES 209/210
+
+## M-20260925-07 【C4】`feature-accept.ps1` 的 ASSERT 正则不能含引号(框架传参把引号吃掉)(本轮写功能卡时踩到)
+- 状态: OPEN(功能卡里已写明规避, 框架未修)
+- 严重度: C4(工具坑: 写卡片的人会以为是自己正则写错)
+- 现象: `- ASSERT: 插件已被装载并列出|/api/plugins|"id":"bilibili-live"` 永远 FAIL, 去掉引号(`bilibili-live`)立刻 PASS, 而打印出的响应体里明明有 `"id":"bilibili-live"`。
+- 根因: 断言文本经 PowerShell 参数/字符串层传递, 双引号在某层被剥掉。
+- 待修: 改成不经引号层的传递(写临时 JSON 再读 / base64 / 单引号包裹), 并删掉卡片模板里的规避说明。
+- 关联: DEV-NOTES 207/210
+
+## M-20260925-08 【C4】官方插件设置"死面板 + 老内联渲染器"两套并存(与 M-20260920-01 同源)
+- 状态: OPEN
+- 严重度: C4(体验/维护: 用户点了没反应; 两套机制并存容易漏改)
+- 现状: ① 「打开页面」仍是死按键 —— 4 个官方插件的 `panel` 全部打不开; ② 官方插件设置走各自 `window.__plgset_<id>` 内联 HTML, 而本轮新增的通用机制是 `manifest.settings`(数据驱动 + 密钥不回显 + 保存热生效)。
+- 待修: 先对面板给出结论(补齐 或 废弃并摘按钮), 再把 4 个官方插件设置逐步迁到 `manifest.settings`(**迁移完成前不要删 `__plgset_*`**, 否则设置界面直接消失)。
+- 关联: M-20260920-01; DEV-NOTES 197/210

@@ -37,7 +37,7 @@ Get-FileHash .\VRCLiveBoard-Lite-RequiresNode-v1.4.3.zip -Algorithm SHA256
 
 ## 从源码运行
 
-- 需要 Node.js 18+(建议 20+),Windows 10/11
+- 需要 Node.js **22+**(随包的插件用了全局 `WebSocket`,Node 18/20 会失败),Windows 10/11
 - 不复制配置也能启动(自动回退到 `config.default.json`);自定义请复制为 `config.json` 修改
 - `node src/main.js`,或直接双击 `启动.bat`
 
