@@ -64,7 +64,15 @@ if (Object.keys(cur.artifacts).every((r) => base.artifacts[r] === cur.artifacts[
 // npm audit(best effort; 离线只警告)
 if (!process.argv.includes('--no-npm')) {
   try {
-    const out = execFileSync('npm', ['audit', '--json', '--prefix', ROOT], { cwd: ROOT, encoding: 'utf8', windowsHide: true, maxBuffer: 32 * 1024 * 1024, shell: true });
+    // 2026-09-25: 不能用 shell:true —— 本仓库可能在工作区是 UNC 路径(\\server\share\...), cmd.exe 无法以 UNC 为 cwd,
+    // 会静默退回 C:\Windows, 于是 npm 在**别的目录**里找 lockfile → 永远 ENOLOCK(实测)。改用 npm.cmd + 直接 spawn。
+    // 两难的解释: Windows 上 .cmd 必须用 shell 才能 spawn(Node 的 CVE-2024-27980 收紧), 而 shell(cmd.exe) 又不接受 UNC 做 cwd。
+    // 解法: 找到 npm 的 CLI js, 用**当前 node 直接跑**它 —— 不用 shell, 也不怕 UNC。
+    const path = require('path');
+    const npmCli = path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js');
+    const out = fs.existsSync(npmCli)
+      ? execFileSync(process.execPath, [npmCli, 'audit', '--json'], { cwd: ROOT, encoding: 'utf8', windowsHide: true, maxBuffer: 32 * 1024 * 1024 })
+      : execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['audit', '--json'], { cwd: ROOT, encoding: 'utf8', windowsHide: true, maxBuffer: 32 * 1024 * 1024, shell: true });
     const j = JSON.parse(out);
     const v = (j.metadata && j.metadata.vulnerabilities) || {};
     const total = Object.values(v).reduce((a, b) => a + (typeof b === 'number' ? b : 0), 0);

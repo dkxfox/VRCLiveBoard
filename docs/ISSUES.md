@@ -746,7 +746,7 @@
 - 关联: DEV-NOTES 186
 
 ## M-20260920-01 控制台「打开页面」(第三方面板)是死按键 —— 面板容器在 1.4.x 控制台里缺失(开发 B站插件时自查)
-- 状态: OPEN(已被 B站插件绕开: 它的设置改走"插件卡片里的设置字段")
+- 状态: **WONTFIX-面板 / FIXED-死按键**(2026-09-25 结论): 面板容器缺失已久且没有真实需求方, 决定**不支持插件自带面板**; 「打开页面」死按键与关闭残留逻辑**已摘除**, 带 panel 的插件改为显示一行说明(三语 `plgPanelGone`), 设置统一走 `manifest.settings`(见 PLUGIN-DEV.md)。恢复面板能力需另立功能卡。
 - 严重度: S3(体验: 插件自带设置页打不开, 第三方插件的面板能力等于没有)
 - 来源: 做 B站插件设置界面时顺手核对 —— 点按钮 → 前端找不到容器
 - 现象: 插件卡片上的「打开页面」按钮点了没有任何反应。
@@ -776,7 +776,7 @@
 - 根因: 本机工作区在 UNC 路径上且**仓库根没有 package-lock.json**, `npm audit --json` 回 `{"error":{"code":"ENOLOCK",...}}` 并退出 1; dep-audit 的 catch 分支解析该 JSON 后取 `j.metadata.vulnerabilities`(**不存在**)→ 得到 `{}` → 当成"0 个漏洞"打 OK。**扫描器说自己绿了, 比漏报更危险**。
 - 改动: `scripts/checks/dep-audit.js` catch 分支: 没有 `metadata.vulnerabilities` 就报 **WARN + 原因**, 不再算通过(新增 warn 计数与汇总行)。
 - 验证: 复跑输出 `WARN npm audit 没有给出结果(ENOLOCK: This command requires an existing lockfile.) —— 这条不算通过, 需人工确认` + `---- 1 WARN ----`; 依赖清单与 8 项受监控产物哈希仍 OK。
-- 待用户决定: 是否在仓库根生成 `package-lock.json`(能让 npm audit 真正可跑、安装可复现; 但新增一个仓库/随包文件, 属 A0 决策)。
+- 已修(2026-09-25, 用户"继续完成修补"): ① 生成并提交根 `package-lock.json`(**26KB**, 在本地临时目录用 `npm install --package-lock-only --ignore-scripts` 生成后拷回 —— UNC 工作区里 npm 的 cmd 包装器跑不了); ② 修掉 `dep-audit` 执行 npm 的方式: Windows 上 `.cmd` 必须 shell 才能 spawn, 而 shell(cmd.exe) 不接受 UNC 做 cwd → 改为**用当前 node 直接跑 npm 的 CLI js**。复跑结果: `OK npm audit: 严重 0 / 高危 0 / 中 0 / 低 0(合计 0)` —— 依赖审计从"假通过"变成**真的在跑**。
 - 关联: DEV-NOTES 208; PROCESS-03 §0「审计器本身也要被审计」
 
 ## M-20260925-02 【C2·已修】弹幕服务器地址未做白名单校验 —— 认证令牌可能被发到任意主机(PROCESS-03 3A 发现)
@@ -821,7 +821,7 @@
 - 关联: DEV-NOTES 209/210
 
 ## M-20260925-07 【C4】`feature-accept.ps1` 的 ASSERT 正则不能含引号(框架传参把引号吃掉)(本轮写功能卡时踩到)
-- 状态: OPEN(功能卡里已写明规避, 框架未修)
+- 状态: **FIXED**(2026-09-25): 断言改走 **base64** 通道(`feature-accept.ps1` 编码 → `smoke.ps1 -AssertB64` 解码), 引号/竖线不再经过命令行解析层; 功能卡里那条正则已改回自然的 `"id":"bilibili-live"` 写法并复跑 **19 PASS / 0 FAIL**。
 - 严重度: C4(工具坑: 写卡片的人会以为是自己正则写错)
 - 现象: `- ASSERT: 插件已被装载并列出|/api/plugins|"id":"bilibili-live"` 永远 FAIL, 去掉引号(`bilibili-live`)立刻 PASS, 而打印出的响应体里明明有 `"id":"bilibili-live"`。
 - 根因: 断言文本经 PowerShell 参数/字符串层传递, 双引号在某层被剥掉。

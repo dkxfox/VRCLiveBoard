@@ -50,6 +50,17 @@ manifest 里可以声明 `settings` 数组, 控制台会在插件卡片里**自�
 - `secret: true` = 敏感值: **永远不会回传给浏览器**(界面只显示"已保存/未填写"), 留空保存表示"不修改"; 日志里也别打印它;
 - 保存走已有的 `POST /api/plugins/config`; 插件里用 `ctx.config.<key>` 读。
 
+## 插件自带页面面板: 本版控制台不支持(2026-09-25 结论)
+
+`panel: { title, html(cfg) }` 这套"插件自带 HTML 面板"在 **1.4.x 新版控制台里无法使用**: 页面容器(`plgPanelOverlay`/`plgPanelFrame`)
+在新版 UI 重写时丢失, 面板路由只回 JSON(没有渲染壳, 也没有"面板内函数 → 插件 `api` 方法"的桥)。控制台里那个
+「打开页面」按钮**按下去没有任何反应** —— 所以它已被摘除(ISSUES M-20260920-01)。
+
+- **新插件请用 `manifest.settings`**(控制台自动渲染输入框 + 密钥不回显 + 保存即生效), 见下面一节;
+- 已知的官方插件(weather-board / friend-welcome / scheduled-board 等)仍带着旧的 `panel`, 控制台会显示一行说明而不是按钮;
+  它们的设置目前仍走各自的 `__plgset_<id>` 渲染器(内联 HTML), 迁移到 `manifest.settings` 是后续工作(ISSUES M-20260925-08);
+- 想恢复"完整面板"能力需要**另立功能卡**: 补容器 + 渲染壳 + 方法桥, 并按存储型 XSS 的口径做沙箱 iframe。
+
 ## index.js(能力注入 ctx)
 
 ```js

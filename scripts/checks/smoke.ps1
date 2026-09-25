@@ -10,11 +10,16 @@ param(
   [string]$Zip = '',
   [int]$Port = 19250,
   [string[]]$Assert = @(),
+  [string]$AssertB64 = '',      # 2026-09-25: 断言也可以用 base64 传(命令行层会把双引号吃掉, 见 ISSUES M-20260925-07)
   [switch]$KeepTemp,
   [switch]$Flow
 )
 $ErrorActionPreference = 'Stop'
 $Assert = @($Assert | ForEach-Object { $_ -split ([string][char]31) } | Where-Object { $_ })
+if ($AssertB64) {                        # base64 通道: 断言里的引号/竖线都不会被命令行解析层改写
+  $txt = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($AssertB64))
+  $Assert = @($txt -split ([string][char]31) | Where-Object { $_ })
+}
 $proj = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 if ($Port -eq 19190) { Write-Output '[FATAL] 19190 是用户实例端口, 禁止用于测试'; exit 2 }
 $tmp = Join-Path $env:TEMP ('vrcb-smoke-' + $Port)

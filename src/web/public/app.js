@@ -235,13 +235,12 @@ function plgCard(p){var en=!!(p.enabled||p.run),ap=!!p.approved;var d=document.c
       .catch(function (e) { apiFail('#plugCards', e); });
   };
   pwrap.appendChild(plb); pwrap.appendChild(pin); prioHost.appendChild(pwrap);
-  if (pbody) {
-    // 第三方面板(M-20260911-40): 用沙箱 iframe 承载插件自带页面 —— 绝不把插件 HTML 直接 innerHTML 进控制台(存储型 XSS)
-    if (p.hasPanel || p.panel) {
-      var pn = document.createElement('button'); pn.className = 'small gray'; pn.textContent = tr('btnOpenPage'); pn.style.marginLeft = '6px';
-      pn.onclick = function () { var ov = $('plgPanelOverlay'); var fr = $('plgPanelFrame'); if (!ov || !fr) return; fr.src = '/api/plugins/panel?id=' + encodeURIComponent(p.id); ov.hidden = false; };
-      pbody.appendChild(pn);
-    }
+  // 第三方面板按钮**已摘除**(2026-09-25, ISSUES M-20260920-01): 新版控制台里 index.html 没有
+  // plgPanelOverlay / plgPanelFrame 容器, 面板路由又只回 JSON(没有渲染壳与 api 桥) —— 按下去什么都不会发生。
+  // "用户看得见、点了没反应"比"没有这个按钮"更糟, 所以先摘掉; 插件设置一律走 manifest.settings(见 PLUGIN-DEV.md)。
+  if (pbody && (p.hasPanel || p.panel) && p.enabled && !(Array.isArray(p.settingsUi) && p.settingsUi.length)) {
+    var pnote = document.createElement('span'); pnote.className = 'sub'; pnote.textContent = tr('plgPanelGone');
+    pbody.appendChild(pnote);
   }
  return d;}
 function renderPlgCards(){var el=$('plugCards');if(!el)return;el.innerHTML='';if(!plgArr.length){el.innerHTML='<div class="sub">'+tr('plgNoPlugins')+'</div>';return;}plgArr.forEach(function(p){el.appendChild(plgCard(p));});}
@@ -511,7 +510,7 @@ function guideHide(){var ov=$('guideOverlay');if(ov)ov.hidden=true;try{var no=$(
 function capInfoShow(){fetch('/api/config').then(function(r){return r.json();}).then(function(c){var cap=((c.ocrtl||{}).capture)||{};var el=$('capInfo');if(!el)return;var md=cap.mode||'window';var key=md==='region'?'capModeReg':(md==='screen'?'capModeScr':'capModeWin');var s=tr(key);if(md==='region'){var rg=cap.region||{};s+=' '+(rg.w>0?((rg.x||0)+','+(rg.y||0)+' '+(rg.w||0)+'x'+(rg.h||0)):tr('capNoRegion'));}el.textContent=s;}).catch(function(e){apiFail('#capInfo',e);});}
 capInfoShow();
 // 插件面板关闭(M-20260911-40): 关闭时把 iframe 置空, 避免残留页面在后台继续跑
-(function(){var c=$('plgPanelClose');if(!c)return;c.onclick=function(){var ov=$('plgPanelOverlay'),fr=$('plgPanelFrame');if(ov)ov.hidden=true;if(fr)fr.src='about:blank';};})();
+// 面板关闭逻辑已随"死按键"一起摘除(2026-09-25): 容器本来就不存在, 这段只是历史残留。
 
 // init
 
