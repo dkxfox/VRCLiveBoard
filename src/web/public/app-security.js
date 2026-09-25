@@ -6,7 +6,7 @@
 const T = window.VRCB_LANG || { 'zh-CN': {} };
 // tr / t / 当前语言码都来自 lang.js(<head> 最先加载) —— 这里不再重复定义(2026-09-25 归位, M-20260925-05):
 // app.js 会在本文件执行**之前**就可能调用 tr(), 所以取词必须比 app.js 更早就位。
-// 注意: 这里**不要**写 `const tr = window.tr` —— GI18NU 门禁会拦"局部绑定遮蔽取词函数"; 直接用全局 tr 即可。
+// 注意: 这里**不要**给取词函数再声明一个局部变量(GI18NU 门禁会拦"遮蔽取词函数"); 直接用全局的那个函数即可。
 function langGet() { return window.__lang(); }
 function langSet(v) { return window.__lang(v); }
 function applyLang() {
