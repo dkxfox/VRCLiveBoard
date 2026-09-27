@@ -21,7 +21,7 @@
             },
     "desktop":  {
                     "showConsole":  true,
-                    "softwareVideoDecode":  false
+                    "hardwareAcceleration":  "auto"
                 },
     "update":  {
                    "mirror":  "",

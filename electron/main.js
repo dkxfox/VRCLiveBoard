@@ -20,12 +20,28 @@ function desktopCfg() {
     return JSON.parse(raw.charCodeAt(0) === 0xFEFF ? raw.slice(1) : raw).desktop || {};
   } catch (e) { return {}; }
 }
+// 档位(M-20260927-10): auto(默认) / decode(仅关闭视频硬解码) / off(全部关闭 = 软件渲染)。
+// 旧键 softwareVideoDecode 仍然认(等价 decode)。解析结果写进 VRCB_HW_MODE, 让核心/诊断/取证报告都能自证"这一轮跑在什么档位"。
+const HW_MODE = (function () {
+  try {
+    const d = desktopCfg();
+    const m = String(d.hardwareAcceleration || '').toLowerCase();
+    if (m === 'auto' || m === 'decode' || m === 'off') return m;
+    return d.softwareVideoDecode === true ? 'decode' : 'auto';
+  } catch (e) { return 'auto'; }
+})();
 try {
-  if (desktopCfg().softwareVideoDecode === true) {
+  if (HW_MODE === 'decode') {
     app.commandLine.appendSwitch('disable-accelerated-video-decode');
-    console.log('[VRCLiveBoard] 已按配置关闭硬件视频解码(desktop.softwareVideoDecode=true)');
+    console.log('[VRCLiveBoard] 硬件加速档位: decode(仅关闭视频硬件解码)');
+  } else if (HW_MODE === 'off') {
+    app.disableHardwareAcceleration();
+    console.log('[VRCLiveBoard] 硬件加速档位: off(全部关闭, 软件渲染)');
+  } else {
+    console.log('[VRCLiveBoard] 硬件加速档位: auto(默认)');
   }
 } catch (e) {}
+process.env.VRCB_HW_MODE = HW_MODE;
 
 function applyConsoleSetting() {
   try {

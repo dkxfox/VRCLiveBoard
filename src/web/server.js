@@ -119,6 +119,14 @@ function effPluginSec() {
   }
   // ===== 启动彩蛋决策(设计稿 §4 状态机, M-20260911-50) =====
   // 单一来源: 桌面壳启动画面与网页控制台都问 /api/efx/boot —— 两套判定必然漂移, 而"已播记录"只有服务端能写回 config
+  // 硬件加速档位(M-20260927-10): auto(默认) / decode(仅关闭视频硬解码) / off(全部关闭, 软件渲染)。
+  // 旧键 desktop.softwareVideoDecode 是 1.4.6 之前的写法, 仍然认(等价 decode), 避免用户配置失效。
+  function hwAccelMode() {
+    const d = (rootConfig.desktop && typeof rootConfig.desktop === 'object') ? rootConfig.desktop : {};
+    const m = String(d.hardwareAcceleration || '').toLowerCase();
+    if (m === 'auto' || m === 'decode' || m === 'off') return m;
+    return d.softwareVideoDecode === true ? 'decode' : 'auto';
+  }
   function efxCfg() {
     if (!rootConfig.efx || typeof rootConfig.efx !== 'object' || Array.isArray(rootConfig.efx)) rootConfig.efx = {};
     const e = rootConfig.efx;
@@ -343,7 +351,7 @@ function effPluginSec() {
     const swf = (rootConfig.chatbox && rootConfig.chatbox.swearFilter) || {};
     // 空安全: 配置段缺失时宁可给空值, 也不能让这个高频接口抛未捕获异常(整个服务会因此不回包)
     const pgCfg = (rootConfig.sources && rootConfig.sources.pages) || {};
-    return json(res, 200, { pages: pgCfg.pages || [], rotationMs: pgCfg.rotationMs, sources: srcs, autostart: autostart, desktop: { showConsole: !((rootConfig.desktop || {}).showConsole === false) }, lang: (rootConfig.web && rootConfig.web.lang) || 'zh-CN', ocrtl: { delayMs: (rootConfig.ocrtl || {}).delayMs || 5000, displayMs: (rootConfig.ocrtl || {}).displayMs || 8000, loops: (rootConfig.ocrtl || {}).loops || 2, mode: (rootConfig.ocrtl || {}).mode || 'auto', vision: { apiBase: v.apiBase || '', model: v.model || 'deepseek-v4.1-flash', hasKey: !!v.apiKey, targetLang: v.targetLang || 'zh', promptMode: (v.promptMode === 'smart' ? 'smart' : 'full') }, capture: { mode: cap.mode || 'window', windowTitle: cap.windowTitle || 'VRChat', region: cap.region || { x: 0, y: 0, w: 0, h: 0 } }, security: { promptDefense: sec.promptDefense !== false, jsonMode: sec.jsonMode !== false, outputSanitize: sec.outputSanitize !== false, extraPrompt: sec.extraPrompt || '', blockWords: sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS } }, swearFilter: { enabled: swf.enabled !== false, words: swf.words && swf.words.length ? swf.words : swearfilter.DEFAULTS }, pluginsSecurity: effPluginSec(), branding: (rootConfig.branding || 'default'), specialEvents: (rootConfig.specialEvents || []), efx: { enabled: efxCfg().enabled, oncePerDay: efxCfg().oncePerDay, splashMaxMs: efxCfg().splashMaxMs }, market: { indexUrl: ((rootConfig.market || {}).indexUrl || ''), revokeUrl: ((rootConfig.market || {}).revokeUrl || ''), installed: rootConfig.marketInstalled || {} } });
+    return json(res, 200, { pages: pgCfg.pages || [], rotationMs: pgCfg.rotationMs, sources: srcs, autostart: autostart, desktop: { showConsole: !((rootConfig.desktop || {}).showConsole === false), hardwareAcceleration: hwAccelMode() }, lang: (rootConfig.web && rootConfig.web.lang) || 'zh-CN', ocrtl: { delayMs: (rootConfig.ocrtl || {}).delayMs || 5000, displayMs: (rootConfig.ocrtl || {}).displayMs || 8000, loops: (rootConfig.ocrtl || {}).loops || 2, mode: (rootConfig.ocrtl || {}).mode || 'auto', vision: { apiBase: v.apiBase || '', model: v.model || 'deepseek-v4.1-flash', hasKey: !!v.apiKey, targetLang: v.targetLang || 'zh', promptMode: (v.promptMode === 'smart' ? 'smart' : 'full') }, capture: { mode: cap.mode || 'window', windowTitle: cap.windowTitle || 'VRChat', region: cap.region || { x: 0, y: 0, w: 0, h: 0 } }, security: { promptDefense: sec.promptDefense !== false, jsonMode: sec.jsonMode !== false, outputSanitize: sec.outputSanitize !== false, extraPrompt: sec.extraPrompt || '', blockWords: sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS } }, swearFilter: { enabled: swf.enabled !== false, words: swf.words && swf.words.length ? swf.words : swearfilter.DEFAULTS }, pluginsSecurity: effPluginSec(), branding: (rootConfig.branding || 'default'), specialEvents: (rootConfig.specialEvents || []), efx: { enabled: efxCfg().enabled, oncePerDay: efxCfg().oncePerDay, splashMaxMs: efxCfg().splashMaxMs }, market: { indexUrl: ((rootConfig.market || {}).indexUrl || ''), revokeUrl: ((rootConfig.market || {}).revokeUrl || ''), installed: rootConfig.marketInstalled || {} } });
   });
   const route_v1_chatbox = function (req, res, url) {
     return readBody(req, function (body) {
@@ -1030,6 +1038,21 @@ function effPluginSec() {
   on('GET', '/api/logs', function (req, res, url) {
     return json(res, 200, { lines: logger.tail(Number(url.searchParams.get('tail')) || 200) });
   });
+  // 硬件加速档位(桌面壳在 ready 之前读同一个字段决定开关, 所以这里只负责"存", 生效要重启)
+  on('POST', '/api/desktop/hw-accel', function (req, res, url) {
+    return readBody(req, function (body) {
+      try {
+        const o = JSON.parse(body || '{}');
+        const m = String(o.mode || '').toLowerCase();
+        if (m !== 'auto' && m !== 'decode' && m !== 'off') return json(res, 400, { ok: false, error: 'mode 必须是 auto / decode / off' });
+        rootConfig.desktop = rootConfig.desktop || {};
+        rootConfig.desktop.hardwareAcceleration = m;
+        try { delete rootConfig.desktop.softwareVideoDecode; } catch (e) {}   // 旧键退场, 免得两个开关打架
+        persist();
+        return json(res, 200, { ok: true, mode: m, active: (process.env.VRCB_HW_MODE || 'unknown'), restartRequired: true });
+      } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
+    });
+  });
   on('POST', '/api/desktop/console', function (req, res, url) {
     return readBody(req, function (body) {
       try {
@@ -1117,7 +1140,7 @@ function effPluginSec() {
     });
   });
   on('GET', '/api/diagnose', function (req, res, url) {
-    return diagnose({ config: rootConfig, composer: composer }).then(function (r) { return portCheck().then(function (pc) { r.ports = pc; r.gpu = shellGpuStatus(); json(res, 200, r); }); }).catch(function (e) { json(res, 500, { ok: false, error: String(e.message) }); });
+    return diagnose({ config: rootConfig, composer: composer }).then(function (r) { return portCheck().then(function (pc) { r.ports = pc; r.gpu = shellGpuStatus(); r.hwAccel = { mode: hwAccelMode(), active: (process.env.VRCB_HW_MODE || 'unknown(非桌面壳)') }; json(res, 200, r); }); }).catch(function (e) { json(res, 500, { ok: false, error: String(e.message) }); });
   });
   on('POST', '/api/autostart', function (req, res, url) {
     return readBody(req, function (body) {

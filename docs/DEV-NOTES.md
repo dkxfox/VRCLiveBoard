@@ -1265,6 +1265,16 @@
 - 教训(三条, 都是本轮真金白银换的): ① **周期性卡顿先量播放端**: 我前四轮都在改主进程/窗口节流/网络盘这些**宿主**, 真正定案靠的是"整段播放的缓冲曲线 + 丢帧计数"; ② **探针环境必须先自证**: 我那台机器跑 Electron 探针回的是"软件解码", 与用户实机**相反**, 差点把结论带反; ③ **开关类修复必须让报告自证生效**(env 快照), 否则用户说"还是卡"/"好了"都无法归因。
 - 遗留: ① **1.4.6 版本说明**要写三条 —— 彩蛋在窗口期内每次启动都播、OCR 区域源改常驻助手+退避(插件需重新授权)、新增"关闭硬件视频解码"开关; ② 技术债 M-20260927-08(30 秒慢档仍阻塞 ~130ms)/ M-20260927-09(ocrregion 单 tick ~500ms)已登记未处理; ③ 用户 config 现已开启软解, 保持即可。
 
+## 241. 设置里新增"硬件加速"三档开关(用户要求: 界面也卡过)(2026-09-27 深夜)
+- 解读与边界: 用户问"要不要在设置里加个禁用硬件加速之类的开关, 以前用户界面用起来也有这个问题" —— 这是**产品面**的要求: M-20260927-07 的绕过手段当时只在 config.json 里, 用户要的是"界面上能改"; 并且"界面本身卡"将来也需要同一类逃生门。当场实现。
+- 设计: 一条配置三档 —— `desktop.hardwareAcceleration` = `auto`(默认) / `decode`(仅关闭视频硬件解码) / `off`(关闭全部硬件加速=软件渲染); 旧键 `softwareVideoDecode` 仍认作 `decode`(老配置不失效)。控制台「高级设置 → 硬件加速」下拉框, 改完提示"重启程序后生效"(壳在 ready 之前读配置)。
+- 实现: ① `electron/main.js` ready 前解析档位(decode → `disable-accelerated-video-decode`; off → `app.disableHardwareAcceleration()`), 档位写进 `process.env.VRCB_HW_MODE` 供自证; ② 新路由 `POST /api/desktop/hw-accel`(白名单校验, 非法 400, 写入即 persist 并删旧键); ③ `/api/config` 的 desktop 段回传档位; ④ `/api/diagnose` 增加 `hwAccel{mode, active}`; ⑤ 控制台下拉 + 三语文案 6 键; ⑥ 取证报告 `env.hwMode`。
+- 证据(E1, 隔离壳实测): `electron electron/main.js` + 独立 `VRCB_USER_DATA`(端口自动回退 19191, **不碰用户实例**): 日志 `硬件加速档位: decode(仅关闭视频硬件解码)` ✓; `/api/diagnose` 回 `hwAccel={"mode":"decode","active":"decode"}` 且 `gpu.featureStatus.video_decode=disabled_software` ✓ —— 档位**真的落到了 Chromium 开关上**。
+- 证据(E2, 门禁): backend-flow 新增 3 条断言 → **145 PASS / 0 FAIL**; 冒烟 15/15; 常规门禁 15 PASS; 路由清单已登记。
+- 踩坑(值得记): 我第一次用 `electron .` 起隔离实例做验证 —— 结果 `hwAccel.active` 是 `unknown(非桌面壳)`, 差点误判成"开关没生效"。真因: `package.json.main = src/main.js`, `electron .` 起的是**纯核心**(没有壳), 桌面壳必须走 `electron electron/main.js`(npm run desktop / 启动器)。教训: **验证要打在真实的入口上**, 入口搞错时"证据"会指向一个不存在的 bug。
+- 诚实标注: `off` 档只做了代码路径, **未实机验证**(要实测需把实例切到 off 跑一遍) —— 已写进 M-20260927-10 卡片; 用户 config 已从旧键迁移为 `hardwareAcceleration: "decode"`(备份在 %TEMP%)。
+- 遗留: 1.4.6 版本说明要写这条(新增"硬件加速"三档设置); 若将来有用户反馈"界面也卡", 第一句就是"高级设置 → 硬件加速 → 全部关闭, 重启试试"。
+
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1405,5 +1415,6 @@
 | 238 | 2026-09-27 | 卡顿取证首轮读数: 真凶是"每 5 秒一次的硬件采集"(si.networkStats 阻塞事件循环 ~140ms) |
 | 239 | 2026-09-27 | 卡顿第六轮: 完整 60 秒读数把"数据/主进程/NAS"全部排除, 矛头指向媒体管线本身 |
 | 240 | 2026-09-27 | 卡顿结案: 真因是"硬件视频解码呈现跟不上"(双显卡机器), 软解对照验证通过 |
+| 241 | 2026-09-27 | 设置里新增"硬件加速"三档开关(用户要求: 界面也卡过) |
 
 <!-- DEV-NOTES-INDEX:END -->

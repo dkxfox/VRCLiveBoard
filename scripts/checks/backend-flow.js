@@ -539,6 +539,15 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     ok(!!(dpp && dpp.ok === true), '性能取证: POST /api/diag/perf 接受页面端证据');
     const dpa = JSON.parse((await req('/api/diag/perf', { method: 'POST', body: JSON.stringify({ arm: 60 }) })).body.toString('utf8'));
     ok(!!(dpa && dpa.ok === true), '性能取证: POST {arm:N} 支持手动续期');
+    // 硬件加速三档(M-20260927-10): 设置界面用它解决"双显卡机器上彩蛋/界面卡顿", 必须能存能读、非法值拒绝
+    const hw0 = JSON.parse((await req('/api/config')).body.toString('utf8'));
+    ok(!!(hw0.desktop && ['auto', 'decode', 'off'].indexOf(hw0.desktop.hardwareAcceleration) >= 0), '硬件加速: /api/config 回传档位(' + (hw0.desktop && hw0.desktop.hardwareAcceleration) + ')');
+    const hw1 = JSON.parse((await req('/api/desktop/hw-accel', { method: 'POST', body: JSON.stringify({ mode: 'off' }) })).body.toString('utf8'));
+    const hw2 = JSON.parse((await req('/api/config')).body.toString('utf8'));
+    ok(!!(hw1.ok === true && hw2.desktop && hw2.desktop.hardwareAcceleration === 'off'), '硬件加速: 保存 off 后回读一致');
+    const hw3 = JSON.parse((await req('/api/desktop/hw-accel', { method: 'POST', body: JSON.stringify({ mode: 'bogus' }) })).body.toString('utf8'));
+    ok(!!(hw3.ok === false), '硬件加速: 非法档位被拒绝');
+    await req('/api/desktop/hw-accel', { method: 'POST', body: JSON.stringify({ mode: 'auto' }) });   // 复原, 免得影响后续用例
     await req('/api/config', { method: 'POST', body: JSON.stringify({ specialEvents: [] }) });
   } catch (e) { ok(false, '启动彩蛋判定用例异常: ' + e.message); }
 

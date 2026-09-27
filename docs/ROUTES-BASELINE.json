@@ -84,6 +84,12 @@
     },
     {
       "m": "POST",
+      "p": "/api/desktop/hw-accel",
+      "level": 0,
+      "note": "硬件加速三档(M-20260927-10): auto/decode/off —— 只写入 config.desktop.hardwareAcceleration, 重启后由桌面壳在 ready 前生效; 旧键 softwareVideoDecode 仍兼容为 decode"
+    },
+    {
+      "m": "POST",
       "p": "/api/desktop/quit",
       "level": 0
     },

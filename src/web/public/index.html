@@ -272,6 +272,7 @@ body.no-anim *{animation:none!important;transition:none!important}
     <div class="card-title" style="margin-bottom:8px" data-t="advTitle">高级设置</div>
     <div class="row"><input type="checkbox" id="advAuto"><b style="font-size:13px" data-t="autoStart">开机自启</b><span class="sub" data-t="autoStartDesc">登录时自动运行</span></div>
     <div class="row" style="margin-top:8px"><input type="checkbox" id="advConsole"><b style="font-size:13px" data-t="showConsole">显示命令行窗口</b><span class="sub" data-t="desktop">桌面版</span><span class="sub" data-t="showConsoleDesc"></span><input type="checkbox" id="swfOn"><b style="font-size:13px" data-t="swfToggle">脏话过滤器</b><button class="small gray" onclick="swfSave()" data-t="swfSaveBtn">保存</button></div>
+    <div class="row" style="margin-top:8px"><b style="font-size:13px" data-t="hwAccelT">硬件加速</b><select id="advHwAccel" style="width:200px"><option value="auto" data-t="hwAuto">自动(默认)</option><option value="decode" data-t="hwDecode">仅关闭视频硬件解码</option><option value="off" data-t="hwOff">全部关闭(界面也卡时)</option></select><span class="sub" data-t="hwHint">改完需重启程序生效</span></div>
     <div class="sub" style="margin:12px 0 4px">🔒1 <span data-t="cfgBackupTitle">配置备用</span></div>
     <div class="row"><button class="small gray" id="expCfg" data-t="btnExportCfg"></button><button class="small gray" id="impCfg" data-t="btnImportCfg"></button></div>
     <div class="sub" style="margin:12px 0 4px" data-t="advNetwork">网络 / 端口</div>

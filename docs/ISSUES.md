@@ -425,5 +425,12 @@
   · **M-20260927-08 【S4】** 硬件采集"慢档"(网络计数/CPU 温度)每 30 秒仍会阻塞主进程约 130ms(单次 PowerShell 0.8~1.4 秒) —— 已从"每 5 秒"降到"每 30 秒", 用户侧已无感; 彻底解决需要把它挪出主进程(常驻助手进程)。
   · **M-20260927-09 【S4】** ocrregion 单次 tick 仍需 ~500ms(常驻截图助手链路), 退避后约 27 秒一次; 若将来 OCR 区域源在游戏内高频使用, 需要把它移出 composer 主循环(独立 worker)。
 
-
-
+## M-20260927-10 【S3】**设置里新增"硬件加速"三档开关**(用户要求: 界面以前也遇到过同样的卡)
+- 状态: **FIXED**(2026-09-27 深夜, 当场实现并实机验证)
+- 来源: 用户在 M-20260927-07 结案后提出 —— "要不要在设置里加个禁用硬件加速之类的开关, 以前用户界面用起来也有这个问题"。即: 这个绕过手段不该只藏在 config.json 里; 而且"界面本身卡"将来也需要同一类逃生门。
+- 设计(一条配置 / 三档 / 一个界面控件): `desktop.hardwareAcceleration` = `auto`(默认) / `decode`(仅关闭视频硬件解码) / `off`(关闭全部硬件加速 = 软件渲染); 旧键 `desktop.softwareVideoDecode` 仍认作 `decode`(老配置不失效)。控制台「高级设置 → 硬件加速」下拉框读写它, 改完提示"已保存, 重启程序后生效"(壳在 ready 之前读配置, 只能重启生效)。
+- 实现: ① `electron/main.js` 在 ready 前解析档位 —— `decode` 走 `appendSwitch('disable-accelerated-video-decode')`, `off` 走 `app.disableHardwareAcceleration()`, 并把档位写进 `process.env.VRCB_HW_MODE`(让核心/诊断/取证报告都能自证); ② 新路由 `POST /api/desktop/hw-accel`(白名单校验 `auto|decode|off`, 非法回 400; 写入即 persist, 并删除旧键避免两个开关打架); ③ `GET /api/config` 的 `desktop` 段回传当前档位; ④ `/api/diagnose` 增加 `hwAccel{mode, active}`; ⑤ 控制台新增下拉 + 三语文案 6 键; ⑥ 取证报告 `env` 增加 `hwMode`。
+- 验证(E1, 隔离壳实测): 用 `electron electron/main.js` + 独立 `VRCB_USER_DATA` 起一个隔离实例(端口自动回退到 19191, **不碰用户实例 19190**) —— 日志打印 `[VRCLiveBoard] 硬件加速档位: decode(仅关闭视频硬件解码)` ✓; `/api/diagnose` 回 `hwAccel={"mode":"decode","active":"decode"}` ✓ 且 `gpu.featureStatus.video_decode=disabled_software` ✓ —— **档位确实落到了 Chromium 开关上, 不是只写了个字段**。
+- 验证(E2, 门禁): `backend-flow` 新增 3 条断言(`/api/config` 回传档位 / 保存 off 后回读一致 / 非法档位被拒绝)→ **145 PASS / 0 FAIL**; 隔离冒烟 15/15; 常规门禁 15 PASS; 路由清单登记新路由。
+- 诚实标注: `off` 档(软件渲染)本轮**只做了代码路径, 未实机验证**(要实测需把实例切到 off 再跑一遍); `auto` / `decode` 两档已实测。
+- 教训: "藏"在配置文件里的开关等于没做 —— 用户提的这条要求当场做掉比事后教人手改 config.json 强(PROCESS-02 §5 的"用户可见面"口径)。

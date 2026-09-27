@@ -162,6 +162,7 @@ function envInfo() {
   } catch (e) {}
   if (!o.electron) o.versions = { node: process.versions.node };
   o.argvSoftDecode = process.argv.indexOf('--disable-accelerated-video-decode') >= 0;
+  o.hwMode = process.env.VRCB_HW_MODE || null;   // 桌面壳按 config 决定的档位(auto/decode/off), 非壳模式为 null
   return o;
 }
 
