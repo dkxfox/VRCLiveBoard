@@ -1098,7 +1098,9 @@ function effPluginSec() {
   on('GET', '/api/diag/perf', function (req, res, url) {
     let d = null;
     try { d = require('../diagperf'); } catch (e) { return json(res, 200, { ok: false, error: '取证模块不可用: ' + e.message }); }
-    return json(res, 200, d.report());
+    const rep = d.report();
+    try { if (rep && rep.report && composer && composer.sources) { rep.report.sources = composer.sources.map(function (s) { return { id: s.id, enabled: !!s.enabled, intervalMs: s.intervalMs, priority: s.priority, pollError: s._pollError || null }; }); } } catch (e) {}
+    return json(res, 200, rep);
   });
   on('POST', '/api/diag/perf', function (req, res, url) {
     return readBody(req, function (body) {

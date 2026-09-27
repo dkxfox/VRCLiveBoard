@@ -51,7 +51,11 @@ class Composer {
       const interval = src.intervalMs || 2000;
       if (now - (src._lastPoll || 0) < interval) continue;
       src._lastPoll = now;
+      // 源 tick 计时(M-20260927-07): 卡顿取证要能回答"这一次停顿是不是某个源拉出来的" —— 带耗时报给 diagperf,
+      // 让它和页面端 <video> 停顿、主进程事件循环尖峰对同一条时轴(>=20ms 才记, 正常源几乎不产生记录)。
+      const _t0 = Date.now();
       try { src._cached = await src.getText(this.getContext()); src._pollError = null; } catch (e) { src._cached = null; src._pollError = String((e && e.message) || e); }
+      try { require('./diagperf').tickMark({ at: _t0, src: src.id, ms: Date.now() - _t0 }); } catch (e) {}
       if (src._cached !== null && src._cached !== undefined) src.lastText = src._cached;
     }
     this.transients = this.transients.filter(function (t) { return t.ttlUntil > now; });

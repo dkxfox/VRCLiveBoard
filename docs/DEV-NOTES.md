@@ -1231,9 +1231,10 @@
 - 做法(启动即自动, 用户零学习成本): `npm start` 时 `src/main.js` 调 `require('./diagperf').arm(300)` —— 自动取证 **300 秒**, 到点**自动落盘** `logs/perf-<id>.json`(logs/ 已在 .gitignore)。用户只需"重启程序 → 让彩蛋播一遍", 不必记任何 URL。
 - 四路证据(同一 t0 时轴): ① **主进程事件循环延迟** —— `perf_hooks.monitorEventLoopDelay({resolution:10})`, 每秒取 `h.max` 并 reset, 记录 p50/p90/p99/max 与 ≥80ms 尖峰(附该秒自身 CPU 与各进程 CPU); ② **各进程 CPU** —— `process.cpuUsage` + Electron `app.getAppMetrics()`(GPU/Renderer/Utility 分列); ③ **视频响应投递曲线** —— `/api/special/video` 响应期间每 200ms 记一次 `res.socket.bytesWritten`, 收尾时算出平均吞吐(KB/s)与"相邻采样字节不变且 ≥300ms"的**断供段**; ④ **渲染端停顿** —— 页面 `playSpecialVideo` 里的探针对 `waiting/stalled/playing/suspend/error/ended/seeking/seeked` 逐个打点(带 `video.currentTime`), 并用 rAF 记录 ≥60ms 的长帧, 播放中每 10 秒 POST 一次 `/api/diag/perf`(中途关掉也能拿到数据)。
 - 自动归因(`report.verdict`): 把页面停顿与事件循环尖峰对轴 —— 同轴 → 优先查主进程(插件定时任务/写盘/采集进程); 不同轴 → 指向渲染/解码端; 投递曲线有断供段 → 数据到达侧(磁盘/NAS/读流)。判据写在代码里, 而不是我的记忆里。
-- 接口: `GET /api/diag/perf` 取报告(**读不销毁会话**, 可反复读; 采样继续到自然结束); `POST /api/diag/perf` 收页面端证据, 带 `{"arm":300}` 时是**手动续航**(窗口不够时可再 arm 一次)。两条路由已登记进 `docs/ROUTES-BASELINE.json`(level 0)。
+- 接口: `GET /api/diag/perf` 取报告(**读不销毁会话**, 可反复读; 采样继续到自然结束); `POST /api/diag/perf` 收页面端证据, 带 `{"arm":300}` 时开启一轮新会话(会话进行中是空操作, 回 `already:true` —— 想再测一轮就等它跑完再 arm)。两条路由已登记进 `docs/ROUTES-BASELINE.json`(level 0)。
 - 踩到的坑(值得记): 门禁的**路由可达性扫描会 GET 一遍所有路由** —— 第一版 `report()` 读完就把会话清空, 于是扫描之后紧跟的真实断言拿到"没有取证数据"(隔离实例里 `FAIL 性能取证: GET ...`)。修法: **报告幂等**, 读多少次都不销毁会话。教训: 加了新路由就等于把自己挂到了"全路由扫描"的必经路径上, 任何"读一次即失效"的语义都会先被扫描吃掉。
 - 证据: 合成数据自测 —— waiting→playing 配对出停顿 2000ms、投递曲线认出 400ms 处 500ms 断供、吞吐算出 50KB/s、verdict 同时给出"主进程平稳 → 看渲染/解码"与"数据到达侧需要看"; 隔离实例 `backend-flow` **138 PASS / 0 FAIL**(新增 2 条: GET 返回含 eventLoop 的报告 / POST 接受页面端证据), `SMOKE RESULT: pass=15 fail=0`。
+- 追加(同日): 报告再加两样东西, 让归因能落到**具体对象**上 —— ① `composer.tick` 给每个源的 `getText` **计时**(>=20ms 才记), 形成**源 tick 时轴**; ② `GET /api/diag/perf` 的报告自带**当前源清单**(id/enabled/intervalMs/pollError)。于是 verdict 能直接说"页面停顿与慢源 tick 同轴 N 次: ocrregion(900ms) -> 先治这个源"; 自测(合成数据): 不同轴时**不误报**, 只提示"源不是直接原因", 清单 5 个源照实回。
 - 遗留: 等用户按"重启 → 播一遍"跑一次, 我读 `logs/perf-*.json` 定位残留卡顿; 该工具是否长期保留(或降级为"仅诊断模式开启")待定。
 
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->

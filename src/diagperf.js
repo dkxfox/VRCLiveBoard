@@ -18,13 +18,14 @@ let session = null;
 function iso(t) { return new Date(t).toISOString(); }
 function clampSec(v) { const n = Number(v); if (!isFinite(n) || n <= 0) return DEFAULT_SECONDS; return Math.max(15, Math.min(MAX_SECONDS, Math.round(n))); }
 
+// 注意: 会话进行中调用是空操作(回 already:true), 只在"上一次已结束"时才会开新会话
 function arm(seconds) {
   if (session) return { ok: true, id: session.id, already: true, seconds: session.seconds };
   const secs = clampSec(seconds);
   const h = monitorEventLoopDelay({ resolution: 10 });
   h.enable();
   const t0 = Date.now();
-  const s = { id: 'perf-' + t0, t0: t0, startedAt: iso(t0), seconds: secs, endsAt: t0 + secs * 1000, h: h, samples: [], video: [], client: null, reported: 0 };
+  const s = { id: 'perf-' + t0, t0: t0, startedAt: iso(t0), seconds: secs, endsAt: t0 + secs * 1000, h: h, samples: [], video: [], ticks: [], client: null, reported: 0 };
   const cpu0 = process.cpuUsage();
   s.iv = setInterval(function () {
     const lag = h.max / 1e6; h.reset();
@@ -56,6 +57,12 @@ function stop(why) {
 }
 
 function videoMark(d) { if (session) { session.video.push(d); if (session.video.length > 200) session.video.shift(); } }
+// 源 tick 计时(>=20ms 才记: 正常源是毫秒级, 记全量没意义还会淹掉信号)
+function tickMark(d) {
+  if (!session || !d || !(d.ms >= 20)) return;
+  session.ticks.push({ atMs: Math.max(0, d.at - session.t0), src: d.src, ms: d.ms });
+  if (session.ticks.length > 600) session.ticks.shift();
+}
 function clientReport(payload) {
   if (!session) return { ok: false, error: '没有进行中的取证会话(程序启动后会自动记录 ' + DEFAULT_SECONDS + ' 秒; 重启程序后再试)' };
   session.client = payload || null;
@@ -90,6 +97,18 @@ function clientStalls(client) {
 }
 function near(a, b, tol) { return Math.abs(a - b) <= (tol || 800); }
 
+// 源 tick 与页面停顿对轴: 一次 >=300ms 的 tick 若与某次停顿同轴, 基本就是它拉出来的
+function tickHits(ticks, stalls) {
+  const slow = (ticks || []).filter(function (t) { return t.ms >= 300; });
+  const hits = [];
+  slow.forEach(function (t) {
+    stalls.forEach(function (st) {
+      if (st.startMs != null && st.startMs >= t.atMs - 500 && st.startMs <= t.atMs + t.ms + 500) hits.push({ src: t.src, tickMs: t.ms, atMs: t.atMs, stallMs: st.ms });
+    });
+  });
+  return { slow: slow, hits: hits };
+}
+
 function verdicts(s, spikes, stalls, respGaps) {
   const out = [];
   const hasSpike = spikes.length > 0;
@@ -101,6 +120,9 @@ function verdicts(s, spikes, stalls, respGaps) {
   } else if (stalls.length && !hasSpike) {
     out.push('页面停顿 ' + stalls.length + ' 次但主进程事件循环全程平稳 -> 指向渲染端/解码端, 以及文件数据投递');
   }
+  const th = tickHits(s.ticks, stalls);
+  if (th.hits.length) out.push('页面停顿与慢源 tick 同轴 ' + th.hits.length + ' 次: ' + th.hits.slice(0, 6).map(function (h) { return h.src + '(' + h.tickMs + 'ms)'; }).join(', ') + ' -> 先治这个源');
+  else if (th.slow.length) out.push('有 ' + th.slow.length + ' 次慢源 tick(>=300ms)但未与停顿同轴 -> 源不是直接原因, 仍需看它是否抬高 CPU');
   if (respGaps.length) out.push('视频响应中途有 ' + respGaps.length + ' 段"断供"(相邻采样字节数不变 >=300ms) -> 数据到达侧(磁盘/NAS/读流)需要看');
   const slow = (s.video || []).filter(function (v) { return v.throughputKBps != null && v.throughputKBps < 400 && v.bytes > 200000; });
   if (slow.length) out.push(slow.length + ' 次视频响应平均吞吐低于 400KB/s -> 播放期带宽/读盘跟不上 1Mbps 视频会持续补缓冲');
@@ -126,6 +148,10 @@ function writeReport(s) {
       spikeCount80ms: spikes.length,
       spikes: spikes.slice(0, 25).map(function (x) { return { atMs: x.atMs, lagMs: x.lagMs, selfCpuMs: x.selfCpu, procs: (x.procs || []).map(function (p) { return p.type + '#' + p.pid + '=' + p.cpu + '%'; }).join(' ') }; }) },
     videoResponses: responses.slice(-40),
+    sourceTicks: { count: (s.ticks || []).length, slow300ms: tickHits(s.ticks, stalls).slow.length,
+      bySrc: (s.ticks || []).reduce(function (acc, t) { acc[t.src] = Math.max(acc[t.src] || 0, t.ms); return acc; }, {}),
+      ticks: (s.ticks || []).slice(-120) },
+    sources: s.sources || null,
     clientStalls: stalls,
     clientLongFrames: lf.slice(0, 20),
     client: s.client,
@@ -150,4 +176,4 @@ function report() {
   s.reported = (s.reported || 0) + 1;
   return { ok: true, report: writeReport(s) };
 }
-module.exports = { arm: arm, stop: stop, report: report, clientReport: clientReport, videoMark: videoMark, active: function () { return !!session; }, DEFAULT_SECONDS: DEFAULT_SECONDS };
+module.exports = { arm: arm, stop: stop, report: report, clientReport: clientReport, videoMark: videoMark, tickMark: tickMark, active: function () { return !!session; }, DEFAULT_SECONDS: DEFAULT_SECONDS };

@@ -530,8 +530,12 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     // 性能取证接口(M-20260927-07): 启动即 arm, GET 取报告(含事件循环采样与视频响应时序), POST 收页面端证据
     const dpv = JSON.parse((await req('/api/diag/perf')).body.toString('utf8'));
     ok(!!(dpv && dpv.ok === true && dpv.report && dpv.report.eventLoop && Array.isArray(dpv.report.videoResponses)), '性能取证: GET /api/diag/perf 返回报告(采样 ' + (dpv && dpv.report && dpv.report.eventLoop && dpv.report.eventLoop.samples) + ' 次)' + (dpv && dpv.ok ? '' : ' [响应: ' + JSON.stringify(dpv).slice(0, 160) + ']'));
+    // 报告必须自带"源清单 + 源 tick 时轴": 排查靠的是"这次停顿是不是某个源拉出来的", 缺这两项报告就只是噪声
+    ok(!!(dpv.report.sourceTicks && Array.isArray(dpv.report.sourceTicks.ticks) && Array.isArray(dpv.report.sources) && dpv.report.sources.length > 0), '性能取证: 报告带源清单与源 tick 时轴(' + ((dpv.report.sources || []).length) + ' 个源)');
     const dpp = JSON.parse((await req('/api/diag/perf', { method: 'POST', body: JSON.stringify({ video: { events: [{ name: 'playing' }], longFrames: [], frames: 0 } }) })).body.toString('utf8'));
     ok(!!(dpp && dpp.ok === true), '性能取证: POST /api/diag/perf 接受页面端证据');
+    const dpa = JSON.parse((await req('/api/diag/perf', { method: 'POST', body: JSON.stringify({ arm: 60 }) })).body.toString('utf8'));
+    ok(!!(dpa && dpa.ok === true), '性能取证: POST {arm:N} 支持手动续期');
     await req('/api/config', { method: 'POST', body: JSON.stringify({ specialEvents: [] }) });
   } catch (e) { ok(false, '启动彩蛋判定用例异常: ' + e.message); }
 
