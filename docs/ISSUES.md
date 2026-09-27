@@ -395,5 +395,12 @@
   · **但这个探针有混淆, 不能据此下结论**: 我这边跑 Electron 时可能根本拿不到那张 5070 Ti(双卡: RTX 5070 Ti + AMD 核显), 而用户**运行中的壳**不一定相同(它的进程表里确实有 `--type=gpu-process`)。
   · **因此加了可自证的诊断字段**: `/api/diagnose` 现在带 `gpu`(取自**运行中那个壳**的 `app.getGPUFeatureStatus()`, 纯 Node 模式如实回 `available:false`)。**请用户在桌面壳运行时打开 `http://127.0.0.1:19190/api/diagnose`, 把 `gpu` 段发回来** —— 若 `software: true` 则方向锁定为"硬件加速没起来"(候选修法: `--ignore-gpu-blocklist` / `--disable-gpu-sandbox` / 指定 ANGLE 后端; 或把彩蛋素材降到 720p 以下/降低窗口内缩放成本)。
   · **另需一条对照**: 浏览器**无痕窗口**再放一次 —— 排除"HTTP 缓存让浏览器看起来流畅"这一假象(此前浏览器测试可能命中了缓存)。
+- **第四轮 = 根因找到(2026-09-27 深夜) —— 与 GPU/遮挡/网络盘**都无关** ✗✗✗**: `plugins/ocrregion.js`(OCR 区域字幕源, 用户 config 里 `enabled: true` / `intervalMs: 3000`)**每一个 tick 都 `execFile('powershell.exe', [... screen_capture.ps1 ...])`**。
+  · **实测成本(E1)**: 直接跑同一条 PowerShell 截图命令 → **901ms / 919ms 一次**; 也就是说这台机器上**每 3 秒有 ~0.9 秒的 CPU/进程尖峰** —— 正在播放的启动彩蛋(桌面壳里主进程还要同时喂 HTTP 视频流)必然"每 3 秒卡一下、声音一起停、恢复后跳帧"。而浏览器里直放之所以不卡: 那段视频早已缓冲完, 尖峰伤不到它。
+  · **修复**: ① 改用**常驻截图助手**(`src/capturehost.js`, 与截图翻译同一条链路) —— 正常情况不再每次起 PowerShell; ② **连续失败退避**(3 次 NO-WINDOW 后实际间隔 ×10, 成功即恢复)。
+  · **修复后实测**: 模拟 6 个 tick —— 前 3 次 910/538/483ms(常驻助手启动 + 判窗), **第 4 次起 0ms**(退避生效) ✓; 对比旧行为"每次都 900ms" ✓。
+  · **回归护栏**: GPLUG 新增 3 条断言 —— 该源**不得**自行 spawn PowerShell 截图 / 必须走 capturehost / 必须有退避(`BACKOFF_AFTER`|`nextAllowedAt`)。
+  · **撤销无证据的改动(诚实)**: 前三轮我基于被否证的假设加过四个 Electron 开关(backgroundThrottling:false / disable-background-timer-throttling / disable-backgrounding-occluded-windows / disable-renderer-backgrounding / CalculateNativeWinOcclusion), **已全部回退**, 并在代码里留一行注释说明来龙去脉。
+  · 状态: **FIXED(待用户实机确认)** —— 证据链完整(成本实测 + 修复后实测), 但"卡顿消失"仍需用户重启后确认; 若用户想独立复核, 可把 OCR 区域源**停用**再放一遍(同样应不卡)。
 
 

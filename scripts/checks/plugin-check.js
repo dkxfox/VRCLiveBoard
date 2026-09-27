@@ -151,5 +151,16 @@ try {
   }
 } catch (e) { say('FAIL', '读取 pack-exclude.json 失败(夹具保险无法校验): ' + e.message); }
 
+// 8. OCR 区域源不许"每 tick 起 PowerShell"(2026-09-27, M-20260927-07 根因): 实测单次 0.9 秒 CPU,
+//    在 3 秒间隔下等于整机每 3 秒一次尖峰 —— 启动彩蛋视频因此"每 3 秒卡一下、声音一起停"。
+//    要求: 走常驻截图助手(capturehost) + 连续失败退避(没人开游戏时几乎零开销)。
+try {
+  const src = fs.readFileSync(path.join(PLUGINS, 'ocrregion.js'), 'utf8');
+  const bad = /execFile\s*\(\s*['"]powershell/i.test(src) || /screen_capture\.ps1/.test(src);
+  say(bad ? 'FAIL' : true, 'OCR 区域源: 不得自行 spawn PowerShell 截图(必须走常驻助手)' + (bad ? ' —— 会把整机 CPU 打成每 tick 一次尖峰' : ''));
+  say(/capturehost/.test(src) ? true : 'FAIL', 'OCR 区域源: 走常驻截图助手(capturehost)');
+  say(/BACKOFF_AFTER|nextAllowedAt/.test(src) ? true : 'FAIL', 'OCR 区域源: 连续失败要有退避(窗口不在时别空转)');
+} catch (e) { say('WARN', '读取 plugins/ocrregion.js 失败(跳过 OCR 区域源断言): ' + e.message); }
+
 console.log('  ---- ' + (fail ? fail + ' FAIL' : '0 FAIL') + ' / ' + warn + ' WARN ----');
 process.exit(fail ? 1 : 0);
