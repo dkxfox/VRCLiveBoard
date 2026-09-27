@@ -39,14 +39,14 @@ Lite 包不带 electron(需系统 Node 22+), 其余依赖由 npm 按需安装, �
 
 | 素材 | 状态 | 说明 |
 | --- | --- | --- |
-| `assets/videos/*.mp4`(当前 `fes-0615.mp4`, 7.8MB) | **来源仍待用户确认 —— 但已由机制挡住: 未登记就不随包** | 启动彩蛋视频, **只进自包含包**(Lite 排除); `events.json` 不入库, 打包时注入。**登记处: `docs/ASSET-PROVENANCE.json`** —— `source/license/confirmedBy` 三项填齐才随包, 否则 `make-dist` 会把它从包里移除并在日志里点名。发布前请确认素材来源 / 可分发性, 或换成自制素材 |
+| `assets/videos/*.mp4`(当前 `fes-0615.mp4`, 7.5MB) | **已登记为 `local-only`: 仅本机测试用, 永不随包**(2026-09-27 用户说明: 该视频用于测试彩蛋功能是否完好) | 启动彩蛋视频, **只进自包含包**(Lite 排除); `events.json` 不入库, 打包时注入。**登记处: `docs/ASSET-PROVENANCE.json`** —— 只有 `source/license/confirmedBy` 三项填齐**且 `distribution` 不是 `local-only`** 的素材才随包; 否则 `make-dist` 会把它从包里移除、并在日志里点名(连指向它的彩蛋事件也一并跳过注入)。要改成随包必须**显式**把 `distribution` 写成 `package` 并补齐许可与确认人。发布前请确认素材来源 / 可分发性, 或换成自制素材 |
 | 图标 / 主题 / 星空背景 / 彩蛋代码 | 本项目自制 | — |
 
 ## 5. 规则(新增第三方组件时照做)
 
 1. 新增或升级任何第三方组件(依赖 / vendor / 模型文件 / 素材), **在同一次提交里更新本文件** —— 否则 dep-audit 只看得见哈希, 看不见许可证与来源。
 2. 版本以文件头或 `package.json` 的**实测值**为准, 不许照抄印象; 许可证以包内 LICENSE 文件或 `package.json` 的 `license` 字段为准, **两者都没有就写"待确认"并去上游核实**。
-3. 许可证不明或来源说不清的组件 / 素材**不进包**: 素材走 `docs/ASSET-PROVENANCE.json` 登记(`make-dist` 会移除未登记的并点名), 组件走本文件与第 2 节的许可文本。
+3. 许可证不明或来源说不清的组件 / 素材**不进包**: 素材走 `docs/ASSET-PROVENANCE.json` 登记(`make-dist` 会移除未登记的并点名, 且跳过注入指向它的事件); 组件走本文件与第 2 节的许可文本。**只做本机测试的素材写 `"distribution": "local-only"`** —— 永不随包, 也不需要许可(不发行就不涉及第 4 条)。
 4. 插件的 `vendor/` 若引入第三方库, **同一目录树的插件根**必须带 `LICENSE-<许可>.txt` + `THIRD-PARTY-NOTICE.txt`(见第 2 节做法; 根目录放 txt 不会扰动攻击面/产物基线)。
 5. **市场发布也受同一份禁入名单约束**: `make-market.js` 现在会跳过命中 `pack-exclude.json` 的 `forbiddenNamePatterns` 的插件 id("不进包的东西也不进市场"); 2026-09-27 修之前, 三个开发夹具曾被误当成官方插件写进市场索引。
 6. 本文件不替代 `docs/SECURITY-BASELINE.json`(机器基线); 两者合起来才是"依赖 + 许可证"的完整面。

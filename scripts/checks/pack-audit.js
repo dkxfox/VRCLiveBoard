@@ -83,10 +83,10 @@ function audit(zp) {
       else console.log('  彩蛋素材: Lite 正确排除');
     } else {
       // 2026-09-27: 与 make-dist 的素材闸同一口径 —— **只有已登记来源的素材才"必须在包里"**; 未登记的按规矩不进包(不是错)。
-      const approved = (function () { try { const p = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs', 'ASSET-PROVENANCE.json'), 'utf8')); return (p.assets || []).filter((a) => a && a.file && a.source && a.license && a.confirmedBy).map((a) => String(a.file)); } catch (e) { return []; } })();
+      const approved = (function () { try { const p = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs', 'ASSET-PROVENANCE.json'), 'utf8')); return (p.assets || []).filter((a) => a && a.file && a.source && a.license && a.confirmedBy && String(a.distribution || '').toLowerCase() !== 'local-only').map((a) => String(a.file)); } catch (e) { return []; } })();
       const unregistered = local.filter((f) => approved.indexOf(f) < 0);
       const need = local.filter((f) => approved.indexOf(f) >= 0);
-      if (unregistered.length) console.log('  彩蛋素材: 未登记来源 → 按规矩不进包(' + unregistered.join(', ') + '; 见 docs/ASSET-PROVENANCE.json)');
+      if (unregistered.length) console.log('  彩蛋素材: 未登记或标为 local-only → 按规矩不进包(' + unregistered.join(', ') + '; 见 docs/ASSET-PROVENANCE.json)');
       const bad = need.filter((f) => { const e = inZip.find((x) => x.name === 'assets/videos/' + f); return !e || e.uSize < 4096; });
       if (bad.length) fails.push('已登记来源的彩蛋视频没有原样进包: ' + bad.join(', '));
       else if (need.length) console.log('  彩蛋素材: 自包含包含 ' + need.length + ' 个已登记视频(' + need.join(', ') + ')');

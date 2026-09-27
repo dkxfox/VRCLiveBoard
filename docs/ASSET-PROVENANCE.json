@@ -1,14 +1,15 @@
 {
-  "说明": "随包素材的来源与许可登记。make-dist 只把**在这里登记齐全(source / license / confirmedBy 三者非空)**的素材打进包; 没登记的会被移除并在日志里点名 —— 来路不明的素材不进包(见 docs/THIRD-PARTY.md §5 规则 3)。",
+  "说明": "随包素材的来源与许可登记。make-dist 只把**登记齐全(source / license / confirmedBy 三者非空 且 distribution 不是 local-only)**的素材打进包; 其余会被移除并在日志里点名 —— 来路不明的素材不进包(见 docs/THIRD-PARTY.md §5 规则 3)。",
   "updatedAt": "2026-09-27",
   "assets": [
     {
       "file": "fes-0615.mp4",
       "kind": "启动彩蛋视频(只进自包含包, Lite 不含)",
-      "source": "",
+      "distribution": "local-only",
+      "source": "用户提供并手工放入 彩蛋素材/6月15日无字幕与无水印素材把阎魔刀给我.mp4(与 assets/videos/fes-0615.mp4 哈希一致) —— 2026-09-27 用户说明: 该视频用来测试彩蛋功能是否完好, 不作为公开发行素材",
       "license": "",
       "confirmedBy": "",
-      "note": "待用户确认来源与可分发性: 自己录的? 从哪拿的? 授权是什么? 填齐上面三项前, 该素材不会随包出厂。"
+      "note": "distribution=local-only ⇒ **永不随包**(即使日后补齐 license/confirmedBy 也不会自动进包, 要进包必须显式改成 package)。本机测试: events.json 里的触发日期已临时改成 09-27(今天)。"
     }
   ]
 }

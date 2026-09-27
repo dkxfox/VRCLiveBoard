@@ -168,11 +168,24 @@ Copy-Item (Join-Path $p 'config.default.json') (Join-Path $stage 'config.json') 
 Scrub-Secrets (Join-Path $stage 'config.json')
 # 彩蛋事件表注入(M-20260911-50): 仓库是公开的, "什么时候播什么"只放在本地 assets\videos\events.json(gitignore),
 # 打包时注入包内 config.json —— 只注入自包含版(Lite 连视频都不带, 注入也没用)
+# 素材来源登记(2026-09-27): 只有 docs/ASSET-PROVENANCE.json 里登记齐全、且 distribution 不是 local-only 的素材才随包。
+# 这份 $approved 同时供"事件注入过滤"(下面)与"素材闸"(第 2.5 步)使用 —— 一处判定, 两处生效。
+$approved = @{}
+try {
+  $prov = (Get-Content (Join-Path $p 'docs\ASSET-PROVENANCE.json') -Raw -Encoding UTF8) | ConvertFrom-Json
+  foreach ($a in @($prov.assets)) {
+    if ($a.file -and $a.source -and $a.license -and $a.confirmedBy -and ([string]$a.distribution).ToLower() -ne 'local-only') { $approved[[string]$a.file] = $true }
+  }
+} catch { Write-Output ('[WARN] 读取 ASSET-PROVENANCE.json 失败(按"全部未登记"处理): ' + $_.Exception.Message) }
 $eggEv = Join-Path $p 'assets\videos\events.json'
 if (Test-Path $eggEv) {
   try {
     $evObj = (Get-Content $eggEv -Raw -Encoding UTF8) | ConvertFrom-Json
     $evArr = @($evObj.specialEvents)
+    # 只注入"素材确实随包"的事件(2026-09-27): 否则包里会留下指向不存在视频的事件(素材闸把视频移除后就是这种状态)。
+    $evKept = @($evArr | Where-Object { $n = Split-Path ([string]$_.video) -Leaf; $n -and $approved.ContainsKey($n) })
+    if ($evKept.Count -ne $evArr.Count) { Write-Output ('[WARN] 彩蛋事件表 ' + $evArr.Count + ' 条里有 ' + ($evArr.Count - $evKept.Count) + ' 条指向未随包的素材, 已跳过注入') }
+    $evArr = $evKept
     if ($evArr.Count -gt 0) {
       $cfgSc = Join-Path $stage 'config.json'
       $cfgObj = (Get-Content $cfgSc -Raw -Encoding UTF8) | ConvertFrom-Json
@@ -195,17 +208,12 @@ Check-Stage $stage
 # 规则来源: docs/THIRD-PARTY.md §5 规则 3 —— "来源说不清的不进包"; 在此之前彩蛋视频的来源一直是未知状态。
 $eggDir = Join-Path $p 'assets\videos'
 $stageEgg = Join-Path $stage 'assets\videos'
-$approved = @{}
-try {
-  $prov = (Get-Content (Join-Path $p 'docs\ASSET-PROVENANCE.json') -Raw -Encoding UTF8) | ConvertFrom-Json
-  foreach ($a in @($prov.assets)) { if ($a.file -and $a.source -and $a.license -and $a.confirmedBy) { $approved[[string]$a.file] = $true } }
-} catch { Write-Output ('[WARN] 读取 ASSET-PROVENANCE.json 失败(按"全部未登记"处理): ' + $_.Exception.Message) }
 if (Test-Path $stageEgg) {
   foreach ($f in @(Get-ChildItem $stageEgg -File -ErrorAction SilentlyContinue)) {
     if ($f.Extension -ne '.mp4' -and $f.Extension -ne '.webm') { continue }
     if (-not $approved.ContainsKey($f.Name)) {
       Remove-Item $f.FullName -Force -ErrorAction SilentlyContinue
-      Write-Output ('[WARN] 素材未登记来源, 已从包中移除: ' + $f.Name + ' —— 要随包就在 docs/ASSET-PROVENANCE.json 里填齐 source/license/confirmedBy')
+      Write-Output ('[WARN] 素材未登记(或标为 local-only), 已从包中移除: ' + $f.Name + ' —— 要随包就在 docs/ASSET-PROVENANCE.json 里填齐 source/license/confirmedBy 并把 distribution 写成 package')
     }
   }
 }
