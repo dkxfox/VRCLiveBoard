@@ -123,7 +123,7 @@ function effPluginSec() {
     if (!rootConfig.efx || typeof rootConfig.efx !== 'object' || Array.isArray(rootConfig.efx)) rootConfig.efx = {};
     const e = rootConfig.efx;
     if (typeof e.enabled !== 'boolean') e.enabled = true;                        // 设计 §2: 「动效/启动动画」默认开
-    if (typeof e.oncePerDay !== 'boolean') e.oncePerDay = true;                  // 实测 59s 视频: 同一天不重复播, 否则每次重启都要等一遍
+    // oncePerDay(2026-09-27 起**不再生效**): 用户拍板"当天每次启动都播", 判定里已不看这个字段; 保留仅为了兼容老配置(不再写默认值)
     // 启动画面时长上限(M-20260911-53): 素材可能长达一分钟, 而"启动画面挡住主窗口多久"必须有一个上限;
     // 0 = 不限(素材多长就播多长)。实测事故: 59s 视频把主窗口挡了近一分钟, 用户以为程序坏了。
     if (typeof e.splashMaxMs !== 'number' || !isFinite(e.splashMaxMs) || e.splashMaxMs < 0) e.splashMaxMs = 20000;
@@ -159,7 +159,8 @@ function effPluginSec() {
       return Array.isArray(j.specialEvents) ? j.specialEvents : (Array.isArray(j) ? j : []);
     } catch (e) { return []; }
   }
-  // 设计 §4 状态机: 命中特殊彩蛋窗口 → 开关开可反复(受 oncePerDay 约束) / 开关关则本版本只强播一次;
+  // 设计 §4 状态机(2026-09-27 调整): 命中特殊彩蛋窗口 → **开关开则每次启动都播**(用户要求去掉"每天只播一次"的限制;
+  //   `efx.oncePerDay` 字段保留兼容但**不再生效**) / 开关关则本版本只强播一次;
   // 未命中 → 开关开走日常彩蛋或普通启动动画, 开关关则不播
   // dry=1: 只问不记(开发测试页的"今天会播什么"预览不能把彩蛋消耗掉)
   function efxDecision(dateArg, dry) {
@@ -169,7 +170,7 @@ function effPluginSec() {
     const parsed = raw ? parseDateArg(raw) : null;
     const asOf = raw || today;                       // 回传原始输入(便于测试页显示)
     const day = parsed ? parsed.mmdd : mmddOf(today); // 判定口径: 一律 MM-DD
-    const stamp = day;                                // 记录口径: 同样 MM-DD(与 oncePerDay 的比较保持一致, 免得两种写法各记一次)
+    const stamp = day;                                // 记录口径: 同样 MM-DD(played 记录用, 供"开关关→强播一次"判定与排障)
     const dateInvalid = !!raw && !parsed;
     const cfgList = Array.isArray(rootConfig.specialEvents) ? rootConfig.specialEvents : [];
     const list = cfgList.length ? cfgList : localSpecialEvents();
@@ -181,11 +182,11 @@ function effPluginSec() {
       const key = id + '@' + ver;
       const rec = e.played[key] || null;
       const forced = !e.enabled;                                                 // 设计 §4: 开关关 → 到日期强播一次
-      const playedToday = !!(rec && (rec.last === stamp || rec.last === asOf));
+      // 2026-09-27 用户拍板: **去掉"每天只播一次"** —— 窗口内只要开关是开的, 每次启动都播(不再看 playedToday)。
+      // 记录仍然写(played 供"开关关→强播一次"判定与排障使用), 但不再用它拦播放。
       let play = true, reason;
       if (forced && rec && rec.forced) { play = false; reason = '开关关且本版本已强播过'; }
-      else if (!forced && e.oncePerDay && playedToday) { play = false; reason = '开关开但今天已播过'; }
-      else { reason = forced ? '开关关 → 强播一次' : '窗口内且开关开'; }
+      else { reason = forced ? '开关关 → 强播一次' : '窗口内且开关开(每次启动都播)'; }
       if (play && !dry) { e.played[key] = { forced: forced || !!(rec && rec.forced), last: stamp }; persist(); }
       return { ok: true, dry: !!dry, source: cfgList.length ? 'config' : 'local', action: play ? 'special' : 'off', today: day, input: asOf, dateInvalid: dateInvalid, enabled: e.enabled, forced: forced, reason: reason, maxMs: e.splashMaxMs,
         event: play ? { id: id, version: ver, title: String(hit.title || ''), video: String(hit.video || ''), mode: String(hit.mode || 'video'), sound: String(hit.sound || ''), maxMs: e.splashMaxMs } : null };
@@ -387,7 +388,7 @@ function effPluginSec() {
         if (o.efx !== undefined && o.efx && typeof o.efx === 'object') {
           const e = efxCfg();
           if (o.efx.enabled !== undefined) e.enabled = !!o.efx.enabled;
-          if (o.efx.oncePerDay !== undefined) e.oncePerDay = !!o.efx.oncePerDay;
+          if (o.efx.oncePerDay !== undefined) e.oncePerDay = !!o.efx.oncePerDay;   // 兼容字段: 仍接受写入, 但判定不再读它(2026-09-27)
           if (o.efx.splashMaxMs !== undefined) { const m = Number(o.efx.splashMaxMs); if (isFinite(m) && m >= 0 && m <= 300000) e.splashMaxMs = m; }
           if (o.efx.played !== undefined && o.efx.played && typeof o.efx.played === 'object' && !Array.isArray(o.efx.played)) e.played = o.efx.played;
         }

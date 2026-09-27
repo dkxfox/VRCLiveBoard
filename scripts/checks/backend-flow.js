@@ -337,13 +337,15 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     // 上限必须存在且默认别太大(M-20260911-53 事故: 59s 素材把主窗口挡了近一分钟); 0 = 不限是给"就想播完"的用户留的
     ok(typeof d8.maxMs === 'number' && d8.maxMs >= 0 && d8.maxMs <= 60000, '决策带上画面时长上限 maxMs(默认 20000, 0=不限, 上限 60s): 实得 ' + d8.maxMs);
     ok(d8.event && d8.event.maxMs === d8.maxMs, '事件里也带同一份 maxMs(控制台播放路径直接用它)');
+    // 2026-09-27 用户拍板: 去掉"每天只播一次" —— 已播过之后同一天再问, **仍然要播**
     d8 = await boot(D);
-    ok(d8.action === 'off' && /已播过/.test(d8.reason || ''), '同一天再问 → off(oncePerDay 生效)');
+    ok(d8.action === 'special', '同一天再问 → 仍然 special(每次启动都播, 已无 oncePerDay 限制): 实得 ' + d8.action + '/' + d8.reason);
     const cfg8 = ROOT && fs.existsSync(path.join(ROOT, 'config.json')) ? JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8')) : null;
     ok(!!(cfg8 && cfg8.efx && cfg8.efx.played && cfg8.efx.played['gate-egg@1'] && cfg8.efx.played['gate-egg@1'].last === D), '已播记录落盘(efx.played[gate-egg@1].last)');
+    // oncePerDay 现在是**兼容字段**(判定不读它): 两种取值都必须 special —— 显式锁住"字段已失效"这件事
     await setEfx({ efx: { enabled: true, oncePerDay: false } });
     d8 = await boot(D);
-    ok(d8.action === 'special', 'oncePerDay=false → 同一天可反复看(设计 §4)');
+    ok(d8.action === 'special', 'oncePerDay=false 时同样 special(两种取值都播)');
     await setEfx({ specialEvents: [Object.assign({}, EV, { version: 2 })], efx: { enabled: false, oncePerDay: true } });
     d8 = await boot(D);
     ok(d8.action === 'special' && d8.forced === true, '开关关 → 到日期仍强播一次(设计 §4)');

@@ -387,5 +387,6 @@
   · **关键推理**: 浏览器与桌面端**访问的是同一个服务进程**(19190 由桌面壳主进程托管), 所以"服务端/主进程周期性阻塞"被排除 ✓; 同样的文件、同样的 Chromium 内核, **唯一差别是窗口上下文**(桌面窗口被 VRChat 盖住 / 可能最小化) → 指向 Chromium 的**遮挡检测与后台降级**(`CalculateNativeWinOcclusion` / `--disable-backgrounding-occluded-windows`)。
   · 处置: ① 保留 `backgroundThrottling:false`(它单独不够, 但方向正确); ② **新增三个开关**: `disable-backgrounding-occluded-windows` / `disable-renderer-backgrounding` / `disable-features=CalculateNativeWinOcclusion`。
   · 待验证的判据(若仍卡): (a) **关掉 VRChat** 再放一遍 —— 判 GPU 争抢; (b) 命令行带 `--disable-gpu` 启动 —— 判硬件解码/合成路径; (c) **把程序复制到本地盘**跑一遍 —— 用户实例跑在 `Z:` 网络映射盘上, 视频与所有 I/O 都走 SMB, 这是第三假设; (d) 当时窗口是**最小化**还是只是被盖住?
+- **追加(2026-09-27 晚)**: ① 用户要求**去掉"每天只播一次"** —— 已落地(见 DEV-NOTES 234): 窗口内每次启动都播, `played` 只记录不拦, `oncePerDay` 成了兼容字段; 这样用户可反复启动做 A/B 验证, 不用再改版本号。② **撤回"网络盘 I/O"假设**: 浏览器直放与桌面端**走的是同一条服务端读取路径**(同一进程同一文件), 若 SMB 抖动是主因, 浏览器端也该同样卡 —— 与实测"浏览器流畅"直接矛盾; 且用户网络是 2.5G 网卡 + 10G 光纤交换机, 带宽/延迟都不是瓶颈。该假设降为最后手段。③ 主假设仍是**窗口上下文**(遮挡检测/后台降级), 已加三个开关待重启验证; 若无效, 剩下两条对照: 关 VRChat(资源争抢) / `--disable-gpu`(解码·合成路径)。
 
 

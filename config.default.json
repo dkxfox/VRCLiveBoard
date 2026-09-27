@@ -142,7 +142,7 @@
                },
     "efx":  {
                 "enabled":  true,
-                "oncePerDay":  true,
+                "oncePerDay":  false,
                 "played":  {
                            }
             }
