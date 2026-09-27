@@ -57,7 +57,7 @@ VRCLiveBoard 是一个 Windows 小工具。把它开着,你玩 VRChat 的时候,
     · 双击 启动桌面版.bat 或 启动.bat。
 
   轻量版(Lite-RequiresNode, 约 11MB):
-    · 体积小, 需要电脑已安装 Node.js;
+    · 体积小, 需要电脑已安装 Node.js 22 或更高(18/20 会跑不起来);
     · 第一次启动会自动补齐缺失的组件(需要联网)。
 
 启动方式:

@@ -19,6 +19,12 @@ async function main() {
   let codename = '';
   try { codename = String(JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'version.json'), 'utf8').replace(/^\uFEFF/, '')).codename || ''); } catch (e) {}
   logger.info('VRCLiveBoard' + (codename ? ('(' + codename + ') ') : ' ') + '启动中...');
+  // 运行环境自检(M-20260927-01): Node 18/20 没有全局 WebSocket, 插件会以"某个功能莫名不工作"的方式失败(只报后台日志)
+  // 只提示、不拦启动: 桌面版内嵌 Electron 43 的 Node 24, 不会命中; 轻量版用系统 Node, 会命中
+  const nodeMajor = parseInt(String(process.versions.node).split('.')[0], 10);
+  if (nodeMajor < 22) {
+    logger.warn('当前 Node.js ' + process.versions.node + ' 低于要求的 22: 部分插件(歌词 / B站直播)可能不可用, 请升级到 Node.js 22 或更高');
+  }
   const configPath = path.join(__dirname, '..', 'config.json');
   const configio = require('./configio');
   // 配置损坏不炸: config.json -> .bak -> config.default.json 兜底链(日志警告)

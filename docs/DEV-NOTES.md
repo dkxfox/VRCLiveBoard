@@ -1030,3 +1030,24 @@
 - 诚实修正(审计自己的误判): 我初判"I18N-BASELINE 停在 2026-09-11 = 过期"是**错的** —— `docs/I18N-BASELINE.json` 是 GI18NH 的**白名单豁免清单**, 只在新增豁免时由 `i18n-hardcode.js --update-baseline` 刷新日期, 没有新豁免就该保持旧日期。**该条已从待办撤回**, 判断依据留在此处以免下次重犯。
 - 遗留(批 C, 未获批准不动): ① 影响面矩阵缺 `src/pluginsys/manager.js` / `src/web/public/app.js` / `scripts/checks/*` 三类行(审计新发现, 不在本次批准范围); ② FEATURES 三张卡状态收口(F-20260903-01/-02 仍 BUILD; VR 虚拟键盘研究文档缺状态行); ③ ISSUES 归档 + DEV-NOTES 索引/体积; ④ 3A 一键入口 `audit-3a.ps1`; ⑤ 缺"发布后响应/回滚""外部插件入库审查清单""原生组件规范""第三方许可证清单""留存与清理周期"五章。
 - 教训: **能被机器守住的口径只能有一份**(名单 / 步骤 / 预算), 其它地方一律"指向"而不是"复制"; 写规则必须带**可判定阈值** —— 本轮 5 处矛盾里 4 处都是"两套说法 + 没有阈值"。
+
+## 219. 批 B: 轻量版 Node 版本口径补齐 —— 说明写清 + 主程序启动自检(2026-09-27, 用户"连启动检查一起做", 对应审计 P0-5)
+- 解读与边界: 只解决"环境不满足时用户拿不到可读提示"这一件事, 改 2 个文件(`src/main.js` + `使用说明.txt`); **不做**版本拦截(不阻止启动), **不做**控制台 UI 提示(那要新增三语键, 属另一轮)。桌面版不受影响, 已实测。
+- 现象: README 与 `package.json engines` 都写了 Node 22+, 但《使用说明》轻量版段只写"需要电脑已安装 Node.js", 主程序启动时也没有任何版本自检 —— Node 18/20 用户装完能启动, 直到启用歌词/B站插件才以 `WebSocket is not defined` 一类无关报错失败。
+- 根因: ① `engines` 只对 npm 安装生效, 双击 `启动.bat` 的用户走不到那里; ② "运行要求"写在了说明文件的**插件章节**(第 395 行)而不是安装章节; ③ 主程序把环境判定权完全交给了插件运行时。
+- 改动: ① `使用说明.txt` 轻量版段 → "需要电脑已安装 Node.js **22 或更高(18/20 会跑不起来)**"; ② `src/main.js` 启动横幅之后加自检: `process.versions.node` 主版本 < 22 → `logger.warn` 打印"当前 Node.js x.y.z 低于要求的 22: 部分插件(歌词 / B站直播)可能不可用, 请升级到 Node.js 22 或更高"(**只提示不拦启动** —— 拦了会在非标准 Node 发行版上误伤); ③ `docs/DOC-BASELINE.json` 把 `Node.js 22 或更高` 固化为 must 断言(GDOC 从此守这条口径); ④ ISSUES 开卡 **M-20260927-01**。
+- 证据: `ELECTRON_RUN_AS_NODE=1 electron -e "console.log(process.versions.node, typeof WebSocket)"` → `24.18.1 function`(桌面版内嵌 Node 24, 不会命中提示); 本轮 `run-gates.ps1 -Smoke` GATES SUMMARY:
+
+```
+  PASS G1     语法解析(改动文件)      PASS GI18NH 硬编码文案检测
+  PASS G2     编码规范                PASS GHTML  控制台页面
+  PASS GVER   版本一致性              PASS GUWIRE 控件接线
+  PASS GI18N  三语键对齐              PASS GBOOT  前端启动可执行性
+  PASS GI18NU i18n 引用完整性         PASS GPLUG  插件契约/单一源
+  PASS GCONF  配置契约/安全默认       PASS GROUTE 后端口径清单
+  PASS GDOC   说明文件一致性          PASS G4     隔离冒烟 :19250
+  ---- 14 PASS / 1 FAIL(GSYNC: 提交前的工作区, 属预期) ----
+```
+
+  隔离冒烟: `SMOKE RESULT: pass=15 fail=0`。
+- 遗留 / 教训: ① **"写进 README / engines" ≠ "用户看得到"** —— 面向终端用户的运行要求必须写在安装章节里, 并且能在启动时自己说出来; ② 只 warn 不拦, 是刻意保留的保守语义; ③ 这次两批改动各跑一次 `-Smoke`, 对应 PROCESS-04 §11 新增的"同一结论不重复跑, 但换内容就算新证据"的口径。
