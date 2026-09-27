@@ -66,6 +66,17 @@ function settingsUiOf(schema, settings) {
   }
   return out;
 }
+// manifest.ai → 状态里的 permissions.ai(M-20260927-03, 2026-09-27 修正)
+//   背景: manifest.ai 是**顶层**字段(PLUGIN-DEV 示例), 而 status() 原来只回 manifest.permissions ——
+//   前端 app.js 一直按 p.permissions.ai 判定"AI 能力高危(需输入插件名确认)"并显示 AI 项, 于是:
+//   AI 插件既不显示 AI 能力、也不走高危确认, 与《使用说明》的承诺不符(当时没有插件声明 ai, 属潜在缺口)。
+//   纯函数, 便于门禁直接断言。
+function permsViewOf(manifest) {
+  const p = Object.assign({}, (manifest && manifest.permissions) || {});
+  const ai = manifest && manifest.ai;
+  if (ai && Array.isArray(ai.tasks) && ai.tasks.length) p.ai = { tasks: ai.tasks.slice() };
+  return p;
+}
 class PluginManager {
   constructor(opts) {
     this.root = opts.root;
@@ -343,7 +354,7 @@ class PluginManager {
           id: e.id, name: e.manifest.name, version: e.manifest.version, author: e.manifest.author || '',
           description: e.manifest.description || '', api: e.manifest.api || '', approved: e.approved,
           enabled: e.enabled, error: e.error || null,
-          permissions: e.manifest.permissions || {},
+          permissions: permsViewOf(e.manifest),
           conflicts: conf[e.id] || [],
           hasPanel: !!(e.plugin && e.plugin.panel),
           hasPage: !!(e.plugin && e.plugin.page),
@@ -408,4 +419,4 @@ class PluginManager {
     return { title: entry.plugin.panel.title || entry.manifest.name, html: entry.plugin.panel.html(entry.settings) || '' };
   }
 }
-module.exports = { PluginManager, API_MAJOR, settingsUiOf };
+module.exports = { PluginManager, API_MAJOR, settingsUiOf, permsViewOf };

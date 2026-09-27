@@ -105,5 +105,35 @@ if (fs.existsSync(testRunner)) {
   else say('FAIL', '插件离线单测失败: 退出码 ' + r.status);
 }
 
+// 6. 状态映射: manifest.ai 必须归并进 status().permissions.ai(M-20260927-03, 2026-09-27)
+//    前端 app.js 按 p.permissions.ai 判定"AI 能力高危(需输入插件名确认)"并显示 AI 项;
+//    只回 manifest.permissions 的话, AI 插件既不显示、也不走高危档 —— 属安全 UX 的静默降级。
+const { permsViewOf, PluginManager } = require(path.join(ROOT, 'src', 'pluginsys', 'manager.js'));
+const pvAi = permsViewOf({ permissions: { process: true }, ai: { tasks: ['translate', 'chat'] } });
+say(pvAi.ai && pvAi.ai.tasks && pvAi.ai.tasks.length === 2 ? true : 'FAIL', '状态映射: manifest.ai → permissions.ai(审批窗 AI 显示/高危判定依赖它)');
+say(pvAi.process === true ? true : 'FAIL', '状态映射: 原 permissions 字段未被覆盖(process 仍在)');
+say(!permsViewOf({ permissions: {} }).ai ? true : 'FAIL', '状态映射: 未声明 ai 的插件不产生 permissions.ai(不误判高危)');
+say(!permsViewOf({ ai: { tasks: [] } }).ai ? true : 'FAIL', '状态映射: ai.tasks 为空数组时同样不产生(与前端判定一致)');
+say(Object.keys(permsViewOf(null)).length === 0 ? true : 'FAIL', '状态映射: manifest 缺失时安全回退为空对象');
+
+// 6b. 行为级: status() 真的把 manifest.ai 映射出来了(不只是纯函数写对)
+const os = require('os');
+const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'vrcb-plgstatus-'));
+try {
+  const demoDir = path.join(tmpRoot, 'ai-demo');
+  fs.mkdirSync(demoDir, { recursive: true });
+  fs.writeFileSync(path.join(demoDir, 'manifest.json'), JSON.stringify({ id: 'ai-demo', name: 'AI 演示', version: '1.0.0', author: 'gate', api: '2.0.0', permissions: { process: false }, ai: { tasks: ['translate'] } }, null, 2));
+  fs.writeFileSync(path.join(demoDir, 'index.js'), 'module.exports = function () { return { apply: function () {}, dispose: function () {} }; };\n');
+  const noop = function () {};
+  const mgr = new PluginManager({ root: tmpRoot, composer: null, logger: { info: noop, warn: noop, error: noop }, approvals: {}, security: function () { return null; }, aiConfig: function () { return null; } });
+  const one = (mgr.status().plugins || []).filter(function (p) { return p.id === 'ai-demo'; })[0];
+  if (one && one.permissions && one.permissions.ai && one.permissions.ai.tasks && one.permissions.ai.tasks[0] === 'translate') say(true, 'status() 行为: 真实构造 PluginManager, 声明 ai 的插件带 permissions.ai');
+  else say('FAIL', 'status() 行为: 声明 ai 的插件没有带 permissions.ai —— 审批窗会漏掉 AI 高危确认与 AI 显示');
+} catch (e) {
+  say('FAIL', 'status() 行为断言自身出错: ' + e.message);
+} finally {
+  try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch (e) {}
+}
+
 console.log('  ---- ' + (fail ? fail + ' FAIL' : '0 FAIL') + ' / ' + warn + ' WARN ----');
 process.exit(fail ? 1 : 0);

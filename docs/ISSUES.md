@@ -847,3 +847,15 @@
 - 验证: 常规门禁 **14 PASS**(G1 覆盖 main.js 语法 / G2 编码 / GDOC 含新断言 0 FAIL)+ 隔离冒烟 **15/15 PASS**; 详见 DEV-NOTES 219。
 - 关联: DEV-NOTES 219; 条目 218(审计批 A)
 
+## M-20260927-03 【C3】manifest.ai 没进 status().permissions → AI 插件既不显示也不走高危确认(功能卡收口时发现)
+- 状态: FIXED(2026-09-27)
+- 严重度: C3(安全 UX 静默降级; 当时没有任何插件声明 ai, 属潜在缺口 —— 一旦有 AI 插件, 用户会在"不知道它要花我的 AI 额度"的情况下授权)
+- 来源: 2026-09-27 功能卡收口时跑 feature-accept, F-20260903-02 的"审批窗AI能力显示"断言 FAIL, 顺链查到根因
+- 现象: 声明 `manifest.ai.tasks` 的插件在审批窗里**看不到 AI 能力项**, 也**不需要输入插件名确认**; 而《使用说明》第 138/221 行明确承诺"声明进程执行或 AI 能力的高危插件还需输入插件名确认"。
+- 根因: `manifest.ai` 是**顶层**字段(PLUGIN-DEV 示例), 但 `PluginManager.status()` 只回 `permissions: e.manifest.permissions`; 前端 `app.js` 的 `plgPermsDesc` / `plgPermsHtml` / `plgWarn` 一直按 `p.permissions.ai` 判定 → 恒为 undefined(既不显示、也不进高危档)。
+- 影响面: 所有走控制台审批的 AI 插件(当前 **0 个**; 官方 5 个插件均未声明 ai)。潜在面: 未来任何 AI 插件。
+- 改动: ① `src/pluginsys/manager.js` 新增纯函数 `permsViewOf(manifest)`(把 `manifest.ai.tasks` 归并进 `permissions.ai`, 其余字段原样透传), `status()` 改用它, 并导出供门禁断言; ② `scripts/checks/plugin-check.js`(GPLUG)新增 **6 条断言**: 5 条纯函数(映射成功 / 不覆盖原字段 / 未声明不产生 / 空数组不产生 / manifest 缺失安全回退)+ **1 条行为级**(临时目录造一个声明 ai 的假插件, 真实 `new PluginManager(...)` 后断言 `status().plugins[0].permissions.ai.tasks` 存在)。
+- 验证: ① GPLUG → `0 FAIL / 0 WARN`(6 条新断言全绿); ② **红队**: 把 `status()` 改回旧写法 → 门禁报 `FAIL status() 行为: 声明 ai 的插件没有带 permissions.ai —— 审批窗会漏掉 AI 高危确认与 AI 显示`(exit=1), 恢复后 `0 FAIL`; ③ 常规门禁 14 PASS + 隔离冒烟 15/15。
+- 关联: DEV-NOTES 221; F-20260903-02; 使用说明 第 138/221 行
+
+
