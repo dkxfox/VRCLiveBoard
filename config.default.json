@@ -20,7 +20,8 @@
                 "lang":  "zh-CN"
             },
     "desktop":  {
-                    "showConsole":  true
+                    "showConsole":  true,
+                    "softwareVideoDecode":  false
                 },
     "update":  {
                    "mirror":  "",
@@ -143,6 +144,7 @@
     "efx":  {
                 "enabled":  true,
                 "oncePerDay":  false,
+                "videoMute":  false,
                 "played":  {
                            }
             }

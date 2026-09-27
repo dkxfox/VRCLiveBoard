@@ -128,6 +128,9 @@ function effPluginSec() {
     // 0 = 不限(素材多长就播多长)。实测事故: 59s 视频把主窗口挡了近一分钟, 用户以为程序坏了。
     if (typeof e.splashMaxMs !== 'number' || !isFinite(e.splashMaxMs) || e.splashMaxMs < 0) e.splashMaxMs = 20000;
     if (!e.played || typeof e.played !== 'object' || Array.isArray(e.played)) e.played = {};
+    // 静音播放(M-20260927-07 第六轮): 卡顿取证显示"数据早就缓冲满、丢帧却是每秒 30 帧一撮"——
+    // 需要用"静音"来区分是"音频时钟被卡住"还是"解码/呈现跟不上", 所以给用户一个可配置的开关。
+    if (typeof e.videoMute !== 'boolean') e.videoMute = false;
     return e;
   }
   function localDateStr() { const d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
@@ -189,7 +192,7 @@ function effPluginSec() {
       else { reason = forced ? '开关关 → 强播一次' : '窗口内且开关开(每次启动都播)'; }
       if (play && !dry) { e.played[key] = { forced: forced || !!(rec && rec.forced), last: stamp }; persist(); }
       return { ok: true, dry: !!dry, source: cfgList.length ? 'config' : 'local', action: play ? 'special' : 'off', today: day, input: asOf, dateInvalid: dateInvalid, enabled: e.enabled, forced: forced, reason: reason, maxMs: e.splashMaxMs,
-        event: play ? { id: id, version: ver, title: String(hit.title || ''), video: String(hit.video || ''), mode: String(hit.mode || 'video'), sound: String(hit.sound || ''), maxMs: e.splashMaxMs } : null };
+        event: play ? { id: id, version: ver, title: String(hit.title || ''), video: String(hit.video || ''), mode: String(hit.mode || 'video'), sound: String(hit.sound || ''), mute: !!e.videoMute, maxMs: e.splashMaxMs } : null };
     }
     if (!e.enabled) return { ok: true, dry: !!dry, action: 'off', today: day, input: asOf, dateInvalid: dateInvalid, enabled: false, forced: false, reason: '开关关且今天没有特殊彩蛋', event: null, maxMs: e.splashMaxMs };
     const daily = (Array.isArray(rootConfig.dailyEvents) ? rootConfig.dailyEvents : []).filter(function (d) { return efxInWindow(day, d); })[0] || null;

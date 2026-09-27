@@ -129,9 +129,15 @@ function verdicts(s, spikes, stalls, respGaps) {
   const fin = (s.client && s.client.video && s.client.video.final) || null;
   if (fin && fin.drop >= 20) out.push('渲染端累计丢帧 ' + fin.drop + ' 帧(已解码 ' + fin.dec + ') -> 解码/渲染跟不上, 看显卡解码与整机 CPU 争抢');
   else if (fin && fin.drop < 5 && stalls.length) out.push('丢帧极少(' + fin.drop + ')却出现停顿 -> 更像"数据/时钟被卡住", 而不是解码能力不足');
-  const opHits = (s.ops || []).filter(function (o) { return o.ms >= 100 && stalls.some(function (st) { return st.startMs != null && st.startMs >= o.atMs - 500 && st.startMs <= o.atMs + o.ms + 500; }); });
-  if (opHits.length) out.push('页面停顿与主进程慢操作同轴 ' + opHits.length + ' 次: ' + opHits.slice(0, 6).map(function (o) { return o.name + '(' + o.ms + 'ms)'; }).join(', ') + ' -> 先治这个操作');
-  else if ((s.ops || []).some(function (o) { return o.ms >= 100; })) out.push('有主进程慢操作(>=100ms)但未与停顿同轴 -> 它不是直接原因, 但仍在占主线程');
+  // 只有"确实把事件循环堵住"的操作才算嫌疑(2026-09-27 修正): 第一版只看耗时, 把 287ms 的**异步**采集也算成凶手,
+  // 属于假阳性 —— 异步子进程耗时再长也不阻塞主线程。判据: 该操作窗口内必须有一次 >=80ms 的事件循环尖峰。
+  const blocking = (s.ops || []).filter(function (o) { return o.ms >= 100 && spikeInWindow(spikes, o.atMs, o.atMs + o.ms); });
+  const nonBlocking = (s.ops || []).filter(function (o) { return o.ms >= 100 && blocking.indexOf(o) < 0; });
+  const opHits = blocking.filter(function (o) { return stalls.some(function (st) { return st.startMs != null && st.startMs >= o.atMs - 500 && st.startMs <= o.atMs + o.ms + 500; }); });
+  if (opHits.length) out.push('页面停顿与"确实阻塞过事件循环"的慢操作同轴 ' + opHits.length + ' 次: ' + opHits.slice(0, 6).map(function (o) { return o.name + '(' + o.ms + 'ms)'; }).join(', ') + ' -> 先治这个操作');
+  else if (blocking.length) out.push('有 ' + blocking.length + ' 次阻塞过事件循环的慢操作, 但未与停顿同轴 -> 不是本次停顿的直接原因');
+  else if (nonBlocking.length) out.push('有 ' + nonBlocking.length + ' 次耗时较长但**不阻塞事件循环**的操作(异步子进程) -> 不构成主线程阻塞, 不必当凶手');
+  if (blocking.length === 0 && stalls.length) out.push('主线程没有任何 >=80ms 阻塞却仍停顿 -> 结论: 问题在渲染/媒体管线本身(解码/呈现/音频时钟), 不在主进程');
   const th = tickHits(s.ticks, stalls);
   if (th.hits.length) out.push('页面停顿与慢源 tick 同轴 ' + th.hits.length + ' 次: ' + th.hits.slice(0, 6).map(function (h) { return h.src + '(' + h.tickMs + 'ms)'; }).join(', ') + ' -> 先治这个源');
   else if (th.slow.length) out.push('有 ' + th.slow.length + ' 次慢源 tick(>=300ms)但未与停顿同轴 -> 源不是直接原因, 仍需看它是否抬高 CPU');
@@ -141,6 +147,25 @@ function verdicts(s, spikes, stalls, respGaps) {
   if (!stalls.length && !hasSpike && !respGaps.length) out.push('本次没抓到停顿: 要么没复现, 要么视频没真正播(看 client.video.events 是否为空)');
   return out;
 }
+
+// 运行环境快照: 排障时必须能确认"这一轮到底跑在什么开关下"(否则测试结论无从解释)
+function envInfo() {
+  const o = { electron: false, versions: null, videoSwitches: {}, gpuStatus: null };
+  try {
+    const el = require('electron');
+    if (el && el.app) {
+      o.electron = true;
+      o.versions = { electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node };
+      try { if (el.app.commandLine && el.app.commandLine.hasSwitch) { o.videoSwitches.softwareVideoDecode = el.app.commandLine.hasSwitch('disable-accelerated-video-decode'); o.videoSwitches.disableGpu = el.app.commandLine.hasSwitch('disable-gpu'); } } catch (e) {}
+      try { if (typeof el.app.getGPUFeatureStatus === 'function') { const st = el.app.getGPUFeatureStatus() || {}; o.gpuStatus = { video_decode: st.video_decode, gpu_compositing: st.gpu_compositing }; } } catch (e) {}
+    }
+  } catch (e) {}
+  if (!o.electron) o.versions = { node: process.versions.node };
+  o.argvSoftDecode = process.argv.indexOf('--disable-accelerated-video-decode') >= 0;
+  return o;
+}
+
+function spikeInWindow(spikes, start, end) { return (spikes || []).some(function (sp) { return sp.atMs >= start - 1200 && sp.atMs <= end + 1200; }); }
 
 function writeReport(s) {
   const lags = s.samples.map(function (x) { return x.lagMs; }).slice().sort(function (a, b) { return a - b; });
@@ -155,6 +180,7 @@ function writeReport(s) {
   const lf = ((s.client && s.client.video && s.client.video.longFrames) || []).slice().sort(function (a, b) { return b.ms - a.ms; });
   const summary = {
     id: s.id, startedAt: s.startedAt, endedAt: s.endedAt || iso(Date.now()), why: s.why || 'reading', seconds: s.seconds,
+    env: envInfo(),
     active: Date.now() <= s.endsAt, remainingMs: Math.max(0, s.endsAt - Date.now()), readCount: s.reported,
     eventLoop: { samples: lags.length, p50Ms: pick(0.5), p90Ms: pick(0.9), p99Ms: pick(0.99), maxMs: lags.length ? lags[lags.length - 1] : 0,
       spikeCount80ms: spikes.length,

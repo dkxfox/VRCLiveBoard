@@ -11,6 +11,22 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 // CalculateNativeWinOcclusion), 实测**都不是原因** —— 真因是 OCR 区域源每 3 秒起一次 PowerShell(见 plugins/ocrregion.js)。
 // 已全部回退, 保持"每个改动都有证据"; 若将来真的遇到被遮挡窗口被降频, 再把上面这几个开关加回来。
 
+// 软件解码开关(M-20260927-07 第六轮): 彩蛋卡顿取证显示"整段数据早已缓冲满、丢帧却是每秒 30 帧一撮、CPU/GPU 都不忙",
+// 指向"显卡解码/呈现链路"本身(本机是 RTX 5070 Ti + AMD 核显的双卡)。720p 视频软解开销极小, 所以给用户一个可配置的
+// 绕过开关: config.json 里 desktop.softwareVideoDecode = true → 关掉硬件视频解码。必须在 app ready 之前 appendSwitch。
+function desktopCfg() {
+  try {
+    const raw = fs.readFileSync(path.join(__dirname, '..', 'config.json'), 'utf8');
+    return JSON.parse(raw.charCodeAt(0) === 0xFEFF ? raw.slice(1) : raw).desktop || {};
+  } catch (e) { return {}; }
+}
+try {
+  if (desktopCfg().softwareVideoDecode === true) {
+    app.commandLine.appendSwitch('disable-accelerated-video-decode');
+    console.log('[VRCLiveBoard] 已按配置关闭硬件视频解码(desktop.softwareVideoDecode=true)');
+  }
+} catch (e) {}
+
 function applyConsoleSetting() {
   try {
     const raw = fs.readFileSync(path.join(__dirname, '..', 'config.json'), 'utf8');

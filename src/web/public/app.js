@@ -360,6 +360,7 @@ function playSpecialVideo(sv){
   var skipped=false; var skip=function(){if(skipped)return;skipped=true;probe.lastPost=0;pSend(v);ov.remove();};
   ov.addEventListener('click',skip);
   var v=ov.querySelector('video');
+  if(v&&sv&&sv.mute)v.muted=true;   // 静音播放(排障开关 efx.videoMute: 用于区分"音频时钟卡住"与"解码跟不上")
   if(v){
     ['waiting','stalled','playing','suspend','error','ended','seeking','seeked'].forEach(function(n){
       v.addEventListener(n,function(){ var o=pVid(v); probe.events.push({at:Date.now()-probe.t0,name:n,ct:Math.round((v.currentTime||0)*1000)/1000,rs:v.readyState,dec:o.dec,drop:o.drop,buf:o.buf}); });
