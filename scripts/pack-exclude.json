@@ -1,5 +1,6 @@
 {
   "说明": "打包排除清单(唯一来源): make-dist.ps1 与 scripts/checks/pack-audit.js 都读这一份。新增开发文件/目录时改这里, 不要再往脚本里加字面量。",
+  "陷阱(2026-09-27 实测)": "files 里的通配符会**同时匹配 8.3 短名** —— 曾加过 \"_*.txt\" 想兜底临时脚本, 结果中文名文件的长名被系统短名(形如 _XXXXX~1.TXT)命中, 把 使用说明.txt / 版本说明.txt 一起排除了。通配符只用于 ASCII 名(如 *.bak); 要拦\"下划线开头的临时脚本\"请用 forbiddenNamePatterns 里的 ^_.*\\.js$(它比对 zip 条目长名, 且是 FAIL 而不是静默排除)。",
   "dirNameRegex": "测试|OCR|截图",
   "dirs": [
     "node_modules",
@@ -87,6 +88,7 @@
     "master-pass",
     "授权登记表",
     "^master\\.js$",
-    "^api\\.js$"
+    "^api\\.js$",
+    "^_.*\\.js$"
   ]
 }

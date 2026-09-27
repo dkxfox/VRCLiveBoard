@@ -70,16 +70,16 @@
       ]
     }
   },
-  "updatedAt": "2026-09-25",
+  "updatedAt": "2026-09-27",
   "zipVolumes": {
-    "asOf": "v1.4.4 (2026-09-25 正式打包; 差异逐条复核: 相对 v1.4.2 的 1319/225938784 与 141/8328445, 本次条目 +22 = 新增官方插件「B站直播互动」11 个文件(manifest/index/lib×7/README/CHANGELOG) + 恢复备份里的同一份 11 个文件; 字节 +126169 来自插件本体与随包文档(DEV-NOTES/ISSUES/PLUGIN-DEV/使用说明/版本说明/README/version.json), 无任何移除。 另记: 打包时发现「官方可选插件」恢复备份没遵守 pack-exclude, 曾把该插件的 test/ 11 个开发文件(含假服务器与 child_process 调用)打进包 —— 首次打包 entries=1352, 修 make-dist 后重打才得到本基线数字(entries=1341/163, test/ 0 个))",
+    "asOf": "v1.4.5 (2026-09-27 正式打包; 差异逐条复核: 条目数与 v1.4.4 相同(1341/163) —— 本轮修掉一个误入包的开发脚本 _db.js(832B, 遗留临时脚本, 已删除), 并在 pack-audit 的 forbiddenNamePatterns 里加了「下划线开头的 .js」禁入项兜底; 字节 +26.8KB 全部来自随包文档文本增长(docs/DEV-NOTES.md 的新增条目与条目索引 + 使用说明/版本说明/README/version.json 的版本口径), 无文件增删。 另记(打包陷阱): 曾试过在 pack-exclude 的 files 里加下划线通配符兜底临时脚本, 结果该通配符同时匹配 8.3 短名, 把 使用说明.txt/版本说明.txt 一起排除, zip 中文名自检当场 FAIL(written=1337, 缺 2 个中文名文件) —— 已回退; 结论: 通配符只用于 ASCII 名)",
     "Lite-RequiresNode": {
       "entries": 163,
-      "bytes": 8454614
+      "bytes": 8481435
     },
     "Desktop-SelfContained": {
       "entries": 1341,
-      "bytes": 226064954
+      "bytes": 226091774
     }
   },
   "supplyChain": {

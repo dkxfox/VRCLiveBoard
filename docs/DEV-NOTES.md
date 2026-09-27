@@ -1125,6 +1125,17 @@
 - 证据: `node scripts\checks\dev-notes-index.js` → **0 FAIL / 0 WARN**(清理前是 2 WARN: 122->121、214->211 与空条目 110/111); 重排脚本自报 `块数 119 | 集合一致 true | 内容零丢失 true | 排序后严格递增 true`; 索引已刷新(119 条); 常规门禁 15 PASS + 隔离冒烟 15/15。
 - 遗留 / 教训: ① **"正文里提到了自己的标记"是一类真实的"自噬"风险** —— 凡是用标记定位自身块的工具, 都必须**行首锚定 + 唯一性断言**; ② 白名单机制验证有效: 既能容忍历史, 也能在修完后立刻回到零容忍; ③ 空条目**加标注**优于"按标题补写一段看起来合理的内容"(后者等于伪造记录); ④ 记录被误删时, **逐字重建 + 写明来源**是唯一诚实的做法 —— 本次四段正文全部来自当时的会话原文。
 
+## 227. 1.4.5 打包与打包侧三处发现(2026-09-27, 用户"先清理干净再发布")
+- 解读与边界: 本轮只做**打包 + 打包侧修复 + 基线复核**, 功能代码一行没动; 发布动作(建 Release / 传资产)仍等令牌。
+- 过程与发现(三处, 全部当场修掉):
+  ① **开发脚本误入包**: `_db.js`(832B —— 我上一轮改 DOC-BASELINE 时留下的临时脚本, 提交在 6f59be8)一直随两个包出厂; 是 **pack-audit 的体积/条目基线**先报漂移(现 1342/164 vs 基线 1341/163)才暴露。处置: `git rm _db.js` + 在 pack-audit 的 forbiddenNamePatterns 加"下划线开头的 .js"禁入项(`^_.*[.]js$`)兜底。**这是 pack-audit 第二次靠基线抓出"不该进包的东西"**(上一次是 1.4.4 的插件 `test/`)。
+  ② **pack-exclude 通配符会匹配 8.3 短名(真坑)**: 我为了兜底临时脚本, 在 `files` 里加了 `_*.txt` / `_*.js` —— 结果 robocopy 的 `/XF` **同时匹配文件的 8.3 短名**, 而中文名文件的短名形如 `_XXXXX~1.TXT`, 于是 **`使用说明.txt` 与 `版本说明.txt` 被静默排除**(条目 1342 → 1337), make-dist 的 zip 中文名自检当场 FAIL(`[PROBLEM] self-contained zip 中文文件名编码异常`)—— **第二道自检救了场**。处置: 回退这两个通配符, 并把教训写进 `scripts/pack-exclude.json` 的"陷阱"字段(通配符只用于 ASCII 名; 要拦临时脚本用 forbiddenNamePatterns —— 它是 FAIL 而不是静默排除)。
+  ③ **手改基线把 JSON 弄坏**: 更新 `zipVolumes.asOf` 说明文字时我写了正则 `^_.*\.js$`, 而 `\.` 在 JSON 里是**非法转义** → `SECURITY-BASELINE.json` 解析失败, surface-scan / dep-audit 双双以堆栈报错退出(exit 1)。处置: 用 `JSON.stringify` 生成该字段写回(转义交给库), 并给两个扫描器加**清晰报错**("基线 JSON 解析失败(手改基线最常见的坑: 反斜杠/引号没转义)")—— 以前只会甩一个 SyntaxError 堆栈。
+- 体积基线(复核后更新): `zipVolumes` Desktop **1341 / 226091774**、Lite **163 / 8481435**; `asOf` 写明差异来源(条目数与 v1.4.4 相同; 字节 +26.8KB **全部**是随包文档增长 —— DEV-NOTES 新条目与 119 条索引 + 使用说明/版本说明/README/version.json 的版本口径), `updatedAt` → 2026-09-27。
+- 顺手校正口径: `PROCESS-03` §3 原写"更新基线的**唯一**方式是跑 `--update-baseline`" —— 实际 **zipVolumes 没有这个开关**, 一直是人工按实测值更新; 已改写为分别说明两种方式(复核纪律相同)。
+- 证据: `make-dist.ps1` → 桌面 **1341** 条目 / Lite **163** 条目, 两份 `utf8 name check: OK / no .bak: OK` + `stage secret scan: CLEAN`; `node scripts\checks\pack-audit.js <两个 zip>` → 两个 **PASS**; 3A 三扫描器全绿(域名 16 / 依赖 6 + 产物哈希 8 + npm audit 0); 常规门禁 **15 PASS** + 隔离冒烟 **15/15**。
+- 遗留: 发布(建 Release + 传 3 资产 + SHA256SUMS)需要用户把 GitHub 令牌写进桌面/TEMP 文件(纪律见 PROCESS-03 §2); 发布后补 PROCESS-02 §8.12 与 DEV-NOTES 228。
+
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1251,5 +1262,6 @@
 | 224 | 2026-09-27 | ISSUES 归档: 主表 883 → 355 行, 61 张历史卡移入 ISSUES-ARCHIVE.md |
 | 225 | 2026-09-27 | DEV-NOTES 条目索引(GNOTES 门禁)+ 记录结构审计: 门禁首跑抓出 4 处历史异常 |
 | 226 | 2026-09-27 | 清理 M-20260927-05: DEV-NOTES 4 处历史结构异常 + 修掉一次"索引块标记字面量"引发的正文吞噬 |
+| 227 | 2026-09-27 | 1.4.5 打包与打包侧三处发现 |
 
 <!-- DEV-NOTES-INDEX:END -->

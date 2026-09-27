@@ -43,7 +43,9 @@ if (process.argv.includes('--update-baseline')) {
   console.log('[GDEP] 基线已更新: 依赖 ' + Object.keys(cur.dependencies).length + ' 个, 产物哈希 ' + Object.keys(cur.artifacts).length + ' 项');
   process.exit(0);
 }
-const base = (JSON.parse(fs.readFileSync(BASELINE, 'utf8')).supplyChain) || { dependencies: {}, artifacts: {} };
+let base = { dependencies: {}, artifacts: {} };
+try { base = (JSON.parse(fs.readFileSync(BASELINE, 'utf8')).supplyChain) || { dependencies: {}, artifacts: {} }; }
+catch (e) { console.log('[GDEP] FAIL 基线 JSON 解析失败(手改基线最常见的坑: 说明文字里的反斜杠/引号没转义): ' + e.message); process.exit(1); }
 let fail = 0, warn = 0;
 console.log('[GDEP dep-audit] 依赖 ' + Object.keys(cur.dependencies).length + ' 个 / 受监控产物 ' + Object.keys(cur.artifacts).length + ' 项');
 

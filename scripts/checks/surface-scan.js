@@ -83,7 +83,9 @@ if (process.argv.includes('--update-baseline')) {
   process.exit(0);
 }
 if (!fs.existsSync(BASELINE)) { console.log('[GSURF] FAIL 基线不存在, 先跑 --update-baseline 并人工复核'); process.exit(1); }
-const base = JSON.parse(fs.readFileSync(BASELINE, 'utf8')).surface || {};
+let base = {};
+try { base = JSON.parse(fs.readFileSync(BASELINE, 'utf8')).surface || {}; }
+catch (e) { console.log('[GSURF] FAIL 基线 JSON 解析失败(手改基线最常见的坑: 说明文字里的反斜杠/引号没转义): ' + e.message); process.exit(1); }
 let fail = 0;
 function diff(label, now, was) {
   const added = now.filter((x) => !(was || []).includes(x));

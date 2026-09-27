@@ -44,7 +44,7 @@
 ## 3. 基线文件管理
 
 - docs/SECURITY-BASELINE.json 有四个区块:surface(攻击面)、supplyChain(依赖+产物哈希)、zipVolumes(发布包体积/条目数, 按包种类 Lite-RequiresNode / Desktop-SelfContained)、updatedAt。发布重打包后, 用 pack-audit 打印的体积/条目数更新 zipVolumes(漂移比对依赖它)。
-- **更新基线的唯一方式**:跑 --update-baseline 并**人工复核打印出来的每一项**再提交。基线更新本身是高危操作,必须走 A0 确认。
+- **更新基线的方式**(2026-09-27 校正): ① surface / supplyChain 区块用 `node scripts\checks\surface-scan.js --update-baseline`(打印的每一项都要人工复核); ② **zipVolumes 区块没有 `--update-baseline` 开关** —— 用 pack-audit 打印的 entries/bytes 实测值**人工更新**, 纪律相同(逐项复核 + DEV-NOTES 记录)。基线更新本身是高危操作,必须走 A0 确认(例外仅 zipVolumes, 见下条)。
 - **例外: zipVolumes 属"记录性同步"(2026-09-27 增补)**: 发布包体积/条目数**随每次发布必然变化**, 允许用 pack-audit 打印的实测值直接更新该区块, **不强制 A0 回述**, 但必须在 DEV-NOTES 里写明"变了什么、为什么"(surface / supplyChain 两个区块仍必须 A0)。原文一句话把三类基线一视同仁, 实际操作时要么被迫走过场、要么留下未记录的偏差。
 - 任何「基线变了」的提交都要在 DEV-NOTES 里写明:变了什么、为什么、谁审过。
 - **许可证与来源**不在这里, 在 `docs/THIRD-PARTY.md`(2026-09-27 建立): 依赖 / vendor / 模型 / 素材变动时必须同步 —— surface 与 supplyChain 只管"变了没有", 管不了"能不能分发"。
