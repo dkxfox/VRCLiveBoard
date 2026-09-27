@@ -87,10 +87,11 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke -Assert '被修的bug|/api/
 | **GCONF** | 必备键 + **安全开关默认 true** + 公开版无私有内容 | `config-contract.js` | 15 / 31 |
 | **GROUTE** | 后端口径清单: server.js 的 (method, path, 门禁等级) 必须与 ROUTES-BASELINE.json 完全一致 | `route-inventory.js` | 129 |
 | **GDOC** | 说明文件过时检查: DOC-BASELINE 的 must/mustNot 子串断言 + 引用文件存在 | `doc-consistency.js` | 2026-09-03 文档漂移审计 |
+| **GNOTES** | 记录索引一致性: DEV-NOTES 条目索引与条目列表一致 + **编号严格递增**(专抓"追加条目锚点取错"这类事故) | `dev-notes-index.js` | 2026-09-27 记录结构审计 |
 | **GPACK** | 发布包审计:禁入文件 / UTF-8 文件名标志 / config 脱敏 / **包内盐与源码一致** / **官方插件恢复备份齐全** / 全量机密扫描 | `pack-audit.js` | 85 / 67 / 87 |
 | **GSYNC** | 工作区干净 + 与 origin/main 零差 + 无悬空未跟踪文件 | `git-sync-check.js` | 84 |
 
-**运行开关(2026-09-27 补记)**:快跑 **14** 个门(G1/G2/GVER/GI18N/GI18NU/GI18NH/GHTML/GUWIRE/GBOOT/GPLUG/GCONF/GROUTE/GDOC/GSYNC);`-Smoke` 追加 **G4** 隔离冒烟;`-Pack <zip>` 追加 **GPACK** 包审计;`-SmokeOnly` 只跑 G4(必须与 `-Smoke` 同用)。
+**运行开关(2026-09-27 补记)**:快跑 **15** 个门(G1/G2/GVER/GI18N/GI18NU/GI18NH/GHTML/GUWIRE/GBOOT/GPLUG/GCONF/GROUTE/GDOC/GNOTES/GSYNC);`-Smoke` 追加 **G4** 隔离冒烟;`-Pack <zip>` 追加 **GPACK** 包审计;`-SmokeOnly` 只跑 G4(必须与 `-Smoke` 同用)。
 **这份名单必须与 `run-gates.ps1` 的 GATES SUMMARY 一致** —— 新增/改名门禁时两处一起改(GDOC 会守本文件的关键子串, 见 `docs\DOC-BASELINE.json`)。
 
 **证据规范**:只有 `GATES SUMMARY` 表可以作为"已验证"的证据贴进 DEV-NOTES;禁止用"我检查过了 / 应该没问题"代替。
@@ -147,7 +148,7 @@ NN. **一句话标题**(日期, 触发人/来源):
 
 **开场五件事**:① 读 `DEV-NOTES` §1–2 + 最近 3 条条目 ② 读 `ISSUES.md` 未关闭项 ③ 跑 `git-sync-check.js` ④ 确认用户实例是否在跑(在跑就绕开)⑤ **读 `docs\PROCESS-04-工作规范.md` §0 速查**(行动纪律, 2026-09-27 增补)。
 
-**收尾五件事**:① `run-gates.ps1` 汇总表 ② DEV-NOTES 条目 ③ 版本一致(GVER) ④ commit + push,GSYNC PASS ⑤ 清临时文件 / 端口 / 凭据。
+**收尾五件事**:① `run-gates.ps1` 汇总表 ② DEV-NOTES 条目 + `node scripts\checks\dev-notes-index.js --update`(刷新条目索引, GNOTES 会守) ③ 版本一致(GVER) ④ commit + push,GSYNC PASS ⑤ 清临时文件 / 端口 / 凭据。
 
 ## 9. 常用命令速查
 
@@ -159,6 +160,7 @@ node scripts\checks\pack-audit.js dist\公开版\*.zip             # 发布前�
 node scripts\checks\version-sync.js                              # 改版本号后
 node scripts\checks\auth-state-check.js                         # 授权体系状态(流程 3 的 3A; 开发者机)
 node scripts\checks\doc-consistency.js                          # 说明文件过时检查(GDOC)
+node scripts\checks\dev-notes-index.js --update                  # 刷新 DEV-NOTES 条目索引(加条目后必跑; GNOTES 守)
 powershell -File scripts\checks\run-gates.ps1 -Smoke -SmokeOnly  # 只跑隔离冒烟(前端/接口改动的自检)
 powershell -File scripts\make-dist.ps1                            # 打包(改打包脚本后必跑; -SkipLight 只出桌面包)
 powershell -File scripts\checks\release-audit.ps1                 # 3B 发布前检查(11 步; 见 PROCESS-03 §2)

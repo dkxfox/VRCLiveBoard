@@ -71,6 +71,7 @@ Gate 'GPLUG' '插件契约/单一源'   { node scripts\checks\plugin-check.js }
 Gate 'GCONF' '配置契约/安全默认' { node scripts\checks\config-contract.js }
 Gate 'GROUTE' '后端口径清单'    { node scripts\checks\route-inventory.js }
 Gate 'GDOC'  '说明文件一致性'    { node scripts\checks\doc-consistency.js }
+Gate 'GNOTES' '记录索引一致性'   { node scripts\checks\dev-notes-index.js }
 }
 if ($Smoke) {
   Gate 'G4' ('隔离冒烟 :' + $Port) {
