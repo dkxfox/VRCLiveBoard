@@ -372,5 +372,15 @@
 - 改动: ① `src/web/server.js`: `mmddOf` 改为与 `parseDateArg` 同口径(`^(?:\d{4}-)?(\d{2})-(\d{2})$`), ISO 与 MM-DD 都接受, 垃圾输入仍返回空串; ② `scripts/checks/backend-flow.js` 新增 **3 条回归断言**(隔离实例): 默认路径(不传 date)命中今天 / 显式传 ISO 日期命中 / 窗口外日期不命中 —— 全部 `dry=1`, 不写已播状态。
 - 验证: **红队对照**(必做): 把 `mmddOf` 改回旧实现 → 断言报 `FAIL 启动彩蛋: 默认路径(不传 date)命中今天的窗口(action=normal)`(backend-flow 134 PASS / 1 FAIL); 恢复修复 → `PASS ... (action=special)`(backend-flow **135 PASS / 0 FAIL**) —— 断言确实抓得住这个 bug。常规门禁 15 PASS + 隔离冒烟 15/15。
 - 遗留: 已发布的 **1.4.5 带此 bug**, 修复随**下一个版本(1.4.6)** 出厂; 用户本机从仓库运行, 重启即生效。
+## M-20260927-07 【S3】**彩蛋视频播放每几秒卡顿一下**(用户实机; 主假设: 窗口被遮挡时的后台节流)
+- 状态: OPEN(**待用户验证** —— 已按低风险改法处理, 需实机确认是否消除)
+- 严重度: S3(彩蛋视频可看但观感差; 不影响主功能)
+- 来源: 用户实机反馈(2026-09-27): "播是播了, 但是播放三秒就卡顿一下"(承接 M-20260927-06 修复后)
+- 现象: 启动彩蛋视频能播, 但**周期性卡顿**(用户描述周期约 3 秒)。本机复现不了(用户环境: 戴 VR, 窗口被 VRChat 盖住)。
+- 已排除(证据): ① **文件本身干净** —— 解析 mp4: faststart(moov 在 mdat 前)、视频 avc1 30fps(16000 时间基的 2×528+1×544 是标准的 30fps 表达, 无抖动)、音频 mp4a(AAC) 48kHz、总长 59.47s、平均码率仅 1058 kbps; ② **服务端流式传输无问题** —— `/api/special/video` 支持 Range(206/416 都有断言)、`createReadStream` 直传且带 `Content-Length`; ③ **采样不是原因** —— 用户 config 里 hardware/media/pages 三个数据源**全部停用**。
+- 主假设(待验证): 窗口被 VRChat 遮挡时, Chromium 的**后台节流**(`backgroundThrottling` 默认 true)对该窗口降频绘制 → 视频合成周期性掉帧。本程序的设计场景恰恰是"窗口常年被盖住"。
+- 改动(低风险, 一行 + 一个开关): ① `electron/main.js` 主窗口加 `webPreferences: { backgroundThrottling: false }`; ② 启动时 `app.commandLine.appendSwitch('disable-background-timer-throttling')`。
+- **判据测试(请用户做, 用来证实/证伪)**: ① **浏览器直放同一个文件**: 在浏览器打开 `http://127.0.0.1:19190/api/special/video?file=assets%2Fvideos%2Ffes-0615.mp4` —— 浏览器流畅而程序窗口卡 → 指向窗口/渲染层(与本次改动方向一致); 两边都卡 → 指向文件或机器负载(GPU 被 VR 占满)。② **窗口切前台**看同一段视频: 若卡顿明显减轻 → 证实后台节流假设。③ 补充信息: 是"每 3 秒规律一次"还是"只在前 3 秒一次"? 当时是在 VR 里看桌面(VD/SteamVR)?
+- 下一步(若改动无效): ① 用控制台页面周期轮询做 A/B(临时关掉 3s/5s 轮询看是否消失); ② 试 `--disable-gpu` 或 `app.disableHardwareAcceleration()` 对比; ③ 重新编码测试视频(结构虽干净, 但换一版可彻底排除文件因素)。
 
 

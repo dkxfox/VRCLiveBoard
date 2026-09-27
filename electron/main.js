@@ -6,6 +6,10 @@ const { setConsoleVisible } = require(path.join(__dirname, '..', 'src', 'console
 const { cleanupUserData } = require('./userdata-cleanup');
 // 允许自动播放(含声音): 特殊彩蛋启动视频需要无手势自动播
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+// 关闭后台定时器节流(2026-09-27, M-20260927-07): 本程序的窗口常年被 VRChat 盖住(用户戴 VR 时尤其明显),
+// Chromium 默认会对"不可见/被遮挡"的窗口降频 —— 现象就是启动彩蛋视频"每几秒卡一下"。
+// 绘制侧对应开关是 BrowserWindow 的 webPreferences.backgroundThrottling:false(见 createWindow)。
+app.commandLine.appendSwitch('disable-background-timer-throttling');
 
 function applyConsoleSetting() {
   try {
@@ -83,7 +87,9 @@ function showMain() { try { if (win && !win.isDestroyed() && !win.isVisible()) {
 function createWindow() {
   const icon = loadIcon();
   // show:false + ready-to-show: 首帧即带正确图标再上任务栏, 不给 Windows 缓存默认图标的机会(M-20260903-03)
-  win = new BrowserWindow({ width: 940, height: 760, minWidth: 600, minHeight: 460, autoHideMenuBar: true, backgroundColor: '#10141a', title: 'VRCLiveBoard', icon: icon, show: false });
+  // backgroundThrottling:false(M-20260927-07): 窗口被遮挡/不在前台时不降频绘制。
+  // 这是本程序的常态(用户戴 VR, 控制台窗口被 VRChat 盖住), 默认节流会让彩蛋视频与页面动画周期性卡顿。
+  win = new BrowserWindow({ width: 940, height: 760, minWidth: 600, minHeight: 460, autoHideMenuBar: true, backgroundColor: '#10141a', title: 'VRCLiveBoard', icon: icon, show: false, webPreferences: { backgroundThrottling: false } });
   try { win.setIcon(icon); } catch (e) { /* 旧版本 Electron 无此方法则忽略 */ }
   win.once('ready-to-show', function () { showMain(); });
   // 兜底: 页面加载异常时也要显示窗口(3 秒后仍未显示则强制) —— 但启动画面正在播时不抢显
