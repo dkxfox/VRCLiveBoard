@@ -117,13 +117,16 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke -Assert '被修的bug|/api/
 | `src/osc.js` | **三参数直发不弹窗**(s,T,F)、限频 |
 | `src/web/server.js` | 路由契约(200/403 各自正确)、`no-store`、未解锁时 403 |
 | `src/web/public/index.html` | GHTML + 侧边栏锚点 + 三语渲染 |
-| `src/web/public/lang.js` | GI18N |
+| `src/web/public/lang.js` | GI18N;新增文案必须三语同补(GI18NU/GI18NH 会反向检查引用与硬编码) |
+| `src/web/public/app.js` | GHTML + GUWIRE + GBOOT(控件接线与启动可执行性都在这里);`apiFail` 静默失败上报仍在;切语言走 `reRenderAll()` |
 | `plugins/**` | GPLUG;版本号变更 → 授权哈希失效 → **必须提示用户重新红窗授权**;`plugins/` 是唯一源,`官方可选插件/` 由打包生成,**不要手工同步第二份** |
+| `src/pluginsys/manager.js` | GPLUG + 隔离冒烟的**插件生命周期**(批准→启用→接口→停用→再启用)、`manifest.settings` 渲染与保存热生效、`registerSource` 默认 `enabled` 为真 |
 | `config.default.json` | GCONF;新功能默认关闭、安全开关默认 true、公开版无私有内容 |
 | **文档事实变更**(功能描述/位置/权限口径/文案) | **GDOC**;同步更新 `docs/DOC-BASELINE.json` 并经人工复核 |
 | `src/devgate.js` / `dev-dongle/master/master.js` | 两处盐逐字一致 + 沙箱七项(注册→发码→接受→重放拒→旧盐拒→迷你狗盐→登记表未污染) |
 | `启动*.bat` | G2 + 含空格路径双击可用 |
 | `scripts/make-dist.ps1` | 单 BOM + PARSE_OK + 实跑打包 + GPACK |
+| `scripts/checks/**`(门禁自身) | **门禁红队自测**(`release-audit.ps1` 第 0 步 / `gate-selftest.ps1`):改了门禁就必须证明它**还能抓住原来能抓的东西** —— 扫描器自己绿了比漏报更危险 |
 | `src/versioncheck.js` | 多源取最高 / releaseUrl 白名单 / 6h 缓存 |
 | **任何新增的根目录文件** | **默认视为"会进包"**:确认是否要加进 `$xfFiles` 排除 |
 
@@ -159,8 +162,27 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke -SmokeOnly  # 只跑隔离�
 powershell -File scripts\make-dist.ps1                            # 打包(改打包脚本后必跑; -SkipLight 只出桌面包)
 powershell -File scripts\checks\release-audit.ps1                 # 3B 发布前检查(11 步; 见 PROCESS-03 §2)
 powershell -File scripts\checks\feature-accept.ps1 -Card docs\FEATURES\F-xxx.md  # 功能卡验收断言
+powershell -File scripts\checks\audit-3a.ps1                      # 3A 一键(机密扫描 + 攻击面 + 依赖/产物)
 node scripts\checks\secret-scan.js                               # 3A 机密扫描(工作区 + git 历史)
 node scripts\checks\surface-scan.js                              # 3A 攻击面基线比对
 node scripts\checks\dep-audit.js                                 # 3A 依赖审计 + 产物哈希
 node plugins\bilibili-live\test\run-all.js                       # 插件离线单测(任一插件改版后跑自己那份)
 ```
+
+## 10. 数据与产物留存与清理周期(2026-09-27 增补)
+
+原则: **可再生的清, 不可再生的留; 含凭据的立刻删; 证据链永久留。**
+
+| 对象 | 策略 | 谁来做 |
+| --- | --- | --- |
+| `dist\公开版\` 旧版本包 | 只留**当前版本**(打包前目录先清空) | `make-dist.ps1` 自动 |
+| `审计报告-AUDIT-*.txt`(仓库根) | **永久保留** —— 发布证据链, 不参与清理 | 人工 |
+| `logs\`(用户侧 app.log / boot.log / 插件审计日志等) | 超 100KB 只留尾部 100KB; 超 30 天删除; 残留截图临时文件超 1 天删除; 旧版本 electron 缓存删除 | `src/housekeeping.js` 每 6h 自动 |
+| `.electron-cache` / `.pydist` / `.ocr-langs`(开发机) | **保留**(删了要重新下载或编译); 空间紧张时再删, 删前在 DEV-NOTES 记一条 | 人工 |
+| `config.json.bak` 及任何含口令/密钥的副本 | **立刻删** —— 属机密面(secret-scan 会扫到) | 人工 |
+| `DEV-NOTES.md` / `ISSUES.md` / `docs` 下的基线 | 永久, **只归档不删除**(历史本身就是证据) | 人工 |
+| 临时脚本与中间产物 | 一律写 `$env:TEMP`, 不落仓库(PROCESS-04 §11 第 6 条) | 人工 |
+
+**节奏**: 每个 milestone 发布收口时做一次清点 —— ① `git status` 无悬空文件 ② `dist` 只剩当前版本 ③ 缓存体积记录在案 ④ 临时文件已清; 结果写进当次 DEV-NOTES 条目。
+
+**清理属"可逆性存疑"的动作**: 不确定能不能再生的, 先问再删; 已经删掉的, 在 DEV-NOTES 里留一句"删了什么、为什么可再生"。
