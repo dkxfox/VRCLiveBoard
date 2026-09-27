@@ -1,7 +1,7 @@
 # 流程 1:维护与优化(Maintenance & Optimization)
 
 > 适用对象:接手本项目的人类开发者与 AI。**本文件是可执行的操作规程,不是建议。**
-> 配套:`docs/GLOSSARY.md`(术语)、`docs/ISSUES.md`(问题登记)、`scripts/checks/`(门禁脚本)。
+> 配套:`docs/PROCESS-04-工作规范.md`(**行动纪律 12 条, 所有流程共用的"怎么做"**)、`docs/GLOSSARY.md`(术语)、`docs/ISSUES.md`(问题登记)、`scripts/checks/`(门禁脚本)。
 
 ## 0. 为什么要有这份东西
 

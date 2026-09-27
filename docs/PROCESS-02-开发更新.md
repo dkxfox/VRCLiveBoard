@@ -1,6 +1,6 @@
 # 流程 2:开发更新(Feature Development)
 
-> 配套:`docs/PROCESS-01-维护与优化.md`(维护流程)、`docs/GLOSSARY.md`、`docs/FEATURES/`(功能卡)、`scripts/checks/`(门禁)。
+> 配套:`docs/PROCESS-04-工作规范.md`(**行动纪律 12 条: 预检门 / 竞争假设 / 证据等级 / 最小变更 / 失败制动 / 停止与预算…**)、`docs/PROCESS-01-维护与优化.md`(维护流程)、`docs/GLOSSARY.md`、`docs/FEATURES/`(功能卡)、`scripts/checks/`(门禁)。
 > 口径由用户于 2026-09-01 拍板,下列五条是**硬约束**,不是建议。
 
 ## 0. 五条硬约束(用户拍板)
