@@ -1074,8 +1074,20 @@ function effPluginSec() {
       return json(res, 200, { ok: true, dir: dir });
     } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
   });
+  // 桌面壳的 GPU 状态(M-20260927-07): 排查"彩蛋视频每几秒卡一下"时必须知道**运行中的壳**走的是硬件还是软件解码 ——
+  // 网页版(纯 Node)没有 Electron 栈, 直接回 available:false。只读、不含任何凭据。
+  function shellGpuStatus() {
+    try {
+      const el = require('electron');
+      if (el && typeof el === 'object' && el.app && typeof el.app.getGPUFeatureStatus === 'function') {
+        const st = el.app.getGPUFeatureStatus() || {};
+        return { available: true, platform: process.platform, featureStatus: st, software: String(st.video_decode || '').indexOf('software') >= 0 || String(st.gpu_compositing || '').indexOf('software') >= 0 };
+      }
+      return { available: false, reason: '非 Electron 模式(网页版没有 GPU 栈)' };
+    } catch (e) { return { available: false, reason: '读取 Electron GPU 状态失败: ' + e.message }; }
+  }
   on('GET', '/api/diagnose', function (req, res, url) {
-    return diagnose({ config: rootConfig, composer: composer }).then(function (r) { return portCheck().then(function (pc) { r.ports = pc; json(res, 200, r); }); }).catch(function (e) { json(res, 500, { ok: false, error: String(e.message) }); });
+    return diagnose({ config: rootConfig, composer: composer }).then(function (r) { return portCheck().then(function (pc) { r.ports = pc; r.gpu = shellGpuStatus(); json(res, 200, r); }); }).catch(function (e) { json(res, 500, { ok: false, error: String(e.message) }); });
   });
   on('POST', '/api/autostart', function (req, res, url) {
     return readBody(req, function (body) {

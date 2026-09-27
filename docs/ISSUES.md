@@ -388,5 +388,12 @@
   · 处置: ① 保留 `backgroundThrottling:false`(它单独不够, 但方向正确); ② **新增三个开关**: `disable-backgrounding-occluded-windows` / `disable-renderer-backgrounding` / `disable-features=CalculateNativeWinOcclusion`。
   · 待验证的判据(若仍卡): (a) **关掉 VRChat** 再放一遍 —— 判 GPU 争抢; (b) 命令行带 `--disable-gpu` 启动 —— 判硬件解码/合成路径; (c) **把程序复制到本地盘**跑一遍 —— 用户实例跑在 `Z:` 网络映射盘上, 视频与所有 I/O 都走 SMB, 这是第三假设; (d) 当时窗口是**最小化**还是只是被盖住?
 - **追加(2026-09-27 晚)**: ① 用户要求**去掉"每天只播一次"** —— 已落地(见 DEV-NOTES 234): 窗口内每次启动都播, `played` 只记录不拦, `oncePerDay` 成了兼容字段; 这样用户可反复启动做 A/B 验证, 不用再改版本号。② **撤回"网络盘 I/O"假设**: 浏览器直放与桌面端**走的是同一条服务端读取路径**(同一进程同一文件), 若 SMB 抖动是主因, 浏览器端也该同样卡 —— 与实测"浏览器流畅"直接矛盾; 且用户网络是 2.5G 网卡 + 10G 光纤交换机, 带宽/延迟都不是瓶颈。该假设降为最后手段。③ 主假设仍是**窗口上下文**(遮挡检测/后台降级), 已加三个开关待重启验证; 若无效, 剩下两条对照: 关 VRChat(资源争抢) / `--disable-gpu`(解码·合成路径)。
+- **第三轮(2026-09-27 深夜, 用户"还是那样卡, 开始播放 5 秒后 3 秒一卡, 游戏现在也没运行")**:
+  · **"资源争抢(VRChat/VR)"这条被排除** ✓(游戏没开也照卡); **"遮挡/后台降级"也无效** ✗(已加的四个开关没解决问题)。
+  · **"网络盘 I/O"被实测否定**: 逐块读同一文件 —— UNC 122 块 **2ms** / `Z:` 122 块 **2ms** / 本地盘 1ms(全部已缓存, 无一块 >30ms) → 用户判断正确, 该假设**彻底撤回**。
+  · **新线索(高度可疑, 待自证)**: 我用 `electron --no-sandbox <探针>` 读 `app.getGPUFeatureStatus()` 得到 `video_decode = disabled_software`、`gpu_compositing = disabled_software`、`glImplementationParts = (gl=none,angle=none)`、`inProcessGpu = true` —— **软件解码 + 软件合成**。这解释得通"浏览器(硬件解码)流畅 / 壳内(软件路径)周期性掉帧"。
+  · **但这个探针有混淆, 不能据此下结论**: 我这边跑 Electron 时可能根本拿不到那张 5070 Ti(双卡: RTX 5070 Ti + AMD 核显), 而用户**运行中的壳**不一定相同(它的进程表里确实有 `--type=gpu-process`)。
+  · **因此加了可自证的诊断字段**: `/api/diagnose` 现在带 `gpu`(取自**运行中那个壳**的 `app.getGPUFeatureStatus()`, 纯 Node 模式如实回 `available:false`)。**请用户在桌面壳运行时打开 `http://127.0.0.1:19190/api/diagnose`, 把 `gpu` 段发回来** —— 若 `software: true` 则方向锁定为"硬件加速没起来"(候选修法: `--ignore-gpu-blocklist` / `--disable-gpu-sandbox` / 指定 ANGLE 后端; 或把彩蛋素材降到 720p 以下/降低窗口内缩放成本)。
+  · **另需一条对照**: 浏览器**无痕窗口**再放一次 —— 排除"HTTP 缓存让浏览器看起来流畅"这一假象(此前浏览器测试可能命中了缓存)。
 
 

@@ -524,6 +524,9 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     ok(!!(dd2 && dd2.action === 'special'), '启动彩蛋: 显式传 ISO 日期(' + todayISO + ')同样命中');
     const dd3 = JSON.parse((await req('/api/efx/boot?date=01-01&dry=1')).body.toString('utf8'));
     ok(!!(dd3 && dd3.action !== 'special'), '启动彩蛋: 窗口外的日期不命中(01-01 -> ' + (dd3 && dd3.action) + ')');
+    // GPU 诊断字段(M-20260927-07): 排障要看"运行中的壳"是硬件还是软件解码 —— 隔离实例是纯 Node, 必须如实回 available:false
+    const dg = JSON.parse((await req('/api/diagnose')).body.toString('utf8'));
+    ok(!!(dg && dg.gpu && typeof dg.gpu.available === 'boolean'), '诊断接口带 GPU 状态字段(网页版 available=' + (dg && dg.gpu && dg.gpu.available) + ')');
     await req('/api/config', { method: 'POST', body: JSON.stringify({ specialEvents: [] }) });
   } catch (e) { ok(false, '启动彩蛋判定用例异常: ' + e.message); }
 

@@ -1208,6 +1208,15 @@
 - 证据: 隔离实例(19259)`backend-flow` → **135 PASS / 0 FAIL**, 其中彩蛋相关 8 条全绿: 默认路径命中今天 / 显式 ISO 命中 / 窗口外不命中 / 窗口内开关开→special / **同一天再问仍 special(实得 special + 理由"窗口内且开关开(每次启动都播)")** / oncePerDay=false 同样 special / dry=1 只问不记 / 用例结束清空条目; `SMOKE RESULT: pass=15 fail=0`; 常规门禁 15 PASS。
 - 遗留 / 教训: ① **下个版本(1.4.6)的《版本说明》要写这条行为变化**(彩蛋在窗口期内每次启动都会播; `splashMaxMs=0` 的用户每次启动会完整看一遍, 可点画面或 Esc 跳过); ② 教训: 改行为前先搜**测试里有没有锁旧行为的断言** —— 这次差点漏掉(先跑了一次 smoke 才发现 `FAIL 同一天再问 → off`), 说明"先跑一次再改"比"改完再跑"更能暴露假设冲突。
 
+## 235. 彩蛋卡顿第三轮: 排除资源争抢与网络盘, 锁定"壳内是否软件渲染"并加自证诊断字段(2026-09-27 深夜)
+- 解读与边界: 用户新反馈"还是那样卡, 开始播放 **5 秒**后 **3 秒一卡**, 游戏也没运行"。本轮只做两件事: **用数据砍掉已死的假设**, 以及**给用户一个能自己读出来的机器证据**(而不是我继续猜)。
+- 已排除(实测, 全部留证据): ① **资源争抢** —— VRChat 没运行也照卡 ✓; ② **网络盘 I/O** —— 逐块读同一文件: UNC 122 块 2ms / `Z:` 122 块 2ms / 本地盘 1ms, 无一块 >30ms(用户判断正确, 该假设彻底撤回); ③ **遮挡/后台降级** —— 上一轮四个开关(backgroundThrottling/occluded-windows/renderer-backgrounding/CalculateNativeWinOcclusion)全部无效 ✗。
+- 新线索: 我这边跑 `electron --no-sandbox <探针>` 读 `app.getGPUFeatureStatus()` → `video_decode = disabled_software` / `gpu_compositing = disabled_software` / `glImplementationParts = (gl=none,angle=none)` / `inProcessGpu = true` = **软件解码 + 软件合成**。
+- **诚实标注混淆项**: 我的探针环境可能就拿不到独显(双卡: RTX 5070 Ti + AMD 核显), 而用户**运行中的壳**未必相同(它的进程里有 `--type=gpu-process`) —— 所以这个结果**只能当线索, 不能当结论**。
+- 产出(让证据自己说话): `/api/diagnose` 新增 `gpu` 字段 —— 取自**运行中那个进程**的 `app.getGPUFeatureStatus()`(纯 Node 模式如实回 `available:false`), 并加了一条隔离实例断言(`诊断接口带 GPU 状态字段`, 网页版必须 available=false); backend-flow 现在 **136 PASS / 0 FAIL**。
+- 下一步(等用户回两个数据): ① 桌面壳运行时打开 `http://127.0.0.1:19190/api/diagnose` 把 `gpu` 段发来(若 `software:true` → 方向锁定"硬件加速没起来", 候选修法: `--ignore-gpu-blocklist` / `--disable-gpu-sandbox` / 指定 ANGLE 后端 / 降素材分辨率); ② 浏览器**无痕窗口**再放一次(排除 HTTP 缓存造成的"浏览器流畅"假象)。
+- 遗留 / 教训: ① **同一个"卡顿"我连续三轮假设都没打中**, 教训是: 环境相关的问题要**尽快把测量权交给用户**(这次做对的就是加诊断字段, 而不是继续加开关); ② 判据要挑"能一刀砍掉一半假设"的(本轮: 游戏关掉 + 无痕浏览器); ③ 探针自身的**运行环境**必须先自证(我差点把"我的会话没有 GPU"当成"用户的壳没有 GPU")。
+
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1342,5 +1351,6 @@
 | 232 | 2026-09-27 | 修"启动彩蛋不播视频": mmddOf 不认 ISO 日期 —— 该功能从上线起从未按日期触发 |
 | 233 | 2026-09-27 | 彩蛋视频"每几秒卡顿一下": 先排除文件与传输, 再按"后台节流"假设做低风险改动 |
 | 234 | 2026-09-27 | 去掉"彩蛋每天只播一次"的限制: 当天每次启动都播 |
+| 235 | 2026-09-27 | 彩蛋卡顿第三轮: 排除资源争抢与网络盘, 锁定"壳内是否软件渲染"并加自证诊断字段 |
 
 <!-- DEV-NOTES-INDEX:END -->
