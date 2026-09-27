@@ -101,6 +101,14 @@
       ],
       "mustNot": []
     },
+    "docs/ISSUES-ARCHIVE.md": {
+      "must": [
+        "归档 = 只读历史",
+        "M-20260911-49",
+        "A-20260902-01"
+      ],
+      "mustNot": []
+    },
     "docs/THIRD-PARTY.md": {
       "must": [
         "SheetJS",
@@ -119,6 +127,9 @@
     }
   },
   "links": {
+    "docs/ISSUES.md": [
+      "docs/ISSUES-ARCHIVE.md"
+    ],
     "README.md": [
       "docs/PLUGIN-DEV.md",
       "使用说明.txt",
