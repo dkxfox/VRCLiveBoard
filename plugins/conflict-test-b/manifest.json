@@ -1,0 +1,26 @@
+{
+  "id": "conflict-test-b",
+  "name": "冲突检测测试 B(伙伴)",
+  "version": "1.0.0",
+  "author": "VRCLiveBoard 开发自测",
+  "description": "与 conflict-test 配对: 共享同一个独占资源(vrchat-chatbox)且数据源优先级相同 —— 两个同时启用就能在插件卡上看到两条冲突。**永不随包出厂**。",
+  "api": "2.0.0",
+  "permissions": {
+    "network": [],
+    "filesystem": {
+      "read": [],
+      "write": []
+    },
+    "process": false,
+    "ports": []
+  },
+  "dependencies": {},
+  "conflicts": [],
+  "exclusive": [
+    "vrchat-chatbox"
+  ],
+  "loadOrder": 100,
+  "changelog": [
+    "1.0.0 首次: 与 conflict-test 配对的冲突演示(永不随包出厂)"
+  ]
+}

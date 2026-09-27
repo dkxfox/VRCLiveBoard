@@ -19,6 +19,9 @@
     "docs\\FEATURES",
     "dev-fixtures",
     "plugins\\bilibili-live\\test",
+    "plugins\\conflict-test",
+    "plugins\\conflict-test-b",
+    "plugins\\conflict-test-dep",
     "插件研发",
     "market",
     "_removed-plugins",
@@ -89,6 +92,7 @@
     "授权登记表",
     "^master\\.js$",
     "^api\\.js$",
-    "^_.*\\.js$"
+    "^_.*\\.js$",
+    "^conflict-test"
   ]
 }

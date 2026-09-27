@@ -57,3 +57,6 @@ _归档-2026-09/
 
 # 本地构建的桌面启动器(scripts/launcher 可重建; 从不进发布包)
 /VRCLiveBoard.exe
+
+# 冲突检测测试插件写下的自测数据(夹具专用, 不随包出厂)
+plugins/conflict-test*/data/

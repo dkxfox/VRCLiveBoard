@@ -1148,6 +1148,18 @@
 - **令牌纪律执行**: 桌面 `GitHub令牌.txt` 与临时上传脚本**已删除**(脚本只读令牌、不回显; 输出里只有长度, 没有内容); 仓库无令牌痕迹, `git status` 干净。
 - 遗留(诚实): ① 两张功能卡(F-20260903-01/-02)等用户在自己实例做 UI 复核; ② `docs/THIRD-PARTY.md` 两条合规待办(SheetJS 许可文本 / 彩蛋视频来源); ③ weather-board vendor xlsx 仍 0.18.5; ④ 建议把本次用过的 GitHub 令牌轮换一次。
 
+## 229. 冲突检测测试插件(全权限夹具 ×3, 永不随包出厂)(2026-09-27, 用户"写个测试用的冲突检测插件我试试, 全部权限都要的那种")
+- 解读与边界: 要的是"能装进自己实例里点着看"的夹具 → 放 `plugins/` 下(控制台「重新扫描」即可见), 但必须在**三个地方**保证它永不进包; 主程序代码一行不动。
+- 产出(三个小夹具 + 一份试法说明):
+  ① `plugins/conflict-test/` —— **全权限**主夹具: 网络 `example.com` / `api.github.com`、写文件、**进程**、端口 `19191`、**AI(translate/chat)**(`process` + `ai` ⇒ 高危档, 批准时必须输入插件名); 声明独占资源 `vrchat-chatbox`, 数据源优先级 45; 三个接口 —— `selfTest`(逐项试 http / 写自己目录 / 读回 / **写 config.json** / 进程 / AI, 把"允许或被拒"如实回报)、`show`(优先级 95 抢占)、`status`; 另带 4 个 `manifest.settings` 字段(含一个 secret 字段演示"不回显")。
+  ② `plugins/conflict-test-b/` —— 伙伴夹具: 与 A 共享同一独占资源 + 同优先级数据源(两个都启用就能看到两条冲突)。
+  ③ `plugins/conflict-test-dep/` —— 故意声明缺依赖 + 与 `weather-board` 互斥: **启用会被冲突引擎拦住**(设计行为, 用来验证拦截文案)。
+  ④ `plugins/conflict-test/README.md` —— 逐步试法、期望现象、"想换冲突条件改哪一行"。
+- 证据(先自己验证再交付, 不是照印象写文案): ① `plugin-check.js`(GPLUG) → 目录插件 **8 个全 OK**(含三个夹具的授权哈希); ② `plugin-behavior.js` → 三个夹具各 3 条全 PASS(工厂/apply/dispose 不抛错、数据源 enabled+priority+getText 齐、dispose 后定时器清零), 总 **54 PASS / 0 FAIL**; ③ **直接调冲突引擎**核对 README 里的承诺: A/B 报「独占资源冲突: vrchat-chatbox」+「聊天框显示优先级相同,内容会互相抢占」, DEP 报「缺少依赖插件 no-such-plugin(要求 >=1.0.0)」+「manifest 声明与 weather-board 互斥」; ④ 常规门禁 **15 PASS** + 隔离冒烟 **15/15**。
+- 永不进包的三道保险: ① `scripts/pack-exclude.json` 的 dirs 加三个目录 + forbiddenNamePatterns 加 `^conflict-test`(**进包即 FAIL**); ② `make-dist.ps1` 的跳过条件从 `-eq 'conflict-test'` 改为 **`-like 'conflict-test*'`**(覆盖 -b / -dep); ③ `.gitignore` 加 `plugins/conflict-test*/data/`(`selfTest` 会往数据目录写一个自测文件, 免得污染 git 状态)。
+- 遗留: 夹具不进任何发布包, 所以**不写进《版本说明》**; 下次 `make-dist` 时顺手确认两个包条目数仍是 1341/163(即便漏了, pack-audit 的 `^conflict-test` 禁入正则会报 FAIL)。
+- 教训: ① **给用户手动试的东西, 承诺必须先自己验证一遍** —— 冲突文案是照引擎实际输出核的; ② 夹具是"全权限", 所以"不进包"必须有多层保证, 而且**排除清单本身要有 FAIL 级兜底**(禁入正则), 否则哪天排除规则失效就是静默漏包。
+
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1276,5 +1288,6 @@
 | 226 | 2026-09-27 | 清理 M-20260927-05: DEV-NOTES 4 处历史结构异常 + 修掉一次"索引块标记字面量"引发的正文吞噬 |
 | 227 | 2026-09-27 | 1.4.5 打包与打包侧三处发现 |
 | 228 | 2026-09-27 | 1.4.5「拾遗」正式发布 |
+| 229 | 2026-09-27 | 冲突检测测试插件(全权限夹具 ×3, 永不随包出厂) |
 
 <!-- DEV-NOTES-INDEX:END -->

@@ -1,0 +1,28 @@
+{
+  "id": "conflict-test-dep",
+  "name": "冲突检测测试 DEP(启用会被拦)",
+  "version": "1.0.0",
+  "author": "VRCLiveBoard 开发自测",
+  "description": "故意声明「缺依赖」+「与 weather-board 互斥」: 启用它会被冲突引擎当场拦住并给出原因(这是设计行为, 不是 bug)。想启用它就得改 manifest。**永不随包出厂**。",
+  "api": "2.0.0",
+  "permissions": {
+    "network": [],
+    "filesystem": {
+      "read": [],
+      "write": []
+    },
+    "process": false,
+    "ports": []
+  },
+  "dependencies": {
+    "no-such-plugin": ">=1.0.0"
+  },
+  "conflicts": [
+    "weather-board"
+  ],
+  "exclusive": [],
+  "loadOrder": 100,
+  "changelog": [
+    "1.0.0 首次: 演示「启用被冲突引擎拦住」(永不随包出厂)"
+  ]
+}

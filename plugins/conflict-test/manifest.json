@@ -1,0 +1,67 @@
+{
+  "id": "conflict-test",
+  "name": "冲突检测测试(全权限)",
+  "version": "1.0.0",
+  "author": "VRCLiveBoard 开发自测",
+  "description": "开发自测夹具: 声明全部权限(网络/文件/进程/端口/AI)+ 独占资源条件, 用来验证审批窗、安全策略与冲突检测。**永不随包出厂**(pack-exclude + make-dist 双重排除)。",
+  "api": "2.0.0",
+  "permissions": {
+    "network": [
+      "example.com",
+      "api.github.com"
+    ],
+    "filesystem": {
+      "read": [],
+      "write": []
+    },
+    "process": true,
+    "ports": [
+      19191
+    ]
+  },
+  "ai": {
+    "tasks": [
+      "translate",
+      "chat"
+    ]
+  },
+  "dependencies": {},
+  "conflicts": [],
+  "exclusive": [
+    "vrchat-chatbox"
+  ],
+  "loadOrder": 100,
+  "settings": [
+    {
+      "key": "prefix",
+      "label": "播报前缀",
+      "type": "text",
+      "hint": "显示在测试文本前面",
+      "default": "[冲突测试]"
+    },
+    {
+      "key": "intervalSec",
+      "label": "轮播间隔(秒)",
+      "type": "number",
+      "hint": "5 ~ 600",
+      "default": 30
+    },
+    {
+      "key": "enabledDemo",
+      "label": "输出演示文本",
+      "type": "bool",
+      "hint": "关掉后数据源返回空(观察聊天框变化)",
+      "default": true
+    },
+    {
+      "key": "secretDemo",
+      "label": "密钥字段演示(不会回显)",
+      "type": "password",
+      "secret": true,
+      "hint": "填什么都行; 保存后界面只显示「已保存」"
+    }
+  ],
+  "changelog": [
+    "1.0.0 首次: 全权限 + 独占资源条件 + 权限自测 API(永不随包出厂)"
+  ]
+}

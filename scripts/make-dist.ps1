@@ -114,7 +114,7 @@ function Copy-OfficialPlugins($stageDir) {
   New-Item -ItemType Directory -Force -Path $optDir | Out-Null
   $n = 0
   foreach ($d in @(Get-ChildItem (Join-Path $p 'plugins') -Directory)) {
-    if ($d.Name -eq 'conflict-test') { continue }   # 开发自测夹具(全权限), 不进包(2026-09-11 审计 H2)
+    if ($d.Name -like 'conflict-test*') { continue }   # 开发自测夹具(全权限 + 冲突演示), 不进包(2026-09-11 审计 H2; 2026-09-27 改为前缀匹配, 覆盖 conflict-test / -b / -dep)
     # 2026-09-25 audit fix: the restore-backup must honour pack-exclude too. The main copy skipped
     # plugins/<id>/test, but this backup used a plain recursive robocopy, so dev-only test files
     # (fake server + child_process usage) shipped inside the backup (measured in the 1.4.4 build:
