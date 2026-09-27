@@ -1162,6 +1162,17 @@
 - **用户验收(2026-09-27): 通过, 并决定长期保留这三个夹具**("以后说不定还能用到")。因此本轮把它们**升级为常备开发工具**: ① `开发者文档/02-插件开发规范.md` 新增"手工自测夹具(conflict-test*)"一节(什么时候跑 / 怎么算通过 / 指向 README); ② `docs/GLOSSARY.md` 新增词条(含"别上架插件市场"的误解提示); ③ **GPLUG 新增第 7 节断言**: 逐个校验每个 `conflict-test*` 的"pack-exclude 目录 + 禁入正则"两样都在, 缺一样就 FAIL —— 把"永不进包"从"人记得"改成**机器守**; ④ `DOC-BASELINE` 增两条 must(插件规范与术语表各一条)。
 - **顺带修掉我自己写错的一处保险(诚实)**: 禁入正则原先写成 `^conflict-test`, 而 pack-audit 比对的是 **zip 条目路径**(形如 `plugins/conflict-test/manifest.json`)→ 锚定行首的正则**永远匹配不上**, 等于没设防; 上面那条新断言第一次运行就把这三个 FAIL 了出来。已改成不锚定的 `conflict-test`, 并用条目形态实测 = true。教训: **保险本身也要被验证** —— 写了正则不等于拦得住(与"扫描器说自己绿了"同一类)。
 
+## 230. 清 THIRD-PARTY 两条合规待办: 插件许可文本补齐 + 素材来源登记机制(2026-09-27, 用户"继续清 THIRD-PARTY 两条合规待办")
+- 解读与边界: 待办①(三个插件缺 SheetJS 许可文本)能**完全做掉**; 待办②(彩蛋视频来源)只有用户知道 —— 所以本轮把它做成**机制**: 没登记就不随包, 只差用户填一行信息。
+- 待办① 落地: friend-welcome / scheduled-board / weather-board 各加 `LICENSE-Apache-2.0.txt`(规范全文, 取自本仓库 `node_modules/tesseract.js/LICENSE.md`)+ `THIRD-PARTY-NOTICE.txt`(组件 / 版本 / 上游 / 许可 / 我们只做原样拷贝)。**放在插件根而不是 vendor/**, 三个原因: ① surface-scan 只扫 `js|ps1|bat|py|html|json`, 不扫 txt → 攻击面基线**不漂**; ② dep-audit 只监控 `plugins/<id>/vendor/` 的聚合哈希 → 根目录新增文件**不动产物基线**; ③ 市场 zip 一样会带上这两个文件(许可随分发走)。
+  · **代价(已接受并记录)**: 授权哈希覆盖整个插件目录 → 三个插件各升一个补丁位(`friend-welcome 1.3.3` / `scheduled-board 2.0.1` / `weather-board 1.0.1`), **已装用户更新后需重新授权一次**; `market/packages` 与 `market/index.json` 已同步重建(旧版本 zip 保留, 便于回滚/吊销)。
+- 待办② 落地: 新增 `docs/ASSET-PROVENANCE.json`(素材来源登记: `source`/`license`/`confirmedBy` 三项填齐才随包)+ `make-dist.ps1` 新增**素材闸**(未登记的 `.mp4/.webm` 从 stage 里删除并在日志里点名)。当前 `fes-0615.mp4` 仍未登记 → **从下一次打包起不再随包**; 用户告知来源后填一行即恢复。
+- **途中抓到一个真问题(市场发布器)**: `make-market.js` 当时**不认 pack-exclude 的禁入名单** —— 第一次重建就把三个 `conflict-test*` 开发夹具当成官方插件写进了 `market/index.json`(3 条)并生成 zip。已修: 发布器跳过命中 `forbiddenNamePatterns` 的 id("不进包的东西也不进市场"), 删掉误生成的三个 zip 后重跑, 索引回到 **5 条**(bilibili-live / friend-welcome / netease-lyrics / scheduled-board / weather-board)。
+- 证据: ① GPLUG → 三个插件新哈希 OK, 且 `config.default.json` 的 `pluginApprovals` 为空(无预置授权需要连带更新); ② `make-market.js` → `[SKIP] conflict-test / -b / -dep 命中禁入名单` ×3 + 索引 5 条; ③ `make-dist.ps1` 日志 → 素材闸打印移除 + 包条目数变化(见报告); ④ `doc-consistency.js` → **0 FAIL**(THIRD-PARTY 的 must 已改为新口径并加 `docs/ASSET-PROVENANCE.json`); ⑤ 常规门禁 **15 PASS** + 隔离冒烟 15/15。
+- 遗留 / 教训: ① **等用户一句话**: `fes-0615.mp4` 的来源与许可(自己录的? 从哪拿的? 授权形式?) —— 填进 `docs/ASSET-PROVENANCE.json` 就恢复随包; ② **下个版本**的《版本说明》要写明"三个官方插件已更新, 更新后需重新授权一次"; ③ 教训: **同一份"永不外发"清单必须被所有分发通道读取** —— 发布包通道(pack-exclude)守住了, 市场通道没读它, 差点把全权限夹具上架; 现在打包器与市场发布器共用同一份名单。
+- **打包/审计侧的连带修复(两处假 FAIL, 都是这次改动逼出来的)**: ① `pack-audit` 的"插件本体必须在包里"检查只写死跳过一个名字(`conflict-test`), 于是 `-b`/`-dep` 被当成应当进包的插件 → 每次打包报假 FAIL; 已改成**读同一份名单**(pack-exclude.dirs + forbiddenNamePatterns)。② 彩蛋素材检查不知道"来源登记"机制: 本机有视频而包里没有就 FAIL; 已改成"**只有已登记来源的素材才必须在包里**", 未登记的打印一行说明而不是 FAIL —— 与 make-dist 的素材闸同口径。
+- **体积基线更新(zipVolumes, 按 2026-09-27 新增的"记录性同步"例外, 免 A0 但记录在此)**: Desktop **1341 → 1352 条 / 226,093,226 → 218,309,020 字节**(+12 = 三插件各 2 份许可/声明 × 插件本体与恢复备份, −1 = 彩蛋视频; 字节 −7.78MB 主要是视频), Lite **163 → 175 条 / 8,482,885 → 8,520,478 字节**; `asOf` 已写明差异来源。更新后 `pack-audit` 两个包 **PASS**。
+
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1291,5 +1302,6 @@
 | 227 | 2026-09-27 | 1.4.5 打包与打包侧三处发现 |
 | 228 | 2026-09-27 | 1.4.5「拾遗」正式发布 |
 | 229 | 2026-09-27 | 冲突检测测试插件(全权限夹具 ×3, 永不随包出厂) |
+| 230 | 2026-09-27 | 清 THIRD-PARTY 两条合规待办: 插件许可文本补齐 + 素材来源登记机制 |
 
 <!-- DEV-NOTES-INDEX:END -->

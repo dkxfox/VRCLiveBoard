@@ -1,0 +1,14 @@
+{
+  "说明": "随包素材的来源与许可登记。make-dist 只把**在这里登记齐全(source / license / confirmedBy 三者非空)**的素材打进包; 没登记的会被移除并在日志里点名 —— 来路不明的素材不进包(见 docs/THIRD-PARTY.md §5 规则 3)。",
+  "updatedAt": "2026-09-27",
+  "assets": [
+    {
+      "file": "fes-0615.mp4",
+      "kind": "启动彩蛋视频(只进自包含包, Lite 不含)",
+      "source": "",
+      "license": "",
+      "confirmedBy": "",
+      "note": "待用户确认来源与可分发性: 自己录的? 从哪拿的? 授权是什么? 填齐上面三项前, 该素材不会随包出厂。"
+    }
+  ]
+}

@@ -72,14 +72,14 @@
   },
   "updatedAt": "2026-09-27",
   "zipVolumes": {
-    "asOf": "v1.4.5 (2026-09-27 正式打包; 差异逐条复核: 条目数与 v1.4.4 相同(1341/163) —— 本轮修掉一个误入包的开发脚本 _db.js(832B, 遗留临时脚本, 已删除), 并在 pack-audit 的 forbiddenNamePatterns 里加了「下划线开头的 .js」禁入项兜底; 字节 +26.8KB 全部来自随包文档文本增长(docs/DEV-NOTES.md 的新增条目与条目索引 + 使用说明/版本说明/README/version.json 的版本口径), 无文件增删。 另记(打包陷阱): 曾试过在 pack-exclude 的 files 里加下划线通配符兜底临时脚本, 结果该通配符同时匹配 8.3 短名, 把 使用说明.txt/版本说明.txt 一起排除, zip 中文名自检当场 FAIL(written=1337, 缺 2 个中文名文件) —— 已回退; 结论: 通配符只用于 ASCII 名)",
+    "asOf": "v1.4.5 二次打包(2026-09-27, 清 THIRD-PARTY 合规待办后): 条目 1341 → 1352(+11)= 三个官方插件各 +2 文件(LICENSE-Apache-2.0.txt / THIRD-PARTY-NOTICE.txt)× (插件本体 + 官方可选插件恢复备份) 共 +12, 再减去彩蛋视频 −1(未登记来源 → 按规矩不进包, 见 docs/ASSET-PROVENANCE.json); Lite 163 → 175(+12, 同上, Lite 本就不含视频)。字节 Desktop −7.78MB 主要是彩蛋视频被移出, 另有 6 份许可/声明文本约 +70KB。 三插件同时各升一个补丁位(friend-welcome 1.3.3 / scheduled-board 2.0.1 / weather-board 1.0.1): 授权哈希覆盖插件目录, 已装用户更新后需重新授权一次。",
     "Lite-RequiresNode": {
-      "entries": 163,
-      "bytes": 8482885
+      "entries": 175,
+      "bytes": 8520478
     },
     "Desktop-SelfContained": {
-      "entries": 1341,
-      "bytes": 226093226
+      "entries": 1352,
+      "bytes": 218309020
     }
   },
   "supplyChain": {

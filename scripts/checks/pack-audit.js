@@ -81,13 +81,17 @@ function audit(zp) {
     if (/Lite/i.test(label)) {
       if (inZip.length) fails.push('Lite 包混入彩蛋视频(' + inZip.map((e) => e.name).join(', ') + '): 素材属于自包含版, Lite 必须单独排除');
       else console.log('  彩蛋素材: Lite 正确排除');
-    } else if (local.length && !inZip.length) {
-      fails.push('本机有 ' + local.length + ' 个彩蛋视频, 但自包含包里一个都没有(打包排除写错?)');
-    } else if (local.length) {
-      const bad = local.filter((f) => { const e = inZip.find((x) => x.name === 'assets/videos/' + f); return !e || e.uSize < 4096; });
-      if (bad.length) fails.push('彩蛋视频没有原样进包: ' + bad.join(', '));
-      else console.log('  彩蛋素材: 自包含包含 ' + local.length + ' 个视频(' + local.join(', ') + ')');
-    } else console.log('  彩蛋素材: 本机无素材, 跳过(自包含包不含彩蛋视频)');
+    } else {
+      // 2026-09-27: 与 make-dist 的素材闸同一口径 —— **只有已登记来源的素材才"必须在包里"**; 未登记的按规矩不进包(不是错)。
+      const approved = (function () { try { const p = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs', 'ASSET-PROVENANCE.json'), 'utf8')); return (p.assets || []).filter((a) => a && a.file && a.source && a.license && a.confirmedBy).map((a) => String(a.file)); } catch (e) { return []; } })();
+      const unregistered = local.filter((f) => approved.indexOf(f) < 0);
+      const need = local.filter((f) => approved.indexOf(f) >= 0);
+      if (unregistered.length) console.log('  彩蛋素材: 未登记来源 → 按规矩不进包(' + unregistered.join(', ') + '; 见 docs/ASSET-PROVENANCE.json)');
+      const bad = need.filter((f) => { const e = inZip.find((x) => x.name === 'assets/videos/' + f); return !e || e.uSize < 4096; });
+      if (bad.length) fails.push('已登记来源的彩蛋视频没有原样进包: ' + bad.join(', '));
+      else if (need.length) console.log('  彩蛋素材: 自包含包含 ' + need.length + ' 个已登记视频(' + need.join(', ') + ')');
+      else if (!local.length) console.log('  彩蛋素材: 本机无素材, 跳过(自包含包不含彩蛋视频)');
+    }
   }
 
   // 3. 必备文件
@@ -103,7 +107,11 @@ function audit(zp) {
   }
 
   // 4b. 官方插件恢复备份: 打包必须为 plugins\ 下每个插件生成 官方可选插件\<id>\ 副本(用户误删可拷回)
-  const officialDirs = PLUGIN_PACK ? [] : fs.readdirSync(path.join(ROOT, 'plugins'), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).filter((n) => n !== 'conflict-test');   // 开发自测夹具不进包, 也不要求它在包里(2026-09-11 审计 H2)
+  // 2026-09-27: 排除判断改成"读同一份名单" —— 以前只写死跳过 conflict-test 一个名字, 于是 conflict-test-b/-dep 被当成
+  // 应当进包的插件, 每次打包都报假 FAIL(实测)。现在: ① pack-exclude.dirs 里点名排除的插件目录; ② 命中 forbiddenNamePatterns 的 id —— 两者任一即"本就不该在包里"。
+  const peDirExcluded = (id) => (PE.dirs || []).some((d) => String(d).replace(/\//g, '\\').toLowerCase() === ('plugins\\' + id).toLowerCase());
+  const forbiddenId = (id) => FORBIDDEN_NAME.some((re) => re.test(id) || re.test('plugins/' + id + '/manifest.json'));
+  const officialDirs = PLUGIN_PACK ? [] : fs.readdirSync(path.join(ROOT, 'plugins'), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).filter((n) => !peDirExcluded(n) && !forbiddenId(n));
   for (const id of officialDirs) {
     if (!names.includes('plugins/' + id + '/manifest.json')) fails.push('包内缺少插件本体: plugins/' + id);
     if (!names.includes('官方可选插件/' + id + '/manifest.json')) fails.push('包内缺少误删恢复备份: 官方可选插件/' + id);

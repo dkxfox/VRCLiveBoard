@@ -1,8 +1,46 @@
 {
   "schema": 1,
-  "updated": "2026-09-25",
+  "updated": "2026-09-27",
   "note": "插件目录: 由 scripts/make-market.js 生成, 请勿手改(改插件的 manifest 后重新生成)。tier: official=官方 / reviewed=已审核第三方 / experimental=实验区(默认最严策略)。",
   "items": [
+    {
+      "id": "bilibili-live",
+      "name": "B站直播互动",
+      "author": {
+        "id": "vrcliveboard",
+        "name": "VRCLiveBoard 官方",
+        "contact": "https://github.com/dkxfox/VRCLiveBoard"
+      },
+      "version": "0.3.0",
+      "api": "2.0.0",
+      "tier": "official",
+      "summary": "接入哔哩哔哩直播开放平台: 弹幕/礼物/醒目留言/上舰实时联动 VRChat 聊天框(支持抢占、排队、聚合与屏蔽词)",
+      "tags": [
+        "直播",
+        "B站",
+        "弹幕",
+        "互动"
+      ],
+      "url": "https://cdn.jsdelivr.net/gh/dkxfox/VRCLiveBoard@main/market/packages/bilibili-live-0.3.0.zip",
+      "sha256": "f043f36ce212080080aca2638918b68c91c4824452455bb562499a5a27fb7dcb",
+      "size": 40231,
+      "permissions": {
+        "network": [
+          "live-open.biliapi.com",
+          "chat.bilibili.com",
+          "api.live.bilibili.com"
+        ],
+        "filesystem": {
+          "read": [],
+          "write": []
+        },
+        "process": false,
+        "ports": []
+      },
+      "changelog": "0.3.0: 高价值消息保持展示(SC/礼物/上舰逐类时长)、直播间信息展示(标题/房间号/热度开关)、设置改完即时生效; 修复场次解析/结束场次/断线重开局/弹幕被占屏者挡住等 8 处问题。**需重新红窗授权一次**。",
+      "publishedAt": "2026-09-27",
+      "minApp": "1.4.4"
+    },
     {
       "id": "friend-welcome",
       "name": "好友欢迎",
@@ -11,14 +49,14 @@
         "name": "VRCLiveBoard 官方",
         "contact": "https://github.com/dkxfox/VRCLiveBoard"
       },
-      "version": "1.3.2",
+      "version": "1.3.3",
       "api": "2.0.0",
       "tier": "official",
       "summary": "指定好友进入房间时显示专属欢迎语并轮巡(仅显示显示名,不发送 UID),结束后自动恢复原状",
       "tags": [],
-      "url": "https://cdn.jsdelivr.net/gh/dkxfox/VRCLiveBoard@main/market/packages/friend-welcome-1.3.2.zip",
-      "sha256": "2d8afbc2d7a77f0e58a5a6f80b6ff8945edf5bcf4e80561508caa6eb39f6d0d3",
-      "size": 752141,
+      "url": "https://cdn.jsdelivr.net/gh/dkxfox/VRCLiveBoard@main/market/packages/friend-welcome-1.3.3.zip",
+      "sha256": "0bfe1f7350f5d8f7e01ea9474939550215af1f241217285244d993e6478ad47c",
+      "size": 757417,
       "permissions": {
         "network": [],
         "filesystem": {
@@ -28,8 +66,8 @@
         "process": false,
         "ports": []
       },
-      "changelog": "",
-      "publishedAt": "2026-09-12",
+      "changelog": "1.3.3 补齐 vendor 里 SheetJS 的 Apache-2.0 许可文本与第三方声明(合规; 因授权哈希覆盖插件目录, 更新后需重新授权一次)",
+      "publishedAt": "2026-09-27",
       "minApp": "1.4.0"
     },
     {
@@ -63,7 +101,7 @@
         ]
       },
       "changelog": "",
-      "publishedAt": "2026-09-12",
+      "publishedAt": "2026-09-27",
       "minApp": "1.4.0"
     },
     {
@@ -74,14 +112,14 @@
         "name": "VRCLiveBoard 官方",
         "contact": "https://github.com/dkxfox/VRCLiveBoard"
       },
-      "version": "2.0.0",
+      "version": "2.0.1",
       "api": "2.0.0",
       "tier": "official",
       "summary": "定时公告: 常规轮播 + 整点/半点播报 + 指定日期时间特殊公告(可中断其它功能, 支持 Excel 批量管理)",
       "tags": [],
-      "url": "https://cdn.jsdelivr.net/gh/dkxfox/VRCLiveBoard@main/market/packages/scheduled-board-2.0.0.zip",
-      "sha256": "a455835c570179556ac73612155a549a6ef6f1b6007bee30668916af57474b19",
-      "size": 752626,
+      "url": "https://cdn.jsdelivr.net/gh/dkxfox/VRCLiveBoard@main/market/packages/scheduled-board-2.0.1.zip",
+      "sha256": "ef358337319aba071701c0db408500906e2908ce28d741d2479e4778f20a71ac",
+      "size": 757904,
       "permissions": {
         "network": [],
         "filesystem": {
@@ -91,8 +129,8 @@
         "process": false,
         "ports": []
       },
-      "changelog": "",
-      "publishedAt": "2026-09-12",
+      "changelog": "2.0.1 补齐 vendor 里 SheetJS 的 Apache-2.0 许可文本与第三方声明(合规; 因授权哈希覆盖插件目录, 更新后需重新授权一次)",
+      "publishedAt": "2026-09-27",
       "minApp": "1.4.0"
     },
     {
@@ -103,14 +141,14 @@
         "name": "VRCLiveBoard 官方",
         "contact": "https://github.com/dkxfox/VRCLiveBoard"
       },
-      "version": "1.0.0",
+      "version": "1.0.1",
       "api": "2.0.0",
       "tier": "official",
       "summary": "多城市天气轮巡播报: 主源 Open-Meteo(免密钥, 中文城市名), 失败自动降级 wttr.in; 支持批量管理",
       "tags": [],
-      "url": "https://cdn.jsdelivr.net/gh/dkxfox/VRCLiveBoard@main/market/packages/weather-board-1.0.0.zip",
-      "sha256": "3f1bbd25bc514dc8b09a5a9225119f1ddd58e82c98ac634f74f4057354ab3bf3",
-      "size": 724496,
+      "url": "https://cdn.jsdelivr.net/gh/dkxfox/VRCLiveBoard@main/market/packages/weather-board-1.0.1.zip",
+      "sha256": "2f0dc9eb316449d33cce21a18f4b51caafe8d8a60e4b1adb79569955f9e05f99",
+      "size": 729778,
       "permissions": {
         "network": [
           "api.open-meteo.com",
@@ -124,47 +162,9 @@
         "process": false,
         "ports": []
       },
-      "changelog": "",
-      "publishedAt": "2026-09-12",
+      "changelog": "1.0.1 补齐 vendor 里 SheetJS 的 Apache-2.0 许可文本与第三方声明(合规; 因授权哈希覆盖插件目录, 更新后需重新授权一次)",
+      "publishedAt": "2026-09-27",
       "minApp": "1.4.0"
-    },
-    {
-      "id": "bilibili-live",
-      "name": "B站直播互动",
-      "author": {
-        "id": "vrcliveboard",
-        "name": "VRCLiveBoard 官方",
-        "contact": "https://github.com/dkxfox/VRCLiveBoard"
-      },
-      "version": "0.3.0",
-      "api": "2.0.0",
-      "tier": "official",
-      "summary": "接入哔哩哔哩直播开放平台: 弹幕/礼物/醒目留言/上舰实时联动 VRChat 聊天框(支持抢占、排队、聚合与屏蔽词)",
-      "tags": [
-        "直播",
-        "B站",
-        "弹幕",
-        "互动"
-      ],
-      "url": "https://cdn.jsdelivr.net/gh/dkxfox/VRCLiveBoard@main/market/packages/bilibili-live-0.3.0.zip",
-      "sha256": "e54fb7e1d5893d046aef4d886b6b0c0f3911ae00b4968fc89f1f3f205e4f8ab4",
-      "size": 40231,
-      "permissions": {
-        "network": [
-          "live-open.biliapi.com",
-          "chat.bilibili.com",
-          "api.live.bilibili.com"
-        ],
-        "filesystem": {
-          "read": [],
-          "write": []
-        },
-        "process": false,
-        "ports": []
-      },
-      "changelog": "0.3.0: 高价值消息保持展示(SC/礼物/上舰逐类时长)、直播间信息展示(标题/房间号/热度开关)、设置改完即时生效; 修复场次解析/结束场次/断线重开局/弹幕被占屏者挡住等 8 处问题。**需重新红窗授权一次**。",
-      "publishedAt": "2026-09-25",
-      "minApp": "1.4.4"
     }
   ]
 }

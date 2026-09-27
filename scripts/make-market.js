@@ -30,10 +30,18 @@ const only = String(arg('only', '')).split(',').map(function (s) { return s.trim
 
 function sha256File(p) { return crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex'); }
 
+// 2026-09-27 修: 市场发布器此前**不认 pack-exclude 的禁入名单** —— 结果三个 conflict-test* 开发夹具(全权限/演示用)
+// 被当官方插件打进了市场索引(实测: 第一次重建就出现了 3 条)。现在凡命中 forbiddenNamePatterns 的 id 一律跳过,
+// 与"永不随包出厂"同一条纪律: 不进包的东西也不该进市场。
+const FORBIDDEN = (PE.forbiddenNamePatterns || []).map(function (p) { try { return new RegExp(p, 'i'); } catch (e) { return null; } }).filter(Boolean);
+function isForbiddenId(id) { return FORBIDDEN.some(function (re) { return re.test(id) || re.test('plugins/' + id + '/manifest.json'); }); }
+
 const ids = fs.readdirSync(PLUGINS).filter(function (n) {
   const d = path.join(PLUGINS, n);
   return fs.statSync(d).isDirectory() && fs.existsSync(path.join(d, 'manifest.json'));
-}).filter(function (id) { return !only.length || only.indexOf(id) >= 0; }).sort();
+}).filter(function (id) { return !only.length || only.indexOf(id) >= 0; })
+  .filter(function (id) { if (isForbiddenId(id)) { console.log('[SKIP] ' + id + ' 命中 pack-exclude 禁入名单(开发夹具/永不分发), 不进市场'); return false; } return true; })
+  .sort();
 
 if (!ids.length) { console.log('plugins/ 下没有可发布的插件'); process.exit(1); }
 if (!DRY) { fs.mkdirSync(PKGS, { recursive: true }); }

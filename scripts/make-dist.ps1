@@ -191,7 +191,24 @@ Copy-OfficialPlugins $stage
 Prune-Docs $stage
 Check-Stage $stage
 # 彩蛋素材只在开发机本地(gitignore): 干净克隆上打出来的包没有视频, 必须让这件事在日志里看得见(M-20260911-50)
+# 素材来源登记(2026-09-27 新增): 只有 docs/ASSET-PROVENANCE.json 里 source/license/confirmedBy 三项都填了的素材才随包出厂。
+# 规则来源: docs/THIRD-PARTY.md §5 规则 3 —— "来源说不清的不进包"; 在此之前彩蛋视频的来源一直是未知状态。
 $eggDir = Join-Path $p 'assets\videos'
+$stageEgg = Join-Path $stage 'assets\videos'
+$approved = @{}
+try {
+  $prov = (Get-Content (Join-Path $p 'docs\ASSET-PROVENANCE.json') -Raw -Encoding UTF8) | ConvertFrom-Json
+  foreach ($a in @($prov.assets)) { if ($a.file -and $a.source -and $a.license -and $a.confirmedBy) { $approved[[string]$a.file] = $true } }
+} catch { Write-Output ('[WARN] 读取 ASSET-PROVENANCE.json 失败(按"全部未登记"处理): ' + $_.Exception.Message) }
+if (Test-Path $stageEgg) {
+  foreach ($f in @(Get-ChildItem $stageEgg -File -ErrorAction SilentlyContinue)) {
+    if ($f.Extension -ne '.mp4' -and $f.Extension -ne '.webm') { continue }
+    if (-not $approved.ContainsKey($f.Name)) {
+      Remove-Item $f.FullName -Force -ErrorAction SilentlyContinue
+      Write-Output ('[WARN] 素材未登记来源, 已从包中移除: ' + $f.Name + ' —— 要随包就在 docs/ASSET-PROVENANCE.json 里填齐 source/license/confirmedBy')
+    }
+  }
+}
 $eggN = 0
 if (Test-Path $eggDir) { $eggN = @(Get-ChildItem $eggDir -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -eq '.mp4' -or $_.Extension -eq '.webm' }).Count }   # -Include 不带 -Recurse 恒为空(实测), 会打出"素材为空"的假日志
 if ($eggN -gt 0) { Write-Output ('egg assets: ' + $eggN + ' video(s) -> self-contained package') }

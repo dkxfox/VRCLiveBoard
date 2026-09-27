@@ -116,7 +116,8 @@
         "SheetJS",
         "Apache-2.0",
         "PSF-2.0",
-        "来源与授权未记录"
+        "来源仍待用户确认",
+        "docs/ASSET-PROVENANCE.json"
       ],
       "mustNot": []
     },

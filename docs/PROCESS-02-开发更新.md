@@ -128,6 +128,8 @@ powershell -File scripts\checks\feature-accept.ps1 -Card docs\FEATURES\F-2026090
 - **打包清单同步**:新增根目录文件默认视为"会进包",明确决定进 `$required` 还是 `$xfFiles`
 - 出包后必须跑 `pack-audit.js`(会校验:插件本体 + 官方可选插件恢复备份 + 盐一致 + 机密扫描)
 - 最后走流程 3(安全审计)的发布前检查
+- **素材随包必须先登记(2026-09-27 增补)**: 视频 / 图片等素材要在 `docs/ASSET-PROVENANCE.json` 里填齐 `source/license/confirmedBy` 才会进包 —— `make-dist` 会把未登记的素材从包里**移除并在日志里点名**(规则见 `docs/THIRD-PARTY.md` §5)。
+- **市场发布与打包共用同一份禁入名单**: `make-market.js` 会跳过命中 `scripts/pack-exclude.json` 的 `forbiddenNamePatterns` 的插件 id —— "不进包的东西也不进市场"(2026-09-27 修: 此前发布器不读该名单, 差点把开发夹具当官方插件上架)。
 - **发布后必做(2026-09-27 补记, 因为 1.4.4 漏过一次)**: 在 `docs/RELEASE-ASSETS.json` 追记本版两条 zip 的 `name/bytes/sha256` —— 客户端从这里读校验和(GitHub 直链在国内不可达), 漏一步的后果是"检查更新看得见新版、却显示不出校验值"; 校验值以 GitHub Release 资产的公开 `digest` 为准, 并与本地 `SHA256SUMS` 核对。`release-audit.ps1` 第 7 步会对"本版是否已追记"给 WARN。
 
 ## 6. 门禁(在流程 1 基础上新增三个)

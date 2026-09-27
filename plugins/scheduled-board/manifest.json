@@ -1,7 +1,7 @@
 {
   "id": "scheduled-board",
   "name": "定时公告",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": "VRCLiveBoard 官方",
   "description": "定时公告: 常规轮播 + 整点/半点播报 + 指定日期时间特殊公告(可中断其它功能, 支持 Excel 批量管理)",
   "api": "2.0.0",
@@ -17,5 +17,8 @@
   "dependencies": {},
   "conflicts": [],
   "exclusive": [],
-  "loadOrder": 100
+  "loadOrder": 100,
+  "changelog": [
+    "2.0.1 补齐 vendor 里 SheetJS 的 Apache-2.0 许可文本与第三方声明(合规; 因授权哈希覆盖插件目录, 更新后需重新授权一次)"
+  ]
 }
