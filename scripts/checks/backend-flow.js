@@ -527,6 +527,11 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     // GPU 诊断字段(M-20260927-07): 排障要看"运行中的壳"是硬件还是软件解码 —— 隔离实例是纯 Node, 必须如实回 available:false
     const dg = JSON.parse((await req('/api/diagnose')).body.toString('utf8'));
     ok(!!(dg && dg.gpu && typeof dg.gpu.available === 'boolean'), '诊断接口带 GPU 状态字段(网页版 available=' + (dg && dg.gpu && dg.gpu.available) + ')');
+    // 性能取证接口(M-20260927-07): 启动即 arm, GET 取报告(含事件循环采样与视频响应时序), POST 收页面端证据
+    const dpv = JSON.parse((await req('/api/diag/perf')).body.toString('utf8'));
+    ok(!!(dpv && dpv.ok === true && dpv.report && dpv.report.eventLoop && Array.isArray(dpv.report.videoResponses)), '性能取证: GET /api/diag/perf 返回报告(采样 ' + (dpv && dpv.report && dpv.report.eventLoop && dpv.report.eventLoop.samples) + ' 次)' + (dpv && dpv.ok ? '' : ' [响应: ' + JSON.stringify(dpv).slice(0, 160) + ']'));
+    const dpp = JSON.parse((await req('/api/diag/perf', { method: 'POST', body: JSON.stringify({ video: { events: [{ name: 'playing' }], longFrames: [], frames: 0 } }) })).body.toString('utf8'));
+    ok(!!(dpp && dpp.ok === true), '性能取证: POST /api/diag/perf 接受页面端证据');
     await req('/api/config', { method: 'POST', body: JSON.stringify({ specialEvents: [] }) });
   } catch (e) { ok(false, '启动彩蛋判定用例异常: ' + e.message); }
 

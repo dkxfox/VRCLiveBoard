@@ -33,6 +33,10 @@ async function main() {
   config.plugins = config.plugins || {};
   config.plugins.security = Object.assign({ networkPolicy: 'whitelist', processPolicy: 'consent', fsWritePolicy: 'sandbox', fsReadPolicy: 'self', aiPolicy: 'allow' }, config.plugins.security || {});
 
+  // 播放期性能取证(M-20260927-07): 启动即自动记录 120 秒(事件循环延迟 + 各进程 CPU + 视频响应时序),
+  // 页面端 <video> 的卡顿/掉帧证据会 POST 回来 —— 重启一次、让彩蛋播一遍, 再开 /api/diag/perf 就能拿到同一时轴的三方证据。
+  try { require('./diagperf').arm(300); } catch (e) { logger.warn('性能取证启动失败(不影响运行): ' + e.message); }
+
   const osc = new OscSender(config.osc);
   await osc.open();
   logger.info('OSC 已就绪, 目标 ' + config.osc.host + ':' + config.osc.port);

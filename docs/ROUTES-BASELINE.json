@@ -36,6 +36,18 @@
       "level": 0
     },
     {
+      "m": "GET",
+      "p": "/api/diag/perf",
+      "level": 0,
+      "note": "播放期性能取证报告(2026-09-27, M-20260927-07): 事件循环延迟 + 进程 CPU + 视频响应时序 + 页面端 <video> 证据; 取一次即结束会话, 同时落盘 logs/perf-*.json。不含凭据"
+    },
+    {
+      "m": "POST",
+      "p": "/api/diag/perf",
+      "level": 0,
+      "note": "页面端把 <video> 卡顿事件与 rAF 掉帧送回来(同上); 只写内存会话, 不落盘、不影响播放"
+    },
+    {
       "m": "POST",
       "p": "/api/capture/set",
       "level": 0

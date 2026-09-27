@@ -802,6 +802,14 @@ function effPluginSec() {
         }
       }
       const ct = path.extname(f).toLowerCase() === '.webm' ? 'video/webm' : 'video/mp4';
+      // 响应完成计时(M-20260927-07): 排查要看"服务端这一次视频响应有没有卡"(与页面端 waiting/stalled 对照)
+      // 投递曲线(M-20260927-07): 每 200ms 记一次 socket 已写字节数 —— "数据是持续流还是中途断供"只有这条曲线说得清
+      try {
+        const t0 = Date.now(); const marks = [];
+        const iv = setInterval(function () { try { marks.push({ ms: Date.now() - t0, bw: res.socket ? res.socket.bytesWritten : 0 }); if (marks.length > 400) marks.shift(); } catch (e) {} }, 200);
+        res.on('finish', function () { try { clearInterval(iv); require('../diagperf').videoMark({ t0: t0, at: t0, ms: Date.now() - t0, ranged: ranged, bytes: (ranged ? (end - start + 1) : total), status: res.statusCode, marks: marks }); } catch (e) {} });
+        res.on('close', function () { try { clearInterval(iv); } catch (e) {} });
+      } catch (e) {}
       if (ranged) { res.writeHead(206, { 'Content-Range': 'bytes ' + start + '-' + end + '/' + total, 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1, 'Content-Type': ct }); fs.createReadStream(f, { start: start, end: end }).pipe(res); }
       else { res.writeHead(200, { 'Content-Length': total, 'Content-Type': ct, 'Accept-Ranges': 'bytes' }); fs.createReadStream(f).pipe(res); }
     });
@@ -1086,6 +1094,23 @@ function effPluginSec() {
       return { available: false, reason: '非 Electron 模式(网页版没有 GPU 栈)' };
     } catch (e) { return { available: false, reason: '读取 Electron GPU 状态失败: ' + e.message }; }
   }
+  // 播放期性能取证(M-20260927-07): GET 取报告(同时落盘 logs/perf-*.json); POST 收页面端送回的 <video> 证据
+  on('GET', '/api/diag/perf', function (req, res, url) {
+    let d = null;
+    try { d = require('../diagperf'); } catch (e) { return json(res, 200, { ok: false, error: '取证模块不可用: ' + e.message }); }
+    return json(res, 200, d.report());
+  });
+  on('POST', '/api/diag/perf', function (req, res, url) {
+    return readBody(req, function (body) {
+      let d = null;
+      try { d = require('../diagperf'); } catch (e) { return json(res, 200, { ok: false, error: '取证模块不可用: ' + e.message }); }
+      try {
+        const o = JSON.parse(body || '{}');
+        if (o && o.arm) return json(res, 200, d.arm(o.arm));   // 手动续航: POST {"arm":300}
+        return json(res, 200, d.clientReport(o));
+      } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
+    });
+  });
   on('GET', '/api/diagnose', function (req, res, url) {
     return diagnose({ config: rootConfig, composer: composer }).then(function (r) { return portCheck().then(function (pc) { r.ports = pc; r.gpu = shellGpuStatus(); json(res, 200, r); }); }).catch(function (e) { json(res, 500, { ok: false, error: String(e.message) }); });
   });

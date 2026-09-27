@@ -350,9 +350,20 @@ function playSpecialVideo(sv){
   var ov=document.createElement('div');ov.style.cssText='position:fixed;inset:0;z-index:9999;background:#000;cursor:pointer';
   ov.innerHTML='<video src="'+vurl+'" autoplay playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain"></video>'+(sv&&sv.title?('<div style="position:absolute;bottom:26px;left:0;right:0;text-align:center;color:rgba(255,255,255,.7);font-size:13px;letter-spacing:2px;pointer-events:none">'+tr('clickToSkip')+'</div>'):'');
   document.body.appendChild(ov);
-  var skipped=false; var skip=function(){if(skipped)return;skipped=true;ov.remove();};
+  // 播放取证(M-20260927-07): 把 <video> 的卡顿事件与 rAF 掉帧记下来, 结束时 POST 给服务端 ——
+  // 与主进程的事件循环延迟/CPU/视频响应时序拼成同一时轴, 才能分清"是数据没到、还是渲染/解码跟不上"。
+  var probe={t0:Date.now(),events:[],longFrames:[],frames:0,last:0,sent:false};
+  function pSend(){ if(probe.sent)return; probe.sent=true; probe.durMs=Date.now()-probe.t0; try{fetch('/api/diag/perf',{method:'POST',body:JSON.stringify({video:probe})}).catch(function(){});}catch(e){} }
+  var skipped=false; var skip=function(){if(skipped)return;skipped=true;pSend();ov.remove();};
   ov.addEventListener('click',skip);
   var v=ov.querySelector('video');
+  if(v){
+    ['waiting','stalled','playing','suspend','error','ended','seeking','seeked'].forEach(function(n){
+      v.addEventListener(n,function(){ probe.events.push({at:Date.now()-probe.t0,name:n,ct:Math.round((v.currentTime||0)*1000)/1000,rs:v.readyState}); });
+    });
+    (function loop(ts){ if(skipped)return; probe.frames++; if(probe.last){var dd=ts-probe.last; if(dd>=60) probe.longFrames.push({at:Math.round(ts-probe.t0),ms:Math.round(dd)});} probe.last=ts; requestAnimationFrame(loop); })(performance.now());
+    setInterval(pSend,10000);   // 播到一半被关掉也能拿到数据
+  }
   // 可观测性(2026-09-27, M-20260927-06): 以前"彩蛋不播"没有任何痕迹 —— 出错/卡播都只静默收尾。
   // 现在走既有的失败上报出口(apiFail -> 控制台提示 + 服务端日志), 消息保持 ASCII 以免触发硬编码中文门禁。
   if(v){v.addEventListener('ended',skip);v.addEventListener('error',function(){if(!skipped){try{apiFail('efx-video','video error code='+((v.error&&v.error.code)||'?'));}catch(e){}skip();}});}
