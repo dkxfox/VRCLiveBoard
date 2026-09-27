@@ -59,3 +59,4 @@
 | **S1–S4** | S1 崩溃/数据丢失/安全;S2 主功能不可用;S3 体验问题;S4 优化建议 |
 | **可逆动作** | 能用 `git revert` 或重跑脚本还原的动作 |
 | **不可逆动作** | 见"动作"表中标注,执行前必须走 A0 回述确认 |
+| **手工自测夹具(conflict-test\*)** | `plugins/conflict-test` / `-b` / `-dep` 三个**全权限或演示用**的测试插件, 用来手工验证审批窗、权限策略与冲突引擎; 用法见 `plugins/conflict-test/README.md` | 不是官方插件、**别上架市场**; 也**永不随包出厂**(pack-exclude + make-dist 跳过 + GPLUG 保险断言) |

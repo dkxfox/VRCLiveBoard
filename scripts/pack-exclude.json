@@ -93,6 +93,6 @@
     "^master\\.js$",
     "^api\\.js$",
     "^_.*\\.js$",
-    "^conflict-test"
+    "conflict-test"
   ]
 }

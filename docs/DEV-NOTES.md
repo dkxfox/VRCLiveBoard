@@ -1159,6 +1159,8 @@
 - 永不进包的三道保险: ① `scripts/pack-exclude.json` 的 dirs 加三个目录 + forbiddenNamePatterns 加 `^conflict-test`(**进包即 FAIL**); ② `make-dist.ps1` 的跳过条件从 `-eq 'conflict-test'` 改为 **`-like 'conflict-test*'`**(覆盖 -b / -dep); ③ `.gitignore` 加 `plugins/conflict-test*/data/`(`selfTest` 会往数据目录写一个自测文件, 免得污染 git 状态)。
 - 遗留: 夹具不进任何发布包, 所以**不写进《版本说明》**; 下次 `make-dist` 时顺手确认两个包条目数仍是 1341/163(即便漏了, pack-audit 的 `^conflict-test` 禁入正则会报 FAIL)。
 - 教训: ① **给用户手动试的东西, 承诺必须先自己验证一遍** —— 冲突文案是照引擎实际输出核的; ② 夹具是"全权限", 所以"不进包"必须有多层保证, 而且**排除清单本身要有 FAIL 级兜底**(禁入正则), 否则哪天排除规则失效就是静默漏包。
+- **用户验收(2026-09-27): 通过, 并决定长期保留这三个夹具**("以后说不定还能用到")。因此本轮把它们**升级为常备开发工具**: ① `开发者文档/02-插件开发规范.md` 新增"手工自测夹具(conflict-test*)"一节(什么时候跑 / 怎么算通过 / 指向 README); ② `docs/GLOSSARY.md` 新增词条(含"别上架插件市场"的误解提示); ③ **GPLUG 新增第 7 节断言**: 逐个校验每个 `conflict-test*` 的"pack-exclude 目录 + 禁入正则"两样都在, 缺一样就 FAIL —— 把"永不进包"从"人记得"改成**机器守**; ④ `DOC-BASELINE` 增两条 must(插件规范与术语表各一条)。
+- **顺带修掉我自己写错的一处保险(诚实)**: 禁入正则原先写成 `^conflict-test`, 而 pack-audit 比对的是 **zip 条目路径**(形如 `plugins/conflict-test/manifest.json`)→ 锚定行首的正则**永远匹配不上**, 等于没设防; 上面那条新断言第一次运行就把这三个 FAIL 了出来。已改成不锚定的 `conflict-test`, 并用条目形态实测 = true。教训: **保险本身也要被验证** —— 写了正则不等于拦得住(与"扫描器说自己绿了"同一类)。
 
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 

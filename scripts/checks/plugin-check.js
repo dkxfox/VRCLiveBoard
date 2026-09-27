@@ -135,5 +135,21 @@ try {
   try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch (e) {}
 }
 
+// 7. 开发夹具的出厂保险(2026-09-27): conflict-test* 是**全权限**的手工测试夹具(用法见 plugins/conflict-test/README.md),
+//    必须**永不进包**。把"排除清单还完整"变成断言 —— 只靠人记得改 pack-exclude, 迟早会漏(2026-09-27 就漏过一次 _db.js)。
+try {
+  const pe = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts', 'pack-exclude.json'), 'utf8'));
+  const dirs = Array.isArray(pe.dirs) ? pe.dirs : [];
+  const pats = Array.isArray(pe.forbiddenNamePatterns) ? pe.forbiddenNamePatterns : [];
+  const fixtures = Object.keys(manifests).filter((id) => /^conflict-test/.test(id));
+  if (!fixtures.length) say('WARN', '没有找到 conflict-test* 夹具(手册与 README 的引用会失效)');
+  for (const id of fixtures) {
+    const want = ('plugins\\' + id).toLowerCase();
+    const inDirs = dirs.some((d) => String(d).replace(/\//g, '\\').toLowerCase() === want);
+    const inPats = pats.some((p) => { try { return new RegExp(p, 'i').test('plugins/' + id + '/manifest.json'); } catch (e) { return false; } });
+    say(inDirs && inPats ? true : 'FAIL', '夹具出厂保险 ' + id + ': pack-exclude 目录' + (inDirs ? ' ✓' : ' **缺**') + ' / 禁入正则' + (inPats ? ' ✓' : ' **缺**') + (inDirs && inPats ? '' : ' —— 缺一样就会被打进发布包'));
+  }
+} catch (e) { say('FAIL', '读取 pack-exclude.json 失败(夹具保险无法校验): ' + e.message); }
+
 console.log('  ---- ' + (fail ? fail + ' FAIL' : '0 FAIL') + ' / ' + warn + ' WARN ----');
 process.exit(fail ? 1 : 0);
