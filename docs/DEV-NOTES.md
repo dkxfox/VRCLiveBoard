@@ -1139,6 +1139,15 @@
 - **顺手修掉 release-audit 自身的一处报告矛盾**: 步骤判定原来只看子进程退出码, 于是出现"块内已标记失败、步骤结果仍写 PASS, 结论却是 AUDIT FAIL"(本次 BUILD-INFO 那次实测); 现在步骤判定 = 退出码 **或** 块内失败标记。
 - 最终产物: Desktop **226,093,226B**(sha256 `7695d635…`) / Lite **8,482,885B**(`82f9bd58…`) + `SHA256SUMS-v1.4.5.txt`; `zipVolumes` 已按最终包复核(1341/226093226 与 163/8482885, pack-audit 两包 PASS)。
 
+## 228. 1.4.5「拾遗」正式发布(2026-09-27, 用户"令牌在桌面")
+- **上线结果**: Release **v1.4.5**(id **397517133**)https://github.com/dkxfox/VRCLiveBoard/releases/tag/v1.4.5 —— 3 个资产全部 `state=uploaded`, **GitHub 侧 digest 与本地 SHA256SUMS 逐份一致**(Desktop `7695d635…`, Lite `82f9bd58…`, SUMS `036470d1…`), `latest` 指向 v1.4.5。
+- **产物**: Desktop-SelfContained 226,093,226 B(215.62 MB)+ Lite-RequiresNode 8,482,885 B(8.09 MB)+ `SHA256SUMS-v1.4.5.txt`; 条目 1341 / 163。
+- **审计**: `release-audit.ps1` **AUDIT PASS**(11 步全 PASS, 报告 `审计报告-AUDIT-20260927-125807.txt`); 两份 FAIL 报告(`124226` 包比代码旧 / `125247` 未推送)**如实留档**, 没有删。
+- **本版内容**: 插件 AI 审批口径修复 + 启动自检 Node 版本 + 死键清理; 未改插件权限, 用户**无需重新授权**。详细发布记录回填 `docs/PROCESS-02-开发更新.md` 的 **8.12** 节(产物/审计/上线/三处打包侧修复/令牌纪律/追记)。
+- **发布后追记(本轮补的窟窿)**: `docs/RELEASE-ASSETS.json` 此前只到 1.4.3 —— **1.4.4 发布时漏了追记**, 客户端读该文件看不到 1.4.4 的校验值; 本次一并补上 1.4.4 与 1.4.5(校验值取自 GitHub 资产公开 digest, 已与本地核对), 并把"发布后必做追记"写进 PROCESS-02 §5, 同时在 `release-audit.ps1` 第 7 步加"本版是否已追记"的 **WARN**(追记发生在发布之后, 所以不能是 FAIL)。
+- **令牌纪律执行**: 桌面 `GitHub令牌.txt` 与临时上传脚本**已删除**(脚本只读令牌、不回显; 输出里只有长度, 没有内容); 仓库无令牌痕迹, `git status` 干净。
+- 遗留(诚实): ① 两张功能卡(F-20260903-01/-02)等用户在自己实例做 UI 复核; ② `docs/THIRD-PARTY.md` 两条合规待办(SheetJS 许可文本 / 彩蛋视频来源); ③ weather-board vendor xlsx 仍 0.18.5; ④ 建议把本次用过的 GitHub 令牌轮换一次。
+
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1266,5 +1275,6 @@
 | 225 | 2026-09-27 | DEV-NOTES 条目索引(GNOTES 门禁)+ 记录结构审计: 门禁首跑抓出 4 处历史异常 |
 | 226 | 2026-09-27 | 清理 M-20260927-05: DEV-NOTES 4 处历史结构异常 + 修掉一次"索引块标记字面量"引发的正文吞噬 |
 | 227 | 2026-09-27 | 1.4.5 打包与打包侧三处发现 |
+| 228 | 2026-09-27 | 1.4.5「拾遗」正式发布 |
 
 <!-- DEV-NOTES-INDEX:END -->

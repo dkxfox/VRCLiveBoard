@@ -128,6 +128,7 @@ powershell -File scripts\checks\feature-accept.ps1 -Card docs\FEATURES\F-2026090
 - **打包清单同步**:新增根目录文件默认视为"会进包",明确决定进 `$required` 还是 `$xfFiles`
 - 出包后必须跑 `pack-audit.js`(会校验:插件本体 + 官方可选插件恢复备份 + 盐一致 + 机密扫描)
 - 最后走流程 3(安全审计)的发布前检查
+- **发布后必做(2026-09-27 补记, 因为 1.4.4 漏过一次)**: 在 `docs/RELEASE-ASSETS.json` 追记本版两条 zip 的 `name/bytes/sha256` —— 客户端从这里读校验和(GitHub 直链在国内不可达), 漏一步的后果是"检查更新看得见新版、却显示不出校验值"; 校验值以 GitHub Release 资产的公开 `digest` 为准, 并与本地 `SHA256SUMS` 核对。`release-audit.ps1` 第 7 步会对"本版是否已追记"给 WARN。
 
 ## 6. 门禁(在流程 1 基础上新增三个)
 
@@ -301,6 +302,17 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke
 
 **发现并已修的产品问题(本轮)**: 见 DEV-NOTES 200~207(场次响应嵌套解析 `_INTERACTION_END` 重开局、end 体、会话重开重建桥导致弹幕被丢、过期临时文本死锁、插件数据源缺 `enabled`、设置不热更新)。
 
+
+### 8.12 1.4.5 发布(2026-09-27 · 修补版: 插件 AI 审批口径 + 启动自检 Node 版本)
+
+- **产物**: Desktop-SelfContained **215.62 MB**(226093226 字节, sha256 `7695d635…4ef1b721`)+ Lite-RequiresNode **8.09 MB**(8482885 字节, `82f9bd58…ee4fc00`)+ `SHA256SUMS-v1.4.5.txt`; 条目数 1341 / 163(与 1.4.4 相同)。
+- **审计**: `release-audit.ps1` **AUDIT PASS**(11 步全 PASS), 报告 `审计报告-AUDIT-20260927-125807.txt`。本轮另留两份 FAIL 报告(诚实留档): `124226` = 包内 BUILD-INFO 与 HEAD 不一致(包比代码旧 → 重打包); `125247` = 本地领先 origin 未推送(→ 推送后重跑)。
+- **上线**: https://github.com/dkxfox/VRCLiveBoard/releases/tag/v1.4.5(Release id **397517133**, 3 资产, **GitHub digest 与本地 SHA256SUMS 逐份一致**, `latest` = v1.4.5)。
+- **本版内容**: ① 修"插件声明 AI 能力后, 审批窗既不显示 AI 项、也不需要输入插件名确认"(与《使用说明》承诺不符; 当前无插件声明 AI, 属提前修正; 由 GPLUG 6 条断言守); ② 启动自检 Node 版本(轻量版在 Node 18/20 上明确提示)+ 说明书轻量版段写明 Node.js 22+; ③ 清理两条废弃文案键。**未改插件权限 → 无需重新授权**。
+- **打包侧修掉的三处真问题**: ① 开发脚本 `_db.js` 一直随包出厂(体积基线报漂移暴露; 已删并加禁入名单); ② pack-exclude 的 `_*.txt` 通配符**匹配 8.3 短名**, 把 `使用说明.txt`/`版本说明.txt` 静默排除(zip 中文名自检拦下; 已回退并写入"陷阱"说明); ③ 手改基线时正则 `\.` 造成 JSON 非法转义(扫描器以堆栈退出 → 改用 `JSON.stringify` 写回 + 扫描器加清晰报错)。
+- **发布令牌纪律**: 用户把令牌放在桌面 `GitHub令牌.txt`; 上传脚本只读该行、**不回显**, **用后立即删除**该文件与临时脚本(均已完成, `git status` 干净)。
+- **发布后追记**: `docs/RELEASE-ASSETS.json` 补上 **1.4.5 与 1.4.4** —— 1.4.4 发布时漏了这一步, 客户端读该文件只能看到 1.4.3(校验值缺失); 校验值取自 GitHub Release 资产的公开 digest 并与本地 SHA256SUMS 核对。`release-audit.ps1` 第 7 步新增"本版是否已追记"的 WARN, 防止再漏。
+- 遗留(诚实): 两张功能卡(F-20260903-01/-02)仍等用户在自己实例做 UI 复核(ACCEPT→DONE); `docs/THIRD-PARTY.md` 两条合规待办(SheetJS 许可文本随 vendor / 彩蛋视频来源确认); weather-board vendor xlsx 仍 0.18.5。
 ### 8.11 1.4.4 发布(2026-09-25 · B站直播插件 + 插件设置字段)
 
 - **产物**: Desktop-SelfContained **215.59 MB**(226064954 字节, sha256 090fccaa…34ee0) + Lite-RequiresNode **8.06 MB**(8454614 字节, sha256 e8042a67…bfba1) + SHA256SUMS-v1.4.4.txt。

@@ -129,6 +129,13 @@ RunStep '7. 发布包审计 + SHA256 清单' {
   $plugZips = @(Get-ChildItem $plugDir -Filter '*.zip' -File -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
   if ($plugZips.Count) { node scripts\checks\pack-audit.js --plugin-pack @plugZips; if ($LASTEXITCODE -ne 0) { Log 'FAIL 插件更新包审计未通过'; $script:exit = 1 } else { Log ('插件更新包审计通过(' + $plugZips.Count + ' 个)') } }
   else { Log 'WARN 没有找到插件更新包(dist\插件更新包\*.zip)' }
+  # 发布后追记检查(2026-09-27 增补, WARN 不阻塞): docs/RELEASE-ASSETS.json 必须有本版条目 —— 客户端从它读校验和;
+  # 1.4.4 发布时漏了这步(客户端只能看到 1.4.3), 所以这里留个可见提醒(追记发生在发布之后, 故不能是 FAIL)。
+  try {
+    $ra = Get-Content (Join-Path $proj 'docs\RELEASE-ASSETS.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    if (-not ($ra.versions.PSObject.Properties.Name -contains $ver)) { Log ('WARN docs/RELEASE-ASSETS.json 还没有 v' + $ver + ' 条目 —— 发布后记得追记(否则客户端显示不出校验值)') }
+    else { Log ('RELEASE-ASSETS.json 已追记 v' + $ver) }
+  } catch { Log ('WARN 读取 RELEASE-ASSETS.json 失败: ' + $_.Exception.Message) }
   $sums = Join-Path $pub ('SHA256SUMS-v' + $ver + '.txt')
   Get-FileHash $zips -Algorithm SHA256 | ForEach-Object { '{0}  {1}' -f $_.Hash.ToLower(), (Split-Path $_.Path -Leaf) } | Set-Content -Path $sums -Encoding ascii
   Log ('已生成校验和清单: ' + $sums)
