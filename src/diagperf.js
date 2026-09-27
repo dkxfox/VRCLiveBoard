@@ -165,6 +165,14 @@ function envInfo() {
   return o;
 }
 
+// 只留最近 keep 份 perf-*.json(按文件名里的时间戳排序, 最旧先删)
+function pruneReports(dir, keep) {
+  try {
+    const files = fs.readdirSync(dir).filter(function (f) { return /^perf-\d+\.json$/.test(f); }).sort();
+    files.slice(0, Math.max(0, files.length - keep)).forEach(function (f) { try { fs.unlinkSync(path.join(dir, f)); } catch (e) {} });
+  } catch (e) {}
+}
+
 function spikeInWindow(spikes, start, end) { return (spikes || []).some(function (sp) { return sp.atMs >= start - 1200 && sp.atMs <= end + 1200; }); }
 
 function writeReport(s) {
@@ -210,6 +218,7 @@ function writeReport(s) {
     fs.mkdirSync(dir, { recursive: true });
     file = path.join(dir, s.id + '.json');
     fs.writeFileSync(file, JSON.stringify(summary, null, 1), 'utf8');
+    pruneReports(dir, 10);   // 留存上限: 每次启动都会生成一份, 留最近 10 份即可(见 PROCESS-01 §10)
   } catch (e) {}
   summary.file = file;
   return summary;
