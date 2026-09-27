@@ -857,5 +857,16 @@
 - 改动: ① `src/pluginsys/manager.js` 新增纯函数 `permsViewOf(manifest)`(把 `manifest.ai.tasks` 归并进 `permissions.ai`, 其余字段原样透传), `status()` 改用它, 并导出供门禁断言; ② `scripts/checks/plugin-check.js`(GPLUG)新增 **6 条断言**: 5 条纯函数(映射成功 / 不覆盖原字段 / 未声明不产生 / 空数组不产生 / manifest 缺失安全回退)+ **1 条行为级**(临时目录造一个声明 ai 的假插件, 真实 `new PluginManager(...)` 后断言 `status().plugins[0].permissions.ai.tasks` 存在)。
 - 验证: ① GPLUG → `0 FAIL / 0 WARN`(6 条新断言全绿); ② **红队**: 把 `status()` 改回旧写法 → 门禁报 `FAIL status() 行为: 声明 ai 的插件没有带 permissions.ai —— 审批窗会漏掉 AI 高危确认与 AI 显示`(exit=1), 恢复后 `0 FAIL`; ③ 常规门禁 14 PASS + 隔离冒烟 15/15。
 - 关联: DEV-NOTES 221; F-20260903-02; 使用说明 第 138/221 行
+## M-20260927-02 【C4】两张功能卡的 ASSERT 指向重构后不存在的标识符 → feature-accept 假 FAIL(功能卡收口时发现)
+- 状态: FIXED(2026-09-27)
+- 严重度: C4(记录与工具: 卡片"自测"常年 FAIL, 反而没人看得出功能到底还在不在)
+- 来源: 2026-09-27 功能卡收口时跑 feature-accept
+- 现象: `feature-accept.ps1 -Card F-20260903-01` → `SMOKE RESULT: pass=13 fail=2`; `-Card F-20260903-02` → `pass=13 fail=1`。失败项 = "审批窗风险分级在页面脚本|/app.js|plgRiskHigh / plgPermsRisk" 与 "审批窗AI能力显示|/app.js|permAi"。
+- 根因: 这三条断言写于 2026-09-03, 之后前端经历 2026-09-11 的拆分与重写(app.js 拆出 app-security.js 等), 审批窗实现改名为 `plgPermsHtml` / `plgWarn` / `plgRiskNote` / `plgAiShort`; **旧标识符 `plgRiskHigh`、`permAi` 只剩 lang.js 里的死键, `plgPermsRisk` 从来没有过**。断言没人跑, 于是没人发现(这正是 M-20260927-03 那种真缺口能藏两个月的原因)。
+- 影响面: 这两张卡的自测长期假 FAIL; "功能还在不在"没有机器证据(实际功能仍在, 见验证)。
+- 改动: ① 两张卡的 ASSERT 行改为**真实且带行为含义**的标识符(F-20260903-01: `plgPermsHtml` + `plgRiskNote`; F-20260903-02: `plgAiShort`), 每张卡加一行"断言重校(2026-09-27)"说明; ② F-20260903-02 用文字指向 GPLUG 的 6 条 AI 映射断言 —— **不写实例断言**(当前无插件声明 ai, 写了就是假绿); ③ 两张卡的 D3/D4 勾选项按实测补全。
+- 验证: 改后重跑 —— F-20260903-01 `SMOKE RESULT: pass=15 fail=0`(exit=0); F-20260903-02 `pass=14 fail=0`(exit=0); 功能本体走查 `app.js:176-186`(风险着色 + 高危判定 + 输入插件名/ID + 5 秒倒计时)与 `index.html:365-376`(`plgModal` / `plgRiskNote` / `plgConfirm` 容器在)。
+- 遗留: `plgRiskHigh` / `permAi`(以及从未存在的 `plgPermsRisk`)在 `lang.js` 三语各 1 条**死键**。本次不删(不阻断验收, 删键要走 GI18N 三语同步); 下次做 i18n 清理时一并处理。
+- 关联: DEV-NOTES 222; F-20260903-01 / F-20260903-02; M-20260927-03
 
 

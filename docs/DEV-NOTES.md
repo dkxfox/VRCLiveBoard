@@ -1050,6 +1050,7 @@
 ```
 
   隔离冒烟: `SMOKE RESULT: pass=15 fail=0`。
+- 遗留 / 教训: ① **"写进 README / engines" ≠ "用户看得到"** —— 面向终端用户的运行要求必须写在安装章节里, 并且能在启动时自己说出来; ② 只 warn 不拦, 是刻意保留的保守语义; ③ 这次两批改动各跑一次 `-Smoke`, 对应 PROCESS-04 §11 新增的"同一结论不重复跑, 但换内容就算新证据"的口径。
 
 ## 220. 标准审计批 C-1: 新增第 13 条「上下文压缩后重新锚定」+ 补三处缺章 + 3A 一键入口(2026-09-27, 用户"继续修补, 开发流程暂缓"+"要不要加一条规则: 发现对话上下文压缩时需要确认仍按照标准流程开发")
 - 解读与边界: 两件事 —— ① 继续补审计提出的缺项(开发流程 / VR 虚拟键盘按用户指示**暂缓**); ② 采纳并把"上下文压缩后重新锚定"写成规则。本轮只碰标准文档 + 一个**只读**脚本, 不动功能代码。
@@ -1075,4 +1076,16 @@
 - 改动: ① `src/pluginsys/manager.js`: 新增纯函数 `permsViewOf(manifest)`(`manifest.ai.tasks` 非空才归并成 `permissions.ai = { tasks:[...] }`, 其余字段原样透传), `status()` 由 `e.manifest.permissions || {}` 改为 `permsViewOf(e.manifest)`, 并把函数加入 `module.exports`(与 `settingsUiOf` 同样的"纯函数供门禁直接断言"做法); ② `scripts/checks/plugin-check.js`(GPLUG)新增 **6 条断言** —— 5 条纯函数(映射成功 / 原 `process` 字段不被覆盖 / 未声明不产生 / `tasks: []` 不产生 / `manifest` 缺失回退空对象)+ **1 条行为级**(os.tmpdir 造 `ai-demo` 假插件 → `new PluginManager({root: tmp})` → `status().plugins[0].permissions.ai.tasks[0] === 'translate'`, 用完删临时目录)。
 - 证据: ① `node scripts\checks\plugin-check.js` → 6 条新断言全部 `OK`(旧行为下它们抓不到, 见②); ② **红队对照实验**: 把 `status()` 临时改回 `e.manifest.permissions || {}` → 门禁输出 `FAIL status() 行为: 声明 ai 的插件没有带 permissions.ai —— 审批窗会漏掉 AI 高危确认与 AI 显示` + `---- 1 FAIL / 0 WARN ----`, exit=1; 恢复后 exit=0 —— **断言确实能抓回旧缺陷**(不是"写完就绿")。
 - 遗留 / 教训: ① **跨端契约要有一处"合并点"**: 数据在 A 端一半、B 端一半时, 中间那层(这里是 status 映射)最容易漏, 而且两端各自的测试都不会红; ② 这次能发现, 靠的是**功能卡自测**——如果那张卡的断言早被修好(见 M-20260927-02), 这个缺口在 9 月初就会暴露; ③ 卡里没提到的 `plgRiskHigh` / `permAi` 死键暂不删(不阻断验收, 删键要三语同步), 已记进 M-20260927-02 的遗留。
-- 遗留 / 教训: ① **"写进 README / engines" ≠ "用户看得到"** —— 面向终端用户的运行要求必须写在安装章节里, 并且能在启动时自己说出来; ② 只 warn 不拦, 是刻意保留的保守语义; ③ 这次两批改动各跑一次 `-Smoke`, 对应 PROCESS-04 §11 新增的"同一结论不重复跑, 但换内容就算新证据"的口径。
+
+## 222. 功能卡收口(F-20260903-01/-02)+ 第三方许可证清单建立(2026-09-27, 用户"继续"; 标准审计批 C-2a)
+- 解读与边界: 收口两张挂在 `BUILD` 的插件功能卡, 并补上审计指出的"缺第三方许可证清单"一章。**不收口** VR 虚拟键盘(主卡仍是 DRAFT, 等用户拍板交付形态)与 F-20260925-01(ACCEPT, 等用户实机)。
+- 现象与根因(收口时才发现的两件事): ① 两张卡的 5 个切片**全部已勾**, 但状态一直是 `BUILD` —— 没人跑过卡片自带的自测, 也没人做收口动作, 于是"完成度"停留在 2026-09-03 的纸面; ② 跑起来立刻暴露两类问题: 断言指向已不存在的标识符(见 M-20260927-02), 以及真正的功能缺口 —— `manifest.ai` 没被映射进 `status().permissions`(见 M-20260927-03 / 条目 221)。
+- 改动: 
+  ① `docs/FEATURES/F-20260903-01-plugin-security.md`: 状态 `BUILD` → **ACCEPT**(5 切片全绿 + GCONF 守默认档 + 隔离冒烟覆盖 /api/security 单向收紧与 require 钩子; 《使用说明》与《版本说明》第十节均已写明); 断言重校; D3/D4 勾选项按实测补全并注明判据。
+  ② `docs/FEATURES/F-20260903-02-plugin-ai-gateway.md`: 状态 → **ACCEPT**, 并把"显示契约级缺口已修"写进状态行(指向 221); 断言重校为 `plgAiShort`; 明确**不写假的实例断言**(无插件声明 ai)。
+  ③ `docs/FEATURES/F-20260925-02-VR虚拟键盘-技术研究.md`: 补状态行"**附件(随主卡)**"(模板要求每张卡有状态, 附件也不该例外)。
+  ④ 新增 `docs/THIRD-PARTY.md`(许可证与来源清单): 随包依赖 6 项(electron 43.4.0 MIT / osc 2.4.5 MIT-OR-GPL-2.0 / systeminformation 5.33.5 MIT / tesseract.js 7.0.0 Apache-2.0 / 两个模型包 MIT)+ 插件 vendor 的 SheetJS xlsx(0.20.3 ×2、**0.18.5 ×1**, Apache-2.0)+ 用户侧按需安装(Python PSF-2.0、winsdk MIT、LiveTranslate 未核)+ 素材(彩蛋视频**来源未记录, 待确认**)。
+  ⑤ 接线: `PROCESS-01` §6 矩阵新增"第三方组件"行(dep-audit + THIRD-PARTY 同步); `PROCESS-03` §3 写明许可证面不在 SECURITY-BASELINE 而在 THIRD-PARTY; `DOC-BASELINE` 新增 THIRD-PARTY 的 4 条 must(含"来源与授权未记录"这条**待办也被门禁记住**)。
+- 证据: ① `feature-accept.ps1`: F-20260903-01 → **15 PASS / 0 FAIL**、F-20260903-02 → **14 PASS / 0 FAIL**(改断言前分别是 13/2 与 13/1); ② `plugin-check.js` → 0 FAIL / 0 WARN(含 6 条 AI 映射断言); ③ `doc-consistency.js` → 0 FAIL(THIRD-PARTY 4 条 must 全 OK); ④ 提交前 `run-gates.ps1 -Smoke` → **15 PASS / 0 FAIL**(G4 隔离冒烟 15/15)。
+- 遗留(诚实清单): ① 两张卡仍等**用户在自己实例的 UI 复核**(ACCEPT→DONE 只差这一句; 按 PROCESS-04 §12 不由 AI 代签); ② `lang.js` 三个死键待 i18n 清理(见 M-20260927-02); ③ THIRD-PARTY 的两条待办 —— **SheetJS 许可文本要随 vendor 附带**, 以及**彩蛋视频 `fes-0615.mp4` 的来源/可分发性要用户确认**(这两条已写进文档且被 GDOC 断言记住); ④ weather-board vendor xlsx 仍是 0.18.5(台账 M-20260904-01, 属功能回归类改动); ⑤ 批 C-2b 未动: ISSUES 历史附录归档 + DEV-NOTES 索引(已 1100+ 行)。
+- 教训: **功能卡是活记录, 不是立项存档** —— 切片勾完不等于完成: 状态、断言、发布准备三块都要在收口时按实测过一遍; 而"断言指向哪里"必须跟着实现走, 否则卡片自测会变成没人看的红叉, 真缺口(如 manifest.ai 映射)就能在红叉背后躺两个月。

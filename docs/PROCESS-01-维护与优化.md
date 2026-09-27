@@ -126,6 +126,7 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke -Assert '被修的bug|/api/
 | `src/devgate.js` / `dev-dongle/master/master.js` | 两处盐逐字一致 + 沙箱七项(注册→发码→接受→重放拒→旧盐拒→迷你狗盐→登记表未污染) |
 | `启动*.bat` | G2 + 含空格路径双击可用 |
 | `scripts/make-dist.ps1` | 单 BOM + PARSE_OK + 实跑打包 + GPACK |
+| `package.json` / `package-lock.json` / `plugins/*/vendor/**`(第三方组件) | dep-audit(依赖清单 + 8 项产物哈希)+ **`docs/THIRD-PARTY.md` 同步**(版本 / 许可证 / 来源 / 是否随包) |
 | `scripts/checks/**`(门禁自身) | **门禁红队自测**(`release-audit.ps1` 第 0 步 / `gate-selftest.ps1`):改了门禁就必须证明它**还能抓住原来能抓的东西** —— 扫描器自己绿了比漏报更危险 |
 | `src/versioncheck.js` | 多源取最高 / releaseUrl 白名单 / 6h 缓存 |
 | **任何新增的根目录文件** | **默认视为"会进包"**:确认是否要加进 `$xfFiles` 排除 |

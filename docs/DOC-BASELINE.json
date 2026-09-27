@@ -83,6 +83,7 @@
         "快跑 **14** 个门",
         "开场五件事",
         "| `src/pluginsys/manager.js` |",
+        "| `package.json` / `package-lock.json` / `plugins/*/vendor/**`(第三方组件) |",
         "| `scripts/checks/**`(门禁自身) |",
         "## 10. 数据与产物留存与清理周期"
       ],
@@ -97,6 +98,15 @@
         "## 6. 发布后响应与回滚",
         "audit-3a.ps1",
         "**11 步**一次跑完"
+      ],
+      "mustNot": []
+    },
+    "docs/THIRD-PARTY.md": {
+      "must": [
+        "SheetJS",
+        "Apache-2.0",
+        "PSF-2.0",
+        "来源与授权未记录"
       ],
       "mustNot": []
     },

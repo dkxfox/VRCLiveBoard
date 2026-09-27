@@ -4,10 +4,11 @@
 
 ## 0. 状态
 
-- 状态: BUILD
+- 状态: **ACCEPT**(2026-09-27 收口: 5 个切片全绿; 门禁侧 GCONF 守默认档 + 隔离冒烟覆盖 /api/security 单向收紧与 require 钩子; 《使用说明》"插件安全策略"段与《版本说明》十、均已写明; pack-audit 多次 AUDIT PASS)
 - 归属: 主体(插件系统核心)
-- 目标版本: 下个补丁版(不升 1.4.0, 走流程 1 补丁位)
-- 关联: DEV-NOTES 条目 95
+- 目标版本: 下个补丁版(不升 1.4.0, 走流程 1 补丁位) → **已随 1.4.x 系列出厂**
+- 关联: DEV-NOTES 条目 95 / **222(2026-09-27 收口)**
+- 遗留: 仅"用户在自己实例做一次 UI 复核"一项(ACCEPT 语义 = 代码与门禁完成, 等用户一句话转 DONE; 按 PROCESS-04 §12 不由 AI 代签)
 
 ## 1. 七问(D0)
 
@@ -55,15 +56,16 @@
 ## 4. 验收断言(D3)
 
 - ASSERT: 插件安全默认策略|/api/config|networkPolicy.*whitelist
-- ASSERT: 审批窗风险分级在页面脚本|/app.js|plgRiskHigh
-- ASSERT: 审批窗风险分级在页面脚本|/app.js|plgPermsRisk
-- [ ] 影响面回归(PROCESS-01 §6 矩阵)已勾选
+- ASSERT: 审批窗按风险着色渲染权限(process/写文件=红, 其余=黄)|/app.js|plgPermsHtml
+- ASSERT: 高危插件需输入插件名或 ID 确认|/app.js|plgRiskNote
+- [x] 影响面回归(PROCESS-01 §6 矩阵)已勾选(2026-09-27: config.default→GCONF、app.js→GHTML/GUWIRE/GBOOT、lang.js→GI18N/GI18NU/GI18NH、server.js 路由→GROUTE + 隔离冒烟、插件→GPLUG、文档→GDOC; 全绿)
 - [ ] 用户在自己实例确认(UI/交互类必填)
+> **断言重校(2026-09-27)**: 原两条断言写的 `plgRiskHigh` / `plgPermsRisk` 是 2026-09-03 的实现名, 09-11 前端拆分重写后已不存在(仅 lang.js 剩死键) —— **功能仍在, 是断言指错了目标**(见 M-20260927-02)。
 
 ## 5. 发布准备(D4)
 
-- [ ] 使用说明.txt 章节(插件系统章补"插件安全策略"段)
-- [ ] 版本说明.txt 条目(下次补丁版)
-- [ ] README 功能一览
-- [ ] 打包清单: 无新文件
-- [ ] pack-audit 通过
+- [x] 使用说明.txt 章节(插件系统章补"插件安全策略"段 —— GDOC 断言 "插件安全策略的放宽"/"安全策略、授权记录" 守着)
+- [x] 版本说明.txt 条目(第十节已写"插件安全收紧: 插件卡新增五个安全策略…0 级可看、可单向收紧, 放宽需一级密码; 审批窗逐项列示权限、高危…")
+- [x] README 功能一览(2026-09-27 判定: 现状已列"插件系统自由扩展"; 安全策略细节由《使用说明》与《版本说明》覆盖, **不重复进 README**, 避免三处维护)
+- [x] 打包清单: 无新文件(仅 config.default.json / 既有前端文件)
+- [x] pack-audit 通过(1.4.x 各次发布均为 AUDIT PASS)
