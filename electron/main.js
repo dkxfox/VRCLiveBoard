@@ -10,6 +10,13 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 // Chromium 默认会对"不可见/被遮挡"的窗口降频 —— 现象就是启动彩蛋视频"每几秒卡一下"。
 // 绘制侧对应开关是 BrowserWindow 的 webPreferences.backgroundThrottling:false(见 createWindow)。
 app.commandLine.appendSwitch('disable-background-timer-throttling');
+// 遮挡检测/后台降级(M-20260927-07 第二轮): 用户实测 backgroundThrottling:false **单独不够** —— 桌面端仍"每 ~3 秒
+// 音视频一起卡一下并跳帧"(浏览器同源直放却流畅)。Chromium 在 Windows 上会通过原生遮挡检测(CalculateNativeWinOcclusion)
+// 判定窗口"被完全遮挡"→ 对整个渲染进程降级; 本程序窗口常年被 VRChat 盖住, 正是被降级的对象。
+// 三个开关合起来关掉这条链路(绘制/定时器/渲染进程优先级), 让被遮挡时也照常出帧。
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 
 function applyConsoleSetting() {
   try {
