@@ -382,5 +382,6 @@
 - 改动(低风险, 一行 + 一个开关): ① `electron/main.js` 主窗口加 `webPreferences: { backgroundThrottling: false }`; ② 启动时 `app.commandLine.appendSwitch('disable-background-timer-throttling')`。
 - **判据测试(请用户做, 用来证实/证伪)**: ① **浏览器直放同一个文件**: 在浏览器打开 `http://127.0.0.1:19190/api/special/video?file=assets%2Fvideos%2Ffes-0615.mp4` —— 浏览器流畅而程序窗口卡 → 指向窗口/渲染层(与本次改动方向一致); 两边都卡 → 指向文件或机器负载(GPU 被 VR 占满)。② **窗口切前台**看同一段视频: 若卡顿明显减轻 → 证实后台节流假设。③ 补充信息: 是"每 3 秒规律一次"还是"只在前 3 秒一次"? 当时是在 VR 里看桌面(VD/SteamVR)?
 - 下一步(若改动无效): ① 用控制台页面周期轮询做 A/B(临时关掉 3s/5s 轮询看是否消失); ② 试 `--disable-gpu` 或 `app.disableHardwareAcceleration()` 对比; ③ 重新编码测试视频(结构虽干净, 但换一版可彻底排除文件因素)。
+- **第一轮验证结果(2026-09-27 晚, 用户)**: ① **浏览器直放不卡** ✓(文件/机器/传输全部没问题, 差异确实在窗口/渲染层 —— 与主假设方向一致); ② 桌面端**不播放** —— 经查**不是回归, 是设计里的 `oncePerDay` 生效**: `config.efx.played = {"fes-0615@1":{"forced":false,"last":"09-27"}}` 说明当天已播过一次(`logs/app.log` 20:42 那次), 随后的 20:50 / 20:51 两次启动按设计返回 `off`(理由"开关开但今天已播过")。**即: 节流改动实际上还没被验证过**(后两次启动根本没播视频)。处置: 本地测试事件 `version` 1 → 2(key 变 `fes-0615@2`, 无已播记录 → 下次启动会播); 想反复测可在控制台执行 `fetch('/api/config',{method:'POST',body:JSON.stringify({efx:{oncePerDay:false}})})`, 测完记得改回 `true`。
 
 
