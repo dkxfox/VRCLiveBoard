@@ -1135,6 +1135,9 @@
 - 顺手校正口径: `PROCESS-03` §3 原写"更新基线的**唯一**方式是跑 `--update-baseline`" —— 实际 **zipVolumes 没有这个开关**, 一直是人工按实测值更新; 已改写为分别说明两种方式(复核纪律相同)。
 - 证据: `make-dist.ps1` → 桌面 **1341** 条目 / Lite **163** 条目, 两份 `utf8 name check: OK / no .bak: OK` + `stage secret scan: CLEAN`; `node scripts\checks\pack-audit.js <两个 zip>` → 两个 **PASS**; 3A 三扫描器全绿(域名 16 / 依赖 6 + 产物哈希 8 + npm audit 0); 常规门禁 **15 PASS** + 隔离冒烟 **15/15**。
 - 遗留: 发布(建 Release + 传 3 资产 + SHA256SUMS)需要用户把 GitHub 令牌写进桌面/TEMP 文件(纪律见 PROCESS-03 §2); 发布后补 PROCESS-02 §8.12 与 DEV-NOTES 228。
+- 审计结果(2026-09-27 12:58): `release-audit.ps1` → **AUDIT PASS**(11 步全 PASS), 报告 `审计报告-AUDIT-20260927-125807.txt`。途中先 FAIL 两次, 报告都保留: ① `124226` = BUILD-INFO 绑定的提交与 HEAD 不一致(包比代码旧) → 重打; ② `125247` = 本地领先 origin 未推送 → 推送后重跑。
+- **顺手修掉 release-audit 自身的一处报告矛盾**: 步骤判定原来只看子进程退出码, 于是出现"块内已标记失败、步骤结果仍写 PASS, 结论却是 AUDIT FAIL"(本次 BUILD-INFO 那次实测); 现在步骤判定 = 退出码 **或** 块内失败标记。
+- 最终产物: Desktop **226,093,226B**(sha256 `7695d635…`) / Lite **8,482,885B**(`82f9bd58…`) + `SHA256SUMS-v1.4.5.txt`; `zipVolumes` 已按最终包复核(1341/226093226 与 163/8482885, pack-audit 两包 PASS)。
 
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
