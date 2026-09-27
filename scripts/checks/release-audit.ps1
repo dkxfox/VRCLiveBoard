@@ -21,12 +21,16 @@ Log ''
 function RunStep($name, $block) {
   Log ('---- 步骤: ' + $name + ' ----')
   $prevEap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+  $before = $script:exit
   $out = & $block 2>&1 | Out-String
   $code = $LASTEXITCODE
   $ErrorActionPreference = $prevEap
   Log $out.Trim()
-  Log ('步骤结果 ' + $name + ': ' + $(if ($code -eq 0) { 'PASS' } else { 'FAIL' }))
-  if ($code -ne 0) { $script:exit = 1 }
+  # 步骤判定 = 子进程退出码 **或** 块内主动标记的失败(2026-09-27 修): 以前块内 `$script:exit=1` 后若最后一条命令退出码为 0,
+  # 报告会写"步骤结果: PASS"而结论却是 AUDIT FAIL —— 报告自相矛盾(实测: BUILD-INFO 漂移那次)。
+  $bad = ($code -ne 0) -or ($script:exit -ne $before)
+  Log ('步骤结果 ' + $name + ': ' + $(if ($bad) { 'FAIL' } else { 'PASS' }))
+  if ($bad) { $script:exit = 1 }
   Log ''
 }
 
