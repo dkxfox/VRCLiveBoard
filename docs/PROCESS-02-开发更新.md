@@ -124,6 +124,7 @@ powershell -File scripts\checks\feature-accept.ps1 -Card docs\FEATURES\F-2026090
 ## 5. D4 集成与发布准备
 
 - 版本:达到 milestone 才 +次版本(1.4.0);未达标的改动按流程 1 走补丁位
+- **版本代号从"未发布主题卡"取(2026-09-27 增补)**: 代号不是发布当天现想的 —— 先查 `docs/ISSUES.md` 里状态为 PLANNED 的 `V-*` 卡(如 `V-20260927-01`: 1.5 主题「月光」), 按卡里的"发布时必改清单"逐项落地(version.json / package.json / 版本说明 / 横幅 / README / RELEASE-ASSETS); 没有主题卡就先向用户要代号, 不要自己编。
 - 文档四同步:`使用说明.txt` 章节 / `版本说明.txt` 条目 / `README.md` 功能一览 / `DEV-NOTES` 条目; **凡改动功能描述/位置/权限口径, 同步更新 `docs/DOC-BASELINE.json`(GDOC 门禁的 must/mustNot 断言, 人工复核)**
 - **打包清单同步**:新增根目录文件默认视为"会进包",明确决定进 `$required` 还是 `$xfFiles`
 - 出包后必须跑 `pack-audit.js`(会校验:插件本体 + 官方可选插件恢复备份 + 盐一致 + 机密扫描)
