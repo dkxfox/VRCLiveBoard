@@ -352,17 +352,20 @@ function playSpecialVideo(sv){
   document.body.appendChild(ov);
   // 播放取证(M-20260927-07): 把 <video> 的卡顿事件与 rAF 掉帧记下来, 结束时 POST 给服务端 ——
   // 与主进程的事件循环延迟/CPU/视频响应时序拼成同一时轴, 才能分清"是数据没到、还是渲染/解码跟不上"。
-  var probe={t0:Date.now(),events:[],longFrames:[],frames:0,last:0,sent:false};
-  function pSend(){ if(probe.sent)return; probe.sent=true; probe.durMs=Date.now()-probe.t0; try{fetch('/api/diag/perf',{method:'POST',body:JSON.stringify({video:probe})}).catch(function(){});}catch(e){} }
-  var skipped=false; var skip=function(){if(skipped)return;skipped=true;pSend();ov.remove();};
+  var probe={t0:Date.now(),events:[],longFrames:[],frames:0,last:0,lastPost:0};
+  // 每次上报"到目前为止的全量快照"(2026-09-27 修正): 原来有 sent 标记只报一次, 抓到的永远是前 10 秒, 而卡顿恰恰在后面。
+  // 现在每 10 秒覆盖上报一次, 跳过/播完再补一次, 服务端保留最后一份。附带解码/丢帧/缓冲区: 区分"数据没到"与"解码跟不上"。
+  function pVid(v){ return {dec:(v&&v.webkitDecodedFrameCount)||0,drop:(v&&v.webkitDroppedFrameCount)||0,buf:(v&&v.buffered&&v.buffered.length)?Math.round(v.buffered.end(v.buffered.length-1)*1000)/1000:0}; }
+  function pSend(v){ if(Date.now()-probe.lastPost<3000)return; probe.lastPost=Date.now(); probe.durMs=Date.now()-probe.t0; probe.final=pVid(v); try{fetch('/api/diag/perf',{method:'POST',body:JSON.stringify({video:probe})}).catch(function(){});}catch(e){} }
+  var skipped=false; var skip=function(){if(skipped)return;skipped=true;probe.lastPost=0;pSend(v);ov.remove();};
   ov.addEventListener('click',skip);
   var v=ov.querySelector('video');
   if(v){
     ['waiting','stalled','playing','suspend','error','ended','seeking','seeked'].forEach(function(n){
-      v.addEventListener(n,function(){ probe.events.push({at:Date.now()-probe.t0,name:n,ct:Math.round((v.currentTime||0)*1000)/1000,rs:v.readyState}); });
+      v.addEventListener(n,function(){ var o=pVid(v); probe.events.push({at:Date.now()-probe.t0,name:n,ct:Math.round((v.currentTime||0)*1000)/1000,rs:v.readyState,dec:o.dec,drop:o.drop,buf:o.buf}); });
     });
     (function loop(ts){ if(skipped)return; probe.frames++; if(probe.last){var dd=ts-probe.last; if(dd>=60) probe.longFrames.push({at:Math.round(ts-probe.t0),ms:Math.round(dd)});} probe.last=ts; requestAnimationFrame(loop); })(performance.now());
-    setInterval(pSend,10000);   // 播到一半被关掉也能拿到数据
+    setInterval(function(){ pSend(v); },10000);   // 每 10 秒覆盖上报一次全量快照(播放中随时可读)
   }
   // 可观测性(2026-09-27, M-20260927-06): 以前"彩蛋不播"没有任何痕迹 —— 出错/卡播都只静默收尾。
   // 现在走既有的失败上报出口(apiFail -> 控制台提示 + 服务端日志), 消息保持 ASCII 以免触发硬编码中文门禁。

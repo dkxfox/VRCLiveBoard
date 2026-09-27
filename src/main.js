@@ -62,7 +62,7 @@ async function main() {
 
   // 硬件变量常驻刷新: 即使"电脑状态"显示源关闭, 公告板页面里的 {cpu_util} 等变量仍然实时可用
   async function refreshVars() {
-    try { Object.assign(composer.vars, await collectHardware()); } catch (e) {}
+    try { Object.assign(composer.vars, await collectHardware({ maxAgeMs: 4000 })); } catch (e) {}   // 与硬件源共用一次采集(见 sources/hardware.js)
   }
   refreshVars();
   const ivVars = setInterval(refreshVars, 5000);

@@ -25,7 +25,7 @@ function arm(seconds) {
   const h = monitorEventLoopDelay({ resolution: 10 });
   h.enable();
   const t0 = Date.now();
-  const s = { id: 'perf-' + t0, t0: t0, startedAt: iso(t0), seconds: secs, endsAt: t0 + secs * 1000, h: h, samples: [], video: [], ticks: [], client: null, reported: 0 };
+  const s = { id: 'perf-' + t0, t0: t0, startedAt: iso(t0), seconds: secs, endsAt: t0 + secs * 1000, h: h, samples: [], video: [], ticks: [], ops: [], client: null, reported: 0 };
   const cpu0 = process.cpuUsage();
   s.iv = setInterval(function () {
     const lag = h.max / 1e6; h.reset();
@@ -57,6 +57,12 @@ function stop(why) {
 }
 
 function videoMark(d) { if (session) { session.video.push(d); if (session.video.length > 200) session.video.shift(); } }
+// 主进程重活打点(>=20ms 才记): "这一秒被谁堵住了"必须能直接读出名字, 否则报告只是噪声
+function mark(d) {
+  if (!session || !d || !(d.ms >= 20)) return;
+  session.ops.push({ atMs: Math.max(0, (d.at || Date.now()) - session.t0), name: d.name, ms: d.ms });
+  if (session.ops.length > 400) session.ops.shift();
+}
 // 源 tick 计时(>=20ms 才记: 正常源是毫秒级, 记全量没意义还会淹掉信号)
 function tickMark(d) {
   if (!session || !d || !(d.ms >= 20)) return;
@@ -88,7 +94,7 @@ function clientStalls(client) {
   ev.forEach(function (e) {
     if (e.name === 'waiting' || e.name === 'stalled') { if (!open) open = e; }
     else if ((e.name === 'playing' || e.name === 'seeked') && open) {
-      out.push({ startMs: open.at, endMs: e.at, ms: Math.max(0, e.at - open.at), ct: open.ct, kind: open.name });
+      out.push({ startMs: open.at, endMs: e.at, ms: Math.max(0, e.at - open.at), ct: open.ct, kind: open.name, dec: open.dec, drop: open.drop, buf: open.buf, endBuf: e.buf });
       open = null;
     }
   });
@@ -120,6 +126,12 @@ function verdicts(s, spikes, stalls, respGaps) {
   } else if (stalls.length && !hasSpike) {
     out.push('页面停顿 ' + stalls.length + ' 次但主进程事件循环全程平稳 -> 指向渲染端/解码端, 以及文件数据投递');
   }
+  const fin = (s.client && s.client.video && s.client.video.final) || null;
+  if (fin && fin.drop >= 20) out.push('渲染端累计丢帧 ' + fin.drop + ' 帧(已解码 ' + fin.dec + ') -> 解码/渲染跟不上, 看显卡解码与整机 CPU 争抢');
+  else if (fin && fin.drop < 5 && stalls.length) out.push('丢帧极少(' + fin.drop + ')却出现停顿 -> 更像"数据/时钟被卡住", 而不是解码能力不足');
+  const opHits = (s.ops || []).filter(function (o) { return o.ms >= 100 && stalls.some(function (st) { return st.startMs != null && st.startMs >= o.atMs - 500 && st.startMs <= o.atMs + o.ms + 500; }); });
+  if (opHits.length) out.push('页面停顿与主进程慢操作同轴 ' + opHits.length + ' 次: ' + opHits.slice(0, 6).map(function (o) { return o.name + '(' + o.ms + 'ms)'; }).join(', ') + ' -> 先治这个操作');
+  else if ((s.ops || []).some(function (o) { return o.ms >= 100; })) out.push('有主进程慢操作(>=100ms)但未与停顿同轴 -> 它不是直接原因, 但仍在占主线程');
   const th = tickHits(s.ticks, stalls);
   if (th.hits.length) out.push('页面停顿与慢源 tick 同轴 ' + th.hits.length + ' 次: ' + th.hits.slice(0, 6).map(function (h) { return h.src + '(' + h.tickMs + 'ms)'; }).join(', ') + ' -> 先治这个源');
   else if (th.slow.length) out.push('有 ' + th.slow.length + ' 次慢源 tick(>=300ms)但未与停顿同轴 -> 源不是直接原因, 仍需看它是否抬高 CPU');
@@ -148,10 +160,19 @@ function writeReport(s) {
       spikeCount80ms: spikes.length,
       spikes: spikes.slice(0, 25).map(function (x) { return { atMs: x.atMs, lagMs: x.lagMs, selfCpuMs: x.selfCpu, procs: (x.procs || []).map(function (p) { return p.type + '#' + p.pid + '=' + p.cpu + '%'; }).join(' ') }; }) },
     videoResponses: responses.slice(-40),
+    slowOps: { count: (s.ops || []).length,
+      byName: (s.ops || []).reduce(function (acc, o) { acc[o.name] = Math.max(acc[o.name] || 0, o.ms); return acc; }, {}),
+      ops: (s.ops || []).slice(-80) },
     sourceTicks: { count: (s.ticks || []).length, slow300ms: tickHits(s.ticks, stalls).slow.length,
       bySrc: (s.ticks || []).reduce(function (acc, t) { acc[t.src] = Math.max(acc[t.src] || 0, t.ms); return acc; }, {}),
       ticks: (s.ticks || []).slice(-120) },
     sources: s.sources || null,
+    clientVideo: (function () {
+      const cv = (s.client && s.client.video) || null;
+      const fin = cv && cv.final;
+      return { frames: cv ? cv.frames : null, durMs: cv ? cv.durMs : null, eventCount: cv && cv.events ? cv.events.length : 0,
+        decoded: fin ? fin.dec : null, dropped: fin ? fin.drop : null, bufferedEnd: fin ? fin.buf : null };
+    })(),
     clientStalls: stalls,
     clientLongFrames: lf.slice(0, 20),
     client: s.client,
@@ -176,4 +197,4 @@ function report() {
   s.reported = (s.reported || 0) + 1;
   return { ok: true, report: writeReport(s) };
 }
-module.exports = { arm: arm, stop: stop, report: report, clientReport: clientReport, videoMark: videoMark, tickMark: tickMark, active: function () { return !!session; }, DEFAULT_SECONDS: DEFAULT_SECONDS };
+module.exports = { arm: arm, stop: stop, report: report, clientReport: clientReport, videoMark: videoMark, tickMark: tickMark, mark: mark, active: function () { return !!session; }, DEFAULT_SECONDS: DEFAULT_SECONDS };

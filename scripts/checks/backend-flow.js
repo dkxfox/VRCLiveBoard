@@ -532,6 +532,7 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     ok(!!(dpv && dpv.ok === true && dpv.report && dpv.report.eventLoop && Array.isArray(dpv.report.videoResponses)), '性能取证: GET /api/diag/perf 返回报告(采样 ' + (dpv && dpv.report && dpv.report.eventLoop && dpv.report.eventLoop.samples) + ' 次)' + (dpv && dpv.ok ? '' : ' [响应: ' + JSON.stringify(dpv).slice(0, 160) + ']'));
     // 报告必须自带"源清单 + 源 tick 时轴": 排查靠的是"这次停顿是不是某个源拉出来的", 缺这两项报告就只是噪声
     ok(!!(dpv.report.sourceTicks && Array.isArray(dpv.report.sourceTicks.ticks) && Array.isArray(dpv.report.sources) && dpv.report.sources.length > 0), '性能取证: 报告带源清单与源 tick 时轴(' + ((dpv.report.sources || []).length) + ' 个源)');
+    ok(!!(dpv.report.slowOps && Array.isArray(dpv.report.slowOps.ops) && dpv.report.clientVideo), '性能取证: 报告带主进程慢操作与页面端视频统计');
     const dpp = JSON.parse((await req('/api/diag/perf', { method: 'POST', body: JSON.stringify({ video: { events: [{ name: 'playing' }], longFrames: [], frames: 0 } }) })).body.toString('utf8'));
     ok(!!(dpp && dpp.ok === true), '性能取证: POST /api/diag/perf 接受页面端证据');
     const dpa = JSON.parse((await req('/api/diag/perf', { method: 'POST', body: JSON.stringify({ arm: 60 }) })).body.toString('utf8'));
