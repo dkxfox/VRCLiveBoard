@@ -353,9 +353,11 @@ function playSpecialVideo(sv){
   var skipped=false; var skip=function(){if(skipped)return;skipped=true;ov.remove();};
   ov.addEventListener('click',skip);
   var v=ov.querySelector('video');
-  if(v){v.addEventListener('ended',skip);v.addEventListener('error',function(){if(!skipped)skip();});}
+  // 可观测性(2026-09-27, M-20260927-06): 以前"彩蛋不播"没有任何痕迹 —— 出错/卡播都只静默收尾。
+  // 现在走既有的失败上报出口(apiFail -> 控制台提示 + 服务端日志), 消息保持 ASCII 以免触发硬编码中文门禁。
+  if(v){v.addEventListener('ended',skip);v.addEventListener('error',function(){if(!skipped){try{apiFail('efx-video','video error code='+((v.error&&v.error.code)||'?'));}catch(e){}skip();}});}
   if(maxMs>0)setTimeout(skip,maxMs);
-  setTimeout(function(){if(v&&!v.videoWidth&&v.readyState<2)skip();},8000);
+  setTimeout(function(){if(v&&!v.videoWidth&&v.readyState<2){try{apiFail('efx-video-stall','no playback within 8s (readyState='+(v.readyState)+')');}catch(e){}skip();}},8000);
 }
 function simpleBoot(c1,c2,greet,deco,title,tag){
   var ov=document.createElement('div');ov.style.cssText='position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(110% 110% at 50% 32%, '+c1+'40 0%, #0b0e13 72%);display:flex;align-items:center;justify-content:center;transition:opacity .55s';

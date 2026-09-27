@@ -508,6 +508,23 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     } catch (e) { ok(false, '插件市场用例异常: ' + e.message); }
   }
 
+  // ⑧ 启动彩蛋判定(M-20260927-06): **默认路径**(不传 date)必须能命中"今天"的窗口 ——
+  //    回归事实: mmddOf('YYYY-MM-DD') 返回空串 → dayNumOf=-1 → efxInWindow 永远 false, 彩蛋按日期**从未真正播过**;
+  //    开发测试页总显式传 date=MM-DD, 所以看起来一切正常。这里用隔离实例跑真实判定(dry=1, 不写已播状态)。
+  try {
+    const d0 = new Date();
+    const todayMMDD = ('0' + (d0.getMonth() + 1)).slice(-2) + '-' + ('0' + d0.getDate()).slice(-2);
+    const todayISO = d0.getFullYear() + '-' + todayMMDD;
+    await req('/api/config', { method: 'POST', body: JSON.stringify({ specialEvents: [{ id: 'gate-today', version: 1, start: todayMMDD, end: todayMMDD, mode: 'video', title: 'gate', video: 'assets/videos/__gate__.mp4' }] }) });
+    const dd = JSON.parse((await req('/api/efx/boot?dry=1')).body.toString('utf8'));
+    ok(!!(dd && dd.action === 'special' && dd.event && dd.event.id === 'gate-today'), '启动彩蛋: 默认路径(不传 date)命中今天的窗口(action=' + (dd && dd.action) + ')');
+    const dd2 = JSON.parse((await req('/api/efx/boot?date=' + todayISO + '&dry=1')).body.toString('utf8'));
+    ok(!!(dd2 && dd2.action === 'special'), '启动彩蛋: 显式传 ISO 日期(' + todayISO + ')同样命中');
+    const dd3 = JSON.parse((await req('/api/efx/boot?date=01-01&dry=1')).body.toString('utf8'));
+    ok(!!(dd3 && dd3.action !== 'special'), '启动彩蛋: 窗口外的日期不命中(01-01 -> ' + (dd3 && dd3.action) + ')');
+    await req('/api/config', { method: 'POST', body: JSON.stringify({ specialEvents: [] }) });
+  } catch (e) { ok(false, '启动彩蛋判定用例异常: ' + e.message); }
+
   console.log('[backend-flow] pass=' + pass + ' fail=' + fail + (skip ? (' skip=' + skip) : ''));
   process.exitCode = fail ? 1 : 0;
 })().catch(function (e) { console.log('  FAIL 流程测试异常: ' + ((e && e.stack) || e)); process.exitCode = 1; });

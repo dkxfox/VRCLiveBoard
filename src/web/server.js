@@ -131,7 +131,10 @@ function effPluginSec() {
     return e;
   }
   function localDateStr() { const d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
-  function mmddOf(s) { const m = /^(\d{2})-(\d{2})$/.exec(String(s || '')); return m ? m[0] : ''; }
+  // 2026-09-27 修(M-20260927-06): 原来只认 MM-DD, 而**默认路径**传进来的是 localDateStr() 的 'YYYY-MM-DD'
+  //   → mmddOf 返回空串 → dayNumOf=-1 → efxInWindow 永远 false → 启动彩蛋**按日期从未真正播过**
+  //   (开发测试页总显式传 date=MM-DD, 所以看起来正常)。现在与 parseDateArg 同口径: 两种写法都接受。
+  function mmddOf(s) { const m = /^(?:\d{4}-)?(\d{2})-(\d{2})$/.exec(String(s || '').trim()); return m ? m[1] + '-' + m[2] : ''; }
   // 日期参数接受 MM-DD 与 YYYY-MM-DD 两种(M-20260911-54): 控制台的日期选择器(<input type="date">)给的是 ISO 形式,
   // 而判定原来只认 MM-DD —— 结果测试页模拟 6/15 时被当成"今天", 彩蛋永远不播。
   function parseDateArg(s) {
