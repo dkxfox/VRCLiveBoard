@@ -22,12 +22,13 @@ lines.forEach((l, i) => {
   if (m) entries.push({ n: parseInt(m[1], 10), title: m[2].trim(), line: i + 1 });
 });
 
-// 已知历史异常白名单(建门禁时已存在, 修不修另议 —— 见 ISSUES M-20260927-05): 白名单内 WARN, 白名单外 FAIL
-let base = { orderAnomalies: [], emptyEntries: [] };
-try { base = Object.assign(base, JSON.parse(fs.readFileSync(BASE, 'utf8'))); } catch (e) { console.log('  WARN 基线读取失败(按空白名单处理): ' + e.message); }
-
 let fail = 0, warn = 0;
 const say = (ok, msg) => { console.log('  ' + (ok === 'FAIL' ? 'FAIL' : ok === 'WARN' ? 'WARN' : 'OK  ') + ' ' + msg); if (ok === 'FAIL') fail++; if (ok === 'WARN') warn++; };
+
+// 已知历史异常白名单(2026-09-27 建立时列了 4 处, 同日按 M-20260927-05 清空; 见 ISSUES):
+//   白名单内 WARN(容忍的历史项), 白名单外 FAIL(新事故)。基线读不出来 = 按空白名单处理 = 全部 FAIL —— 失败方向安全。
+let base = { orderAnomalies: [], emptyEntries: [] };
+try { base = Object.assign(base, JSON.parse(fs.readFileSync(BASE, 'utf8'))); } catch (e) { say('WARN', '基线读取失败(按空白名单处理, 历史项会全部报 FAIL): ' + e.message); }
 
 if (!entries.length) { console.log('  FAIL 没有解析到任何条目(文件格式变了?)'); process.exit(1); }
 // 1) 编号严格递增(乱序/重复/插错位置都会在这里现形)
@@ -65,8 +66,13 @@ const block = [
   '| --- | --- | --- |',
 ].concat(rows).concat(['', END]).join('\n');
 
-const bi = src.indexOf(BEGIN);
-const ei = src.indexOf(END);
+// 标记识别**必须行首锚定**(2026-09-27 事故): 正文里提到过标记的字面量, 用 indexOf 会"找到正文里的那一个",
+// 于是 --update 会把"正文 -> 块尾"整段替换掉(条目 225 的尾部就这么没的)。行首锚定 + 数量断言(至多一处)。
+const countAtLineStart = (marker) => (src.match(new RegExp('^' + marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gm')) || []).length;
+const atLineStart = (marker) => { const m = new RegExp('^' + marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'm').exec(src); return m ? m.index : -1; };
+const bi = atLineStart(BEGIN);
+const ei = atLineStart(END);
+if (countAtLineStart(BEGIN) > 1 || countAtLineStart(END) > 1) { say('FAIL', 'DEV-NOTES.md 里出现了多个行首索引标记(BEGIN ' + countAtLineStart(BEGIN) + ' / END ' + countAtLineStart(END) + ') —— 请人工确认哪一个是真块'); }
 const hasBlock = bi >= 0 && ei > bi;
 const update = process.argv.indexOf('--update') >= 0;
 
