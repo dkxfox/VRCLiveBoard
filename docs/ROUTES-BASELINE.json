@@ -5,7 +5,7 @@
     "1": "一级密码(needL1(res) 或 !unlockState.level1 且回 403)",
     "2": "开发者密码(!unlockState.level2 且回 403)"
   },
-  "updated": "2026-09-12",
+  "updatedAt": "2026-09-12",
   "notes": {
     "POST /api/security": "插件安全策略段零级可\"单向收紧/恢复默认\"; 提示词防线等其余字段一级(条目 98 用户拍板)",
     "POST /api/swearfilter": "开关零级; addWords 一级",

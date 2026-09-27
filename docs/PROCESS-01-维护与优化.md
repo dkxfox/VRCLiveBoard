@@ -16,7 +16,9 @@
 ## 1. 适用范围与红线
 
 **属于流程 1**:bug 修复、交互/文案优化、性能与稳定性小改、文档同步、依赖小版本升级。
-**不属于**(转流程 2 / 3):新功能、新插件、新接口、UI 结构大改、加密狗与门禁逻辑变更、打包脚本改动。
+**不属于**(转流程 2 / 3):新功能、新插件、新接口、UI 结构大改、加密狗与门禁逻辑变更、**发布产物构成变更**(增删随包文件、改官方可选插件恢复备份的构成等)。
+
+**打包脚本的归属(2026-09-27 澄清, 修掉原文与 §5 / §6 的自相矛盾)**: `scripts\make-dist.ps1`、`scripts\pack-*.js`、`scripts\checks\*.ps1` 等**打包/门禁脚本自身的缺陷修复属于流程 1**, 按 §5 的 H 档处理(≤2 文件 / ≤80 行, 独立提交, 且必须实跑打包 + GPACK 作证据); 而**改产物构成或打包策略**(例如决定某个目录进不进包)属于流程 2, 要登记功能卡。一句话:**修脚本走流程 1, 改产物走流程 2**。
 
 | 约束 | 值 |
 | --- | --- |
@@ -75,13 +77,21 @@ powershell -File scripts\checks\run-gates.ps1 -Smoke -Assert '被修的bug|/api/
 | **G2** | 编码规范:bat=无BOM+CRLF+非UTF8中文;含中文 ps1=单 BOM;js/json=无 BOM | `encoding-lint.js` | 81 / 66 / 85 |
 | **GVER** | 版本号七处一致(package/version.json/使用说明×2/版本说明×2/README×2) | `version-sync.js` | 61 / 82 |
 | **GI18N** | zh-CN / zh-TW / en 键集合一致 | `i18n-check.js` | 65 / 71 |
+| **GI18NU** | i18n 引用完整性: `tr('key')` / `data-t` 引用的键必须存在于 lang.js; 附占位符 WARN | `i18n-usage.js` | 114 |
+| **GI18NH** | 硬编码文案检测: 未接 `data-t` 的中文与 I18N-BASELINE 白名单比对, **新增即 FAIL** | `i18n-hardcode.js` | 114 |
 | **GHTML** | 内联脚本**动态边界**语法 + id 唯一 + getElementById 目标 | `html-inline-check.js` | 81 / 19 |
+| **GUWIRE** | 控件接线: index.html 里带 id 的交互控件必须在 app.js 里找得到引用(HTML→JS 方向, 与 GHTML 互补) | `ui-wiring.js` | 121(M-20260907-01 的 20 个死按键) |
+| **GBOOT** | 前端启动可执行性: DOM 桩件里真跑 lang.js + app.js, 断言无异常 / 无 unhandledRejection / 启动动画分支可达 | `frontend-boot.js` | 121(M-20260911-01 启动动画静默失效) |
 | **G4** | 隔离冒烟:临时目录 + 测试端口真启动 + 8 项端点 + **本次专项断言** | `smoke.ps1` | 30(测试打到用户实例) |
 | **GPLUG** | 插件单一源 + manifest 契约 + 更新包版本 + 预置授权哈希 | `plugin-check.js` | 63 / 72 |
 | **GCONF** | 必备键 + **安全开关默认 true** + 公开版无私有内容 | `config-contract.js` | 15 / 31 |
+| **GROUTE** | 后端口径清单: server.js 的 (method, path, 门禁等级) 必须与 ROUTES-BASELINE.json 完全一致 | `route-inventory.js` | 129 |
 | **GDOC** | 说明文件过时检查: DOC-BASELINE 的 must/mustNot 子串断言 + 引用文件存在 | `doc-consistency.js` | 2026-09-03 文档漂移审计 |
 | **GPACK** | 发布包审计:禁入文件 / UTF-8 文件名标志 / config 脱敏 / **包内盐与源码一致** / **官方插件恢复备份齐全** / 全量机密扫描 | `pack-audit.js` | 85 / 67 / 87 |
 | **GSYNC** | 工作区干净 + 与 origin/main 零差 + 无悬空未跟踪文件 | `git-sync-check.js` | 84 |
+
+**运行开关(2026-09-27 补记)**:快跑 **14** 个门(G1/G2/GVER/GI18N/GI18NU/GI18NH/GHTML/GUWIRE/GBOOT/GPLUG/GCONF/GROUTE/GDOC/GSYNC);`-Smoke` 追加 **G4** 隔离冒烟;`-Pack <zip>` 追加 **GPACK** 包审计;`-SmokeOnly` 只跑 G4(必须与 `-Smoke` 同用)。
+**这份名单必须与 `run-gates.ps1` 的 GATES SUMMARY 一致** —— 新增/改名门禁时两处一起改(GDOC 会守本文件的关键子串, 见 `docs\DOC-BASELINE.json`)。
 
 **证据规范**:只有 `GATES SUMMARY` 表可以作为"已验证"的证据贴进 DEV-NOTES;禁止用"我检查过了 / 应该没问题"代替。
 
@@ -131,7 +141,7 @@ NN. **一句话标题**(日期, 触发人/来源):
 
 ## 8. 会话开场与收尾清单(AI 专用)
 
-**开场四件事**:① 读 `DEV-NOTES` §1–2 + 最近 3 条条目 ② 读 `ISSUES.md` 未关闭项 ③ 跑 `git-sync-check.js` ④ 确认用户实例是否在跑(在跑就绕开)。
+**开场五件事**:① 读 `DEV-NOTES` §1–2 + 最近 3 条条目 ② 读 `ISSUES.md` 未关闭项 ③ 跑 `git-sync-check.js` ④ 确认用户实例是否在跑(在跑就绕开)⑤ **读 `docs\PROCESS-04-工作规范.md` §0 速查**(行动纪律, 2026-09-27 增补)。
 
 **收尾五件事**:① `run-gates.ps1` 汇总表 ② DEV-NOTES 条目 ③ 版本一致(GVER) ④ commit + push,GSYNC PASS ⑤ 清临时文件 / 端口 / 凭据。
 
@@ -145,4 +155,12 @@ node scripts\checks\pack-audit.js dist\公开版\*.zip             # 发布前�
 node scripts\checks\version-sync.js                              # 改版本号后
 node scripts\checks\auth-state-check.js                         # 授权体系状态(流程 3 的 3A; 开发者机)
 node scripts\checks\doc-consistency.js                          # 说明文件过时检查(GDOC)
+powershell -File scripts\checks\run-gates.ps1 -Smoke -SmokeOnly  # 只跑隔离冒烟(前端/接口改动的自检)
+powershell -File scripts\make-dist.ps1                            # 打包(改打包脚本后必跑; -SkipLight 只出桌面包)
+powershell -File scripts\checks\release-audit.ps1                 # 3B 发布前检查(11 步; 见 PROCESS-03 §2)
+powershell -File scripts\checks\feature-accept.ps1 -Card docs\FEATURES\F-xxx.md  # 功能卡验收断言
+node scripts\checks\secret-scan.js                               # 3A 机密扫描(工作区 + git 历史)
+node scripts\checks\surface-scan.js                              # 3A 攻击面基线比对
+node scripts\checks\dep-audit.js                                 # 3A 依赖审计 + 产物哈希
+node plugins\bilibili-live\test\run-all.js                       # 插件离线单测(任一插件改版后跑自己那份)
 ```
