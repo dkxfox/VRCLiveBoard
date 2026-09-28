@@ -469,6 +469,8 @@ static class VRKeyboard
             if (showAtStart) { DoShow(); }
             else { DoHide(); Log("[信息] 默认**隐藏**(避免一直吸着控制器激光让游戏收不到输入); 用 --toggle / 控制口 或 --show-at-start 显示"); }
             if (ctlPort > 0) StartControl(ctlPort);
+            EnsureSystem();
+            SetPanelFromMatrix(CurPanelMatrix());
             // 先把事件字段原样打几条出来(排障: 鼠标事件的坐标/按钮到底在哪个偏移)
             SetOverlayRawFn setRaw = Vt<SetOverlayRawFn>(ov, 62);
             SetOverlayFromFileFn setFile = Vt<SetOverlayFromFileFn>(ov, 63);
@@ -698,11 +700,344 @@ static class VRKeyboard
             int e = Vt<SetOverlayTransformAbsoluteFn>(OvRef, 33)(OvRef, HandleRef, UniverseStanding, ref p);
             Log("[放置] " + usedSys + " 头显=(" + hx.ToString("0.00") + "," + hy.ToString("0.00") + "," + hz.ToString("0.00") + ") 朝向=(" + fx.ToString("0.00") + "," + fy.ToString("0.00") + "," + fz.ToString("0.00") + ") -> 面板=(" + p.m3.ToString("0.00") + "," + p.m7.ToString("0.00") + "," + p.m11.ToString("0.00") + ") 距离=" + dist + "m 下移=" + drop + "m 结果=" + e);
             Vt<SetOverlayWidthInMetersFn>(OvRef, 22)(OvRef, HandleRef, meters);
+            SetPanelFromMatrix(p);
         }
         catch (Exception ex) { Log("[放置] 异常: " + ex.Message); }
     }
 
+
+    // ================= 切片 2: 自算射线 + 抓取/放置(参考 wlx-overlay-s: 自己算 ray、边沿检测、松开回原目标) =================
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate uint GetRoleIndexFn(IntPtr self, int role);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate bool GetControllerStateFn(IntPtr self, uint index, ref VRControllerState_t state, uint size);
+
+    // legacy 控制器状态: unPacketNum(4) + pad(4) + ulButtonPressed(8) + ulButtonTouched(8) + rAxis[5](40) = 64
+    [StructLayout(LayoutKind.Explicit, Size = 64)]
+    struct VRControllerState_t
+    {
+        [FieldOffset(0)] public uint unPacketNum;
+        [FieldOffset(8)] public ulong ulButtonPressed;
+        [FieldOffset(16)] public ulong ulButtonTouched;
+        [FieldOffset(24)] public float axis0x;   // rAxis[0].x = 扳机模拟量
+    }
+
+    const int RoleLeft = 1, RoleRight = 2;
+    const ulong TriggerMask = 1UL << 33;          // k_EButton_SteamVR_Trigger == k_EButton_Axis1 == 33
+    const float TitleBarV = 100f / 640f;          // 顶部 100px 是"抓取条"(按住这里拖动键盘)
+
+    static IntPtr SysRef = IntPtr.Zero;
+    static string SysVer = null;
+    static GetPoseFn GetPoseRef = null;
+    static GetControllerStateFn GetStateRef = null;
+    static GetRoleIndexFn RoleIndexRef = null;
+
+    // 面板几何(我们自己维护: 位置 + 三个基向量), 由 SetPanelFromMatrix 更新
+    static float[] PanelPos = new float[] { 0, 1.3f, -1.4f };
+    static float[] PanelRight = new float[] { 1, 0, 0 };
+    static float[] PanelUp = new float[] { 0, 1, 0 };
+    static float[] PanelNormal = new float[] { 0, 0, 1 };   // 局部 +Z: 朝用户那一面
+
+    static bool EnsureSystem()
+    {
+        if (SysRef != IntPtr.Zero) return true;
+        string[] vers = new string[] { "IVRSystem_026", "IVRSystem_025", "IVRSystem_024", "IVRSystem_023" };
+        foreach (string v in vers)
+        {
+            int err = 0;
+            IntPtr cand = VR_GetGenericInterface(v, ref err);
+            if (cand != IntPtr.Zero && err == 0)
+            {
+                SysRef = cand; SysVer = v;
+                GetPoseRef = Vt<GetPoseFn>(cand, 12);              // GetDeviceToAbsoluteTrackingPose
+                RoleIndexRef = Vt<GetRoleIndexFn>(cand, 18);        // GetTrackedDeviceIndexForControllerRole
+                GetStateRef = Vt<GetControllerStateFn>(cand, 37);   // GetControllerState
+                Log("[输入] 拿到 " + v + ": 姿态/手柄角色/扳机 三个入口就绪");
+                return true;
+            }
+        }
+        Log("[输入] 拿不到 IVRSystem 接口(手柄输入不可用, 面板只显示不响应)");
+        return false;
+    }
+
+    static void SetPanelFromMatrix(HmdMatrix34_t m)
+    {
+        PanelPos = new float[] { m.m3, m.m7, m.m11 };
+        PanelRight = new float[] { m.m0, m.m4, m.m8 };
+        PanelUp = new float[] { m.m1, m.m5, m.m9 };
+        PanelNormal = new float[] { m.m2, m.m6, m.m10 };
+    }
+
+    // 射线与面板平面求交 -> 面板 UV(0~1, 原点左下, 与覆盖层一致)
+    static bool RayToUv(float[] o, float[] d, out float u, out float v)
+    {
+        u = 0; v = 0;
+        float den = d[0] * PanelNormal[0] + d[1] * PanelNormal[1] + d[2] * PanelNormal[2];
+        if (Math.Abs(den) < 1e-6f) return false;
+        float dx = PanelPos[0] - o[0], dy = PanelPos[1] - o[1], dz = PanelPos[2] - o[2];
+        float t = (dx * PanelNormal[0] + dy * PanelNormal[1] + dz * PanelNormal[2]) / den;
+        if (t <= 0.02f) return false;                                  // 在身后 / 太近不算
+        float hx = o[0] + d[0] * t - PanelPos[0];
+        float hy = o[1] + d[1] * t - PanelPos[1];
+        float hz = o[2] + d[2] * t - PanelPos[2];
+        float lx = hx * PanelRight[0] + hy * PanelRight[1] + hz * PanelRight[2];
+        float ly = hx * PanelUp[0] + hy * PanelUp[1] + hz * PanelUp[2];
+        float halfW = CurMeters * 0.5f;
+        float halfH = CurMeters * ((float)H / (float)W) * 0.5f;
+        u = 0.5f + lx / (2f * halfW);
+        v = 0.5f + ly / (2f * halfH);
+        return true;
+    }
+
+    static bool InPanelBox(float u, float v) { return u >= 0f && u <= 1f && v >= 0f && v <= 1f; }
+
+    // ---- 指针状态机: 边沿检测 + 抓取/放置 + 只在打中面板时接管输入 ----
+    static bool TrigPrev = false;
+    static bool Grabbing = false;
+    static float[] GrabOffset = new float[] { 0, 0, 0 };
+    static int GrabHandRole = 0;
+    static int InteractionOn = 0;     // 交互开关被打开的次数(用于断言"平时不抢输入")
+
+    static void SetInteractive(bool on)
+    {
+        if (FlagRef == null) return;
+        FlagRef(OvRef, HandleRef, (int)FlagInteractive, on);
+        if (on) InteractionOn++;
+    }
+
+    // 每帧调用: 给定一只手(fw = 朝向)与扳机状态, 决定 hover / 打字 / 抓取
+    static void PointerStep(int role, float[] origin, float[] dir, bool trigger, string url)
+    {
+        float u, v;
+        bool hitPanel = RayToUv(origin, dir, out u, out v) && InPanelBox(u, v);
+
+        // 不抢输入: 只在"打中面板"时才让系统激光鼠标接管那一发扳机; 指开立刻还回去
+        if (hitPanel && !InteractionEnabed) { SetInteractive(true); InteractionEnabed = true; }
+        else if (!hitPanel && InteractionEnabed && !Grabbing) { SetInteractive(false); InteractionEnabed = false; }
+
+        if (hitPanel)
+        {
+            Key hk = Hit(u, v);
+            PointerPx = u * W; PointerPy = (1f - v) * H; PointerValid = true;
+            if (hk != HoverKey) { HoverKey = hk; dirtyGlobal = true; }
+        }
+        else if (!Grabbing)
+        {
+            PointerValid = false;
+            if (HoverKey != null) { HoverKey = null; dirtyGlobal = true; }
+        }
+
+        bool rising = trigger && !TrigPrev;
+        bool falling = !trigger && TrigPrev;
+
+        if (rising)
+        {
+            if (hitPanel && v >= (1f - TitleBarV))            // 顶部抓取条 -> 拿起键盘
+            {
+                Grabbing = true; GrabHandRole = role;
+                GrabOffset = new float[] { PanelPos[0] - origin[0], PanelPos[1] - origin[1], PanelPos[2] - origin[2] };
+                Log("[抓取] 拿起键盘(手=" + (role == RoleLeft ? "左" : "右") + ")");
+            }
+            else if (hitPanel)
+            {
+                Key k = Hit(u, v);
+                if (k != null) { LastClickAt = DateTime.Now; ClicksDone++; PressKey(k, url); dirtyGlobal = true; Log("[输入] 按下 -> " + k.Label); }
+            }
+        }
+        else if (falling && Grabbing && role == GrabHandRole)
+        {
+            Grabbing = false;
+            Log("[抓取] 松手, 钉在当前位置");
+        }
+
+        if (Grabbing && role == GrabHandRole)
+        {
+            HmdMatrix34_t m = CurPanelMatrix();
+            m.m3 = origin[0] + GrabOffset[0];
+            m.m7 = origin[1] + GrabOffset[1];
+            m.m11 = origin[2] + GrabOffset[2];
+            Vt<SetOverlayTransformAbsoluteFn>(OvRef, 33)(OvRef, HandleRef, UniverseStanding, ref m);
+            SetPanelFromMatrix(m);
+        }
+        TrigPrev = trigger;
+    }
+
+    static bool InteractionEnabed = false;
+    static bool dirtyGlobal = false;
+    static int ClicksDone = 0;
+
+    // 当前面板矩阵(位置 + 旋转), 抓取时只改位置
+    static HmdMatrix34_t CurPanelMatrix()
+    {
+        HmdMatrix34_t m = new HmdMatrix34_t();
+        m.m0 = PanelRight[0]; m.m4 = PanelRight[1]; m.m8 = PanelRight[2];
+        m.m1 = PanelUp[0]; m.m5 = PanelUp[1]; m.m9 = PanelUp[2];
+        m.m2 = PanelNormal[0]; m.m6 = PanelNormal[1]; m.m10 = PanelNormal[2];
+        m.m3 = PanelPos[0]; m.m7 = PanelPos[1]; m.m11 = PanelPos[2];
+        return m;
+    }
+
+
+    // ---- 每帧: 从 IVRSystem 读两只手的姿态与扳机, 交给指针状态机 ----
+    static bool[] TrigPrevHand = new bool[3];
+
+    static void RayFromUv(float u, float v, float dist, out float[] o, out float[] d)
+    {
+        float halfW = CurMeters * 0.5f;
+        float halfH = CurMeters * ((float)H / (float)W) * 0.5f;
+        float lx = (u - 0.5f) * 2f * halfW;
+        float ly = (v - 0.5f) * 2f * halfH;
+        o = new float[] {
+            PanelPos[0] + PanelRight[0]*lx + PanelUp[0]*ly + PanelNormal[0]*dist,
+            PanelPos[1] + PanelRight[1]*lx + PanelUp[1]*ly + PanelNormal[1]*dist,
+            PanelPos[2] + PanelRight[2]*lx + PanelUp[2]*ly + PanelNormal[2]*dist };
+        d = new float[] { -PanelNormal[0], -PanelNormal[1], -PanelNormal[2] };
+    }
+
+    static void StepHand(int role, uint idx, Pose_t[] ps, string url)
+    {
+        if (idx == 0 || idx >= (uint)ps.Length) return;
+        HmdMatrix34_t m = ps[idx].m;
+        float[] o = new float[] { m.m3, m.m7, m.m11 };
+        float dx = -m.m2, dy = -m.m6, dz = -m.m10;
+        float len = (float)Math.Sqrt(dx * dx + dy * dy + dz * dz);
+        if (len <= 0.001f || float.IsNaN(len) || float.IsNaN(o[0]))
+        {
+            if (Grabbing && role == GrabHandRole) { Grabbing = false; Log("[抓取] 手柄姿态失效 -> 原地钉住"); }
+            return;
+        }
+        float[] d = new float[] { dx / len, dy / len, dz / len };
+        VRControllerState_t st = new VRControllerState_t();
+        bool ok = GetStateRef != null && GetStateRef(SysRef, idx, ref st, 64u);
+        bool trig = ok && (((st.ulButtonPressed & TriggerMask) != 0) || st.axis0x > 0.5f);
+        bool prev = TrigPrevHand[role];
+        bool rising = trig && !prev;
+        bool falling = !trig && prev;
+        TrigPrevHand[role] = trig;
+        PointerStepEdge(role, o, d, rising, falling, url);
+    }
+
+    // 把 PointerStep 拆成"边沿版", 便于 --sim 直接驱动(不需要 VR)
+    static void PointerStepEdge(int role, float[] origin, float[] dir, bool rising, bool falling, string url)
+    {
+        float u, v;
+        bool hitPanel = RayToUv(origin, dir, out u, out v) && InPanelBox(u, v);
+        if (hitPanel && !InteractionEnabed) { SetInteractive(true); InteractionEnabed = true; }
+        else if (!hitPanel && InteractionEnabed && !Grabbing) { SetInteractive(false); InteractionEnabed = false; }
+        if (hitPanel)
+        {
+            Key hk = Hit(u, v);
+            PointerPx = u * W; PointerPy = (1f - v) * H; PointerValid = true;
+            if (hk != HoverKey) { HoverKey = hk; dirtyGlobal = true; }
+        }
+        else if (!Grabbing)
+        {
+            PointerValid = false;
+            if (HoverKey != null) { HoverKey = null; dirtyGlobal = true; }
+        }
+        if (rising)
+        {
+            if (hitPanel && v >= (1f - TitleBarV))
+            {
+                Grabbing = true; GrabHandRole = role;
+                GrabOffset = new float[] { PanelPos[0] - origin[0], PanelPos[1] - origin[1], PanelPos[2] - origin[2] };
+                Log("[抓取] 拿起键盘(手=" + (role == RoleLeft ? "左" : "右") + ")");
+            }
+            else if (hitPanel)
+            {
+                Key k = Hit(u, v);
+                if (k != null) { LastClickAt = DateTime.Now; ClicksDone++; PressKey(k, url); dirtyGlobal = true; Log("[输入] 按下 -> " + k.Label); }
+            }
+        }
+        else if (falling && Grabbing && role == GrabHandRole) { Grabbing = false; Log("[抓取] 松手, 钉在当前位置"); }
+        if (Grabbing && role == GrabHandRole)
+        {
+            HmdMatrix34_t pm = CurPanelMatrix();
+            pm.m3 = origin[0] + GrabOffset[0];
+            pm.m7 = origin[1] + GrabOffset[1];
+            pm.m11 = origin[2] + GrabOffset[2];
+            if (OvRef != IntPtr.Zero && HandleRef != 0) Vt<SetOverlayTransformAbsoluteFn>(OvRef, 33)(OvRef, HandleRef, UniverseStanding, ref pm);   // sim 模式没有真覆盖层, 只更新几何
+            SetPanelFromMatrix(pm);
+        }
+    }
+
+    // ---- --sim: 不需要 VR 的断言(给门禁/自检用) ----
+    static int SimTest()
+    {
+        int fail = 0;
+        int pass = 0;
+        BuildLayout();
+        HmdMatrix34_t m = new HmdMatrix34_t();
+        m.m0 = 1f; m.m5 = 1f; m.m10 = 1f; m.m3 = 0f; m.m7 = 1.3f; m.m11 = -1.4f;
+        SetPanelFromMatrix(m);
+        CurMeters = 1.35f;
+        DryRun = true;
+        OvRef = IntPtr.Zero; HandleRef = 0; FlagRef = null;   // sim 里没有真覆盖层
+
+        // 1) 射线对准每个键的中心 -> 必须命中它自己
+        int miss = 0;
+        foreach (Key k in Keys)
+        {
+            float u = (k.Rect.X + k.Rect.Width / 2f) / W;
+            float v = 1f - ((k.Rect.Y + k.Rect.Height / 2f) / H);
+            float[] o, d;
+            RayFromUv(u, v, 1.2f, out o, out d);
+            float hu, hv;
+            if (!RayToUv(o, d, out hu, out hv)) { miss++; continue; }
+            Key hk = Hit(hu, hv);
+            if (hk == null || hk.Value != k.Value) miss++;
+        }
+        if (miss == 0) { pass++; Log("  PASS 射线命中: " + Keys.Count + " 个键的中心都能被射线命中"); }
+        else { fail++; Log("  FAIL 射线命中: " + miss + " 个键没命中"); }
+
+        // 2) 边沿检测: 按住不放只出一次字
+        Line = "";
+        float[] o2, d2; RayFromUv(0.1f, 0.7f, 1.2f, out o2, out d2);
+        Key kk = null; float hx, hy;
+        if (RayToUv(o2, d2, out hx, out hy)) kk = Hit(hx, hy);
+        if (kk != null)
+        {
+            Line = "";
+            PointerStepEdge(RoleRight, o2, d2, true, false, "x");    // 按下
+            string after1 = Line;
+            PointerStepEdge(RoleRight, o2, d2, false, false, "x");   // 持续按住
+            if (after1.Length == 1 && Line == after1) { pass++; Log("  PASS 边沿检测: 按住不放只输入 1 个字符('" + Line + "')"); }
+            else { fail++; Log("  FAIL 边沿检测: after1='" + after1 + "' now='" + Line + "'"); }
+        }
+        else { fail++; Log("  FAIL 边沿检测: 找不到可点的键"); }
+
+        // 3) 抓取: 顶部条按下 -> 移动 -> 面板跟着走; 松手 -> 再移动面板不动
+        float[] o3, d3; RayFromUv(0.5f, 1f - TitleBarV * 0.5f, 1.2f, out o3, out d3);   // 对准顶部抓取条
+        float[] before = new float[] { PanelPos[0], PanelPos[1], PanelPos[2] };
+        PointerStepEdge(RoleRight, o3, d3, true, false, "x");
+        if (!Grabbing) { fail++; Log("  FAIL 抓取: 顶部条按下没有进入抓取态"); }
+        else
+        {
+            float[] moved = new float[] { o3[0] + 0.3f, o3[1] + 0.1f, o3[2] };
+            PointerStepEdge(RoleRight, moved, d3, false, false, "x");
+            float dx = PanelPos[0] - (before[0] + 0.3f);
+            if (Math.Abs(dx) < 0.001f) { pass++; Log("  PASS 抓取: 面板跟着手移动(Δx=0.30)"); }
+            else { fail++; Log("  FAIL 抓取: 面板没跟上(Δx=" + dx.ToString("0.###") + ")"); }
+            PointerStepEdge(RoleRight, moved, d3, false, true, "x");    // 松手
+            float[] anchored = new float[] { PanelPos[0], PanelPos[1], PanelPos[2] };
+            float[] moved2 = new float[] { moved[0] + 0.5f, moved[1], moved[2] };
+            PointerStepEdge(RoleRight, moved2, d3, false, false, "x");
+            if (Math.Abs(PanelPos[0] - anchored[0]) < 0.001f) { pass++; Log("  PASS 放置: 松手后位置固定(再移动手柄面板不动)"); }
+            else { fail++; Log("  FAIL 放置: 松手后还在动"); }
+        }
+
+        // 4) 指开面板 -> 不开交互(不抢游戏输入)
+        InteractionEnabed = false;
+        float[] o4 = new float[] { 5f, 5f, 5f }, d4 = new float[] { 0, 1, 0 };
+        PointerStepEdge(RoleRight, o4, d4, true, false, "x");
+        if (!InteractionEnabed) { pass++; Log("  PASS 不抢输入: 射线不在面板上时不打开交互"); }
+        else { fail++; Log("  FAIL 不抢输入: 射线不在面板上却打开了交互"); }
+
+        Log("[模拟自检] 通过 " + pass + " 项, 失败 " + fail + " 项");
+        return fail == 0 ? 0 : 1;
+    }
+
     static int Main(string[] args)
+
+
 
 
     {
@@ -733,6 +1068,7 @@ static class VRKeyboard
         BuildLayout();
         CurMeters = meters; CurDist = dist; CurDrop = 0.28f;
         if (mode == "--selftest") return SelfTest();
+        if (mode == "--sim") return SimTest();
         if (mode == "--render")
         {
             Bitmap b = Render();
