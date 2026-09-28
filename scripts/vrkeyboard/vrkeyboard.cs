@@ -95,7 +95,8 @@ static class VRKeyboard
     static bool PointerValid = false;
     static float PointerPx = 0, PointerPy = 0;
     static DateTime LastClickAt = DateTime.Now;
-    static int AutoHideSec = 45;   // 多久没点就把键盘收起来(免得游戏一直收不到输入)
+    static int AutoHideSec = 0;    // 默认**不**自动收起(45 秒那次把用户的面板收没了); 需要时 --auto-hide N
+    static float CurMeters = 1.35f, CurDist = 1.3f, CurDrop = 0.28f;   // 多久没点就把键盘收起来(免得游戏一直收不到输入)
     static int HoverLogged = 0;
     static IntPtr OvRef = IntPtr.Zero;
     static ulong HandleRef = 0;
@@ -563,9 +564,11 @@ static class VRKeyboard
     static void DoShow()
     {
         if (OvRef == IntPtr.Zero || HandleRef == 0) return;
+        PlaceInFrontOfHead(CurMeters, CurDist, CurDrop);   // 每次都按"你此刻的朝向"摆一次(召唤语义)
         if (FlagRef != null) FlagRef(OvRef, HandleRef, (int)FlagInteractive, true);
         if (ShowRef != null) ShowRef(OvRef, HandleRef);
         Shown = true;
+        LastClickAt = DateTime.Now;
         Status = "键盘已显示: 点字母, 回车发送";
         Log("[控制] 显示键盘(已开可交互)");
     }
@@ -633,7 +636,54 @@ static class VRKeyboard
         }
     }
 
+
+    // ---------- 显示位置: 按头显当前姿态把面板放到眼前(参考 UEVR / Desktop+ 的做法: 读 HMD 姿态 -> 绝对变换) ----------
+    // 为什么要这样: 固定写"站立空间正前方"依赖 play area 朝向(用户可能背对着它); 而"跟随头显"又会让射线永远压在面板上,
+    // 游戏就收不到输入。正确做法是**召唤时按当前朝向摆一次**, 之后固定在原地 —— 看开就把输入还给游戏。
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void GetPoseFn(IntPtr self, int origin, float predictedSeconds, [Out] Pose_t[] poses, uint count);
+
+    [StructLayout(LayoutKind.Explicit, Size = 96)]
+    struct Pose_t { [FieldOffset(0)] public HmdMatrix34_t m; }
+
+    static void PlaceInFrontOfHead(float meters, float dist, float drop)
+    {
+        try
+        {
+            if (OvRef == IntPtr.Zero || HandleRef == 0) return;
+            string[] sysVersions = new string[] { "IVRSystem_026", "IVRSystem_025", "IVRSystem_024", "IVRSystem_023" };
+            IntPtr sys = IntPtr.Zero; string usedSys = null;
+            foreach (string v in sysVersions)
+            {
+                int se = 0;
+                IntPtr cand = VR_GetGenericInterface(v, ref se);
+                if (cand != IntPtr.Zero && se == 0) { sys = cand; usedSys = v; break; }
+            }
+            if (sys == IntPtr.Zero) { Log("[放置] 拿不到 IVRSystem 接口, 保持原位置"); return; }
+            GetPoseFn getPose = Vt<GetPoseFn>(sys, 12);   // IVRSystem::GetDeviceToAbsoluteTrackingPose
+            Pose_t[] poses = new Pose_t[1];
+            getPose(sys, UniverseStanding, 0f, poses, 1u);
+            HmdMatrix34_t h = poses[0].m;
+            float hx = h.m3, hy = h.m7, hz = h.m11;                     // 头显位置(第 4 列)
+            float fx = -h.m2, fy = -h.m6, fz = -h.m10;                  // 朝向 = -第三列
+            float len = (float)Math.Sqrt(fx * fx + fy * fy + fz * fz);
+            if (len > 0.001f) { fx /= len; fy /= len; fz /= len; }
+            if (float.IsNaN(hx) || float.IsNaN(fx) || len <= 0.001f) { Log("[放置] 头显姿态不可用(值异常), 保持原位置"); return; }
+            HmdMatrix34_t p = new HmdMatrix34_t();
+            p.m0 = h.m0; p.m1 = h.m1; p.m2 = h.m2;                       // 用头显的旋转(面板正面朝你)
+            p.m4 = h.m4; p.m5 = h.m5; p.m6 = h.m6;
+            p.m8 = h.m8; p.m9 = h.m9; p.m10 = h.m10;
+            p.m3 = hx + fx * dist;
+            p.m7 = hy + fy * dist - drop;
+            p.m11 = hz + fz * dist;
+            int e = Vt<SetOverlayTransformAbsoluteFn>(OvRef, 33)(OvRef, HandleRef, UniverseStanding, ref p);
+            Log("[放置] " + usedSys + " 头显=(" + hx.ToString("0.00") + "," + hy.ToString("0.00") + "," + hz.ToString("0.00") + ") 朝向=(" + fx.ToString("0.00") + "," + fy.ToString("0.00") + "," + fz.ToString("0.00") + ") -> 面板=(" + p.m3.ToString("0.00") + "," + p.m7.ToString("0.00") + "," + p.m11.ToString("0.00") + ") 距离=" + dist + "m 下移=" + drop + "m 结果=" + e);
+            Vt<SetOverlayWidthInMetersFn>(OvRef, 22)(OvRef, HandleRef, meters);
+        }
+        catch (Exception ex) { Log("[放置] 异常: " + ex.Message); }
+    }
+
     static int Main(string[] args)
+
 
     {
         Console.OutputEncoding = Encoding.UTF8;
@@ -661,6 +711,7 @@ static class VRKeyboard
             else if (args[i] == "--seconds" && i + 1 < args.Length) diag = int.Parse(args[++i]);
         }
         BuildLayout();
+        CurMeters = meters; CurDist = dist; CurDrop = 0.28f;
         if (mode == "--selftest") return SelfTest();
         if (mode == "--render")
         {
