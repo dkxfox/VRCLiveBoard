@@ -1,4 +1,4 @@
-﻿// VR 覆盖层键盘(F-20260925-02 P1, 2026-09-29) —— 独立原生工具, 不进主体包。
+// VR 覆盖层键盘(F-20260925-02 P1, 2026-09-29) —— 独立原生工具, 不进主体包。
 // 为什么是独立工具: 主体是 Node/Electron, 拿不到 OpenVR 原生能力(见功能卡 D1 决策树)。
 // 技术选型: C# + Windows 自带 csc.exe(与 scripts/launcher 同一套, 零工具链) + P/Invoke openvr_api.dll(SteamVR 自带)。
 // 显示: GDI+ 离屏位图 -> **BGRA 原始缓冲**(SetOverlayRaw, 主路径) / PNG 文件(SetOverlayFromFile, 兜底)。
@@ -501,6 +501,33 @@ static class VRKeyboard
                     frame++;
                     dirty = false;
                 }
+                // 每帧: 枚举手柄 -> 读姿态与扳机 -> 交给指针状态机(自算射线/近距戳键)
+                if (SysRef != IntPtr.Zero)
+                {
+                    try
+                    {
+                        EnumerateControllers();
+                        if (ControllerIdx.Length > 0 && GetPoseRef != null)
+                        {
+                            uint mx = 0;
+                            foreach (uint ci in ControllerIdx) if (ci > mx) mx = ci;
+                            uint devMax = Math.Max(mx, 1u);
+                            Pose_t[] ps = new Pose_t[devMax + 1];
+                            GetPoseRef(SysRef, UniverseStanding, 0f, ps, devMax + 1);
+                            bool anyTrig = false;
+                            for (int k = 0; k < ControllerIdx.Length; k++)
+                            {
+                                StepHand(ControllerRole[k], ControllerIdx[k], ps, url);
+                                if (TrigPrevHand[ControllerRole[k]]) anyTrig = true;
+                            }
+                            // 目光指针(兜底, 零猜测): 头显的 -Z 就是它的正前方 —— 看着哪个键扣扳机就能打字。
+                            // 手柄的 -Z 是"握把朝向"(实测朝上偏 ~40 度), 真正的 aim 姿态要走 action 输入系统, 那是下一步的事。
+                            GazeStep(ps, anyTrig, url);
+                            if (dirtyGlobal) { dirty = true; dirtyGlobal = false; }
+                        }
+                    }
+                    catch (Exception ex) { if (MoveLogged < 3) Log("[输入] 读手柄出错: " + ex.Message); }
+                }
                 VREvent_t ev = new VREvent_t();
                 if (poll(ov, handle, ref ev, 64u) != 0)
                 {
@@ -532,7 +559,9 @@ static class VRKeyboard
                             MoveLogged++;
                             Log("[移动样本] 原始=(" + ev.mouseX.ToString("0.####") + "," + ev.mouseY.ToString("0.####") + ") -> " + (hk == null ? "面板外" : hk.Label));
                         }
-                        if (hk != HoverKey) { HoverKey = hk; dirty = true; HoverLogged++; if (HoverLogged <= 25) Log("[悬停] -> " + (hk == null ? "面板外" : hk.Label) + "  原始=(" + ev.mouseX.ToString("0.####") + "," + ev.mouseY.ToString("0.####") + ")"); }
+                        // 系统鼠标事件的坐标恒为 (0,0)(实测两万多个事件), 已废弃: 只留样本日志, 不再让它动指针状态
+                        // (以前它每帧把 HoverKey 清成 null, 把自算射线/目光指针的悬停全冲掉了)
+                        if (MoveLogged < 8 && hk != null) Log("[系统鼠标] 竟然有可用坐标: " + hk.Label);
                         HoverX = ev.mouseX; HoverY = ev.mouseY;
                         { float pu, pv; ToUv(ev.mouseX, ev.mouseY, out pu, out pv); PointerPx = pu * W; PointerPy = (1f - pv) * H; PointerValid = true; }
                     }
@@ -664,7 +693,9 @@ static class VRKeyboard
     // 游戏就收不到输入。正确做法是**召唤时按当前朝向摆一次**, 之后固定在原地 —— 看开就把输入还给游戏。
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void GetPoseFn(IntPtr self, int origin, float predictedSeconds, [Out] Pose_t[] poses, uint count);
 
-    [StructLayout(LayoutKind.Explicit, Size = 96)]
+    // TrackedDevicePose_t 真实大小 = 80 字节(48 矩阵 + 12 线速度 + 12 角速度 + 4 跟踪结果 + 1 有效 + 1 连接 + 2 对齐)
+    // 之前写成 96 -> 数组里第 2 个元素起全部错位(表现为"手柄位置在天上/地板外"), 这是本轮的根因。
+    [StructLayout(LayoutKind.Explicit, Size = 80)]
     struct Pose_t { [FieldOffset(0)] public HmdMatrix34_t m; }
 
     static void PlaceInFrontOfHead(float meters, float dist, float drop)
@@ -750,6 +781,9 @@ static class VRKeyboard
                 GetPoseRef = Vt<GetPoseFn>(cand, 12);              // GetDeviceToAbsoluteTrackingPose
                 RoleIndexRef = Vt<GetRoleIndexFn>(cand, 18);        // GetTrackedDeviceIndexForControllerRole
                 GetStateRef = Vt<GetControllerStateFn>(cand, 37);   // GetControllerState
+                IsConnectedRef = Vt<IsConnectedFn>(cand, 21);        // IsTrackedDeviceConnected
+                GetClassRef = Vt<GetClassFn>(cand, 20);              // GetTrackedDeviceClass
+                GetRoleRef = Vt<GetRoleFn>(cand, 19);                // GetControllerRoleForTrackedDeviceIndex
                 Log("[输入] 拿到 " + v + ": 姿态/手柄角色/扳机 三个入口就绪");
                 return true;
             }
@@ -808,6 +842,7 @@ static class VRKeyboard
     {
         float u, v;
         bool hitPanel = RayToUv(origin, dir, out u, out v) && InPanelBox(u, v);
+        if (!hitPanel && NearToUv(origin, out u, out v) && InPanelBox(u, v)) hitPanel = true;
 
         // 不抢输入: 只在"打中面板"时才让系统激光鼠标接管那一发扳机; 指开立刻还回去
         if (hitPanel && !InteractionEnabed) { SetInteractive(true); InteractionEnabed = true; }
@@ -908,6 +943,7 @@ static class VRKeyboard
         VRControllerState_t st = new VRControllerState_t();
         bool ok = GetStateRef != null && GetStateRef(SysRef, idx, ref st, 64u);
         bool trig = ok && (((st.ulButtonPressed & TriggerMask) != 0) || st.axis0x > 0.5f);
+        LogGeometry(role, o, d);
         bool prev = TrigPrevHand[role];
         bool rising = trig && !prev;
         bool falling = !trig && prev;
@@ -1035,7 +1071,106 @@ static class VRKeyboard
         return fail == 0 ? 0 : 1;
     }
 
+
+    // ---- 近距离戳键(不依赖瞄准方向): 手柄贴近面板时, 用它落在面板上的点当指针 ----
+    static bool NearToUv(float[] p, out float u, out float v)
+    {
+        u = 0; v = 0;
+        float dx = p[0] - PanelPos[0], dy = p[1] - PanelPos[1], dz = p[2] - PanelPos[2];
+        float along = dx * PanelNormal[0] + dy * PanelNormal[1] + dz * PanelNormal[2];
+        if (Math.Abs(along) > 0.08f) return false;
+        float lx = dx * PanelRight[0] + dy * PanelRight[1] + dz * PanelRight[2];
+        float ly = dx * PanelUp[0] + dy * PanelUp[1] + dz * PanelUp[2];
+        float halfW = CurMeters * 0.5f;
+        float halfH = CurMeters * ((float)H / (float)W) * 0.5f;
+        u = 0.5f + lx / (2f * halfW);
+        v = 0.5f + ly / (2f * halfH);
+        return true;
+    }
+
+    // 几何取证: 每 2 秒记一次(手/方向/面板/射线偏差), 用来定位瞄准问题
+    static DateTime LastGeomLog = DateTime.Now;
+    static void LogGeometry(int role, float[] o, float[] d)
+    {
+        if ((DateTime.Now - LastGeomLog).TotalSeconds < 2) return;
+        LastGeomLog = DateTime.Now;
+        float den = d[0] * PanelNormal[0] + d[1] * PanelNormal[1] + d[2] * PanelNormal[2];
+        string info = "den=" + den.ToString("0.###");
+        if (Math.Abs(den) > 1e-6f)
+        {
+            float dx = PanelPos[0] - o[0], dy = PanelPos[1] - o[1], dz = PanelPos[2] - o[2];
+            float t = (dx * PanelNormal[0] + dy * PanelNormal[1] + dz * PanelNormal[2]) / den;
+            if (t > 0)
+            {
+                float hx = o[0] + d[0] * t - PanelPos[0], hy = o[1] + d[1] * t - PanelPos[1], hz = o[2] + d[2] * t - PanelPos[2];
+                float lx = hx * PanelRight[0] + hy * PanelRight[1] + hz * PanelRight[2];
+                float ly = hx * PanelUp[0] + hy * PanelUp[1] + hz * PanelUp[2];
+                info = info + " t=" + t.ToString("0.##") + " 命中偏移=(" + lx.ToString("0.###") + "," + ly.ToString("0.###") + ")";
+            }
+            else info = info + " 交点在身后";
+        }
+        Log("[几何] " + (role == RoleLeft ? "左" : "右") + " 手=(" + o[0].ToString("0.##") + "," + o[1].ToString("0.##") + "," + o[2].ToString("0.##") + ") 方向=(" + d[0].ToString("0.##") + "," + d[1].ToString("0.##") + "," + d[2].ToString("0.##") + ") 面板=(" + PanelPos[0].ToString("0.##") + "," + PanelPos[1].ToString("0.##") + "," + PanelPos[2].ToString("0.##") + ") " + info);
+    }
+
+// ---- 手柄枚举: 实测 GetTrackedDeviceIndexForControllerRole 返回 0, 改为遍历设备类(TrackedDeviceClass_Controller = 2) ----
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate bool IsConnectedFn(IntPtr self, uint index);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int GetClassFn(IntPtr self, uint index);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int GetRoleFn(IntPtr self, uint index);
+
+    static IsConnectedFn IsConnectedRef = null;
+    static GetClassFn GetClassRef = null;
+    static GetRoleFn GetRoleRef = null;
+    static uint[] ControllerIdx = new uint[0];
+    static int[] ControllerRole = new int[0];
+    static DateTime LastEnumLog = DateTime.MinValue;
+
+    static void EnumerateControllers()
+    {
+        if (SysRef == IntPtr.Zero || IsConnectedRef == null) return;
+        List<uint> idx = new List<uint>();
+        List<int> role = new List<int>();
+        for (uint i = 1; i <= 63; i++)
+        {
+            if (!IsConnectedRef(SysRef, i)) continue;
+            if (GetClassRef(SysRef, i) != 2) continue;                 // 2 = Controller
+            int r = GetRoleRef != null ? GetRoleRef(SysRef, i) : 0;    // 1=左 2=右
+            idx.Add(i); role.Add(r);
+        }
+        if (idx.Count >= 1 && role[0] != 1 && role[0] != 2) role[0] = RoleRight;   // 角色缺失时兜底
+        if (idx.Count >= 2 && role[1] != 1 && role[1] != 2) role[1] = RoleLeft;
+        ControllerIdx = idx.ToArray();
+        ControllerRole = role.ToArray();
+        if ((DateTime.Now - LastEnumLog).TotalSeconds > 5)
+        {
+            LastEnumLog = DateTime.Now;
+            string s = "";
+            for (int k = 0; k < idx.Count; k++) s += (k > 0 ? ", " : "") + "#" + idx[k] + "(角色" + role[k] + ")";
+            Log("[输入] 检测到控制器 " + idx.Count + " 个" + (idx.Count > 0 ? (": " + s) : "(没有手柄?)"));
+        }
+    }
+
+// 目光指针: role 0 表示"用头显看", 位置/方向取 pose[0](头显的 -Z 就是正前方)
+    static bool GazeTrigPrev = false;
+
+    static void GazeStep(Pose_t[] ps, bool trigger, string url)
+    {
+        if (ps == null || ps.Length < 1) return;
+        HmdMatrix34_t h = ps[0].m;
+        float[] o = new float[] { h.m3, h.m7, h.m11 };
+        float dx = -h.m2, dy = -h.m6, dz = -h.m10;
+        float len = (float)Math.Sqrt(dx * dx + dy * dy + dz * dz);
+        if (len <= 0.001f || float.IsNaN(o[0])) return;
+        float[] d = new float[] { dx / len, dy / len, dz / len };
+        bool rising = trigger && !GazeTrigPrev;
+        bool falling = !trigger && GazeTrigPrev;
+        GazeTrigPrev = trigger;
+        PointerStepEdge(0, o, d, rising, falling, url);
+    }
+
     static int Main(string[] args)
+
+
+
 
 
 
