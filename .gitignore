@@ -60,3 +60,7 @@ _归档-2026-09/
 
 # 冲突检测测试插件写下的自测数据(夹具专用, 不随包出厂)
 plugins/conflict-test*/data/
+
+# VR 覆盖层键盘(scripts/vrkeyboard)的构建产物与临时预览
+scripts/vrkeyboard/out/
+scripts/vrkeyboard/vrkeyboard-preview.png

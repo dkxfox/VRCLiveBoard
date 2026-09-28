@@ -12,6 +12,7 @@
     ".git",
     "dist",
     "dev-dongle",
+    "scripts\\vrkeyboard",
     "scripts\\checks",
     "scripts\\dev",
     "秘密开发项目素材",

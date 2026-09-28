@@ -1494,6 +1494,14 @@
 - 两个踩坑(都值得记): ① **词典选错**: 先用 segmentit, 它的「排名」低段被占位值污染(生僻词排名 3)且词表偏老(键盘/聊天 不在) → 看到「键盘/聊天不在词表里」才回头换源, **教训: 词库要先做「常用词抽查」再谈排序**; ② **路径传错**: `new PinyinIME({projectDir: __dirname})` 传成 src/ → 词库路径变 src/src/data → **本地直跑没事, 隔离冒烟(ENOENT)才抓出来** —— 又一次印证「必须在隔离实例里验」。
 - 顺带修掉一个门禁自身的毛病: **G1 的 JSON 校验原来用 PowerShell 的 ConvertFrom-Json**, 解析 npm 生成的 package-lock.json 会报「name 参数无效」(文件一大就崩) → 改成用 **node 解析**(任何大小都稳), 已随本次提交生效。
 - 仍缺(等用户一句话): 覆盖层键盘界面(面板/射线点选/候选交互)、全键盘与九键布局、短语表 —— 全部依赖「原生选型确认(C# + 内建 csc + P/Invoke openvr_api.dll)」与验收标准(建议: VR 里射线 60 秒打出 8 个汉字并上屏)。
+
+## 262. 覆盖层键盘 P1 第 1 步落地: 渲染 + 射线命中 + 发送链路(2026-09-29)
+- 用户「继续」→ 按分期开工 P1。选型按 §16.3: **C# + Windows 自带 csc + P/Invoke openvr_api.dll**(零工具链, 与 `scripts/launcher` 同一套)。
+- 交付 `scripts/vrkeyboard/`(独立原生工具, 不进发布包): `vrkeyboard.cs` + ASCII-only 的 `build.bat`。要点: ① 渲染走 **GDI+ 离屏位图 → PNG → SetOverlayFromFile**(P1 不碰 D3D); ② 射线交互靠 `MakeOverlaysInteractiveIfVisible(1<<16)` + `InputMethod_Mouse` + `MouseScale`, 事件坐标是 **GL 空间(左下角原点)**, 命中前必须翻 Y; ③ 发送直接 POST 既有 `/v1/chatbox`。
+- **P/Invoke 的两个关键事实**(记下来免得下次再摸): a) `openvr_api.dll` 只给对象指针, 方法要按 **vtable 下标**调 —— 本次用到的下标全部取自官方 `headers/openvr.h`(BSD-3): CreateOverlay=1/DestroyOverlay=3/SetOverlayFlag=11/SetOverlayWidthInMeters=22/SetOverlayTransformAbsolute=33/ShowOverlay=43/HideOverlay=44/PollNextOverlayEvent=48/SetOverlayInputMethod=50/SetOverlayMouseScale=52/SetOverlayFromFile=63; b) `VREvent_t` = **64 字节**(鼠标 x/y/button 在偏移 16/20/24)。**没有头文件就凭记忆写下标 = 在用户头显里崩溃**, 所以我先把官方头文件下到本地核对过才动手。
+- 自检(`--selftest`, 不需要 VR)全绿: 30 个键**逐个命中测试 30/30** / 渲染 31KB / 打字 `nihao` / 退格 / 发送路径 / 空输入不发送; 编译零错误零警告; 预览图留档 `docs/FEATURES/assets/vrkeyboard-preview.png`。
+- 踩坑: ① `.bat` 里写中文 → cmd 直接报错(`—— 不是内部命令`), 且项目规矩本来就是 **.bat 只准 ASCII/GBK** → 改英文注释; ② `.bat` 必须是 **CRLF** 换行, LF-only 会让 cmd 报 `. was unexpected at this time`; ③ 我的 C# 字符串里出现了单反斜杠路径 → `CS1009 无法识别的转义序列` → 干脆改成不含反斜杠的描述。
+- 本步**不含**: 中文输入法接入(P2, 引擎已就绪见 261)、九键(P3)、短语表(P4)、面板位置记忆/跟随视角。VR 侧实机验证需要用户跑 `out\\vrkeyboard.exe --run`(我这边没有头显, 只能保证自检与渲染)。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1655,5 +1663,6 @@
 | 259 | 2026-09-28 | 新需求登记: 「反向 OSC」—— 用外部软件驱动玩家动作/表情(用户提问, 已建功能卡走 D0) |
 | 260 | 2026-09-28 | 动作输出(反向 OSC)切片 1 落地: 双向信号层的"写"这一半 |
 | 261 | 2026-09-29 | 「我的输入法呢?」—— 内置输入法引擎先落地(词库 + 拼音引擎 + 零级接口) |
+| 262 | 2026-09-29 | 覆盖层键盘 P1 第 1 步落地: 渲染 + 射线命中 + 发送链路 |
 
 <!-- DEV-NOTES-INDEX:END -->
