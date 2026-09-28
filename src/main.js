@@ -76,7 +76,7 @@ async function main() {
           logger.info('[触发器] 说完/发送'); osc.sendTyping(false);
           if (asrOn()) {
             // 识别引擎要把最后一句收尾, 给一小段宽限时间再取文字(M-20260928-02)
-            dictation.stop(1200).then(function (r) {
+            dictation.stop(2600).then(function (r) {
               const text = String((r && r.text) || '').trim();
               if (!text) { logger.info('[听写] 这次没识别到内容'); return; }
               composer.pushTransient(text, 80, 8000);

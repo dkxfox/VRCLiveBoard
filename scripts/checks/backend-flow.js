@@ -598,6 +598,38 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
       if (asrReady.ready || asrReady.error) break;
     }
     ok(!!(asrReady && (asrReady.ready === true || (asrReady.error && String(asrReady.error).length > 0))), '听写助手: 就绪或明确报错(ready=' + (asrReady && asrReady.ready) + ', recognizer=' + (asrReady && asrReady.recognizer) + ', error=' + (asrReady && asrReady.error) + ')');
+    // 命令通道回归(2026-09-28): 旧实现用"反复写同一个文件"当命令通道, 挤在一起会丢命令 -> 用户报"只能识别第一句话"。
+    const waitMs = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+    await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: true, port: 19199, asr: { enabled: true, engine: 'sapi' } }) });
+    let asrS = {};
+    for (let i = 0; i < 24; i++) { await waitMs(500); asrS = JSON.parse((await req('/api/triggers')).body.toString('utf8')).asr || {}; if (asrS.ready || asrS.error) break; }
+    const cmds0 = asrS.cmds || 0;
+    for (let i = 0; i < 3; i++) {
+      await req('/api/triggers/simulate', { method: 'POST', body: JSON.stringify({ param: 'GestureRight', value: 1 }) });
+      await waitMs(260);
+      await req('/api/triggers/simulate', { method: 'POST', body: JSON.stringify({ param: 'GestureRight', value: 0 }) });
+      await waitMs(420);
+    }
+    await waitMs(900);
+    const cmds1 = (JSON.parse((await req('/api/triggers')).body.toString('utf8')).asr || {}).cmds || 0;
+    ok(cmds1 - cmds0 >= 6, '听写: 命令通道不丢命令(3 轮握拳/松开共执行 ' + (cmds1 - cmds0) + ' 条命令, 旧实现会丢)');
+    // LiveTranslate 引擎(识别层②, 2026-09-28): 用假转写文件验证"按新增行取原文"这条链路
+    const os2 = require('os'), path2 = require('path'), fs2 = require('fs');
+    const ltDir = path2.join(os2.tmpdir(), 'vrcb-lt-' + Date.now());
+    fs2.mkdirSync(ltDir, { recursive: true });
+    const ltFile = path2.join(ltDir, 'livetrans_20260928_120000_original.txt');
+    fs2.writeFileSync(ltFile, '[12:00:01] 之前就有的旧内容\n', 'utf8');
+    await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: true, port: 19199, asr: { enabled: true, engine: 'livetranslate', transcriptsDir: ltDir } }) });
+    await req('/api/triggers/simulate', { method: 'POST', body: JSON.stringify({ param: 'GestureRight', value: 1 }) });
+    await waitMs(300);
+    fs2.appendFileSync(ltFile, '[12:00:05] 这次说的话第一句\n[12:00:07] 这次说的话第二句\n', 'utf8');
+    await req('/api/triggers/simulate', { method: 'POST', body: JSON.stringify({ param: 'GestureRight', value: 0 }) });
+    await waitMs(3200);
+    const stLt = JSON.parse((await req('/api/status')).body.toString('utf8'));
+    const ltHit = ((stLt.transientQueue || []).filter(function (x) { return x.text === '这次说的话第一句这次说的话第二句'; })[0]) || null;
+    ok(!!ltHit, '听写: LiveTranslate 引擎只取新增行并上屏(队列=' + JSON.stringify(((stLt.transientQueue || []).map(function (x) { return x.text; })).slice(0, 3)) + ')');
+    await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: false, asr: { enabled: false } }) });
+    await waitMs(600);
     await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: false, asr: { enabled: false } }) });
     await new Promise(function (r) { setTimeout(r, 800); });
     await req('/api/config', { method: 'POST', body: JSON.stringify({ specialEvents: [] }) });
