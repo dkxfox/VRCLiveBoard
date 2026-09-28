@@ -84,6 +84,7 @@ static class VRKeyboard
     static string Status = "点字母打字, 回车发送";
     static string LastSent = null;
     static bool DryRun = false;
+    static bool DashboardMode = true;   // 仪表盘模式(默认): 浮层显示在 SteamVR 仪表盘里, 输入交给仪表盘鼠标
     static bool Shown = false;            // 是否已显示(默认隐藏: 显示即可交互会一直吸着控制器激光, 游戏就收不到输入)
     static int CtlPort = 19192;
     static int ClickCount2 = 0;
@@ -484,6 +485,16 @@ static class VRKeyboard
             if (showAtStart) { DoShow(); }
             else { DoHide(); Log("[信息] 默认**隐藏**(避免一直吸着控制器激光让游戏收不到输入); 用 --toggle / 控制口 或 --show-at-start 显示"); }
             if (ctlPort > 0) StartControl(ctlPort);
+            if (DashboardMode)
+            {
+                // VROverlayFlags_VisibleInDashboard = 1 << 15(官方注释: If set, the overlay will be shown in the dashboard)
+                int de = Vt<SetOverlayFlagFn>(ov, 11)(ov, handle, 1 << 15, true);
+                Log("[仪表盘] VisibleInDashboard -> " + de + " (0 = 成功)");
+                SetInteractive(false);                        // 世界里的输入一个都不要(交给仪表盘鼠标)
+                Log("[仪表盘] ShowOverlay -> " + Vt<ShowOverlayFn>(ov, 43)(ov, handle));
+                Shown = true;
+                Log("[仪表盘] 已就绪: 按系统键呼出 SteamVR 仪表盘, 里面应能看到键盘; 用仪表盘鼠标点键即可");
+            }
             EnsureSystem();
             // action 系统的 aim 姿态**对覆盖层应用不可用**(实测 UpdateActionState -> 8 = NoActiveActionSet: 覆盖层没有输入焦点),
             // 所以这里不再尝试; 射线方向改用"校准过的 grip 朝向"或"目光指针"(见 DEV-NOTES 271)。
@@ -580,6 +591,17 @@ static class VRKeyboard
                         Log("[事件样本] type=" + ev.eventType + " device=" + ev.trackedDeviceIndex + " x=" + ev.mouseX + " y=" + ev.mouseY + " button=" + ev.mouseButton);
                     }
                     EvCount2 = evCount;
+                    // 仪表盘模式: 系统鼠标事件的坐标是**真实的**(世界浮层模式恒为 0) -> 直接拿来定位/命中
+                    bool coordsUsable = DashboardMode && !(Math.Abs(ev.mouseX) < 0.001f && Math.Abs(ev.mouseY) < 0.001f) &&
+                        !float.IsNaN(ev.mouseX) && !float.IsNaN(ev.mouseY) &&
+                        Math.Abs(ev.mouseX) < 100000f && Math.Abs(ev.mouseY) < 100000f;
+                    if (coordsUsable)
+                    {
+                        Key dk = Hit(ev.mouseX, ev.mouseY);
+                        float du, dv; ToUv(ev.mouseX, ev.mouseY, out du, out dv);
+                        PointerPx = du * W; PointerPy = (1f - dv) * H; PointerValid = true;
+                        if (dk != HoverKey) { HoverKey = dk; dirtyGlobal = true; }
+                    }
                     if (ev.eventType == EvMouseMove)
                     {
                         Key hk = Hit(ev.mouseX, ev.mouseY);
@@ -604,7 +626,7 @@ static class VRKeyboard
                         Log("[扳机] " + (down ? "按下" : "松开") + " button=" + ev.mouseButton + " 悬停键=" + (HoverKey == null ? "(无)" : HoverKey.Label));
                         // 手柄射线常常打不中(握把朝向 vs 瞄准方向), 但**目光是可靠的**:
                         // 所以按键时若自家悬停为空, 就回落到"你正在看的键"; 顺便用这次意图自校准那只手。
-                        Key pressKey = HoverKey;
+                        Key pressKey = coordsUsable ? Hit(ev.mouseX, ev.mouseY) : HoverKey;
                         int pressRole = 0;
                         for (int ci = 0; ci < ControllerIdx.Length; ci++) if (ControllerIdx[ci] == ev.trackedDeviceIndex) pressRole = ControllerRole[ci];
                         if (pressKey == null) pressKey = GazeHoverKey;
@@ -1558,7 +1580,10 @@ static class VRKeyboard
         Console.OutputEncoding = Encoding.UTF8;
         // 双击 exe(无参数)应当**启动覆盖层** —— 之前默认是 --selftest, 用户双击后它自检完就退出,
         // 看起来就是"手动启动失败"(2026-09-29 实际踩到)。自检请显式用 --selftest / --sim。
+        // 默认 --run 走**仪表盘模式**(用户 2026-09-29 拍板): 浮层显示在 SteamVR 仪表盘里,
+        // 输入由系统仪表盘鼠标提供(坐标正确) -> 不需要自算射线/校准。世界浮层用 --world 进入。
         string mode = args.Length > 0 ? args[0] : "--run";
+
         string url = "http://127.0.0.1:19190/v1/chatbox";
         string dll = null, outPng = null;
         float meters = 1.35f, dist = 1.6f, height = 1.35f;
