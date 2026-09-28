@@ -167,6 +167,7 @@ body.no-anim *{animation:none!important;transition:none!important}
   <div class="tab" data-tab="trans" data-t="tabTrans"></div>
   <div class="tab" data-tab="env" data-t="tabEnv"></div>
   <div class="tab" data-tab="kbd" data-t="tabKbd"></div>
+  <div class="tab" data-tab="dance" data-t="tabDance"></div>
   <div class="tab" data-tab="adv" data-t="tabAdv"></div>
 </div>
 
@@ -287,6 +288,21 @@ body.no-anim *{animation:none!important;transition:none!important}
       <span class="sub" id="kbdCalibMsg" style="font-size:12px"></span>
     </div>
     <div class="sub" id="kbdStatus" style="font-size:12px;margin-top:8px"></div>
+  </div>
+</div>
+<div id="tab-dance" hidden>
+  <div class="card">
+    <div class="row" style="gap:8px;align-items:center"><b data-t="danceTitle">动作播放</b>
+      <span class="sub" data-t="danceSub">VMD 动作 → 虚拟追踪器(VMT)</span></div>
+    <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap">
+      <select id="danceFile" style="min-width:240px"></select>
+      <button id="danceStart" data-t="danceStart">开始</button>
+      <button class="gray" id="danceHold" data-t="danceHold">定住不动(校准用)</button>
+      <button class="gray" id="danceStop" data-t="danceStop">停止</button>
+      <button class="gray" id="danceRefresh" data-t="danceRefresh">刷新</button>
+    </div>
+    <div class="sub" id="danceStatus" style="font-size:13px;margin-top:10px;font-family:monospace"></div>
+    <div class="sub" data-t="danceHint" style="font-size:12px;margin-top:10px"></div>
   </div>
 </div>
 <div id="tab-adv" hidden>

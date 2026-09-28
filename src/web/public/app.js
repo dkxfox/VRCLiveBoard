@@ -716,3 +716,59 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',kbdInit); else kbdInit();
 })();
+
+
+// ===== 动作播放页(F-20260929-01 路线 B): VMD -> 虚拟追踪器(VMT) =====
+// 为什么放在控制台: 用户自己点"开始/停止/定住", 不用每次叫我起脚本。
+(function(){
+  var poll=null;
+  function dancePaint(st){
+    var el=$('danceStatus'); if(!el) return;
+    if(!st){ el.textContent=tr('danceUnavailable'); return; }
+    var s=tr('dancePlaying')+': '+(st.playing?tr('danceYes'):tr('danceNo'));
+    s+='   |   '+tr('danceSent')+': '+(st.sent||0);
+    if(st.current) s+='   |   '+tr('danceFileLabel')+': '+st.current;
+    if(st.durationSec) s+='   |   '+tr('danceLen')+': '+Math.round(st.durationSec)+'s';
+    s+='   |   '+tr('danceTarget')+': '+st.host+':'+st.port+'  '+st.hz+'Hz  '+(st.trackers||11)+tr('dancePoints');
+    if(st.error) s+='   |   '+tr('danceErr')+': '+st.error;
+    el.textContent=s;
+  }
+  function danceFill(st){
+    var sel=$('danceFile'); if(!sel||!st||!st.files) return;
+    var keep=sel.value;
+    sel.innerHTML='';
+    st.files.forEach(function(f){
+      var o=document.createElement('option');
+      o.value=f.file;
+      o.textContent=f.file+'  ('+Math.round(f.durationSec)+'s / '+f.bones+tr('danceBones')+' / '+Math.round(f.size/1024)+'KB)';
+      sel.appendChild(o);
+    });
+    if(keep) sel.value=keep;
+  }
+  function danceLoad(){
+    fetch('/api/mocap').then(function(r){return r.json();}).then(function(st){
+      dancePaint(st); danceFill(st);
+    }).catch(function(){ dancePaint(null); });
+  }
+  function dancePost(body,msgKey){
+    fetch('/api/mocap',{method:'POST',body:JSON.stringify(body)}).then(function(r){return r.json();}).then(function(r){
+      var el=$('danceStatus');
+      if(el&&r&&!r.ok) el.textContent=tr('danceErr')+': '+(r.error||'');
+      danceLoad();
+    }).catch(function(){ var el=$('danceStatus'); if(el) el.textContent=tr('danceErr'); });
+  }
+  function danceInit(){
+    if(!$('danceFile')) return;
+    $('danceRefresh').onclick=danceLoad;
+    $('danceStart').onclick=function(){ dancePost({action:'start',file:$('danceFile').value},'danceStart'); };
+    $('danceStop').onclick=function(){ dancePost({action:'stop'},'danceStop'); };
+    $('danceHold').onclick=function(){ dancePost({action:'hold',sec:0,file:$('danceFile').value},'danceHold'); };
+    danceLoad();
+    if(poll) clearInterval(poll);
+    poll=setInterval(function(){
+      var p=document.getElementById('tab-dance');
+      if(p&&!p.hidden) danceLoad();
+    },3000);
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',danceInit); else danceInit();
+})();
