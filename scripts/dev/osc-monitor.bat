@@ -4,7 +4,7 @@ setlocal enabledelayedexpansion
 pushd "%~dp0..\.."
 set SECONDS=%~1
 if "%SECONDS%"=="" set SECONDS=60
-set JSON=logs\osc-quest3.json
+set JSON=auto
 if not exist logs mkdir logs
 
 echo ============================================================
@@ -33,7 +33,7 @@ if %ERRORLEVEL%==0 (
 
 !RUNNER! scripts\dev\osc-monitor.js --learn --seconds %SECONDS% --json %JSON%
 echo.
-echo Done. Data file: %CD%\%JSON%
+echo Done. Data file path is printed on the line above (logs\osc-<timestamp>.json).
 echo Tell the developer it is ready (they will read the file).
 popd
 if not "%NOPAUSE%"=="1" pause
