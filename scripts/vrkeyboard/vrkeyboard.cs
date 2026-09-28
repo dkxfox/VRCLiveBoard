@@ -502,7 +502,10 @@ static class VRKeyboard
                 if (dirty && (DateTime.Now - lastRender).TotalMilliseconds >= 66)
                 {
                     lastRender = DateTime.Now;
-                    Bitmap bmp = Render();
+                    // 关键: 每帧的 Bitmap 必须释放 —— 之前泄漏了(每帧 1024x640x4 ≈ 2.6MB),
+                    // 表现为"按得越多越不跟手", 并最终引发 GDI+ 报错与画面闪烁。
+                    using (Bitmap bmp = Render())
+                    {
                     int re = PushRaw(ov, handle, bmp, setRaw);
                     rawErr = re;
                     if (re != 0)
@@ -515,6 +518,7 @@ static class VRKeyboard
                     }
                     frame++;
                     dirty = false;
+                    }
                 }
                 // 每帧: 枚举手柄 -> 读姿态与扳机 -> 交给指针状态机(自算射线/近距戳键)
                 if (ActionsTick(url)) { /* action 输入已接管(用的是真 aim 姿态) */ }
@@ -583,9 +587,29 @@ static class VRKeyboard
                     }
                     else if (ev.eventType == EvMouseDown || ev.eventType == EvMouseUp)
                     {
-                        Key k = Hit(ev.mouseX, ev.mouseY);
-                        Log("[输入] " + (ev.eventType == EvMouseDown ? "按下" : "松开") + " 原始=(" + ev.mouseX.ToString("0.####") + "," + ev.mouseY.ToString("0.####") + ") button=" + ev.mouseButton + " -> " + (k == null ? "没命中任何键" : k.Label));
-                        if (ev.eventType == EvMouseDown && k != null) { clickCount++; LastClickAt = DateTime.Now; PressKey(k, url); dirty = true; }
+                        // 系统鼠标事件**坐标恒为 (0,0)**(实测), 但**按键本身是可靠的** ——
+                        // 所以位置用我们自算射线得到的 HoverKey, 按键用这个事件当扳机。
+                        // (legacy GetControllerState 对没有输入焦点的覆盖层应用返回不了状态, 见 DEV-NOTES 271/278)
+                        bool down = (ev.eventType == EvMouseDown);
+                        Log("[扳机] " + (down ? "按下" : "松开") + " button=" + ev.mouseButton + " 悬停键=" + (HoverKey == null ? "(无)" : HoverKey.Label));
+                        if (down && ev.mouseButton == MouseLeft && HoverKey != null)
+                        {
+                            clickCount++; LastClickAt = DateTime.Now;
+                            if (PointerPy < 100f && LastHoverOrigin != null)
+                            {
+                                // 顶部抓取条: 拿起键盘(记下手柄与面板的相对位置, 之后跟手)
+                                Grabbing = true;
+                                GrabOffset = new float[] { PanelPos[0] - LastHoverOrigin[0], PanelPos[1] - LastHoverOrigin[1], PanelPos[2] - LastHoverOrigin[2] };
+                                Log("[抓取] 拿起键盘(顶部条)");
+                            }
+                            else { PressKey(HoverKey, url); }
+                            dirty = true;
+                        }
+                        else if (!down && Grabbing)
+                        {
+                            Grabbing = false;
+                            Log("[抓取] 松手, 钉在当前位置");
+                        }
                     }
                 }
                 else Thread.Sleep(15);
@@ -848,6 +872,7 @@ static class VRKeyboard
     static int GrabHandRole = 0;
     static int InteractionOn = 0;     // 交互开关被打开的次数(用于断言"平时不抢输入")
 
+    static float[] LastHoverOrigin = null;   // 最近一次悬停在面板上时, 手柄所在位置(抓取时算相对位置用)
     static bool InteractiveNow = false;   // 只在**状态变化**时切交互开关(每帧来回切会让画面闪)
     static void SetInteractive(bool on)
     {
