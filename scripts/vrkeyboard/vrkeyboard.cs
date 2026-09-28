@@ -479,6 +479,7 @@ static class VRKeyboard
             // 所以这里不再尝试; 射线方向改用"校准过的 grip 朝向"或"目光指针"(见 DEV-NOTES 271)。
             // 若将来改成有输入焦点的形态, 把下面这行恢复即可。
             // InitActions();
+            LoadCalib();                         // 一次性校准的偏移(没有就用原始握把朝向)
             SetPanelFromMatrix(CurPanelMatrix());
             // 先把事件字段原样打几条出来(排障: 鼠标事件的坐标/按钮到底在哪个偏移)
             SetOverlayRawFn setRaw = Vt<SetOverlayRawFn>(ov, 62);
@@ -664,9 +665,11 @@ static class VRKeyboard
                         if (path == "/show") { DoShow(); body = "{\"ok\":true,\"shown\":true}"; }
                         else if (path == "/hide") { DoHide(); body = "{\"ok\":true,\"shown\":false}"; }
                         else if (path == "/toggle") { if (Shown) DoHide(); else DoShow(); body = "{\"ok\":true,\"shown\":" + (Shown ? "true" : "false") + "}"; }
+                        else if (path == "/calibrate") { DoCalibrate(); body = "{\"ok\":true,\"note\":\"calibrating\"}"; }
                         else body = "{\"ok\":true,\"shown\":" + (Shown ? "true" : "false") + ",\"events\":" + EvCount2 + ",\"clicks\":" + ClickCount2 + ",\"input\":\"" + JsonEscape(Line) + "\"}";
                         byte[] buf = Encoding.UTF8.GetBytes(body);
                         ctx.Response.ContentType = "application/json";
+                        ctx.Response.Headers.Add("Access-Control-Allow-Origin", "*");   // 控制台页面(:19190)要能直接调本机控制口(:19192)
                         ctx.Response.OutputStream.Write(buf, 0, buf.Length);
                         ctx.Response.Close();
                     }
@@ -954,6 +957,8 @@ static class VRKeyboard
             return;
         }
         float[] d = new float[] { dx / len, dy / len, dz / len };
+        if (PendingCalib > 0) { PendingCalib--; CalibrateHand(role, o, d); }
+        d = ApplyCalib(role, d);                       // 用校准过的朝向当瞄准方向(没校准过就是原样)
         VRControllerState_t st = new VRControllerState_t();
         bool ok = GetStateRef != null && GetStateRef(SysRef, idx, ref st, 64u);
         bool trig = ok && (((st.ulButtonPressed & TriggerMask) != 0) || st.axis0x > 0.5f);
@@ -1009,6 +1014,115 @@ static class VRKeyboard
         }
     }
 
+    // ================= 一次性校准: 把"握把朝向"旋到真正的瞄准方向 =================
+    // 背景: 覆盖层拿不到 action 的 aim 姿态(NoActiveActionSet, 见 DEV-NOTES 271), legacy 只有 grip 姿态,
+    // 而实测 grip 的 -Z 比瞄准方向**偏上约 26 度** -> 用一次"看着键盘中心扣扳机/点校准"把偏移量算出来记住。
+    static float[][] CalibRot = new float[3][];
+    static string CalibFile = null;
+
+    static string CalibPath()
+    {
+        if (CalibFile != null) return CalibFile;
+        try
+        {
+            DirectoryInfo d = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+            for (int i = 0; i < 6 && d != null; i++)
+            {
+                if (File.Exists(Path.Combine(d.FullName, "config.default.json"))) { CalibFile = Path.Combine(d.FullName, "logs", "vrkeyboard-calib.json"); break; }
+                d = d.Parent;
+            }
+        }
+        catch (Exception) { }
+        if (CalibFile == null) CalibFile = Path.Combine(Path.GetTempPath(), "vrkeyboard-calib.json");
+        return CalibFile;
+    }
+
+    static void LoadCalib()
+    {
+        try
+        {
+            if (!File.Exists(CalibPath())) { Log("[校准] 还没有校准记录(射线用原始握把朝向, 会偏上)"); return; }
+            string s = File.ReadAllText(CalibPath());
+            foreach (char hand in new char[] { 'L', 'R' })
+            {
+                int i = s.IndexOf("\"" + hand + "\":[");
+                if (i < 0) continue;
+                i = s.IndexOf('[', i) + 1;
+                int j = s.IndexOf(']', i);
+                string[] parts = s.Substring(i, j - i).Split(',');
+                if (parts.Length < 9) continue;
+                float[] m = new float[9];
+                for (int k = 0; k < 9; k++) m[k] = float.Parse(parts[k], System.Globalization.CultureInfo.InvariantCulture);
+                CalibRot[hand == 'L' ? RoleLeft : RoleRight] = m;
+            }
+            Log("[校准] 已加载: 左=" + (CalibRot[RoleLeft] != null ? "有" : "无") + " 右=" + (CalibRot[RoleRight] != null ? "有" : "无"));
+        }
+        catch (Exception ex) { Log("[校准] 读取失败(忽略): " + ex.Message); }
+    }
+
+    static void SaveCalib()
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(CalibPath()));
+            string s = "{";
+            for (int r = 0; r < 3; r++)
+            {
+                if (CalibRot[r] == null) continue;
+                if (s.Length > 1) s += ",";
+                s += "\"" + (r == RoleLeft ? "L" : "R") + "\":[";
+                for (int k = 0; k < 9; k++) s += (k > 0 ? "," : "") + CalibRot[r][k].ToString("0.000000", System.Globalization.CultureInfo.InvariantCulture);
+                s += "]";
+            }
+            s += "}";
+            File.WriteAllText(CalibPath(), s);
+            Log("[校准] 已保存: " + s);
+        }
+        catch (Exception ex) { Log("[校准] 保存失败: " + ex.Message); }
+    }
+
+    // 把手柄朝向旋到"手柄 -> 面板中心"方向(轴角法), 记成 3x3 旋转矩阵
+    static bool CalibrateHand(int role, float[] handPos, float[] handDir)
+    {
+        float[] t = new float[] { PanelPos[0] - handPos[0], PanelPos[1] - handPos[1], PanelPos[2] - handPos[2] };
+        float tl = (float)Math.Sqrt(t[0] * t[0] + t[1] * t[1] + t[2] * t[2]);
+        if (tl < 0.05f) { Log("[校准] 手离面板太近, 跳过"); return false; }
+        t[0] /= tl; t[1] /= tl; t[2] /= tl;
+        float dot = handDir[0] * t[0] + handDir[1] * t[1] + handDir[2] * t[2];
+        if (dot > 0.9999f) { CalibRot[role] = new float[] { 1, 0, 0, 0, 1, 0, 0, 0, 1 }; SaveCalib(); Log("[校准] 本来就对准, 记为单位旋转"); return true; }
+        float[] ax = new float[] { handDir[1] * t[2] - handDir[2] * t[1], handDir[2] * t[0] - handDir[0] * t[2], handDir[0] * t[1] - handDir[1] * t[0] };
+        float al = (float)Math.Sqrt(ax[0] * ax[0] + ax[1] * ax[1] + ax[2] * ax[2]);
+        if (al < 1e-6f) { Log("[校准] 方向正好相反, 轴角法不适用(跳过)"); return false; }
+        ax[0] /= al; ax[1] /= al; ax[2] /= al;
+        float ang = (float)Math.Acos(Math.Max(-1f, Math.Min(1f, dot)));
+        float c = (float)Math.Cos(ang), s = (float)Math.Sin(ang), tt = 1f - c;
+        float x = ax[0], y = ax[1], z = ax[2];
+        CalibRot[role] = new float[] {
+            tt*x*x + c,    tt*x*y - s*z,  tt*x*z + s*y,
+            tt*x*y + s*z,  tt*y*y + c,    tt*y*z - s*x,
+            tt*x*z - s*y,  tt*y*z + s*x,  tt*z*z + c };
+        Log("[校准] 手=" + (role == RoleLeft ? "左" : "右") + " 夹角=" + (ang * 180.0 / Math.PI).ToString("0.0") + " 度");
+        SaveCalib();
+        return true;
+    }
+
+    static float[] ApplyCalib(int role, float[] d)
+    {
+        float[] m = (role >= 0 && role < 3) ? CalibRot[role] : null;
+        if (m == null) return d;
+        return new float[] {
+            m[0]*d[0] + m[1]*d[1] + m[2]*d[2],
+            m[3]*d[0] + m[4]*d[1] + m[5]*d[2],
+            m[6]*d[0] + m[7]*d[1] + m[8]*d[2] };
+    }
+
+    // 校准期间: 每个手柄都用当前姿态算一次(由控制口 /calibrate 触发)
+    static int PendingCalib = 0;
+    static void DoCalibrate()
+    {
+        PendingCalib = 2;   // 接下来两帧里, 每只出现的手柄都算一次
+        Log("[校准] 收到校准请求: 请让手保持指向键盘中心");
+    }
     // ---- --sim: 不需要 VR 的断言(给门禁/自检用) ----
     static int SimTest()
     {
@@ -1081,6 +1195,23 @@ static class VRKeyboard
         if (!InteractionEnabed) { pass++; Log("  PASS 不抢输入: 射线不在面板上时不打开交互"); }
         else { fail++; Log("  FAIL 不抢输入: 射线不在面板上却打开了交互"); }
 
+        // 6) 校准: 造一个"偏上 26 度"的手柄朝向 -> 校准后射线必须能打中面板中心
+        {
+            float[] handPos = new float[] { 0f, 1.3f, 0.4f };                       // 面板前 1.8m 处
+            float calAng = 26f * (float)Math.PI / 180f;
+            float[] handDir = new float[] { 0f, (float)Math.Sin(calAng), -(float)Math.Cos(calAng) };   // 偏上 26 度
+            float u2, v2;
+            bool hitBefore = RayToUv(handPos, handDir, out u2, out v2);
+            CalibRot[RoleRight] = null;
+            CalibrateHand(RoleRight, handPos, handDir);
+            float[] fixedDir = ApplyCalib(RoleRight, handDir);
+            bool hitAfter = RayToUv(handPos, fixedDir, out u2, out v2);
+            Key hk2 = hitAfter ? Hit(u2, v2) : null;
+            if (hitBefore && !hitAfter) { pass++; Log("  PASS 校准: 偏 26 度时打不中 -> 校准后命中(" + (hk2 == null ? "面板内" : hk2.Label) + ")"); }
+            else if (hitBefore && hitAfter) { pass++; Log("  PASS 校准: 校准后命中(" + (hk2 == null ? "面板内" : hk2.Label) + ")"); }
+            else { fail++; Log("  FAIL 校准: before=" + hitBefore + " after=" + hitAfter); }
+            CalibRot[RoleRight] = null;
+        }
         Log("[模拟自检] 通过 " + pass + " 项, 失败 " + fail + " 项");
         return fail == 0 ? 0 : 1;
     }

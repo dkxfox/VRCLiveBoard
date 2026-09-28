@@ -696,6 +696,12 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     if($('kbdSpace'))$('kbdSpace').onclick=function(){kbdKey('space');};
     if($('kbdClear'))$('kbdClear').onclick=function(){kbdKey('clear');};
     if($('kbdSend'))$('kbdSend').onclick=kbdSend;
+    if($('kbdCalib'))$('kbdCalib').onclick=function(){
+      // 覆盖层的控制口(本机 19192): 让工具"以你此刻的指向"为基准校准射线偏移
+      fetch('http://127.0.0.1:19192/calibrate').then(function(r){return r.json();}).then(function(){
+        if($('kbdCalibMsg'))$('kbdCalibMsg').textContent=tr('kbdCalibOk');
+      }).catch(function(){ if($('kbdCalibMsg'))$('kbdCalibMsg').textContent=tr('kbdCalibErr'); });
+    };
     // 物理键盘也能打(桌面/浏览器里测试用): 只在键盘页可见时接管
     document.addEventListener('keydown',function(ev){
       var p=document.getElementById('tab-kbd');
