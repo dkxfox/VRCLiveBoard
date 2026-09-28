@@ -717,6 +717,13 @@ static class VRKeyboard
     static void DoHide()
     {
         if (OvRef == IntPtr.Zero || HandleRef == 0) return;
+        if (DashboardMode)
+        {
+            // 仪表盘浮层的可见性由仪表盘控制: 程序自己 hide 会导致"仪表盘里什么都没有"
+            Log("[仪表盘] 忽略 hide 请求(可见性交给仪表盘)");
+            Shown = true;
+            return;
+        }
         if (FlagRef != null) FlagRef(OvRef, HandleRef, (int)FlagInteractive, false);
         if (HideRef != null) HideRef(OvRef, HandleRef);
         Shown = false;
