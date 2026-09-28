@@ -1,15 +1,13 @@
 @echo off
-rem Show/hide the VR keyboard overlay (F-20260925-02 P1).
-rem The panel is HIDDEN by default on purpose: a visible+interactive overlay keeps grabbing the
-rem controller laser, so the game stops receiving input (that is what put VRChat into AFK).
+rem Show/hide the VR overlay keyboard. Starts the overlay first if it is not running.
 rem This file must stay ASCII-only (project rule for .bat).
 cd /d "%~dp0"
-if /i "%~1"=="hide" (
-  out\vrkeyboard.exe --hide
-) else if /i "%~1"=="state" (
-  out\vrkeyboard.exe --state
-) else (
-  out\vrkeyboard.exe --toggle
+out\vrkeyboard.exe --state >nul 2>&1
+if errorlevel 1 (
+  echo [info] overlay not running - starting it now...
+  start "" out\vrkeyboard.exe --run
+  timeout /t 3 /nobreak >nul
 )
+out\vrkeyboard.exe --toggle
 echo.
 pause

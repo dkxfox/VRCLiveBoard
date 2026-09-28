@@ -1444,7 +1444,9 @@ static class VRKeyboard
 
     {
         Console.OutputEncoding = Encoding.UTF8;
-        string mode = args.Length > 0 ? args[0] : "--selftest";
+        // 双击 exe(无参数)应当**启动覆盖层** —— 之前默认是 --selftest, 用户双击后它自检完就退出,
+        // 看起来就是"手动启动失败"(2026-09-29 实际踩到)。自检请显式用 --selftest / --sim。
+        string mode = args.Length > 0 ? args[0] : "--run";
         string url = "http://127.0.0.1:19190/v1/chatbox";
         string dll = null, outPng = null;
         float meters = 1.35f, dist = 1.6f, height = 1.35f;
