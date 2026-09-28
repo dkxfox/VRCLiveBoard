@@ -1311,6 +1311,20 @@
   4. **用户侧待办**: F-20260903-01/-02 两张功能卡的实机确认(ACCEPT → DONE); GitHub 令牌用后轮换(本次发布用的那个); weather-board 的 xlsx vendor 债随 3 号卡一起处理。
 - 环境/资产备注: 取证报告在 `logs/perf-*.json`(gitignore); 隔离实例验证用的是独立 `VRCB_USER_DATA` + 端口回退(19191), **全程没碰用户实例 19190**; 桌面壳的硬件加速档位写进 `process.env.VRCB_HW_MODE`, 诊断接口 `/api/diagnose` 与取证报告都能自证。
 
+
+## 245. 输入法可行性确认(用户: Quest 3 为主 + Index 兼容 + 识别层两条都要 + 触发可自定义) —— 结论: 都可行, 并交付 OSC 监听工具去取实机数据(2026-09-27 夜)
+- 用户要求拆解: ① 设备可选(Quest 3 主 + Index 兼容); ② 识别层两条都要(不装 LiveTranslate 也得能用); ③ 射线键盘要有方便的触发; ④ **触发手势做成可自定义**。
+- **触发器结论: 做成「学习式自定义绑定」** —— 不硬编码设备映射。用户点「学习」→ 在 VR 里做动作 → 我们监听 9001, 列出**真的变化**的参数(过滤 VelocityX 这类每帧变的高频浮点噪声)→ 绑成「开始说话 / 发送 / 取消」。Index 兼容 = 同一套流程在 Index 上跑一遍即可, **我们不需要预先知道 Index 的手势映射**; 预设只当省一步的便利(预设可以错, 学习模式不会错)。
+- 证据(触发器): 用户当前头像的 OSC 配置 **202 个参数全带 output**(107 Bool / 75 Float / 20 Int); 内置可当触发器的有 Voice / GestureLeft / GestureRight / GestureLeftWeight / GestureRightWeight / MuteSelf / AFK / Seated / VRMode / Grounded / Viseme / Earmuffs / InStation; /avatar/change 会报头像 id → 我们能据此定位该头像配置并列出「哪些参数会发出来」。端口: VRChat 的 OSC 输出口**固定 9001**(游戏内改不了), 实测当前空闲; 冲突必须检测 + 提示, 不能静默失效。
+- 证据(识别层 ①, 零安装): 本机实测 WinRT SpeechRecognizer 可用, SupportedTopicLanguages 含 **zh-Hans-CN**, 用 zh-Hans-CN **成功创建识别器**且 ContinuousRecognitionSession 可用, 麦克风隐私(桌面应用)为 **Allow** → 「系统听写」这条路 API 链路是通的(精度与断句待实机测)。注意它是**分段出结果**, 不是逐字流式, 对「说一句上屏」够用。
+- 证据(识别层 ②/③): LiveTranslate 复用已查实可行(能选麦克风, 改三处约半天); 自建 Vosk 是 Apache-2.0 ✓ 但**解包 85.9MB** 且中文模型需另行下载(对端网络可能不通)→ 定为后期可选项, 风险已写明。
+- 证据(射线键盘自绘拼音候选): pinyin-pro **MIT** 944KB + @node-rs/jieba **MIT** 11.3MB(带词频)→ **构建期**用两者生成我们自己的「拼音 → 候选 + 词频」紧凑词库(预估 1~3MB), 运行期**零新增依赖**; 候选按「射线能点」设计 + 常用词学习补准确度。
+- **本轮交付的工具**: scripts/dev/osc-monitor.js(不随包出厂 —— pack-exclude 已加 scripts\dev): 监听 9001 → 逐条打印 + ★ 标出可当触发器的内置参数 + 结束汇总(条数 / 变化 / 中位与最小间隔)+ --learn 学习模式(过滤高频噪声)+ --seconds N + --json 落盘; 收到 /avatar/change 会自动去读该头像的 OSC 配置并汇总可用参数。
+- 工具自测(E1): 用合成消息跑通 38 条 —— 内置识别 ✓ / 汇总统计(含中位与最小间隔)✓ / 学习模式过滤高频浮点 ✓ / JSON 落盘 ✓ / 头像配置查询在 id 不存在时优雅降级 ✓。
+- 待用户实机(下次第一件事): 开 VRChat + 游戏内开 OSC → node scripts/dev/osc-monitor.js --learn --seconds 60 --json osc-quest3.json → 期间握拳 / 张开、按语音键、切静音、做两个手势 → 输出给我, 据此定 **Quest 3 预设与真实延迟**; Index 志愿者跑同一份 → 补 Index 预设。
+- 落点: 技术研究 §9(要求拆解 / 触发器 / 识别层 / 拼音候选 / 工具 / 待实机清单 / 一句话结论)+ 主卡新增 §7(结论与下一步)+ scripts/pack-exclude.json 加 scripts\dev。
+- 教训/边界: 这轮**没有再猜设备映射** —— 上一轮我差点把 /input/* 当成"能读手柄按键"(方向搞反), 所以这次凡是"某设备上的某个按键会不会发出来"一律**让工具去测**, 而不是写死在代码里。
+
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1455,5 +1469,6 @@
 | 242 | 2026-09-27 | 记录 1.5 版本主题: 代号「月光」(EME / Moonbounce 意象), 主题 = 直播 / 交流 / 增强 |
 | 243 | 2026-09-27 | 输入法方向修正: 手机方案否决 + 发现"VRChat 回传手势/语音键"可当触发器 + 输入拆成两层 |
 | 244 | 2026-09-27 | 今日收尾 : 彩蛋卡顿**结案** + 硬件加速三档开关 + 1.5 主题记录 + 输入法方向修正(用户"今天先这样吧, 改天继续") |
+| 245 | 2026-09-27 | 输入法可行性确认(用户: Quest 3 为主 + Index 兼容 + 识别层两条都要 + 触发可自定义) —— 结论: 都可行, 并交付 … |
 
 <!-- DEV-NOTES-INDEX:END -->
