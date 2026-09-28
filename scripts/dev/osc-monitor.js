@@ -239,6 +239,26 @@ function printMuteVerdict(msgs) {
     }
   });
   if (lastState === true && lastMs !== null) mutedMs += Math.max(0, endMs - lastMs);   // 收尾时仍处于静音状态
+  // 静音期间各内置参数的活动(2026-09-28 加): 回答「哪些触发器在静音时仍然可用」
+  const others = {};
+  let cur = null, curMs = null;
+  msgs.forEach(function (m) {
+    if (m.addr === '/avatar/parameters/MuteSelf') {
+      if (cur !== null && others[m.addr]) {}
+      cur = String(m.value) === 'true'; curMs = m.ms;
+      return;
+    }
+    if (m.addr.indexOf('/avatar/parameters/') !== 0) return;
+    const nm = m.addr.replace('/avatar/parameters/', '');
+    if (nm === 'Upright' || nm === 'AngularY' || nm.indexOf('Velocity') === 0) return;
+    if (!others[nm]) others[nm] = { on: 0, off: 0 };
+    if (cur === true) others[nm].on++; else if (cur === false) others[nm].off++;
+  });
+  const names = Object.keys(others).filter(function (k) { return others[k].on + others[k].off > 0 && k !== 'Voice'; });
+  if (names.length) {
+    console.log('  静音期间各参数活动(判断哪些触发器静音时还能用):');
+    names.forEach(function (k) { console.log('    ' + k.padEnd(22) + '静音时 ' + String(others[k].on).padStart(4) + ' 次 / 非静音 ' + String(others[k].off).padStart(4) + ' 次' + (others[k].on > 0 ? '  <- 静音时可用 ✓' : '')); });
+  }
   console.log('');
   console.log('=== 静音期间 Voice 行为(这次测试要回答的问题) ===');
   console.log('  MuteSelf 切换 ' + mutes.length + ' 次; 静音累计约 ' + (mutedMs / 1000).toFixed(1) + 's');
