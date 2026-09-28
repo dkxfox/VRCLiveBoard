@@ -159,7 +159,13 @@ class Dictation {
         const grab = function () {
           const lines = self.readLtLines();
           const filter = (opts && typeof opts.filter === 'function') ? opts.filter : null;
-          const kept = filter ? lines.filter(function (l) { return filter(l.atMs, l.text); }) : lines;
+          let kept = filter ? lines.filter(function (l) { return filter(l.atMs, l.text); }) : lines;
+          // 安全阀(2026-09-28 踩过): 过滤后一行不剩时**保留全部** —— 宁可混进别人的话, 也不能让用户"说完什么都没发"。
+          // 触发条件多为"游戏里静音"(VRChat 不上报 Voice/Viseme, 判据天然失效)。
+          if (filter && kept.length === 0 && lines.length > 0) {
+            self.logger.warn('[听写] 按语音活动过滤后为空 -> 保留全部(多半是静音中, 判据不可用)');
+            kept = lines;
+          }
           const dropped = lines.length - kept.length;
           if (dropped > 0) self.logger.info('[听写] 按「我说话的时间段」滤掉 ' + dropped + ' 行(别人的话)');
           self.listening = false;

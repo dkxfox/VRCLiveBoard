@@ -631,7 +631,7 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     // 只保留「我说话时」的转写(2026-09-28 用户反馈: 开着 LiveTranslate 会把环境里别人的话一起带进来)
     fs2.writeFileSync(ltFile, '', 'utf8');
     await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: true, port: 19199, asr: { enabled: true, engine: 'livetranslate', transcriptsDir: ltDir, mineOnly: true } }) });
-    await req('/api/triggers/simulate', { method: 'POST', body: JSON.stringify({ param: 'Voice', value: 0.3 }) });
+    await req('/api/triggers/simulate', { method: 'POST', body: JSON.stringify({ param: 'Voice', value: 0.3 + Math.random() * 0.1 }) });
     await waitMs(250);
     await req('/api/triggers/simulate', { method: 'POST', body: JSON.stringify({ param: 'GestureRight', value: 1 }) });
     await waitMs(250);
@@ -646,7 +646,18 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     const mineHit = ((stMine.transientQueue || []).filter(function (x) { return x.text === '这句是我说的'; })[0]) || null;
     const otherHit = ((stMine.transientQueue || []).filter(function (x) { return x.text && x.text.indexOf('别人说的') >= 0; })[0]) || null;
     ok(!!mineHit && !otherHit, '听写: 只保留我说话时的转写(我的一句在队列=' + !!mineHit + ', 别人那句被滤掉=' + !otherHit + ')');
-    await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: false, asr: { enabled: false } }) });
+
+    // 安全阀(2026-09-28 用户实测踩到): 过滤后一行不剩时必须保留全部 —— 宁可混进别人的话, 也不能"说完什么都没发"
+    fs2.writeFileSync(ltFile, '', 'utf8');
+    await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: true, port: 19199, asr: { enabled: true, engine: 'livetranslate', transcriptsDir: ltDir, mineOnly: true } }) });
+    await req('/api/triggers/simulate', { method: 'POST', body: JSON.stringify({ param: 'GestureRight', value: 1 }) });
+    await waitMs(250);
+    fs2.appendFileSync(ltFile, '[00:00:01] 时间戳远离任何语音窗口的一句\n', 'utf8');   // 必然落在窗口外
+    await req('/api/triggers/simulate', { method: 'POST', body: JSON.stringify({ param: 'GestureRight', value: 0 }) });
+    await waitMs(3300);
+    const stValve = JSON.parse((await req('/api/status')).body.toString('utf8'));
+    const valveHit = ((stValve.transientQueue || []).filter(function (x) { return x.text === '时间戳远离任何语音窗口的一句'; })[0]) || null;
+    ok(!!valveHit, '听写: 过滤后为空 -> 安全阀保留全部(不会再出现\"说完什么都没发\")');    await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: false, asr: { enabled: false } }) });
     await waitMs(600);
     await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: false, asr: { enabled: false } }) });
     await new Promise(function (r) { setTimeout(r, 800); });

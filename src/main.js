@@ -85,6 +85,7 @@ async function main() {
               try {
                 if (asrCfg2.mineOnly === false) return true;
                 if (triggers.mutedDuring(lastTriggerStartAt)) return true;
+                if (!triggers.hasVoiceData()) return true;   // 静音时 VRChat 不上报语音活动, 无从判断 -> 不过滤
                 return triggers.speechWindowsWithin(atMs).length > 0;
               } catch (e) { return true; }
             };
