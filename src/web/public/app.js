@@ -320,6 +320,7 @@ function trigRender(st){
   var el=$('trigStatus'); if(!el) return;
   if(!st||st.ok===false){ el.textContent=(st&&st.error)||tr('saveFail'); return; }
   var h=st.enabled?(st.listening?trigEsc(tr('trigOnAt')+' '+st.port):('⚠ '+trigEsc(st.error||tr('trigErr')))):trigEsc(tr('trigOff'));
+  if(st.port&&Number(st.port)!==9001)h+='<br>⚠ '+trigEsc(tr('trigPortWarn'));
   if(st.muted)h+=' · '+trigEsc(tr('trigMuted'));
   if(st.ptt&&st.ptt.active)h+=' · <b>'+trigEsc(tr('trigListening'))+'</b>';
   if(st.bindings&&st.bindings.start){h+='<br>'+trigEsc(tr('trigBoundStart'))+': '+trigEsc(st.bindings.start.param)+(st.bindings.start.eq!==undefined?(' = '+trigEsc(st.bindings.start.eq)):'');}
@@ -328,8 +329,9 @@ function trigRender(st){
   if(items.length){h+='<br>'+trigEsc(tr('trigLearned'))+': ';items.forEach(function(x){h+='<button class="small gray" data-trigbind="'+trigEsc(x.param)+'" data-trigbindv="'+trigEsc(x.value)+'">'+trigEsc(x.param)+' = '+trigEsc(x.value)+'</button> ';});}
   el.innerHTML=h;
 }
-function trigLoad(){fetch('/api/triggers').then(function(r){return r.json();}).then(function(st){if($('trigOn'))$('trigOn').checked=!!st.enabled;if($('trigPreset')&&st.preset)$('trigPreset').value=st.preset;trigRender(st);}).catch(function(e){apiFail('#trigStatus',e);});}
+function trigLoad(){fetch('/api/triggers').then(function(r){return r.json();}).then(function(st){if($('trigOn'))$('trigOn').checked=!!st.enabled;if($('trigPreset')&&st.preset)$('trigPreset').value=st.preset;if($('trigPort')&&st.port&&document.activeElement!==$('trigPort'))$('trigPort').value=st.port;trigRender(st);}).catch(function(e){apiFail('#trigStatus',e);});}
 if($('trigStatus')){ trigLoad(); setInterval(function(){var tab=$('tab-adv');if(tab&&!tab.hasAttribute('hidden'))trigLoad();},3000); }
+if($('trigPort'))$('trigPort').onchange=function(){var v=Number(this.value);if(!v||v<1024||v>65535){note(tr('saveFail'),'warn');return;}fetch('/api/triggers',{method:'POST',body:JSON.stringify({port:v})}).then(function(r){return r.json();}).then(trigRender).catch(function(e){apiFail('#trigPort',e);});};
 if($('trigOn'))$('trigOn').onchange=function(){var v=this.checked;fetch('/api/triggers',{method:'POST',body:JSON.stringify({enabled:v})}).then(function(r){return r.json();}).then(trigRender).catch(function(e){apiFail('#trigOn',e);});};
 if($('trigPreset'))$('trigPreset').onchange=function(){var v=this.value;fetch('/api/triggers',{method:'POST',body:JSON.stringify({preset:v})}).then(function(r){return r.json();}).then(trigRender).catch(function(e){apiFail('#trigPreset',e);});};
 if($('trigLearn'))$('trigLearn').onclick=function(){fetch('/api/triggers/learn',{method:'POST',body:JSON.stringify({seconds:20})}).then(function(r){return r.json();}).then(function(st){trigRender(st);note(tr('trigLearnHint'),'ok');}).catch(function(e){apiFail('#trigLearn',e);});};
