@@ -8,6 +8,14 @@ const { solveFrame, fitScale } = require('./skeleton');
 const FPS = 30;
 const VMT_DEFAULT_PORT = 39570;
 const TRACKER_COUNT = 11;
+// 只发这几个追踪点(索引见 src/mocap/skeleton.js 的顺序):
+//   0 hip / 1 chest / 7 knee_L / 8 knee_R / 9 foot_L / 10 foot_R
+// 为什么**不发**头部与手臂(2/3/4/5/6): 
+//   · 头由头显提供、手由手柄提供, 再发一份会打架;
+//   · 肘部即使把角色设成 None, VRChat 仍可能按位置把它认领成手臂骨骼 -> 正常追踪器骨骼不匹配时胳膊伸不直
+//     (用户 2026-09-29 实测结论)。**不发**是最彻底的: VMT 不为这些索引创建设备, 从根上不存在冲突。
+// 想恢复某个点: 把它加回这个数组即可(例如将来做手套/手指时)。
+const ACTIVE_POINTS = [0, 1, 7, 8, 9, 10];
 
 function slerp(a, b, t) {
   let d = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
@@ -107,7 +115,7 @@ class MocapPlayer {
     this.holding = true;
     const self = this;
     const pts = this.sampleAt(this.holdAt);
-    this.timer = setInterval(function () { for (let i = 0; i < TRACKER_COUNT; i++) self._send(i, true, pts); }, Math.round(1000 / this.hz));
+    this.timer = setInterval(function () { for (let k = 0; k < ACTIVE_POINTS.length; k++) self._send(ACTIVE_POINTS[k], true, pts); }, Math.round(1000 / this.hz));
     if (this.timer.unref) this.timer.unref();
     this.logger.info('[动作] 已定住(第 ' + this.holdAt + ' 秒的姿态), 追踪点静止 —— 可以去 VRChat 校准全身追踪');
     return { ok: true, holdAt: this.holdAt };
@@ -117,7 +125,7 @@ class MocapPlayer {
     if (sec > this.vmd.durationSec) { this.stop('播放结束'); return false; }
     const pts = this.sampleAt(sec);
     this._lastPts = pts;
-    for (let i = 0; i < TRACKER_COUNT; i++) this._send(i, true, pts);
+    for (let k = 0; k < ACTIVE_POINTS.length; k++) this._send(ACTIVE_POINTS[k], true, pts);
     return true;
   }
   start() {
@@ -142,7 +150,7 @@ class MocapPlayer {
     // 停止时的处理(源码依据: enable 是**设备类型**, 1=Tracker, 0 是非法值):
     // 所以不再发 enable=0, 而是用最后一帧姿态 + enable=1 让追踪点**冻结在原位**, 然后停止发送。
     const last = this._lastPts || this.sampleAt(0);
-    for (let i = 0; i < TRACKER_COUNT; i++) this._send(i, true, last);if (wasPlaying) this.logger.info('[动作] 已停止并关闭追踪点(' + (why || '手动') + ')');
+    for (let k = 0; k < ACTIVE_POINTS.length; k++) this._send(ACTIVE_POINTS[k], true, last);if (wasPlaying) this.logger.info('[动作] 已停止并关闭追踪点(' + (why || '手动') + ')');
     return { ok: true, sent: this.sent };
   }
   status() {
