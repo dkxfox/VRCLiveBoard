@@ -236,7 +236,7 @@ static class VRKeyboard
     [DllImport("openvr_api.dll", CallingConvention = CallingConvention.Cdecl)] static extern bool VR_IsRuntimeInstalled();
     [DllImport("openvr_api.dll", CallingConvention = CallingConvention.Cdecl)] static extern bool VR_IsHmdPresent();
     [DllImport("openvr_api.dll", CallingConvention = CallingConvention.Cdecl)] static extern IntPtr VR_GetStringForHmdError(int eError);
-    [DllImport("openvr_api.dll", CallingConvention = CallingConvention.Cdecl)] static extern IntPtr VROverlay();
+    [DllImport("openvr_api.dll", CallingConvention = CallingConvention.Cdecl)] static extern IntPtr VR_GetGenericInterface(string pchInterfaceVersion, ref int peError);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool SetDllDirectory(string lpPathName);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int CreateOverlayFn(IntPtr self, string key, string name, out ulong handle);
@@ -370,7 +370,12 @@ static class VRKeyboard
         if (!VR_IsRuntimeInstalled()) { Log("[错误] 等了 " + (waited / 1000) + "s 仍找不到 SteamVR 运行时(SteamVR 没装?)"); return 2; }
         if (!VR_IsHmdPresent()) { Log("[错误] 等了 " + (waited / 1000) + "s 仍检测不到头显 —— 先把 SteamVR 跑起来(头显要显示画面)再启动本工具"); return 2; }
         Log("[信息] SteamVR 就绪(等待 " + (waited / 1000) + "s)");
+        ulong handle = 0;
+        IntPtr ov = IntPtr.Zero;
+        try
+        {
         int err = 0;
+        Log("[步骤] VR_InitInternal(AppType=Overlay)…");
         IntPtr ctx = VR_InitInternal(ref err, AppTypeOverlay);
         if (err != 0 || ctx == IntPtr.Zero)
         {
@@ -378,13 +383,26 @@ static class VRKeyboard
             return 2;
         }
         Log("[信息] VR_Init OK");
-        ulong handle = 0;
-        IntPtr ov = VROverlay();
+        Log("[步骤] 取 IVROverlay 接口指针…");
+        // 注意: openvr_api.dll **不导出** VROverlay() —— 那只是官方头文件里的 inline 辅助函数,
+        // 它内部就是调 VR_GetGenericInterface("IVROverlay_0xx")。所以这里直接按版本号取。
+        string usedVer = null;
+        string[] versions = new string[] { "IVROverlay_028", "IVROverlay_027", "IVROverlay_026" };
+        foreach (string ver in versions)
+        {
+            int ge = 0;
+            IntPtr cand = VR_GetGenericInterface(ver, ref ge);
+            Log("[步骤] VR_GetGenericInterface(" + ver + ") = 0x" + cand.ToInt64().ToString("X") + " err=" + ge);
+            if (cand != IntPtr.Zero && ge == 0) { ov = cand; usedVer = ver; break; }
+        }
+        if (ov != IntPtr.Zero) Log("[信息] 接口版本 " + usedVer + "(vtable 下标按官方 master 头文件=028 排的, 版本不符就可能调错函数)");
+        else Log("[警告] 只接受 028(其它版本的 vtable 布局不同, 用错下标会调错函数)");
+                if (ov == IntPtr.Zero) { Log("[错误] 拿不到 IVROverlay 接口指针(SteamVR 运行时没就绪?) —— 到此为止"); VR_ShutdownInternal(); return 2; }
         CreateOverlayFn create = Vt<CreateOverlayFn>(ov, 1);
+        Log("[步骤] 调用 CreateOverlay(" + OverlayKey + ")…");
         int e = create(ov, OverlayKey, OverlayName, out handle);
         Log("[信息] CreateOverlay -> " + e + (e == 0 ? "" : " (非 0 即失败)") + ", handle=" + handle);
         if (e != 0) { VR_ShutdownInternal(); return 2; }
-        try
         {
             Log("[信息] SetOverlayFlag(可交互) -> " + Vt<SetOverlayFlagFn>(ov, 11)(ov, handle, (int)FlagInteractive, true));
             Log("[信息] SetOverlayAlpha -> " + Vt<SetOverlayAlphaFn>(ov, 16)(ov, handle, 1f));
@@ -455,15 +473,20 @@ static class VRKeyboard
                 }
             }
         }
+        // (旧 catch 已合并到下面那个带堆栈的)
+        }
         catch (Exception ex)
         {
-            Log("[异常] " + ex.GetType().Name + ": " + ex.Message);
+            Log("[异常] " + ex.GetType().FullName + " :: " + ex.Message);
+            Log("[异常] 堆栈: " + (ex.StackTrace == null ? "(无)" : ex.StackTrace.Replace(Environment.NewLine, " | ")));
+            try { VR_ShutdownInternal(); } catch (Exception) { }
+            Log("=== 异常退出 ===");
             return 3;
         }
         finally
         {
-            try { if (handle != 0) Vt<DestroyOverlayFn>(VROverlay(), 3)(VROverlay(), handle); } catch (Exception) { }
-            VR_ShutdownInternal();
+            try { if (handle != 0) Vt<DestroyOverlayFn>(ov, 3)(ov, handle); } catch (Exception) { }
+            try { VR_ShutdownInternal(); } catch (Exception) { }
             Log("=== 已退出 ===");
         }
         return 0;
