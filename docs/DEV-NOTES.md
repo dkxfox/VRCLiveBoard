@@ -1868,6 +1868,16 @@
 - 真实动作(自制 2 分钟)准备流程: `已准备: 120.0 秒 / 12020 关键帧 / 11 追踪点 / 60Hz -> 127.0.0.1:39570`; 第 60 秒采样: hip 0.90m / chest 1.05m / head 1.55m(1.55m 身高, 脚在地面)合理 ✓。
 - **两个必须写明的近似**(免得以后当成 bug): ① VMD 只有骨骼关键帧, **没有骨骼长度/层级**(那些在 PMX 里)-> 用标准 MMD 骨架比例近似; ② 为此加了**自动归一化**(按头顶到脚底≈1.55m 缩放 + 最低脚底平移到 y=0), 保证结果稳定可读。将来若用户愿意提供 PMX, 可用真实骨架替换比例。
 - 追踪点顺序(供用户在 VMT 管理器里做 index 映射): **0 hip / 1 chest / 2 head / 3 hand_L / 4 hand_R / 5 elbow_L / 6 elbow_R / 7 knee_L / 8 knee_R / 9 foot_L / 10 foot_R**。
+
+## 293. **更正**: 不需要把 Virtual Desktop 切到 SteamVR —— VDXR 与 VRChat 无关(用户指正, 2026-09-29)
+- 用户指正: 「Virtual Desktop 应该不用切到 SteamVR 吧? 我的 VD 只负责串流视频, VR 环境还是 SteamVR 负责的。」
+- **用户是对的, 我上一轮的判断错了**(292 条里我写了"必须切到 SteamVR, 不能走 VDXR")。查证:
+  · **VDXR 是一个 OpenXR 运行时**, 它的宣传语就是"bypasses SteamVR" —— 但它**只对 OpenXR 应用生效**(Khronos 新闻标题: Virtual Desktop's New OpenXR Runtime **Bypasses SteamVR** To Boost Performance);
+  · **VRChat 是 OpenVR 应用**(PC VR 走 SteamVR; 在 Linux 上也是靠 OpenComposite 把 OpenVR 翻译到 OpenXR 才能跑 Monado) -> **registry 里的 OpenXR ActiveRuntime 与它无关**;
+  · **本机证据(最硬)**: 我们做覆盖层测试时 `vrserver.exe` 正在运行(16:08 启动), 而用户当时就在玩 VRChat -> 说明他的 VRChat 会话**确实经过 SteamVR**。
+- 结论: **VMT(SteamVR 驱动)在用户的现有配置下可以直接工作**; 真机前置只需: 装 VMT + VRChat 以 VR 模式启动 + VMT 管理器里按 index 映射身体部位 + OSC 开启。
+- 我的错误原因(值得记): 我看到注册表里 ActiveRuntime=VDXR, 就**从"当前 OpenXR 运行时"推断出"SteamVR 不参与"** —— 但那是**两个不同层面**(OpenXR 运行时 vs OpenVR 运行时), 而且**应用用哪条路才决定**。我该先问"你平时怎么启动 VRChat", 而不是替用户重配环境。
+- 卡片 §6.6 已就地更正; 这一条单独留档, 不删错误结论, 便于以后回溯。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -2060,5 +2070,6 @@
 | 290 | 2026-09-29 | 路线 B 第一刀开工: VMD 解析器(零依赖, 合成样本 8 项断言全过) + VMT 接口查清 |
 | 291 | 2026-09-29 | 自制测试动作(2 分钟) + 解析器支持 Shift-JIS 骨骼名 |
 | 292 | 2026-09-29 | 路线 B 管线打通: VMD -> 11 点追踪姿态 -> 60Hz /VMT/Room/Unity, 真 UDP 抓包 8 项全过 |
+| 293 | 2026-09-29 | **更正**: 不需要把 Virtual Desktop 切到 SteamVR —— VDXR 与 VRChat 无关(用户指正, 2026-… |
 
 <!-- DEV-NOTES-INDEX:END -->
