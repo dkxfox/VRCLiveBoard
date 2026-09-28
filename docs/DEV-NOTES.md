@@ -1502,6 +1502,16 @@
 - 自检(`--selftest`, 不需要 VR)全绿: 30 个键**逐个命中测试 30/30** / 渲染 31KB / 打字 `nihao` / 退格 / 发送路径 / 空输入不发送; 编译零错误零警告; 预览图留档 `docs/FEATURES/assets/vrkeyboard-preview.png`。
 - 踩坑: ① `.bat` 里写中文 → cmd 直接报错(`—— 不是内部命令`), 且项目规矩本来就是 **.bat 只准 ASCII/GBK** → 改英文注释; ② `.bat` 必须是 **CRLF** 换行, LF-only 会让 cmd 报 `. was unexpected at this time`; ③ 我的 C# 字符串里出现了单反斜杠路径 → `CS1009 无法识别的转义序列` → 干脆改成不含反斜杠的描述。
 - 本步**不含**: 中文输入法接入(P2, 引擎已就绪见 261)、九键(P3)、短语表(P4)、面板位置记忆/跟随视角。VR 侧实机验证需要用户跑 `out\\vrkeyboard.exe --run`(我这边没有头显, 只能保证自检与渲染)。
+
+## 263. 发布包体积基线更新(人工复核后) —— 新增: 输入法词库/引擎/动作输出(2026-09-29)
+- 起因: 给 `pack-exclude` 加了 `scripts\vrkeyboard`(VR 覆盖层键盘, 按 D1 决定**不进主体包**)后跑 `make-dist.ps1`, G-PACK **FAIL**: 条目/体积与基线不符(Desktop 1352→1465 条, Lite 175→183 条)。
+- 复核(逐项看 zip 内容, 不看数字看**东西**):
+  · 增量全部来自 2026-09-27 之后的新功能 —— 输入触发器(`src/triggers.js`)、听写(`src/dictation.js` + `src/helpers/dictation.ps1`)、动作输出(`src/actions.js`)、内置输入法(`src/pinyin.js` + `src/data/pinyin-dict.json`, **1.4MB 是 Desktop 体积增量的主体**)、以及配套门禁与文档;
+  · 安全面全部干净: 机密扫描 CLEAN / 无 `.bak` / 无 `logs/` / 无 `node_modules` / `config.json` 本体未进包(命中的是 `config.default.json`);
+  · **VR 覆盖层键盘确认不进包**: zip 里 `vrkeyboard` 命中 **0 条** —— 打包排除生效;
+  · `scripts/` 里 11 个条目是既有设计(backup / ensure-deps / install-electron / make-dist / launcher 源码等, 与本次新增的 `build-pinyin-dict.js` 同类, 属「随包构建工具」), 保持现状。
+- 处置: 按 PROCESS-03 的要求**人工复核后**更新 `docs/SECURITY-BASELINE.json` 的 `zipVolumes`(并把复核结论写进 `asOf` 字段, 便于下次追溯) → 重跑 `pack-audit.js`: **两个包都 PASS**(Lite 183 条/8.78MB, Desktop 1465 条/214.11MB)。
+- 教训: 门禁拦下来时, 第一反应不该是「改数字」, 而是先**逐项核对内容**(这次核对了 6 类不该进包的东西 + 顶层目录分布), 确认干净再更新基线; 生成物(1.4MB 词库)进包属于「发布变化」, 不是噪音。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1664,5 +1674,6 @@
 | 260 | 2026-09-28 | 动作输出(反向 OSC)切片 1 落地: 双向信号层的"写"这一半 |
 | 261 | 2026-09-29 | 「我的输入法呢?」—— 内置输入法引擎先落地(词库 + 拼音引擎 + 零级接口) |
 | 262 | 2026-09-29 | 覆盖层键盘 P1 第 1 步落地: 渲染 + 射线命中 + 发送链路 |
+| 263 | 2026-09-29 | 发布包体积基线更新(人工复核后) —— 新增: 输入法词库/引擎/动作输出 |
 
 <!-- DEV-NOTES-INDEX:END -->
