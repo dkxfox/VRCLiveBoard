@@ -548,6 +548,35 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     const hw3 = JSON.parse((await req('/api/desktop/hw-accel', { method: 'POST', body: JSON.stringify({ mode: 'bogus' }) })).body.toString('utf8'));
     ok(!!(hw3.ok === false), '硬件加速: 非法档位被拒绝');
     await req('/api/desktop/hw-accel', { method: 'POST', body: JSON.stringify({ mode: 'auto' }) });   // 复原, 免得影响后续用例
+    // 输入触发器(M-20260928-01, F-20260925-02 切片 1): 只监听 -> PTT 状态机 -> 学习模式; 用 19199 避开 VRChat 的 9001
+    const tg0 = JSON.parse((await req('/api/triggers')).body.toString('utf8'));
+    ok(!!(tg0.ok === true && tg0.enabled === false), '触发器: 默认关闭(enabled=' + (tg0 && tg0.enabled) + ')');
+    const tg1 = JSON.parse((await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: true, port: 19199, preset: 'quest3' }) })).body.toString('utf8'));
+    ok(!!(tg1.ok === true && tg1.listening === true && tg1.port === 19199), '触发器: 启用后监听 19199(listening=' + (tg1 && tg1.listening) + ')');
+    try {
+      const { UDPPort } = require('osc');
+      const up = new UDPPort({ remoteAddress: '127.0.0.1', remotePort: 19199 });
+      up.open();
+      await new Promise(function (r) { setTimeout(r, 250); });
+      up.send({ address: '/avatar/parameters/GestureRight', args: [{ type: 'i', value: 1 }] });
+      await new Promise(function (r) { setTimeout(r, 350); });
+      const tg2 = JSON.parse((await req('/api/triggers')).body.toString('utf8'));
+      ok(!!(tg2.ptt && tg2.ptt.active === true), '触发器: 收到真实 OSC 包 -> PTT 激活');
+      up.send({ address: '/avatar/parameters/GestureRight', args: [{ type: 'i', value: 0 }] });
+      await new Promise(function (r) { setTimeout(r, 350); });
+      up.send({ address: '/avatar/parameters/Upright', args: [{ type: 'f', value: 0.5 }] });
+      await new Promise(function (r) { setTimeout(r, 300); });
+      const tg3 = JSON.parse((await req('/api/triggers')).body.toString('utf8'));
+      ok(!!(tg3.ptt.active === false && tg3.stats.send === 1), '触发器: 松开 -> 发送, 噪声参数不计数(send=' + (tg3.stats && tg3.stats.send) + ')');
+      try { up.close(); } catch (e) {}
+    } catch (e) { ok(false, '触发器: UDP 用例异常 ' + e.message); }
+    await req('/api/triggers/learn', { method: 'POST', body: JSON.stringify({ seconds: 5 }) });
+    await req('/api/triggers/simulate', { method: 'POST', body: JSON.stringify({ param: 'GestureLeft', value: 4 }) });
+    await req('/api/triggers/simulate', { method: 'POST', body: JSON.stringify({ param: 'Upright', value: 1 }) });
+    const tg4 = JSON.parse((await req('/api/triggers')).body.toString('utf8'));
+    ok(!!(tg4.learn && tg4.learn.items.length === 1 && tg4.learn.items[0].param === 'GestureLeft'), '触发器: 学习模式收手势、滤噪声(' + JSON.stringify(((tg4.learn && tg4.learn.items) || []).map(function (x) { return x.param; })) + ')');
+    const tg5 = JSON.parse((await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: false }) })).body.toString('utf8'));
+    ok(!!(tg5.listening === false), '触发器: 关闭后停止监听');
     await req('/api/config', { method: 'POST', body: JSON.stringify({ specialEvents: [] }) });
   } catch (e) { ok(false, '启动彩蛋判定用例异常: ' + e.message); }
 

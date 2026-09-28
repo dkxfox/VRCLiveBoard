@@ -147,5 +147,18 @@
                 "videoMute":  false,
                 "played":  {
                            }
-            }
+            },
+    "triggers":  {
+                     "enabled":  false,
+                     "port":  9001,
+                     "preset":  "quest3",
+                     "mode":  "gesture",
+                     "pauseOnMute":  true,
+                     "maxMs":  30000,
+                     "bindings":  {
+                                      "start":  { "param":  "GestureRight", "eq":  1 },
+                                      "cancel":  { "param":  "GestureLeft", "eq":  1 }
+                                  },
+                     "vad":  { "param":  "Voice", "gte":  0.02, "silenceMs":  400 }
+                 }
 }

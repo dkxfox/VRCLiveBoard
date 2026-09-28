@@ -18,6 +18,7 @@ const market = require('../market');   // 插件市场客户端(M-20260911-51)
 
 function createServer(opts) {
   const composer = opts.composer;
+  const triggerEngine = opts.triggers || null;   // 输入触发器(M-20260928-01); 未注入时相关接口如实报不可用
   const logger = opts.logger;
   const webCfg = opts.web;
   const rootConfig = opts.config;
@@ -1136,6 +1137,45 @@ function effPluginSec() {
         const o = JSON.parse(body || '{}');
         if (o && o.arm) return json(res, 200, d.arm(o.arm));   // 手动续航: POST {"arm":300}
         return json(res, 200, d.clientReport(o));
+      } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
+    });
+  });
+  // ===== 输入触发器(M-20260928-01, F-20260925-02 切片 1) =====
+  // 只监听 VRChat 回传的 OSC 参数(不发送任何东西), 把「握拳/松开」这类动作变成 开始说话/发送/取消。
+  on('GET', '/api/triggers', function (req, res, url) {
+    if (!triggerEngine) return json(res, 200, { ok: false, error: '触发器模块不可用(非标准启动)' });
+    return json(res, 200, Object.assign({ ok: true }, triggerEngine.status()));
+  });
+  on('POST', '/api/triggers', function (req, res, url) {
+    return readBody(req, function (body) {
+      if (!triggerEngine) return json(res, 200, { ok: false, error: '触发器模块不可用(非标准启动)' });
+      try {
+        const o = JSON.parse(body || '{}');
+        const st = triggerEngine.apply(o);
+        rootConfig.triggers = Object.assign({}, rootConfig.triggers || {}, o);   // 只并入用户给的键, 保留其它
+        persist();
+        return json(res, 200, Object.assign({ ok: true }, st));
+      } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
+    });
+  });
+  on('POST', '/api/triggers/learn', function (req, res, url) {
+    return readBody(req, function (body) {
+      if (!triggerEngine) return json(res, 200, { ok: false, error: '触发器模块不可用(非标准启动)' });
+      try {
+        const o = JSON.parse(body || '{}');
+        const st = o.stop ? triggerEngine.learnStop() : triggerEngine.learnStart(o.seconds);
+        return json(res, 200, Object.assign({ ok: true }, st));
+      } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
+    });
+  });
+  // 自测入口: 不走网络直接喂一条参数变化(控制台"测试一次"按钮用; 只在本机可达)
+  on('POST', '/api/triggers/simulate', function (req, res, url) {
+    return readBody(req, function (body) {
+      if (!triggerEngine) return json(res, 200, { ok: false, error: '触发器模块不可用(非标准启动)' });
+      try {
+        const o = JSON.parse(body || '{}');
+        if (!o.param) return json(res, 400, { ok: false, error: 'param 为空' });
+        return json(res, 200, Object.assign({ ok: true }, triggerEngine.inject(o.param, o.value)));
       } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
     });
   });

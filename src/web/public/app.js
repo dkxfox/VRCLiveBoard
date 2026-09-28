@@ -313,6 +313,27 @@ if($('advConsole')){(async function(){try{var c=await (await fetch('/api/config'
 // 硬件加速三档(M-20260927-10, 用户要求): 双显卡机器上 Chromium 硬解会出现"帧呈现跟不上"的周期性卡顿,
 // 以前只能手改 config.json —— 现在设置里就能改, 改完提示重启。
 if($('advHwAccel')){(async function(){try{var c=await (await fetch('/api/config')).json();$('advHwAccel').value=(((c.desktop||{}).hardwareAcceleration)||'auto');}catch(e){apiFail('#advHwAccel',e);}})();$('advHwAccel').onchange=async function(){var sel=this;try{var j=await (await fetch('/api/desktop/hw-accel',{method:'POST',body:JSON.stringify({mode:sel.value})})).json();note(j&&j.ok?tr('hwSaved'):tr('saveFail'),j&&j.ok?'ok':'warn');if(!(j&&j.ok)){var c2=await (await fetch('/api/config')).json();sel.value=(((c2.desktop||{}).hardwareAcceleration)||'auto');}}catch(e){apiFail('#advHwAccel',e);}};}
+// 输入触发器(M-20260928-01, F-20260925-02 切片 1): 开关 / 预设 / 学习绑定 —— 学习到的参数点一下就绑成"开始说话"。
+// 数据来源是 VRChat 回传的 OSC 参数(/avatar/parameters/*), 我们只监听, 不向游戏发送任何东西。
+function trigEsc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function trigRender(st){
+  var el=$('trigStatus'); if(!el) return;
+  if(!st||st.ok===false){ el.textContent=(st&&st.error)||tr('saveFail'); return; }
+  var h=st.enabled?(st.listening?trigEsc(tr('trigOnAt')+' '+st.port):('⚠ '+trigEsc(st.error||tr('trigErr')))):trigEsc(tr('trigOff'));
+  if(st.muted)h+=' · '+trigEsc(tr('trigMuted'));
+  if(st.ptt&&st.ptt.active)h+=' · <b>'+trigEsc(tr('trigListening'))+'</b>';
+  if(st.bindings&&st.bindings.start){h+='<br>'+trigEsc(tr('trigBoundStart'))+': '+trigEsc(st.bindings.start.param)+(st.bindings.start.eq!==undefined?(' = '+trigEsc(st.bindings.start.eq)):'');}
+  if(st.learn&&st.learn.on)h+='<br>'+trigEsc(tr('trigLearnHint'))+' ('+Math.round((st.learn.remainingMs||0)/1000)+'s)';
+  var items=(st.learn&&st.learn.items)||[];
+  if(items.length){h+='<br>'+trigEsc(tr('trigLearned'))+': ';items.forEach(function(x){h+='<button class="small gray" data-trigbind="'+trigEsc(x.param)+'" data-trigbindv="'+trigEsc(x.value)+'">'+trigEsc(x.param)+' = '+trigEsc(x.value)+'</button> ';});}
+  el.innerHTML=h;
+}
+function trigLoad(){fetch('/api/triggers').then(function(r){return r.json();}).then(function(st){if($('trigOn'))$('trigOn').checked=!!st.enabled;if($('trigPreset')&&st.preset)$('trigPreset').value=st.preset;trigRender(st);}).catch(function(e){apiFail('#trigStatus',e);});}
+if($('trigStatus')){ trigLoad(); setInterval(function(){var tab=$('tab-adv');if(tab&&!tab.hasAttribute('hidden'))trigLoad();},3000); }
+if($('trigOn'))$('trigOn').onchange=function(){var v=this.checked;fetch('/api/triggers',{method:'POST',body:JSON.stringify({enabled:v})}).then(function(r){return r.json();}).then(trigRender).catch(function(e){apiFail('#trigOn',e);});};
+if($('trigPreset'))$('trigPreset').onchange=function(){var v=this.value;fetch('/api/triggers',{method:'POST',body:JSON.stringify({preset:v})}).then(function(r){return r.json();}).then(trigRender).catch(function(e){apiFail('#trigPreset',e);});};
+if($('trigLearn'))$('trigLearn').onclick=function(){fetch('/api/triggers/learn',{method:'POST',body:JSON.stringify({seconds:20})}).then(function(r){return r.json();}).then(function(st){trigRender(st);note(tr('trigLearnHint'),'ok');}).catch(function(e){apiFail('#trigLearn',e);});};
+if($('trigStatus'))$('trigStatus').onclick=function(ev){var b=(ev.target&&ev.target.closest)?ev.target.closest('[data-trigbind]'):null;if(!b)return;var p=b.getAttribute('data-trigbind');var raw=b.getAttribute('data-trigbindv');var v=(raw==='true')?true:(raw==='false')?false:(isNaN(Number(raw))?raw:Number(raw));fetch('/api/triggers',{method:'POST',body:JSON.stringify({bindings:{start:{param:p,eq:v}}})}).then(function(r){return r.json();}).then(function(st){trigRender(st);note(tr('trigBoundOk'),'ok');}).catch(function(e){apiFail('#trigStatus',e);});};
 if($('oscPort')){(async function(){try{var c2=await (await fetch('/api/config')).json();$('oscPort').value=(c2.osc&&c2.osc.port)||9000;}catch(e){apiFail('#oscPort',e);}})();$('oscApply').onclick=async function(){try{await fetch('/api/ports/osc',{method:'POST',body:JSON.stringify({port:Number($('oscPort').value)||9000})});note(tr('portApplied'),'ok');}catch(e){note(tr('applyFail'),'warn');}};}
 if($('devdocsBtn'))$('devdocsBtn').onclick=function(){fetch('/api/devdocs/open',{method:'POST',body:'{}'});};
 if($('quitBtn'))$('quitBtn').onclick=function(){if(confirm(tr('quitConfirmShort')))fetch('/api/desktop/quit',{method:'POST',body:'{}'});};

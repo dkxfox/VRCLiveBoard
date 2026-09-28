@@ -48,6 +48,30 @@
       "note": "页面端把 <video> 卡顿事件与 rAF 掉帧送回来(同上); 只写内存会话, 不落盘、不影响播放"
     },
     {
+      "m": "GET",
+      "p": "/api/triggers",
+      "level": 0,
+      "note": "输入触发器状态(M-20260928-01, F-20260925-02 切片 1): 是否监听/端口/绑定/当前参数值/PTT 状态/学习模式候选。只读, 不含凭据"
+    },
+    {
+      "m": "POST",
+      "p": "/api/triggers",
+      "level": 0,
+      "note": "启用/停用触发器、切预设、改绑定(热生效 + persist); 只影响本机监听与绑定, 不向游戏发送任何 OSC"
+    },
+    {
+      "m": "POST",
+      "p": "/api/triggers/learn",
+      "level": 0,
+      "note": "学习模式: {seconds} 开始记录「真正变化过」的 OSC 参数(过滤 Upright 等高频噪声), {stop:true} 结束; 用于把绑定交给用户自己教"
+    },
+    {
+      "m": "POST",
+      "p": "/api/triggers/simulate",
+      "level": 0,
+      "note": "自测入口: 不走网络直接喂一条参数变化({param,value}), 供控制台测试与门禁断言用; 不发送任何 OSC"
+    },
+    {
       "m": "POST",
       "p": "/api/capture/set",
       "level": 0

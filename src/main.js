@@ -54,6 +54,22 @@ async function main() {
   config.chatbox.swearFilter = config.chatbox.swearFilter || { enabled: true, words: null };
   const composer = new Composer({ osc: osc, logger: logger, swearFilter: config.chatbox.swearFilter, maxChars: config.chatbox.maxChars, minSendIntervalMs: config.osc.minSendIntervalMs });
 
+  // 输入触发器(M-20260928-01, F-20260925-02 切片 1): 把 VRChat 回传的 /avatar/parameters/* 变成「开始说话/发送/取消」。
+  // 本切片只做到"状态机 + 可见反馈"(/chatbox/typing); 识别层(系统听写/ASR)在切片 2 接入。
+  const { TriggerEngine } = require('./triggers');
+  const triggers = new TriggerEngine({
+    logger: logger,
+    config: config.triggers,
+    onEvent: function (ev) {
+      try {
+        if (ev.type === 'start') { logger.info('[触发器] 开始说话(' + (ev.param || '?') + ')'); osc.sendTyping(true); }
+        else if (ev.type === 'send') { logger.info('[触发器] 说完/发送'); osc.sendTyping(false); }
+        else if (ev.type === 'cancel') { logger.info('[触发器] 取消' + (ev.reason ? ('(' + ev.reason + ')') : '')); osc.sendTyping(false); }
+      } catch (e) { logger.warn('[触发器] 反馈失败: ' + e.message); }
+    }
+  });
+  triggers.sync();
+
   const ivVrc = setInterval(function () {
     const st = getVrcStatus();
     composer.vrcOn = !!(st.running && st.oscEnabled);
@@ -101,7 +117,7 @@ async function main() {
     if (!r.ok) logger.warn('[插件] 自动启用失败 ' + id + ': ' + r.error);
   }
 
-  const web = createServer({ web: config.web, config: config, configPath: configPath, composer: composer, logger: logger, projectDir: projectDir, pluginManager: pluginManager, osc: osc, onQuit: function () { shutdown('控制台退出'); }, onRestart: function (proceed) { shutdown('控制台重启', proceed); } });
+  const web = createServer({ web: config.web, config: config, configPath: configPath, composer: composer, logger: logger, projectDir: projectDir, pluginManager: pluginManager, osc: osc, triggers: triggers, onQuit: function () { shutdown('控制台退出'); }, onRestart: function (proceed) { shutdown('控制台重启', proceed); } });
   const consolePort = await web.start();
   // 桌面壳必须知道**实际**端口: 19190 被占时上面会回退, 写死 URL 就会白屏(M-20260911-08)
   process.env.VRCB_CONSOLE_PORT = String(consolePort);
@@ -131,6 +147,7 @@ async function main() {
     try { clearInterval(ivVrc); } catch (e) {}
     try { clearInterval(ivVars); } catch (e) {}
     try { composer.stop(); } catch (e) {}
+    try { triggers.close(); } catch (e) {}
     try { if (mediaSource && mediaSource.stop) mediaSource.stop(); } catch (e) {}
     try { require('./capturehost').stopCaptureHost(); } catch (e) {}
     try { if (web && web.stop) await Promise.race([web.stop(), new Promise(function (r) { setTimeout(r, 1500); })]); } catch (e) {}

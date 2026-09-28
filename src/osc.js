@@ -28,6 +28,8 @@ class OscSender {
     // b=TRUE 直接显示不弹输入框; n=FALSE 不触发通知音效(更无感)
     return this.send('/chatbox/input', [{ type: 's', value: text }, { type: 'T', value: true }, { type: 'F', value: false }]);
   }
+  // 打字中指示(/chatbox/typing): 触发器"开始说话/取消"时给 VRChat 一个可见反馈(M-20260928-01)
+  sendTyping(on) { return this.send('/chatbox/typing', [{ type: (on ? 'T' : 'F'), value: !!on }]); }
   close() { if (this.sock) { try { this.sock.close(); } catch (e) {} } }
   // 热切换远端地址/端口: 重开 UDP 套接字, 无需重启程序
   setRemote(host, port) {
