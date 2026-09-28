@@ -50,3 +50,12 @@ Lite 包不带 electron(需系统 Node 22+), 其余依赖由 npm 按需安装, �
 4. 插件的 `vendor/` 若引入第三方库, **同一目录树的插件根**必须带 `LICENSE-<许可>.txt` + `THIRD-PARTY-NOTICE.txt`(见第 2 节做法; 根目录放 txt 不会扰动攻击面/产物基线)。
 5. **市场发布也受同一份禁入名单约束**: `make-market.js` 现在会跳过命中 `pack-exclude.json` 的 `forbiddenNamePatterns` 的插件 id("不进包的东西也不进市场"); 2026-09-27 修之前, 三个开发夹具曾被误当成官方插件写进市场索引。
 6. 本文件不替代 `docs/SECURITY-BASELINE.json`(机器基线); 两者合起来才是"依赖 + 许可证"的完整面。
+
+## 开发依赖(只在**构建期**使用, 不随发布包分发)
+
+| 名称 | 许可 | 用途 | 影响范围 |
+| --- | --- | --- | --- |
+| **@node-rs/jieba** | MIT | 生成内置输入法词库时提供中文词表与**词频**(dict.txt) | 只在 scripts/build-pinyin-dict.js 跑的时候用; **不进发布包**; 产物 src/data/pinyin-dict.json 是词频统计结果(非代码), 来源已写进该文件的 meta.sources |
+| **pinyin-pro** | MIT | 同上, 给词表注音(词组级多音字) | 同上 |
+
+> 说明: 两个包由 npm i -D 安装, 发布包里没有它们; 词库文件是按词频排序的「词 + 拼音」数据, 随程序分发。

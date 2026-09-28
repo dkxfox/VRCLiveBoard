@@ -20,7 +20,8 @@ function createServer(opts) {
   const composer = opts.composer;
   const triggerEngine = opts.triggers || null;   // 输入触发器(M-20260928-01); 未注入时相关接口如实报不可用
   const dictation = opts.dictation || null;
-  const actionSender = opts.actions || null;   // 动作输出(F-20260928-01); 未注入时接口如实报不可用      // 语音听写(切片 2); 未注入或未启用时如实报不可用
+  const actionSender = opts.actions || null;
+  const ime = opts.ime || null;   // 内置输入法引擎(F-20260925-02 P2-a)   // 动作输出(F-20260928-01); 未注入时接口如实报不可用      // 语音听写(切片 2); 未注入或未启用时如实报不可用
   const logger = opts.logger;
   const webCfg = opts.web;
   const rootConfig = opts.config;
@@ -1193,6 +1194,26 @@ function effPluginSec() {
   });
   // ===== 动作输出(反向 OSC, F-20260928-01 切片 1)=====
   // 只驱动本机玩家; 默认关闭, 外部软件调用还要单独开 allowLocalApi; 轴/按钮一律自动复位。
+  // ===== 内置输入法(拼音 -> 候选词, F-20260925-02 P2-a)=====
+  // 零级: 只本机; 覆盖层键盘与网页都调它, 候选排序统一在这里, 不依赖系统输入法。
+  on('GET', '/api/pinyin', function (req, res, url) {
+    if (!ime) return json(res, 200, { ok: false, error: '输入法引擎不可用(非标准启动)' });
+    try {
+      const keys = url.searchParams.get('keys') || '';
+      const n = Number(url.searchParams.get('n') || 7);
+      return json(res, 200, { ok: true, keys: keys, candidates: ime.candidates(keys, n) });
+    } catch (e) { return json(res, 500, { ok: false, error: String(e.message) }); }
+  });
+  on('POST', '/api/pinyin/learn', function (req, res, url) {
+    return readBody(req, function (body) {
+      if (!ime) return json(res, 200, { ok: false, error: '输入法引擎不可用(非标准启动)' });
+      try {
+        const o = JSON.parse(body || '{}');
+        const r = ime.learn(o.word);
+        return json(res, r.ok ? 200 : 400, r);
+      } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
+    });
+  });
   on('GET', '/api/actions', function (req, res, url) {
     if (!actionSender) return json(res, 200, { ok: false, error: '动作模块不可用(非标准启动)' });
     return json(res, 200, Object.assign({ ok: true }, actionSender.status()));

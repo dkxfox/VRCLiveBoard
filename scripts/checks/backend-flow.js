@@ -687,11 +687,26 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     await req('/api/config', { method: 'POST', body: JSON.stringify({ actions: { enabled: false, allowLocalApi: false } }) });
     const ac6 = JSON.parse((await req('/api/actions')).body.toString('utf8'));
     ok(!!(ac6.enabled === false && ac6.held.length === 0), '动作输出: 关闭后无残留按下');
+    // 内置输入法(F-20260925-02 P2-a): 拼音 -> 候选词; 词库由 jieba 词频 + pinyin-pro 注音在构建期生成
+    const py1 = JSON.parse((await req('/api/pinyin?keys=nihao&n=7')).body.toString('utf8'));
+    ok(!!(py1.ok === true && py1.candidates && py1.candidates.length > 0 && py1.candidates[0].w === '你好'), '输入法: nihao -> 首选「你好」(' + JSON.stringify(py1).slice(0, 120) + ')');
+    const py2 = JSON.parse((await req('/api/pinyin?keys=jianpan&n=5')).body.toString('utf8'));
+    ok(!!(py2.candidates && py2.candidates[0] && py2.candidates[0].w === '键盘'), '输入法: jianpan -> 首选「键盘」(' + ((py2.candidates || [])[0] || {}).w + ')');
+    const py3 = JSON.parse((await req('/api/pinyin?keys=wm&n=5')).body.toString('utf8'));
+    ok(!!(py3.candidates && py3.candidates[0] && py3.candidates[0].w === '我们'), '输入法: 简拼 wm -> 首选「我们」(' + ((py3.candidates || [])[0] || {}).w + ')');
+    const py4 = JSON.parse((await req('/api/pinyin?keys=&n=5')).body.toString('utf8'));
+    ok(!!(py4.ok === true && py4.candidates && py4.candidates.length === 0), '输入法: 空输入 -> 空候选(不报错)');
+    const py5 = JSON.parse((await req('/api/pinyin?keys=qqqqzz&n=5')).body.toString('utf8'));
+    ok(!!(py5.candidates && py5.candidates.length === 0), '输入法: 打不出来 -> 空候选(不报错)');
+    const py6 = JSON.parse((await req('/api/pinyin/learn', { method: 'POST', body: JSON.stringify({ word: '键盘' }) })).body.toString('utf8'));
+    ok(!!(py6.ok === true && py6.count >= 1), '输入法: 记住选过的词(learn -> count=' + py6.count + ')');
+    const py7 = JSON.parse((await req('/api/pinyin?keys=jianpan&n=3')).body.toString('utf8'));
+    ok(!!(py7.candidates && py7.candidates[0] && py7.candidates[0].w === '键盘'), '输入法: 学过的词仍然排第一(不倒退)');
     await waitMs(600);
     await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: false, asr: { enabled: false } }) });
     await new Promise(function (r) { setTimeout(r, 800); });
     await req('/api/config', { method: 'POST', body: JSON.stringify({ specialEvents: [] }) });
-  } catch (e) { ok(false, '启动彩蛋判定用例异常: ' + e.message); }
+  } catch (e) { ok(false, '启动彩蛋判定用例异常: ' + e.message + ' @ ' + String(e.stack || '').split(String.fromCharCode(10))[1]); }
 
   console.log('[backend-flow] pass=' + pass + ' fail=' + fail + (skip ? (' skip=' + skip) : ''));
   process.exitCode = fail ? 1 : 0;

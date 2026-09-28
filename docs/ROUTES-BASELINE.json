@@ -90,6 +90,18 @@
       "note": "一键释放所有动作(收干净, 防\"一直往前走\"); 关闭动作输出与程序退出时内部也会调用"
     },
     {
+      "m": "GET",
+      "p": "/api/pinyin",
+      "level": 0,
+      "note": "内置输入法候选(F-20260925-02 P2-a): ?keys=nihao&n=7 -> 候选词(带命中方式 full/prefix/initials 与词频); 只读"
+    },
+    {
+      "m": "POST",
+      "p": "/api/pinyin/learn",
+      "level": 0,
+      "note": "记住用户选过的候选词({word}), 下次同拼音优先(只写本机 logs/pinyin-learn.json, 不上传)"
+    },
+    {
       "m": "POST",
       "p": "/api/capture/set",
       "level": 0

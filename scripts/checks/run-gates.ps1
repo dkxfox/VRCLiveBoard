@@ -52,8 +52,8 @@ Gate 'G1' '语法解析(改动文件)' {
       $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content $f -Raw), [ref]$err)
       if ($err.Count) { Write-Output ('  FAIL PS 解析 ' + $f + ': ' + $err[0].Message); $bad++ } else { Write-Output ('  OK   ' + $f) }
     } elseif ($ext -eq '.json') {
-      try { $null = Get-Content $f -Raw -Encoding UTF8 | ConvertFrom-Json; Write-Output ('  OK   ' + $f) }
-      catch { Write-Output ('  FAIL JSON ' + $f + ': ' + $_.Exception.Message); $bad++ }
+      node -e "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'))" $f 2>&1 | Out-Null
+      if ($LASTEXITCODE -ne 0) { Write-Output ('  FAIL JSON ' + $f); $bad++ } else { Write-Output ('  OK   ' + $f) }
     }
   }
   if ($bad -eq 0) { Write-Output '  PASS' }

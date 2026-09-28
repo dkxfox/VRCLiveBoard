@@ -108,6 +108,10 @@ async function main() {
   triggers.sync();
   // 动作输出(反向 OSC, F-20260928-01 切片 1): 外部软件/我们自己的功能 -> 驱动本机玩家动作; 与触发器正好相反方向。
   // 默认关闭; 关闭/退出/异常都走 resetAll, 绝不留下"一直往前走"(官方红线)。
+
+  // 内置输入法引擎(F-20260925-02 P2-a): 拼音串 -> 候选词; 词库懒加载(首次调用才读 1.4MB 词表)
+  const { PinyinIME } = require('./pinyin');
+  const ime = new PinyinIME({ logger: logger, projectDir: projectDir });   // 注意是 projectDir(工程根), 不是 __dirname(src/)
   const { ActionSender } = require('./actions');
   const actions = new ActionSender({ logger: logger, osc: osc, config: config.actions });
 
@@ -158,7 +162,7 @@ async function main() {
     if (!r.ok) logger.warn('[插件] 自动启用失败 ' + id + ': ' + r.error);
   }
 
-  const web = createServer({ web: config.web, config: config, configPath: configPath, composer: composer, logger: logger, projectDir: projectDir, pluginManager: pluginManager, osc: osc, triggers: triggers, dictation: dictation, actions: actions, onQuit: function () { shutdown('控制台退出'); }, onRestart: function (proceed) { shutdown('控制台重启', proceed); } });
+  const web = createServer({ web: config.web, config: config, configPath: configPath, composer: composer, logger: logger, projectDir: projectDir, pluginManager: pluginManager, osc: osc, triggers: triggers, dictation: dictation, actions: actions, ime: ime, onQuit: function () { shutdown('控制台退出'); }, onRestart: function (proceed) { shutdown('控制台重启', proceed); } });
   const consolePort = await web.start();
   // 桌面壳必须知道**实际**端口: 19190 被占时上面会回退, 写死 URL 就会白屏(M-20260911-08)
   process.env.VRCB_CONSOLE_PORT = String(consolePort);

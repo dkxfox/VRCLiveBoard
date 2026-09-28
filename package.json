@@ -24,5 +24,9 @@
   },
   "overrides": {
     "ws": "8.21.3"
+  },
+  "devDependencies": {
+    "@node-rs/jieba": "^2.0.3",
+    "pinyin-pro": "^3.29.4"
   }
 }
