@@ -1878,6 +1878,19 @@
 - 结论: **VMT(SteamVR 驱动)在用户的现有配置下可以直接工作**; 真机前置只需: 装 VMT + VRChat 以 VR 模式启动 + VMT 管理器里按 index 映射身体部位 + OSC 开启。
 - 我的错误原因(值得记): 我看到注册表里 ActiveRuntime=VDXR, 就**从"当前 OpenXR 运行时"推断出"SteamVR 不参与"** —— 但那是**两个不同层面**(OpenXR 运行时 vs OpenVR 运行时), 而且**应用用哪条路才决定**。我该先问"你平时怎么启动 VRChat", 而不是替用户重配环境。
 - 卡片 §6.6 已就地更正; 这一条单独留档, 不删错误结论, 便于以后回溯。
+
+## 294. VMT 已装好并注册为 SteamVR 驱动(用户: 「帮我装上吧」)(2026-09-29)
+- 过程(全部有返回码/输出为据):
+  · 从官方 GitHub Release 下载 **VirtualMotionTrackerSetup_0.15.exe**(v0.15, 5MB);
+  · 校验安装器类型: 全文件扫描命中 4 处 'Inno Setup' -> 用 **Inno 静默参数** `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=...`;
+  · 静默安装 **退出码 0**, 安装日志末行 'Installation process succeeded.';
+  · 落点(日志实据): **`C:\vmt_driver`**(驱动在 `C:\vmt_driver\vmt`, 管理器在 `C:\vmt_driver\vmt_manager\vmt_manager.exe`);
+  · 注册: `vrpathreg adddriver C:\vmt_driver\vmt` 退出码 0 -> `vrpathreg show` 出现 `vmt : C:\vmt_driver\vmt` ✓;
+  · 许可证: 目录里的 LICENSE 是 **MIT**(Copyright (c) 2020 gpsnmeajp) ✓;
+  · 管理器已启动(1 个进程), 界面对用户可见。
+- **时机很好**: 当时 **SteamVR 没在运行**(vrserver 0 个) -> 说明没有正在进行的会话被打断; 驱动会在**下次 SteamVR 启动时自动加载**, 不需要特意重启。
+- 用户接下来要在管理器里做的事: 给**每个虚拟追踪点 index 指定身体部位**(我们的顺序: 0 hip / 1 chest / 2 head / 3 hand_L / 4 hand_R / 5 elbow_L / 6 elbow_R / 7 knee_L / 8 knee_R / 9 foot_L / 10 foot_R), 并确认监听端口为默认 **39570**。
+- **可逆性(重要, 已告知用户)**: 卸载跑 `C:\vmt_driver\unins000.exe`; 解除驱动注册跑 `vrpathreg removedriver C:\vmt_driver\vmt`。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -2071,5 +2084,6 @@
 | 291 | 2026-09-29 | 自制测试动作(2 分钟) + 解析器支持 Shift-JIS 骨骼名 |
 | 292 | 2026-09-29 | 路线 B 管线打通: VMD -> 11 点追踪姿态 -> 60Hz /VMT/Room/Unity, 真 UDP 抓包 8 项全过 |
 | 293 | 2026-09-29 | **更正**: 不需要把 Virtual Desktop 切到 SteamVR —— VDXR 与 VRChat 无关(用户指正, 2026-… |
+| 294 | 2026-09-29 | VMT 已装好并注册为 SteamVR 驱动(用户: 「帮我装上吧」) |
 
 <!-- DEV-NOTES-INDEX:END -->
