@@ -180,7 +180,12 @@ static class VRKeyboard
                 }
             }
             // 靶点: SteamVR 只给仪表盘画光标, 世界里的覆盖层没有 -> 自己画一个(含坐标环)
-            if (PointerValid && Shown)
+            // 护栏: 靶点坐标必须是有限值且在画面附近 —— 否则 GDI+ 会 OverflowException 直接把程序崩掉(实测踩过)
+            bool cursorOk = PointerValid && Shown &&
+                !float.IsNaN(PointerPx) && !float.IsNaN(PointerPy) &&
+                !float.IsInfinity(PointerPx) && !float.IsInfinity(PointerPy) &&
+                PointerPx > -64f && PointerPx < W + 64f && PointerPy > -64f && PointerPy < H + 64f;
+            if (cursorOk)
             {
                 using (SolidBrush b = new SolidBrush(Color.FromArgb(220, 255, 214, 92)))
                     g.FillEllipse(b, PointerPx - 9f, PointerPy - 9f, 18f, 18f);
@@ -470,7 +475,10 @@ static class VRKeyboard
             else { DoHide(); Log("[信息] 默认**隐藏**(避免一直吸着控制器激光让游戏收不到输入); 用 --toggle / 控制口 或 --show-at-start 显示"); }
             if (ctlPort > 0) StartControl(ctlPort);
             EnsureSystem();
-            InitActions();                      // 拿真正的 aim 姿态(拿不到就退回 grip + 目光指针)
+            // action 系统的 aim 姿态**对覆盖层应用不可用**(实测 UpdateActionState -> 8 = NoActiveActionSet: 覆盖层没有输入焦点),
+            // 所以这里不再尝试; 射线方向改用"校准过的 grip 朝向"或"目光指针"(见 DEV-NOTES 271)。
+            // 若将来改成有输入焦点的形态, 把下面这行恢复即可。
+            // InitActions();
             SetPanelFromMatrix(CurPanelMatrix());
             // 先把事件字段原样打几条出来(排障: 鼠标事件的坐标/按钮到底在哪个偏移)
             SetOverlayRawFn setRaw = Vt<SetOverlayRawFn>(ov, 62);
@@ -495,8 +503,9 @@ static class VRKeyboard
                     if (re != 0)
                     {
                         string f = TempPng(frame % 2);
-                        bmp.Save(f, ImageFormat.Png);
-                        int fe = setFile(ov, handle, f);
+                        int fe = -1;
+                        try { bmp.Save(f, ImageFormat.Png); fe = setFile(ov, handle, f); }
+                        catch (Exception ex) { if (frame < 5) Log("[警告] 保存 PNG 失败(跳过这一帧): " + ex.Message); }
                         if (frame < 3) Log("[信息] SetOverlayRaw -> " + re + " (失败), 改用 PNG 文件 -> " + fe + " : " + f);
                     }
                     frame++;
