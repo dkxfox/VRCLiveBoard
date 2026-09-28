@@ -589,6 +589,17 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     ok(!!queued, '听写: 松开后文字已进待发队列(优先级 ' + (queued && queued.priority) + '; 当前上屏=' + (stAsr.current && stAsr.current.text) + ')');
     const as2 = JSON.parse((await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: false, asr: { enabled: false } }) })).body.toString('utf8'));
     ok(!!(as2.asr && as2.asr.enabled === false), '听写: 可关闭, 关闭后不再听');
+    // 听写助手(切片 2): 真起一次 PowerShell 助手 —— 要么 10 秒内就绪, 要么给出明确错误(不能静默卡住)
+    await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: true, port: 19199, asr: { enabled: true, engine: 'sapi' } }) });
+    let asrReady = null;
+    for (let i = 0; i < 20; i++) {
+      await new Promise(function (r) { setTimeout(r, 500); });
+      asrReady = JSON.parse((await req('/api/triggers')).body.toString('utf8')).asr || {};
+      if (asrReady.ready || asrReady.error) break;
+    }
+    ok(!!(asrReady && (asrReady.ready === true || (asrReady.error && String(asrReady.error).length > 0))), '听写助手: 就绪或明确报错(ready=' + (asrReady && asrReady.ready) + ', recognizer=' + (asrReady && asrReady.recognizer) + ', error=' + (asrReady && asrReady.error) + ')');
+    await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: false, asr: { enabled: false } }) });
+    await new Promise(function (r) { setTimeout(r, 800); });
     await req('/api/config', { method: 'POST', body: JSON.stringify({ specialEvents: [] }) });
   } catch (e) { ok(false, '启动彩蛋判定用例异常: ' + e.message); }
 

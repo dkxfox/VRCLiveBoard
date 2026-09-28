@@ -17,7 +17,18 @@ param(
   [string]$Culture = ''
 )
 $ErrorActionPreference = 'Continue'
-function Emit($obj) { [Console]::Out.WriteLine(($obj | ConvertTo-Json -Compress)); [Console]::Out.Flush() }
+function Emit($obj) {
+  # 关键(2026-09-28 实测踩坑): 中文必须自己按 UTF-8 写**字节** —— PowerShell 5.1 的 [Console]::Out 用的是
+  # 控制台代码页(简中系统上是 GBK/936), 而 Node 按 UTF-8 读, 结果识别出来的中文全变成 � 乱码
+  # (用户报的"字库错了"就是这个)。写原始字节可以彻底绕开代码页。
+  try {
+    $json = ($obj | ConvertTo-Json -Compress)
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($json + "`n")
+    $stdout = [Console]::OpenStandardOutput()
+    $stdout.Write($bytes, 0, $bytes.Length)
+    $stdout.Flush()
+  } catch { }
+}
 
 try { Add-Type -AssemblyName System.Speech } catch {
   Emit @{ type = 'status'; state = 'error'; error = '加载 System.Speech 失败: ' + $_.Exception.Message }; exit 1
@@ -67,6 +78,7 @@ while ($true) {
       if ($cmd -and $cmd -ne $lastCmd) {
         $lastCmd = $cmd
         if ($cmd -eq 'quit') { Emit @{ type = 'status'; state = 'bye' }; break }
+        elseif ($cmd -eq 'selftest') { Emit @{ type = 'text'; text = '你好，这是一次听写自检'; final = $true }; Emit @{ type = 'text'; text = '繁体字也测一下: 測試'; final = $true } }
         elseif ($cmd -eq 'listen') {
           try { $engine.RecognizeAsync([System.Speech.Recognition.RecognizeMode]::Multiple); Emit @{ type = 'status'; state = 'listening' } }
           catch { Emit @{ type = 'status'; state = 'error'; error = '开始识别失败: ' + $_.Exception.Message } }
