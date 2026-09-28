@@ -92,6 +92,10 @@ static class VRKeyboard
     static Key HoverKey = null;
     static float HoverX = 0, HoverY = 0;
     static int MoveLogged = 0;
+    static bool PointerValid = false;
+    static float PointerPx = 0, PointerPy = 0;
+    static DateTime LastClickAt = DateTime.Now;
+    static int AutoHideSec = 45;   // 多久没点就把键盘收起来(免得游戏一直收不到输入)
     static int HoverLogged = 0;
     static IntPtr OvRef = IntPtr.Zero;
     static ulong HandleRef = 0;
@@ -172,6 +176,14 @@ static class VRKeyboard
                     g.DrawString(k.Label, f, b, k.Rect.X + (k.Rect.Width - sz.Width) / 2f, k.Rect.Y + (k.Rect.Height - sz.Height) / 2f);
                 }
             }
+            // 靶点: SteamVR 只给仪表盘画光标, 世界里的覆盖层没有 -> 自己画一个(含坐标环)
+            if (PointerValid && Shown)
+            {
+                using (SolidBrush b = new SolidBrush(Color.FromArgb(220, 255, 214, 92)))
+                    g.FillEllipse(b, PointerPx - 9f, PointerPy - 9f, 18f, 18f);
+                using (Pen p = new Pen(Color.FromArgb(230, 255, 255, 255), 2f))
+                    g.DrawEllipse(p, PointerPx - 16f, PointerPy - 16f, 32f, 32f);
+            }
             using (Font f = new Font("Microsoft YaHei UI", 18f))
             using (SolidBrush b = new SolidBrush(Color.FromArgb(255, 150, 200, 160)))
                 g.DrawString(Status + "   [指针 " + HoverX.ToString("0.###") + "," + HoverY.ToString("0.###") + (HoverKey == null ? "" : (" -> " + HoverKey.Label)) + "]", f, b, 20f, H - 44f);
@@ -180,11 +192,16 @@ static class VRKeyboard
     }
 
     // 命中测试: 先判断拿到的是 UV(0~1) 还是像素, 再翻 Y(GL 空间原点在左下角)
+    static void ToUv(float ax, float ay, out float u, out float v)
+    {
+        if (Math.Abs(ax) <= 1.5f && Math.Abs(ay) <= 1.5f) { u = ax; v = ay; }
+        else { u = ax / W; v = ay / H; }
+    }
+
     static Key Hit(float ax, float ay)
     {
         float u, v;
-        if (Math.Abs(ax) <= 1.5f && Math.Abs(ay) <= 1.5f) { u = ax; v = ay; }
-        else { u = ax / W; v = ay / H; }
+        ToUv(ax, ay, out u, out v);
         float px = u * W;
         float py = (1f - v) * H;
         if (px < 0 || py < 0 || px > W || py > H) return null;
@@ -365,9 +382,9 @@ static class VRKeyboard
     }
 
     // ---------- 真跑 ----------
-    static int RunOverlay(string url, string dll, float meters, float dist, float height, bool fixedPos, int diagSeconds, bool showAtStart, int ctlPort)
+    static int RunOverlay(string url, string dll, float meters, float dist, float height, bool followHead, int diagSeconds, bool showAtStart, int ctlPort, int autoHideSec)
     {
-        Log("=== vrkeyboard 启动 === 参数: url=" + url + " meters=" + meters + " dist=" + dist + " height=" + height + " 模式=" + (fixedPos ? "绝对位置(固定)" : "跟随头显") + (diagSeconds > 0 ? (" 诊断 " + diagSeconds + "s") : ""));
+        Log("=== vrkeyboard 启动 === 参数: url=" + url + " meters=" + meters + " dist=" + dist + " height=" + height + " 模式=" + (followHead ? "跟随头显" : "固定在身前") + (diagSeconds > 0 ? (" 诊断 " + diagSeconds + "s") : ""));
         Log("日志文件: " + (LogPath != null ? LogPath : ResolveLogPath()));
         string dllPath = FindOpenVr(dll);
         if (dllPath == null)
@@ -431,7 +448,7 @@ static class VRKeyboard
             Log("[信息] SetOverlayMouseScale(1,1 -> 事件坐标用 UV) -> " + Vt<SetOverlayMouseScaleFn>(ov, 52)(ov, handle, 1f, 1f));
             HmdMatrix34_t m = new HmdMatrix34_t();
             m.m0 = 1f; m.m5 = 1f; m.m10 = 1f;
-            if (fixedPos)
+            if (!followHead)
             {
                 m.m3 = 0f; m.m7 = height; m.m11 = -dist;
                 Log("[信息] 绝对位置(站立空间) 前方 " + dist + "m, 高 " + height + "m -> " + Vt<SetOverlayTransformAbsoluteFn>(ov, 33)(ov, handle, UniverseStanding, ref m));
@@ -439,7 +456,7 @@ static class VRKeyboard
             else
             {
                 m.m3 = 0f; m.m7 = -0.22f; m.m11 = -Math.Max(0.4f, dist);
-                Log("[信息] 跟随头显: 眼前 " + Math.Max(0.4f, dist) + "m / 下方 0.22m -> " + Vt<SetOverlayTransformHeadFn>(ov, 35)(ov, handle, HmdDeviceIndex, ref m));
+                Log("[信息] 跟随头显(会把射线一直压在面板上, 只在排障时用): 眼前 " + Math.Max(0.4f, dist) + "m -> " + Vt<SetOverlayTransformHeadFn>(ov, 35)(ov, handle, HmdDeviceIndex, ref m));
             }
             ShowOverlayFn show = Vt<ShowOverlayFn>(ov, 43);
             HideOverlayFn hide = Vt<HideOverlayFn>(ov, 44);
@@ -495,12 +512,13 @@ static class VRKeyboard
                         }
                         if (hk != HoverKey) { HoverKey = hk; dirty = true; HoverLogged++; if (HoverLogged <= 25) Log("[悬停] -> " + (hk == null ? "面板外" : hk.Label) + "  原始=(" + ev.mouseX.ToString("0.####") + "," + ev.mouseY.ToString("0.####") + ")"); }
                         HoverX = ev.mouseX; HoverY = ev.mouseY;
+                        { float pu, pv; ToUv(ev.mouseX, ev.mouseY, out pu, out pv); PointerPx = pu * W; PointerPy = (1f - pv) * H; PointerValid = true; }
                     }
                     else if (ev.eventType == EvMouseDown || ev.eventType == EvMouseUp)
                     {
                         Key k = Hit(ev.mouseX, ev.mouseY);
                         Log("[输入] " + (ev.eventType == EvMouseDown ? "按下" : "松开") + " 原始=(" + ev.mouseX.ToString("0.####") + "," + ev.mouseY.ToString("0.####") + ") button=" + ev.mouseButton + " -> " + (k == null ? "没命中任何键" : k.Label));
-                        if (ev.eventType == EvMouseDown && k != null) { clickCount++; PressKey(k, url); dirty = true; }
+                        if (ev.eventType == EvMouseDown && k != null) { clickCount++; LastClickAt = DateTime.Now; PressKey(k, url); dirty = true; }
                     }
                 }
                 else Thread.Sleep(15);
@@ -508,6 +526,11 @@ static class VRKeyboard
                 {
                     lastBeat = DateTime.Now;
                     Log("[心跳] 帧=" + frame + " 可见=" + isVisible(ov, handle) + " 原始推送返回=" + rawErr + " 事件=" + evCount + " 点击=" + clickCount + " 输入行='" + Line + "'");
+                }
+                if (Shown && AutoHideSec > 0 && (DateTime.Now - LastClickAt).TotalSeconds >= AutoHideSec)
+                {
+                    Log("[控制] 超过 " + AutoHideSec + " 秒没有点击, 自动收起键盘(把输入还给游戏)");
+                    DoHide();
                 }
                 if (diagSeconds > 0 && (DateTime.Now - start).TotalSeconds >= diagSeconds)
                 {
@@ -618,7 +641,7 @@ static class VRKeyboard
         string url = "http://127.0.0.1:19190/v1/chatbox";
         string dll = null, outPng = null;
         float meters = 1.35f, dist = 1.6f, height = 1.35f;
-        bool fixedPos = false;
+        bool followHead = false;
         bool showAtStart = false;
         int ctl = 19192;
         int diag = 0;
@@ -630,7 +653,8 @@ static class VRKeyboard
             else if (args[i] == "--meters" && i + 1 < args.Length) meters = float.Parse(args[++i]);
             else if (args[i] == "--dist" && i + 1 < args.Length) dist = float.Parse(args[++i]);
             else if (args[i] == "--height" && i + 1 < args.Length) height = float.Parse(args[++i]);
-            else if (args[i] == "--fixed") fixedPos = true;
+            else if (args[i] == "--follow") followHead = true;
+            else if (args[i] == "--auto-hide" && i + 1 < args.Length) AutoHideSec = int.Parse(args[++i]);
             else if (args[i] == "--show-at-start") showAtStart = true;
             else if (args[i] == "--no-ctl") ctl = 0;
             else if (args[i] == "--ctl" && i + 1 < args.Length) ctl = int.Parse(args[++i]);
@@ -650,8 +674,8 @@ static class VRKeyboard
         if (mode == "--hide") return CtlClient("http://127.0.0.1:" + ctl + "/hide");
         if (mode == "--toggle") return CtlClient("http://127.0.0.1:" + ctl + "/toggle");
         if (mode == "--state") return CtlClient("http://127.0.0.1:" + ctl + "/state");
-        if (mode == "--run") return RunOverlay(url, dll, meters, dist, height, fixedPos, 0, showAtStart, ctl);
-        if (mode == "--diag") return RunOverlay(url, dll, meters, dist, height, fixedPos, diag > 0 ? diag : 15, true, 0);
+        if (mode == "--run") return RunOverlay(url, dll, meters, dist, height, followHead, 0, showAtStart, ctl, AutoHideSec);
+        if (mode == "--diag") return RunOverlay(url, dll, meters, dist, height, followHead, diag > 0 ? diag : 15, true, 0, AutoHideSec);
         Log("用法: vrkeyboard.exe --selftest | --render [--out x.png] | --run [--fixed] [--url ...] | --diag [--seconds N]");
         return 1;
     }
