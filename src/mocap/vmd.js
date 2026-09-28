@@ -11,13 +11,23 @@ const SIGNATURES = ['Vocaloid Motion Data 0002', 'Vocaloid Motion Data file'];
 const FRAME_BYTES = 111;
 const FPS = 30;
 
-function readCString(buf, off, len) {
+// 真实 VMD 的字符串是 **Shift-JIS**(MMD 是日文软件); 这里优先用 Shift-JIS 解, 出现替换字符时再按 UTF-8 试一次
+// (我们自己的合成样本用 ASCII 名字, 两种都能读)
+let SJIS = null;
+try { SJIS = new TextDecoder("shift_jis"); } catch (e) { SJIS = null; }
+
+function decodeName(buf, off, len) {
   let end = off;
   const max = off + len;
   while (end < max && buf[end] !== 0) end++;
-  return buf.slice(off, end).toString('utf8');
+  const raw = buf.slice(off, end);
+  if (!raw.length) return "";
+  if (SJIS) {
+    const s = SJIS.decode(raw);
+    if (s.indexOf("\uFFFD") < 0) return s;
+  }
+  return raw.toString("utf8");
 }
-
 function parseVmd(buf) {
   if (!Buffer.isBuffer(buf) || buf.length < 50) throw new Error('文件太小, 不像 VMD');
   const sig = buf.slice(0, 30).toString('latin1').replace(/\0+$/, '').trim();
@@ -25,7 +35,7 @@ function parseVmd(buf) {
   for (const s of SIGNATURES) if (sig.indexOf(s) === 0) sigOk = true;
   if (!sigOk) throw new Error('文件头不是 VMD: "' + sig + '"');
   const nameLen = (sig.indexOf('0002') >= 0) ? 20 : 10;         // 多模型版之后是 20 字节
-  const modelName = readCString(buf, 30, nameLen);
+  const modelName = decodeName(buf, 30, nameLen);
   let off = 30 + nameLen;
   const boneCount = buf.readUInt32LE(off); off += 4;
   const need = off + boneCount * FRAME_BYTES;
@@ -34,7 +44,7 @@ function parseVmd(buf) {
   const byBone = new Map();
   let maxFrame = 0;
   for (let i = 0; i < boneCount; i++) {
-    const bone = readCString(buf, off, 15);
+    const bone = decodeName(buf, off, 15);
     const frame = buf.readUInt32LE(off + 15);
     const pos = [buf.readFloatLE(off + 19), buf.readFloatLE(off + 23), buf.readFloatLE(off + 27)];
     const rot = [buf.readFloatLE(off + 31), buf.readFloatLE(off + 35), buf.readFloatLE(off + 39), buf.readFloatLE(off + 43)];
