@@ -341,13 +341,23 @@ static class VRKeyboard
     static string TempPng(int n) { return Path.Combine(Path.GetTempPath(), "vrcb-vrkeyboard-" + n + ".png"); }
 
     // 把 Bitmap 的 BGRA 像素直接推给覆盖层(比走 PNG 文件更少环节)
+    static IntPtr RawBuf = IntPtr.Zero;      // 常驻纹理缓冲: 指针固定不变, 免得运行时每帧重建纹理(用户反馈"高亮就闪")
     static int PushRaw(IntPtr ov, ulong handle, Bitmap bmp, SetOverlayRawFn fn)
     {
+        if (RawBuf == IntPtr.Zero) RawBuf = Marshal.AllocHGlobal(W * H * 4);
         BitmapData bd = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
-        try { return fn(ov, handle, bd.Scan0, (uint)bmp.Width, (uint)bmp.Height, 4u); }
+        try
+        {
+            // 逐行拷进常驻缓冲(行间可能有对齐填充, 所以按 stride 拷)
+            for (int y = 0; y < bmp.Height; y++)
+                CopyMemory(IntPtr.Add(RawBuf, y * bmp.Width * 4), IntPtr.Add(bd.Scan0, y * bd.Stride), (uint)(bmp.Width * 4));
+            return fn(ov, handle, RawBuf, (uint)bmp.Width, (uint)bmp.Height, 4u);
+        }
         finally { bmp.UnlockBits(bd); }
     }
 
+    [DllImport("kernel32.dll", EntryPoint = "RtlCopyMemory", CallingConvention = CallingConvention.StdCall)]
+    static extern void CopyMemory(IntPtr dest, IntPtr src, uint count);
     // ---------- 自检(不需要 VR) ----------
     static int SelfTest()
     {
@@ -607,7 +617,8 @@ static class VRKeyboard
                             float[] dir = Normalize(new float[] { tgt[0] - LastHoverOrigin[0], tgt[1] - LastHoverOrigin[1], tgt[2] - LastHoverOrigin[2] });
                             float[] gripDir = Normalize(new float[] { -LastHandMatrix[pressRole].m2, -LastHandMatrix[pressRole].m6, -LastHandMatrix[pressRole].m10 });
                             float ang = AngleBetween(gripDir, dir);
-                            if (ang < 30f && CalibrateHandDir(pressRole, gripDir, dir)) Log("[自校准] 手=" + (pressRole == RoleLeft ? "左" : "右") + " 用这次按键修正了 " + ang.ToString("0.0") + " 度(按的是「" + GazeHoverKey.Label + "」)");
+                            // 门槛 60 度: 实测握把与瞄准能差 40 度, 30 度会把样本全挡掉(用户反馈"手柄还是偏")
+                            if (ang < 60f && CalibrateHandDir(pressRole, gripDir, dir)) Log("[自校准] 手=" + (pressRole == RoleLeft ? "左" : "右") + " 用这次按键修正了 " + ang.ToString("0.0") + " 度(按的是「" + GazeHoverKey.Label + "」)");Log("[自校准] 手=" + (pressRole == RoleLeft ? "左" : "右") + " 用这次按键修正了 " + ang.ToString("0.0") + " 度(按的是「" + GazeHoverKey.Label + "」)");
                         }
                         if (down && ev.mouseButton == MouseLeft && pressKey != null)
                         {
