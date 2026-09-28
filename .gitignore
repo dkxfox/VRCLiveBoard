@@ -64,3 +64,9 @@ plugins/conflict-test*/data/
 # VR 覆盖层键盘(scripts/vrkeyboard)的构建产物与临时预览
 scripts/vrkeyboard/out/
 scripts/vrkeyboard/vrkeyboard-preview.png
+
+# 用户自备的动作素材(MMD/VMD 等): 许可归原作者, 绝不入库、绝不随包分发
+
+# User-supplied motion assets (MMD/VMD etc). Licences belong to their authors:
+# never commit them and never ship them in the package.
+assets/motions/
