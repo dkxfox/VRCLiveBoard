@@ -619,7 +619,7 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     fs2.mkdirSync(ltDir, { recursive: true });
     const ltFile = path2.join(ltDir, 'livetrans_20260928_120000_original.txt');
     fs2.writeFileSync(ltFile, '[12:00:01] 之前就有的旧内容\n', 'utf8');
-    await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: true, port: 19199, asr: { enabled: true, engine: 'livetranslate', transcriptsDir: ltDir } }) });
+    await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: true, port: 19199, asr: { enabled: true, engine: 'livetranslate', transcriptsDir: ltDir, mineOnly: false } }) });
     await req('/api/triggers/simulate', { method: 'POST', body: JSON.stringify({ param: 'GestureRight', value: 1 }) });
     await waitMs(300);
     fs2.appendFileSync(ltFile, '[12:00:05] 这次说的话第一句\n[12:00:07] 这次说的话第二句\n', 'utf8');
@@ -628,6 +628,24 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     const stLt = JSON.parse((await req('/api/status')).body.toString('utf8'));
     const ltHit = ((stLt.transientQueue || []).filter(function (x) { return x.text === '这次说的话第一句这次说的话第二句'; })[0]) || null;
     ok(!!ltHit, '听写: LiveTranslate 引擎只取新增行并上屏(队列=' + JSON.stringify(((stLt.transientQueue || []).map(function (x) { return x.text; })).slice(0, 3)) + ')');
+    // 只保留「我说话时」的转写(2026-09-28 用户反馈: 开着 LiveTranslate 会把环境里别人的话一起带进来)
+    fs2.writeFileSync(ltFile, '', 'utf8');
+    await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: true, port: 19199, asr: { enabled: true, engine: 'livetranslate', transcriptsDir: ltDir, mineOnly: true } }) });
+    await req('/api/triggers/simulate', { method: 'POST', body: JSON.stringify({ param: 'Voice', value: 0.3 }) });
+    await waitMs(250);
+    await req('/api/triggers/simulate', { method: 'POST', body: JSON.stringify({ param: 'GestureRight', value: 1 }) });
+    await waitMs(250);
+    const two = function (n) { return ('0' + n).slice(-2); };
+    const dNow = new Date(), dOld = new Date(Date.now() - 2 * 3600 * 1000);
+    const mineLine = '[' + two(dNow.getHours()) + ':' + two(dNow.getMinutes()) + ':' + two(dNow.getSeconds()) + '] 这句是我说的';
+    const otherLine = '[' + two(dOld.getHours()) + ':' + two(dOld.getMinutes()) + ':' + two(dOld.getSeconds()) + '] 这句是环境里别人说的';
+    fs2.appendFileSync(ltFile, mineLine + '\n' + otherLine + '\n', 'utf8');
+    await req('/api/triggers/simulate', { method: 'POST', body: JSON.stringify({ param: 'GestureRight', value: 0 }) });
+    await waitMs(3300);
+    const stMine = JSON.parse((await req('/api/status')).body.toString('utf8'));
+    const mineHit = ((stMine.transientQueue || []).filter(function (x) { return x.text === '这句是我说的'; })[0]) || null;
+    const otherHit = ((stMine.transientQueue || []).filter(function (x) { return x.text && x.text.indexOf('别人说的') >= 0; })[0]) || null;
+    ok(!!mineHit && !otherHit, '听写: 只保留我说话时的转写(我的一句在队列=' + !!mineHit + ', 别人那句被滤掉=' + !otherHit + ')');
     await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: false, asr: { enabled: false } }) });
     await waitMs(600);
     await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: false, asr: { enabled: false } }) });

@@ -63,11 +63,13 @@ async function main() {
   if (asrCfg.enabled === true) dictation.warmup();
   const asrOn = function () { return !!(config.triggers && config.triggers.asr && config.triggers.asr.enabled === true); };
 
+  let lastTriggerStartAt = 0;
   const { TriggerEngine } = require('./triggers');
   const triggers = new TriggerEngine({
     logger: logger,
     config: config.triggers,
     onEvent: function (ev) {
+      if (ev.type === 'start') lastTriggerStartAt = ev.at || Date.now();
       try {
         if (ev.type === 'start') {
           logger.info('[触发器] 开始说话(' + (ev.param || '?') + ')'); osc.sendTyping(true);
@@ -76,7 +78,17 @@ async function main() {
           logger.info('[触发器] 说完/发送'); osc.sendTyping(false);
           if (asrOn()) {
             // 识别引擎要把最后一句收尾, 给一小段宽限时间再取文字(M-20260928-02)
-            dictation.stop(2600).then(function (r) {
+            // 只保留「我在说话」那几秒的转写行(2026-09-28 用户反馈: 开着 LiveTranslate 会把环境里别人的话一起带进来);
+            // 判据直接用 VRChat 回传的 Voice/Viseme 活动窗口 —— 静音时它不上报, 那种情况不过滤。
+            const asrCfg2 = (config.triggers && config.triggers.asr) || {};
+            const mineFilter = function (atMs, text) {
+              try {
+                if (asrCfg2.mineOnly === false) return true;
+                if (triggers.mutedDuring(lastTriggerStartAt)) return true;
+                return triggers.speechWindowsWithin(atMs).length > 0;
+              } catch (e) { return true; }
+            };
+            dictation.stop(2600, { filter: mineFilter }).then(function (r) {
               const text = String((r && r.text) || '').trim();
               if (!text) { logger.info('[听写] 这次没识别到内容'); return; }
               composer.pushTransient(text, 80, 8000);

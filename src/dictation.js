@@ -20,7 +20,7 @@ class Dictation {
     this.logger = opts.logger || { info: function () {}, warn: function () {}, error: function () {} };
     this.projectDir = opts.projectDir || path.join(__dirname, '..');
     const cfg = (opts.config && typeof opts.config === 'object') ? opts.config : {};
-    this.cfg = { enabled: cfg.enabled === true, engine: 'sapi', culture: String(cfg.culture || ''), transcriptsDir: String(cfg.transcriptsDir || '') };
+    this.cfg = { enabled: cfg.enabled === true, engine: 'sapi', culture: String(cfg.culture || ''), transcriptsDir: String(cfg.transcriptsDir || ''), mineOnly: cfg.mineOnly !== false };
     if (cfg.engine === 'stub' || cfg.engine === 'livetranslate' || cfg.engine === 'sapi') this.cfg.engine = cfg.engine;
     this.proc = null; this.rl = null;
     this.cmdFile = path.join(this.projectDir, 'logs', 'dictation.cmd');
@@ -38,6 +38,7 @@ class Dictation {
     if (c.engine !== undefined && ENGINES.indexOf(c.engine) >= 0) this.cfg.engine = c.engine;
     if (c.culture !== undefined) this.cfg.culture = String(c.culture || '');
     if (c.transcriptsDir !== undefined) this.cfg.transcriptsDir = String(c.transcriptsDir || '');
+    if (c.mineOnly !== undefined) this.cfg.mineOnly = c.mineOnly !== false;
     if (this.cfg.enabled && (!wasEnabled || wasEngine !== this.cfg.engine)) { this.closeHelper(); this.warmup(); }
     else if (!this.cfg.enabled && wasEnabled) this.close();
     return this.status();
@@ -46,7 +47,7 @@ class Dictation {
     return {
       enabled: this.cfg.enabled, engine: this.cfg.engine, available: this.available, ready: this.ready,
       listening: this.listening, recognizer: this.recognizer, error: this.lastError, cmds: this.cmds,
-      partial: this.partial, text: this.buffer, helper: path.relative(this.projectDir, this.helper),
+      partial: this.partial, text: this.buffer, mineOnly: this.cfg.mineOnly, helper: path.relative(this.projectDir, this.helper),
       transcriptsDir: this.cfg.transcriptsDir || null
     };
   }
@@ -146,7 +147,7 @@ class Dictation {
     this.writeCmd('listen');
     return { ok: true };
   }
-  stop(graceMs) {
+  stop(graceMs, opts) {
     const self = this;
     const wait = Math.max(0, Math.min(5000, Number(graceMs) || 0));
     if (this.cfg.engine === 'stub') {
@@ -155,7 +156,15 @@ class Dictation {
     if (this.cfg.engine === 'livetranslate') {
       // 宽限期: ASR 可能在我们松手之后才把那句写进文件(实测 LiveTranslate 有 1~3 秒延迟)
       return new Promise(function (resolve) {
-        const grab = function () { const t = self.readLtTail(); self.listening = false; resolve({ text: t, partial: self.partial }); };
+        const grab = function () {
+          const lines = self.readLtLines();
+          const filter = (opts && typeof opts.filter === 'function') ? opts.filter : null;
+          const kept = filter ? lines.filter(function (l) { return filter(l.atMs, l.text); }) : lines;
+          const dropped = lines.length - kept.length;
+          if (dropped > 0) self.logger.info('[听写] 按「我说话的时间段」滤掉 ' + dropped + ' 行(别人的话)');
+          self.listening = false;
+          resolve({ text: kept.map(function (l) { return l.text; }).join(''), partial: self.partial, dropped: dropped });
+        };
         if (wait) setTimeout(grab, Math.min(wait, 2500)); else grab();
       });
     }
@@ -169,11 +178,12 @@ class Dictation {
       setTimeout(finish, wait);
     });
   }
-  // 读 LiveTranslate 转写文件里"这次说话"新增的部分: 形如 "[11:04:07] 文本"
-  readLtTail() {
+  // 读 LiveTranslate 转写文件里「这次说话」新增的部分, 形如 "[11:04:07] 文本"
+  // 返回 [{atMs(当天时刻), text}] —— 交给调用方按「我在说话」的窗口过滤(用户反馈: 会把环境里别人的话带进来)
+  readLtLines() {
     const lt = this._lt;
-    if (!lt) return '';
-    let text = '';
+    if (!lt) return [];
+    let raw = '';
     try {
       const st = fs.statSync(lt.file);
       const from = st.size >= lt.size ? lt.size : 0;   // 文件被轮转/截断就整读
@@ -183,15 +193,22 @@ class Dictation {
       let read = 0;
       while (read < len) read += fs.readSync(fd, buf, read, len - read, from + read);
       fs.closeSync(fd);
-      text = buf.toString('utf8');
-    } catch (e) { return ''; }
+      raw = buf.toString('utf8');
+    } catch (e) { return []; }
     const out = [];
-    String(text).split(/\r?\n/).forEach(function (line) {
-      const m = /^\s*\[?\d{0,2}:?\d{2}:?\d{2}\]?\s*(.*)$/.exec(line);
-      const t = (m ? m[1] : line).trim();
-      if (t) out.push(t);
+    const day = new Date(); day.setHours(0, 0, 0, 0);
+    String(raw).split(/\r?\n/).forEach(function (line) {
+      const m = /^\s*\[(\d{1,2}):(\d{2}):(\d{2})\]\s*(.*)$/.exec(line);
+      if (m) {
+        const atMs = day.getTime() + (Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3])) * 1000;
+        const txt = String(m[4] || '').trim();
+        if (txt) out.push({ atMs: atMs, text: txt });
+      } else {
+        const txt = String(line || '').trim();
+        if (txt) out.push({ atMs: Date.now(), text: txt });
+      }
     });
-    return out.join('');
+    return out;
   }
   writeCmd(cmd) {
     try { fs.appendFileSync(this.cmdFile, String(cmd) + '\n', 'utf8'); } catch (e) { this.logger.warn('[听写] 写命令失败: ' + e.message); }

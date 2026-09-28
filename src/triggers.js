@@ -73,6 +73,10 @@ class TriggerEngine {
     this.lastEvent = null;
     this.ptt = { active: false, since: 0, lastVoiceAt: 0 };
     this.learn = { on: false, until: 0, items: [] };
+    // 语音活动窗口(2026-09-28, 用户反馈「会把环境里别人的话一起带进来」): Voice/Viseme 有活动就记一段,
+    // 给「只保留我说话时的转写」做判据 —— 复用 VRChat 回传的信号, 不需要额外设备。
+    this.speech = [];
+    this.muteLog = [];
     this.timer = null;
   }
   // ---- 配置热更新(POST /api/triggers 用)----
@@ -161,6 +165,7 @@ class TriggerEngine {
   }
   evaluate(name, value, prev) {
     const cfg = this.cfg;
+    this.trackVoiceActivity(name, value);
     if (!cfg.enabled) return;
     // 静音保护: 静音时不开始(VAD 更是不可能触发), 已经在听则取消 —— 静音时不该在听
     if (this.muted()) {
@@ -213,6 +218,25 @@ class TriggerEngine {
     return this.status();
   }
   learnStop() { this.learn.on = false; return this.status(); }
+  // 语音活动: Voice 是麦克风电平(0~1), Viseme 是口型(只有自己说话才有) —— 任一有活动就记一段窗口
+  trackVoiceActivity(name, value) {
+    const now = Date.now();
+    if (name === 'MuteSelf') { this.muteLog.push({ at: now, muted: value === true }); if (this.muteLog.length > 200) this.muteLog.shift(); return; }
+    const active = (name === this.cfg.vad.param && Number(value) >= this.cfg.vad.gte) || (name === 'Viseme' && Number(value) > 0);
+    if (!active) return;
+    const last = this.speech[this.speech.length - 1];
+    if (last && now - last.to <= 1500) { last.to = now; } else { this.speech.push({ from: now, to: now }); }
+    if (this.speech.length > 200) this.speech.shift();
+  }
+  // 转写行的时间(当天 HH:MM:SS)是否落在「我在说话」的窗口里(留 2 秒宽容度)
+  speechWindowsWithin(atMs) {
+    return this.speech.filter(function (w) { return atMs >= w.from - 2000 && atMs <= w.to + 2000; });
+  }
+  // 这次说话期间我是不是静音过(静音时 VRChat 不上报 Voice/Viseme, 判据不可用 -> 不做过滤)
+  mutedDuring(fromMs) {
+    if (this.values.MuteSelf === true) return true;
+    return this.muteLog.some(function (m) { return m.at >= fromMs && m.muted === true; });
+  }
   status() {
     const self = this;
     const values = {};
