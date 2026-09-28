@@ -492,12 +492,16 @@ static class VRKeyboard
             int dumped = 0;
             int frame = 0, rawErr = 0, evCount = 0, clickCount = 0;
             bool dirty = true;
+            DateTime lastRender = DateTime.MinValue;
             DateTime lastBeat = DateTime.Now;
             DateTime start = DateTime.Now;
             while (true)
             {
-                if (dirty)
+                // 节流: 之前是"只要 dirty 就重绘并推纹理", 指针每帧微动 -> 每秒上百次推送 -> 画面闪。
+                // 现在最多 ~15fps, 且只在真的需要时推。(2026-09-29 用户报"键盘在闪", 日志里帧数 22977/20 分钟)
+                if (dirty && (DateTime.Now - lastRender).TotalMilliseconds >= 66)
                 {
+                    lastRender = DateTime.Now;
                     Bitmap bmp = Render();
                     int re = PushRaw(ov, handle, bmp, setRaw);
                     rawErr = re;
@@ -1285,7 +1289,7 @@ static class VRKeyboard
         if (idx.Count >= 2 && role[1] != 1 && role[1] != 2) role[1] = RoleLeft;
         ControllerIdx = idx.ToArray();
         ControllerRole = role.ToArray();
-        if ((DateTime.Now - LastEnumLog).TotalSeconds > 5)
+        if ((DateTime.Now - LastEnumLog).TotalSeconds > 60)
         {
             LastEnumLog = DateTime.Now;
             string s = "";
@@ -1485,6 +1489,7 @@ static class VRKeyboard
         if (mode == "--hide") return CtlClient("http://127.0.0.1:" + ctl + "/hide");
         if (mode == "--toggle") return CtlClient("http://127.0.0.1:" + ctl + "/toggle");
         if (mode == "--state") return CtlClient("http://127.0.0.1:" + ctl + "/state");
+        if (mode == "--calibrate") return CtlClient("http://127.0.0.1:" + ctl + "/calibrate");
         if (mode == "--run") return RunOverlay(url, dll, meters, dist, height, followHead, 0, showAtStart, ctl, AutoHideSec);
         if (mode == "--diag") return RunOverlay(url, dll, meters, dist, height, followHead, diag > 0 ? diag : 15, true, 0, AutoHideSec);
         Log("用法: vrkeyboard.exe --selftest | --render [--out x.png] | --run [--fixed] [--url ...] | --diag [--seconds N]");
