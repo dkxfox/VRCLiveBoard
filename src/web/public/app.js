@@ -634,3 +634,79 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
 (function(){var u=document.getElementById('hdrUrl');if(u&&location&&location.origin)u.textContent=location.origin+'/';
   // GitHub 入口: target/rel 用 JS 兜底(桌面壳只放行 https 且走系统浏览器打开; 新标签是必须的, 否则会被导航守卫拦下)
   var g=document.getElementById('ghRepo');if(g){g.setAttribute('target','_blank');g.setAttribute('rel','noopener noreferrer');}})();
+
+// ===== 键盘页(网页版输入法, F-20260925-02 过渡链路): 字母 -> 拼音 -> 候选 -> 发送 =====
+// 为什么先做网页版: 原生覆盖层的瞄准还差一次校准, 先用这条链路把"能打中文"跑通并验 UX。
+(function(){
+  var cur={py:'',text:''};
+  function kbdPaint(){
+    if($('kbdText'))$('kbdText').textContent=cur.text;
+    if($('kbdPinyin'))$('kbdPinyin').textContent=cur.py?cur.py:'';
+  }
+  function kbdCands(){
+    var el=$('kbdCands'); if(!el) return;
+    el.innerHTML='';
+    if(!cur.py) return;
+    fetch('/api/pinyin?keys='+encodeURIComponent(cur.py)+'&n=7').then(function(r){return r.json();}).then(function(j){
+      var list=(j&&j.candidates)||[];
+      if(!list.length){el.innerHTML='<span class="sub">'+tr('kbdNoCand')+'</span>';return;}
+      list.forEach(function(c){
+        var b=document.createElement('button');
+        b.className='small'; b.textContent=c.w;
+        b.onclick=function(){
+          cur.text+=c.w; cur.py=''; kbdPaint(); kbdCands();
+          fetch('/api/pinyin/learn',{method:'POST',body:JSON.stringify({word:c.w})}).catch(function(){});
+        };
+        el.appendChild(b);
+      });
+    }).catch(function(){ el.innerHTML='<span class="sub">'+tr('kbdNoCand')+'</span>'; });
+  }
+  function kbdKey(ch){
+    if(/^[a-z]$/.test(ch)){ if(cur.py.length<24) cur.py+=ch; }
+    else if(ch==='back'){ if(cur.py) cur.py=cur.py.slice(0,-1); else cur.text=cur.text.slice(0,-1); }
+    else if(ch==='space'){ cur.text+=' '; cur.py=''; }
+    else if(ch==='clear'){ cur.text=''; cur.py=''; }
+    kbdPaint(); kbdCands();
+  }
+  function kbdBuild(){
+    var host=$('kbdKeys'); if(!host) return;
+    var rows=['qwertyuiop','asdfghjkl','zxcvbnm'];
+    rows.forEach(function(row){
+      var d=document.createElement('div'); d.style.cssText='display:flex;gap:8px';
+      row.split('').forEach(function(c){
+        var b=document.createElement('button'); b.textContent=c.toUpperCase();
+        b.style.cssText='width:56px;height:56px;font-size:20px';
+        b.onclick=function(){kbdKey(c);};
+        d.appendChild(b);
+      });
+      host.appendChild(d);
+    });
+  }
+  function kbdSend(){
+    var txt=(cur.text||'').trim();
+    if(!txt){ if($('kbdStatus'))$('kbdStatus').textContent=tr('kbdEmpty'); return; }
+    fetch('/v1/chatbox',{method:'POST',body:JSON.stringify({text:txt,priority:80})}).then(function(r){return r.json();}).then(function(j){
+      if($('kbdStatus'))$('kbdStatus').textContent=(j&&j.ok)?tr('kbdSent'):tr('kbdErr');
+      if(j&&j.ok){cur.text='';cur.py='';kbdPaint();kbdCands();}
+    }).catch(function(){ if($('kbdStatus'))$('kbdStatus').textContent=tr('kbdErr'); });
+  }
+  function kbdInit(){
+    kbdBuild(); kbdPaint();
+    if($('kbdBack'))$('kbdBack').onclick=function(){kbdKey('back');};
+    if($('kbdSpace'))$('kbdSpace').onclick=function(){kbdKey('space');};
+    if($('kbdClear'))$('kbdClear').onclick=function(){kbdKey('clear');};
+    if($('kbdSend'))$('kbdSend').onclick=kbdSend;
+    // 物理键盘也能打(桌面/浏览器里测试用): 只在键盘页可见时接管
+    document.addEventListener('keydown',function(ev){
+      var p=document.getElementById('tab-kbd');
+      if(!p||p.hidden) return;
+      var tag=(ev.target&&ev.target.tagName)||'';
+      if(tag==='INPUT'||tag==='TEXTAREA') return;
+      if(ev.key==='Enter'){ kbdSend(); ev.preventDefault(); return; }
+      if(ev.key==='Backspace'){ kbdKey('back'); ev.preventDefault(); return; }
+      if(ev.key===' '){ kbdKey('space'); ev.preventDefault(); return; }
+      if(/^[a-zA-Z]$/.test(ev.key)) kbdKey(ev.key.toLowerCase());
+    });
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',kbdInit); else kbdInit();
+})();
