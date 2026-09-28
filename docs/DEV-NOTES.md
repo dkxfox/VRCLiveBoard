@@ -1907,6 +1907,16 @@
   · 修复: 去掉 BOM(比对备份确认原文件本来无 BOM), 现在两份配置都 JSON 合法; 备份留在 `steamvr.vrsettings.bak-vrcb-20260928-201947`。
   · 教训(与之前 .ps1/.bat 编码坑同源): **改配置文件一律用 Node 写、不要用 PowerShell 的 Set-Content**(PS 5.1 的 UTF8 = 带 BOM)。
 - 证据: 两份配置 JSON 解析通过; 用户配置里 VMT 角色 8 条 ✓, Rebocap 12 条未动 ✓; 驱动默认设置同步更新 8 条 ✓。
+
+## 296. 关键发现: VMT 的虚拟追踪器**有数据才出现**(用户的"没发现其它设备"是正常的)(2026-09-29)
+- 用户: 「我这边游戏都开了但是没发现 SteamVR 上其它设备」。排查(全部有日志实据):
+  · 驱动**确实加载了**: `Loaded server driver vmt (IServerTrackedDeviceProvider_004) from C:\vmt_driver\vmt\bin\win64\driver_vmt.dll` + `Startup OK`;
+  · 但驱动日志同时有一行 `!!!! Error !!!! : VMTDriver::Config::LoadJson> Parse error or load faild` —— **可疑点: 我改过它自带的设置文件**(已用安装器/脚本**恢复原样**, 角色映射现在只留在 SteamVR 用户配置里生效);
+  · **决定性证据**: 我用播放器往 39570 真发姿态的那一秒, 日志出现 `Driver 'vmt' started activation` + 一连串 `[VMT] Activate: 9/10/11/...` —— **追踪器是收到 OSC 之后才被激活/出现的** ✓✓。
+  · 结论: 用户"看不到其它设备"是因为**当时还没有任何程序给它们发姿态**; 这与我们之前的设计一致(VMT 管接收, 我们管发)。
+- 本轮动作: 已启动 **3 分钟的持续发送**(真动作 / 11 追踪点 / 60Hz -> 127.0.0.1:39570), 请用户在 SteamVR 的"设备 → 管理追踪器"或 VMT 管理器里观察是否出现 `VMT_0..VMT_10`, 以及它们对应的角色(WAIST/CHEST/肘/膝/脚)。
+- 待办: ① 下次重启 SteamVR 后确认那条 `Config::LoadJson` 报错是否消失(若不消失再查); ② 追踪器可见之后, 看 VRChat 是否据此驱动模型 IK; ③ 播放入口(控制台"动作"卡片)仍未做, 目前用临时脚本发送。
+- 教训: 这套链路里"**没看到设备**"不等于"装错了" —— VMT 的设备是**按需激活**的; 以后遇到类似现象,**先看驱动日志再动手改配置**(我这次差点又去改配置, 而不是先去查"有没有数据进来")。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -2102,5 +2112,6 @@
 | 293 | 2026-09-29 | **更正**: 不需要把 Virtual Desktop 切到 SteamVR —— VDXR 与 VRChat 无关(用户指正, 2026-… |
 | 294 | 2026-09-29 | VMT 已装好并注册为 SteamVR 驱动(用户: 「帮我装上吧」) |
 | 295 | 2026-09-29 | VMT 角色映射做好(8 点完整 FBT) + 一次我自己捅的 BOM 娄子 |
+| 296 | 2026-09-29 | 关键发现: VMT 的虚拟追踪器**有数据才出现**(用户的"没发现其它设备"是正常的) |
 
 <!-- DEV-NOTES-INDEX:END -->
