@@ -1512,6 +1512,29 @@
   · `scripts/` 里 11 个条目是既有设计(backup / ensure-deps / install-electron / make-dist / launcher 源码等, 与本次新增的 `build-pinyin-dict.js` 同类, 属「随包构建工具」), 保持现状。
 - 处置: 按 PROCESS-03 的要求**人工复核后**更新 `docs/SECURITY-BASELINE.json` 的 `zipVolumes`(并把复核结论写进 `asOf` 字段, 便于下次追溯) → 重跑 `pack-audit.js`: **两个包都 PASS**(Lite 183 条/8.78MB, Desktop 1465 条/214.11MB)。
 - 教训: 门禁拦下来时, 第一反应不该是「改数字」, 而是先**逐项核对内容**(这次核对了 6 类不该进包的东西 + 顶层目录分布), 确认干净再更新基线; 生成物(1.4MB 词库)进包属于「发布变化」, 不是噪音。
+
+## 264. 覆盖层键盘: 「VR 里看不见」的真因(VROverlay 不是导出符号) + 「游戏变 AFK」的真因(可交互覆盖层一直吸着激光)(2026-09-29)
+
+### 264.1 看不见: `VROverlay()` 根本不是导出函数
+- 现象: 用户在 VR 里完全看不到面板。自诊断版日志一句话定位(这就是加"全量返回码 + 调用前打点"的价值):
+  `[步骤] 取 IVROverlay 接口指针…` → `System.EntryPointNotFoundException: 无法在 DLL"openvr_api.dll"中找到名为"VROverlay"的入口点。`
+- 事实: `openvr_api.dll` 只导出 `VR_InitInternal / VR_ShutdownInternal / VR_IsHmdPresent / VR_IsRuntimeInstalled / VR_GetStringForHmdError / VR_GetGenericInterface` 这些; 头文件里的 `VROverlay()` / `VRSystem()` 是 **inline 辅助函数**, 内部就是调 `VR_GetGenericInterface("IVROverlay_0xx")`。
+- 修复: 改成按版本号取接口(`IVROverlay_028` 优先; **只接受 028**, 因为 vtable 下标是按 028 排的, 版本不符会调错函数), 并把整个初始化段包进 try/catch(带类型+堆栈)。
+- 修好后的实跑证据: `CreateOverlay -> 0`, 之后 Flag/Alpha/SortOrder/Width/InputMethod/MouseScale/变换/ShowOverlay **全部 0**, 心跳 `可见=1`、`原始推送返回=0`、**事件 73→286**(射线已能指到面板)。
+- 教训: **"某某 API 有个便捷函数"这种事必须实测导出表(或看头文件是否 inline), 不能凭印象写 P/Invoke** —— 凭印象的代价是用户白试一轮。
+
+### 264.2 游戏变 AFK: 可交互覆盖层一直吸着控制器的激光
+- 现象(用户): "切出去之后游戏 AFK, 键盘展示下没法操作游戏, 一直是 AFK"。
+- 日志证据: 面板一直可见那 2 分钟里, **事件数 5191 → 11224**(每秒 ~40 个鼠标事件) —— 面板**一直**在吸控制器的激光指针, 于是扣扳机被它吃掉, **VRChat 收不到输入** → 判为 AFK。
+- 修复(三条一起, 缺一不可):
+  ① **默认隐藏**: 启动后不显示, 也**不开可交互**(`MakeOverlaysInteractiveIfVisible=false`) —— 不显示就不抢指针;
+  ② **控制口**(本机 19192): `GET /show|/hide|/toggle|/state`; 配套 `out\\vrkeyboard.exe --toggle|--show|--hide|--state` 与 ASCII-only 的 `toggle.bat`(桌面双击即可);
+  ③ **显示才可交互, 隐藏立刻关掉可交互**: 隐藏时先把 flag 关掉再 HideOverlay, 免得隐藏过程中还吸着指针。
+- 修复后的证据: 同样跑 30 秒, **事件数从 11224 掉到 21~23**(不再吸指针); `--state` 显示 `shown:false` → `--toggle` → `shown:true` → 再 toggle → `shown:false`, 控制口全通。
+- 教训: **覆盖层类工具必须先想清楚"它什么时候该抢输入"** —— 一直可见 + 一直可交互 = 把玩家的控制器拿走了。这与 D0 里用户选的"握拳拉出键盘、再握收起"是同一件事: 默认不该抢输入。
+
+### 264.3 下一步(已明确)
+- 真正的"拉出键盘"手势要接到**触发器层**(主体 `src/triggers.js`, 它不受覆盖层影响): 手势 → `GET /toggle` → 面板显示/隐藏。这一步在 P2 一起做(用户 D0 已拍板: 握拳拉出 / 再握收起)。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1675,5 +1698,6 @@
 | 261 | 2026-09-29 | 「我的输入法呢?」—— 内置输入法引擎先落地(词库 + 拼音引擎 + 零级接口) |
 | 262 | 2026-09-29 | 覆盖层键盘 P1 第 1 步落地: 渲染 + 射线命中 + 发送链路 |
 | 263 | 2026-09-29 | 发布包体积基线更新(人工复核后) —— 新增: 输入法词库/引擎/动作输出 |
+| 264 | 2026-09-29 | 覆盖层键盘: 「VR 里看不见」的真因(VROverlay 不是导出符号) + 「游戏变 AFK」的真因(可交互覆盖层一直吸着激光) |
 
 <!-- DEV-NOTES-INDEX:END -->

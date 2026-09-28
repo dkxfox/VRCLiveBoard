@@ -84,6 +84,16 @@ static class VRKeyboard
     static string Status = "点字母打字, 回车发送";
     static string LastSent = null;
     static bool DryRun = false;
+    static bool Shown = false;            // 是否已显示(默认隐藏: 显示即可交互会一直吸着控制器激光, 游戏就收不到输入)
+    static int CtlPort = 19192;
+    static int ClickCount2 = 0;
+    static int EvCount2 = 0;
+    static bool DumpedEvents = false;
+    static IntPtr OvRef = IntPtr.Zero;
+    static ulong HandleRef = 0;
+    static ShowOverlayFn ShowRef = null;
+    static HideOverlayFn HideRef = null;
+    static SetOverlayFlagFn FlagRef = null;
 
     static void BuildLayout()
     {
@@ -346,7 +356,7 @@ static class VRKeyboard
     }
 
     // ---------- 真跑 ----------
-    static int RunOverlay(string url, string dll, float meters, float dist, float height, bool fixedPos, int diagSeconds)
+    static int RunOverlay(string url, string dll, float meters, float dist, float height, bool fixedPos, int diagSeconds, bool showAtStart, int ctlPort)
     {
         Log("=== vrkeyboard 启动 === 参数: url=" + url + " meters=" + meters + " dist=" + dist + " height=" + height + " 模式=" + (fixedPos ? "绝对位置(固定)" : "跟随头显") + (diagSeconds > 0 ? (" 诊断 " + diagSeconds + "s") : ""));
         Log("日志文件: " + (LogPath != null ? LogPath : ResolveLogPath()));
@@ -423,11 +433,18 @@ static class VRKeyboard
                 Log("[信息] 跟随头显: 眼前 " + Math.Max(0.4f, dist) + "m / 下方 0.22m -> " + Vt<SetOverlayTransformHeadFn>(ov, 35)(ov, handle, HmdDeviceIndex, ref m));
             }
             ShowOverlayFn show = Vt<ShowOverlayFn>(ov, 43);
-            Log("[信息] ShowOverlay -> " + show(ov, handle));
+            HideOverlayFn hide = Vt<HideOverlayFn>(ov, 44);
+            FlagRef = Vt<SetOverlayFlagFn>(ov, 11);
+            ShowRef = show; HideRef = hide; OvRef = ov; HandleRef = handle;
+            if (showAtStart) { DoShow(); }
+            else { DoHide(); Log("[信息] 默认**隐藏**(避免一直吸着控制器激光让游戏收不到输入); 用 --toggle / 控制口 或 --show-at-start 显示"); }
+            if (ctlPort > 0) StartControl(ctlPort);
+            // 先把事件字段原样打几条出来(排障: 鼠标事件的坐标/按钮到底在哪个偏移)
             SetOverlayRawFn setRaw = Vt<SetOverlayRawFn>(ov, 62);
             SetOverlayFromFileFn setFile = Vt<SetOverlayFromFileFn>(ov, 63);
             IsOverlayVisibleFn isVisible = Vt<IsOverlayVisibleFn>(ov, 45);
             PollNextOverlayEventFn poll = Vt<PollNextOverlayEventFn>(ov, 48);
+            int dumped = 0;
             int frame = 0, rawErr = 0, evCount = 0, clickCount = 0;
             bool dirty = true;
             DateTime lastBeat = DateTime.Now;
@@ -453,6 +470,12 @@ static class VRKeyboard
                 if (poll(ov, handle, ref ev, 64u) != 0)
                 {
                     evCount++;
+                    if (dumped < 6)
+                    {
+                        dumped++;
+                        Log("[事件样本] type=" + ev.eventType + " device=" + ev.trackedDeviceIndex + " x=" + ev.mouseX + " y=" + ev.mouseY + " button=" + ev.mouseButton);
+                    }
+                    EvCount2 = evCount;
                     if (ev.eventType == EvMouseDown && ev.mouseButton == MouseLeft)
                     {
                         Key k = Hit(ev.mouseX, ev.mouseY);
@@ -492,7 +515,83 @@ static class VRKeyboard
         return 0;
     }
 
+
+    // ---------- 控制口 + 显示/隐藏(默认隐藏: 显示即可交互会一直吸着控制器激光 -> 游戏收不到输入 = 用户遇到的 AFK) ----------
+    static void DoShow()
+    {
+        if (OvRef == IntPtr.Zero || HandleRef == 0) return;
+        if (FlagRef != null) FlagRef(OvRef, HandleRef, (int)FlagInteractive, true);
+        if (ShowRef != null) ShowRef(OvRef, HandleRef);
+        Shown = true;
+        Status = "键盘已显示: 点字母, 回车发送";
+        Log("[控制] 显示键盘(已开可交互)");
+    }
+
+    static void DoHide()
+    {
+        if (OvRef == IntPtr.Zero || HandleRef == 0) return;
+        if (FlagRef != null) FlagRef(OvRef, HandleRef, (int)FlagInteractive, false);
+        if (HideRef != null) HideRef(OvRef, HandleRef);
+        Shown = false;
+        Status = "键盘已隐藏";
+        Log("[控制] 隐藏键盘(已关可交互, 控制器交还游戏)");
+    }
+
+    static void StartControl(int port)
+    {
+        try
+        {
+            System.Net.HttpListener l = new System.Net.HttpListener();
+            l.Prefixes.Add("http://127.0.0.1:" + port + "/");
+            l.Start();
+            Thread th = new Thread(delegate()
+            {
+                while (true)
+                {
+                    try
+                    {
+                        System.Net.HttpListenerContext ctx = l.GetContext();
+                        string path = ctx.Request.Url.AbsolutePath.ToLower();
+                        string body;
+                        if (path == "/show") { DoShow(); body = "{\"ok\":true,\"shown\":true}"; }
+                        else if (path == "/hide") { DoHide(); body = "{\"ok\":true,\"shown\":false}"; }
+                        else if (path == "/toggle") { if (Shown) DoHide(); else DoShow(); body = "{\"ok\":true,\"shown\":" + (Shown ? "true" : "false") + "}"; }
+                        else body = "{\"ok\":true,\"shown\":" + (Shown ? "true" : "false") + ",\"events\":" + EvCount2 + ",\"clicks\":" + ClickCount2 + ",\"input\":\"" + JsonEscape(Line) + "\"}";
+                        byte[] buf = Encoding.UTF8.GetBytes(body);
+                        ctx.Response.ContentType = "application/json";
+                        ctx.Response.OutputStream.Write(buf, 0, buf.Length);
+                        ctx.Response.Close();
+                    }
+                    catch (Exception) { break; }
+                }
+            });
+            th.IsBackground = true;
+            th.Start();
+            Log("[控制] 已监听 http://127.0.0.1:" + port + "/ (show / hide / toggle / state)");
+        }
+        catch (Exception e) { Log("[控制] 监听失败(端口被占?): " + e.Message); }
+    }
+
+    static int CtlClient(string url)
+    {
+        try
+        {
+            using (WebClient wc = new WebClient())
+            {
+                wc.Encoding = Encoding.UTF8;
+                Console.WriteLine(wc.DownloadString(url));
+                return 0;
+            }
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine("控制调用失败: " + e.Message + " (键盘程序在跑吗? 端口对不对?)");
+            return 2;
+        }
+    }
+
     static int Main(string[] args)
+
     {
         Console.OutputEncoding = Encoding.UTF8;
         string mode = args.Length > 0 ? args[0] : "--selftest";
@@ -500,6 +599,8 @@ static class VRKeyboard
         string dll = null, outPng = null;
         float meters = 1.35f, dist = 1.6f, height = 1.35f;
         bool fixedPos = false;
+        bool showAtStart = false;
+        int ctl = 19192;
         int diag = 0;
         for (int i = 1; i < args.Length; i++)
         {
@@ -510,6 +611,9 @@ static class VRKeyboard
             else if (args[i] == "--dist" && i + 1 < args.Length) dist = float.Parse(args[++i]);
             else if (args[i] == "--height" && i + 1 < args.Length) height = float.Parse(args[++i]);
             else if (args[i] == "--fixed") fixedPos = true;
+            else if (args[i] == "--show-at-start") showAtStart = true;
+            else if (args[i] == "--no-ctl") ctl = 0;
+            else if (args[i] == "--ctl" && i + 1 < args.Length) ctl = int.Parse(args[++i]);
             else if (args[i] == "--seconds" && i + 1 < args.Length) diag = int.Parse(args[++i]);
         }
         BuildLayout();
@@ -522,8 +626,12 @@ static class VRKeyboard
             Log("已渲染: " + p);
             return 0;
         }
-        if (mode == "--run") return RunOverlay(url, dll, meters, dist, height, fixedPos, 0);
-        if (mode == "--diag") return RunOverlay(url, dll, meters, dist, height, fixedPos, diag > 0 ? diag : 15);
+        if (mode == "--show") return CtlClient("http://127.0.0.1:" + ctl + "/show");
+        if (mode == "--hide") return CtlClient("http://127.0.0.1:" + ctl + "/hide");
+        if (mode == "--toggle") return CtlClient("http://127.0.0.1:" + ctl + "/toggle");
+        if (mode == "--state") return CtlClient("http://127.0.0.1:" + ctl + "/state");
+        if (mode == "--run") return RunOverlay(url, dll, meters, dist, height, fixedPos, 0, showAtStart, ctl);
+        if (mode == "--diag") return RunOverlay(url, dll, meters, dist, height, fixedPos, diag > 0 ? diag : 15, true, 0);
         Log("用法: vrkeyboard.exe --selftest | --render [--out x.png] | --run [--fixed] [--url ...] | --diag [--seconds N]");
         return 1;
     }
