@@ -19,6 +19,7 @@ const market = require('../market');   // 插件市场客户端(M-20260911-51)
 function createServer(opts) {
   const composer = opts.composer;
   const triggerEngine = opts.triggers || null;   // 输入触发器(M-20260928-01); 未注入时相关接口如实报不可用
+  const dictation = opts.dictation || null;      // 语音听写(切片 2); 未注入或未启用时如实报不可用
   const logger = opts.logger;
   const webCfg = opts.web;
   const rootConfig = opts.config;
@@ -1144,7 +1145,7 @@ function effPluginSec() {
   // 只监听 VRChat 回传的 OSC 参数(不发送任何东西), 把「握拳/松开」这类动作变成 开始说话/发送/取消。
   on('GET', '/api/triggers', function (req, res, url) {
     if (!triggerEngine) return json(res, 200, { ok: false, error: '触发器模块不可用(非标准启动)' });
-    return json(res, 200, Object.assign({ ok: true }, triggerEngine.status()));
+    return json(res, 200, Object.assign({ ok: true, asr: dictation ? dictation.status() : null }, triggerEngine.status()));
   });
   on('POST', '/api/triggers', function (req, res, url) {
     return readBody(req, function (body) {
@@ -1153,8 +1154,13 @@ function effPluginSec() {
         const o = JSON.parse(body || '{}');
         const st = triggerEngine.apply(o);
         rootConfig.triggers = Object.assign({}, rootConfig.triggers || {}, o);   // 只并入用户给的键, 保留其它
+        if (o.asr !== undefined && dictation) {
+          const asrCfg = Object.assign({}, (rootConfig.triggers && rootConfig.triggers.asr) || {}, o.asr);
+          rootConfig.triggers.asr = asrCfg;
+          dictation.apply(asrCfg);
+        }
         persist();
-        return json(res, 200, Object.assign({ ok: true }, st));
+        return json(res, 200, Object.assign({ ok: true, asr: dictation ? dictation.status() : null }, st));
       } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
     });
   });

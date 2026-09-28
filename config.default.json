@@ -159,6 +159,7 @@
                                       "start":  { "param":  "GestureRight", "eq":  1 },
                                       "cancel":  { "param":  "GestureLeft", "eq":  1 }
                                   },
-                     "vad":  { "param":  "Voice", "gte":  0.02, "silenceMs":  400 }
+                     "vad":  { "param":  "Voice", "gte":  0.02, "silenceMs":  400 },
+                     "asr":  { "enabled":  false, "engine":  "sapi", "culture":  "" }
                  }
 }

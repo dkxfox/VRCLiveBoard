@@ -324,13 +324,15 @@ function trigRender(st){
   if(st.muted)h+=' · '+trigEsc(tr('trigMuted'));
   if(st.ptt&&st.ptt.active)h+=' · <b>'+trigEsc(tr('trigListening'))+'</b>';
   if(st.bindings&&st.bindings.start){h+='<br>'+trigEsc(tr('trigBoundStart'))+': '+trigEsc(st.bindings.start.param)+(st.bindings.start.eq!==undefined?(' = '+trigEsc(st.bindings.start.eq)):'');}
+  if(st.asr&&st.asr.enabled){var as=st.asr;var asTxt=as.available?tr('trigAsrReady'):tr('trigAsrErr');if(as.partial)asTxt+=': '+as.partial;else if(as.text)asTxt+=': '+as.text;h+='<br>'+trigEsc(asTxt)+(as.recognizer?(' ('+trigEsc(as.recognizer)+')'):'')+(as.error?(' ⚠ '+trigEsc(as.error)):'');}
   if(st.learn&&st.learn.on)h+='<br>'+trigEsc(tr('trigLearnHint'))+' ('+Math.round((st.learn.remainingMs||0)/1000)+'s)';
   var items=(st.learn&&st.learn.items)||[];
   if(items.length){h+='<br>'+trigEsc(tr('trigLearned'))+': ';items.forEach(function(x){h+='<button class="small gray" data-trigbind="'+trigEsc(x.param)+'" data-trigbindv="'+trigEsc(x.value)+'">'+trigEsc(x.param)+' = '+trigEsc(x.value)+'</button> ';});}
   el.innerHTML=h;
 }
-function trigLoad(){fetch('/api/triggers').then(function(r){return r.json();}).then(function(st){if($('trigOn'))$('trigOn').checked=!!st.enabled;if($('trigPreset')&&st.preset)$('trigPreset').value=st.preset;if($('trigPort')&&st.port&&document.activeElement!==$('trigPort'))$('trigPort').value=st.port;trigRender(st);}).catch(function(e){apiFail('#trigStatus',e);});}
+function trigLoad(){fetch('/api/triggers').then(function(r){return r.json();}).then(function(st){if($('trigOn'))$('trigOn').checked=!!st.enabled;if($('trigPreset')&&st.preset)$('trigPreset').value=st.preset;if($('trigPort')&&st.port&&document.activeElement!==$('trigPort'))$('trigPort').value=st.port;if($('trigAsr'))$('trigAsr').checked=!!(st.asr&&st.asr.enabled);trigRender(st);}).catch(function(e){apiFail('#trigStatus',e);});}
 if($('trigStatus')){ trigLoad(); setInterval(function(){var tab=$('tab-adv');if(tab&&!tab.hasAttribute('hidden'))trigLoad();},3000); }
+if($('trigAsr'))$('trigAsr').onchange=function(){var v=this.checked;fetch('/api/triggers',{method:'POST',body:JSON.stringify({asr:{enabled:v}})}).then(function(r){return r.json();}).then(trigRender).catch(function(e){apiFail('#trigAsr',e);});};
 if($('trigPort'))$('trigPort').onchange=function(){var v=Number(this.value);if(!v||v<1024||v>65535){note(tr('saveFail'),'warn');return;}fetch('/api/triggers',{method:'POST',body:JSON.stringify({port:v})}).then(function(r){return r.json();}).then(trigRender).catch(function(e){apiFail('#trigPort',e);});};
 if($('trigOn'))$('trigOn').onchange=function(){var v=this.checked;fetch('/api/triggers',{method:'POST',body:JSON.stringify({enabled:v})}).then(function(r){return r.json();}).then(trigRender).catch(function(e){apiFail('#trigOn',e);});};
 if($('trigPreset'))$('trigPreset').onchange=function(){var v=this.value;fetch('/api/triggers',{method:'POST',body:JSON.stringify({preset:v})}).then(function(r){return r.json();}).then(trigRender).catch(function(e){apiFail('#trigPreset',e);});};

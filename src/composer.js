@@ -80,6 +80,9 @@ class Composer {
     const self = this;
     return {
       current: this.current,
+      // 待发队列(2026-09-28 加, M-20260928-02): "我的字为什么没上屏"要看得到是谁在占着优先级。
+      // 注意字段名: transients 已存在且是**数量**(下面那行), 这里用 transientQueue, 别再撞名(踩过)。
+      transientQueue: (this.transients || []).map(function (t) { return { text: t.text, priority: t.priority, ttlUntil: t.ttlUntil }; }),
       ocrState: this.ocrState,
       ocrResult: this.ocrResult,
       vars: this.vars,

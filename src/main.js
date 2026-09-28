@@ -56,15 +56,37 @@ async function main() {
 
   // 输入触发器(M-20260928-01, F-20260925-02 切片 1): 把 VRChat 回传的 /avatar/parameters/* 变成「开始说话/发送/取消」。
   // 本切片只做到"状态机 + 可见反馈"(/chatbox/typing); 识别层(系统听写/ASR)在切片 2 接入。
+  // 听写(切片 2): 常驻 SAPI 助手, 只在触发器的 start/send 之间开麦克风
+  const { Dictation } = require('./dictation');
+  const asrCfg = (config.triggers && config.triggers.asr) || {};
+  const dictation = new Dictation({ logger: logger, projectDir: projectDir, config: asrCfg, onText: function (t, final) { if (!final) { try { logger.info('[听写] 临时: ' + t); } catch (e) {} } } });
+  if (asrCfg.enabled === true) dictation.warmup();
+  const asrOn = function () { return !!(config.triggers && config.triggers.asr && config.triggers.asr.enabled === true); };
+
   const { TriggerEngine } = require('./triggers');
   const triggers = new TriggerEngine({
     logger: logger,
     config: config.triggers,
     onEvent: function (ev) {
       try {
-        if (ev.type === 'start') { logger.info('[触发器] 开始说话(' + (ev.param || '?') + ')'); osc.sendTyping(true); }
-        else if (ev.type === 'send') { logger.info('[触发器] 说完/发送'); osc.sendTyping(false); }
-        else if (ev.type === 'cancel') { logger.info('[触发器] 取消' + (ev.reason ? ('(' + ev.reason + ')') : '')); osc.sendTyping(false); }
+        if (ev.type === 'start') {
+          logger.info('[触发器] 开始说话(' + (ev.param || '?') + ')'); osc.sendTyping(true);
+          if (asrOn()) { const r = dictation.start(); if (!r.ok) logger.warn('[听写] 无法开始: ' + (r.error || '?')); }
+        } else if (ev.type === 'send') {
+          logger.info('[触发器] 说完/发送'); osc.sendTyping(false);
+          if (asrOn()) {
+            // 识别引擎要把最后一句收尾, 给一小段宽限时间再取文字(M-20260928-02)
+            dictation.stop(1200).then(function (r) {
+              const text = String((r && r.text) || '').trim();
+              if (!text) { logger.info('[听写] 这次没识别到内容'); return; }
+              composer.pushTransient(text, 80, 8000);
+              logger.info('[听写] 已上屏: ' + text);
+            }).catch(function (e) { logger.warn('[听写] 取结果失败: ' + e.message); });
+          }
+        } else if (ev.type === 'cancel') {
+          logger.info('[触发器] 取消' + (ev.reason ? ('(' + ev.reason + ')') : '')); osc.sendTyping(false);
+          if (asrOn()) { dictation.stop(0).then(function (r) { const t = String((r && r.text) || '').trim(); if (t) logger.info('[听写] 已丢弃: ' + t); }); }
+        }
       } catch (e) { logger.warn('[触发器] 反馈失败: ' + e.message); }
     }
   });
@@ -117,7 +139,7 @@ async function main() {
     if (!r.ok) logger.warn('[插件] 自动启用失败 ' + id + ': ' + r.error);
   }
 
-  const web = createServer({ web: config.web, config: config, configPath: configPath, composer: composer, logger: logger, projectDir: projectDir, pluginManager: pluginManager, osc: osc, triggers: triggers, onQuit: function () { shutdown('控制台退出'); }, onRestart: function (proceed) { shutdown('控制台重启', proceed); } });
+  const web = createServer({ web: config.web, config: config, configPath: configPath, composer: composer, logger: logger, projectDir: projectDir, pluginManager: pluginManager, osc: osc, triggers: triggers, dictation: dictation, onQuit: function () { shutdown('控制台退出'); }, onRestart: function (proceed) { shutdown('控制台重启', proceed); } });
   const consolePort = await web.start();
   // 桌面壳必须知道**实际**端口: 19190 被占时上面会回退, 写死 URL 就会白屏(M-20260911-08)
   process.env.VRCB_CONSOLE_PORT = String(consolePort);
@@ -148,6 +170,7 @@ async function main() {
     try { clearInterval(ivVars); } catch (e) {}
     try { composer.stop(); } catch (e) {}
     try { triggers.close(); } catch (e) {}
+    try { dictation.close(); } catch (e) {}
     try { if (mediaSource && mediaSource.stop) mediaSource.stop(); } catch (e) {}
     try { require('./capturehost').stopCaptureHost(); } catch (e) {}
     try { if (web && web.stop) await Promise.race([web.stop(), new Promise(function (r) { setTimeout(r, 1500); })]); } catch (e) {}

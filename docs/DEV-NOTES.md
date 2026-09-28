@@ -1382,6 +1382,17 @@
 - 加固(治"下次还会踩"): ① 触发器卡片新增**监听端口输入框**(可改可存) —— 原来看得到端口却改不了, 一旦错了用户只能改文件; ② **端口 ≠ 9001 时状态行直接给醒目警告**("VRChat 只会把 OSC 发到 9001, 除非你在游戏里改过") —— 这次的症状本该一眼可见; ③ 三语文案 +2 键。
 - 遗留: 等用户再握一次拳验证(`[触发器] 开始说话(GestureRight)` + 状态"正在听…" + 游戏内打字指示)。
 
+
+## 251. 听写切片 2 落地: 握拳说话 -> 松开 -> 聊天框出字(Windows 离线识别, 静音也能用)(2026-09-28)
+- 目标: 打通"触发器(切片 1) + 识别层"的完整闭环, 且**不依赖 LiveTranslate**(用户明确要求"不装它也得能用")。
+- 技术选型改过一次(有证据): 先按计划用 WinRT `SpeechRecognizer`, 在 PS 5.1 里 **`$rec.Constraints` 是裸 `__ComObject`**, `Add` 与 `Append` 都不存在(实测)且加不了听写约束 ✗ → 改用 .NET 的 **System.Speech(SAPI)**: `LoadGrammar(DictationGrammar)` 一步到位 ✓; 本机实测已装离线中文识别器 **MS-2052-80-DESK(Microsoft Speech Recognizer 8.0 zh-CN)** ✓, 引擎创建成功 ✓。
+- 另踩一坑(项目老坑复现): **PowerShell 5.1 读 UTF-8 无 BOM 的 .ps1 会按 GBK 解**, 中文字符串把引号/花括号吃掉 → 报 "意外的标记 }" ✗; 加 BOM(239,187,191)后立刻正常 ✓。
+- 实现: ① `src/helpers/dictation.ps1`(新, 常驻 + **只监听命令才开麦**) —— 命令走文件 `logs/dictation.cmd`(listen/stop/quit), 输出 JSON 行(ready/listening/stopping/idle/text[final|临时]); 事件回调在别的 runspace, 用**同步队列**转交给主循环; ② `src/dictation.js`(新) —— 起进程/读行/状态/start/stop(带**宽限期**等最后一句收尾)/stub 测试引擎; ③ `src/main.js` 接线: 触发器 start → 开听, send → 停 + 宽限 1.2s + `composer.pushTransient(text,80,8000)` 上屏, cancel → 停并丢弃; ④ 控制台"识别层: Windows 离线听写"复选框 + 状态行显示识别器/临时结果/错误; ⑤ `/api/triggers` 回传 `asr` 状态, POST 可热开关; ⑥ `composer.status()` 新增 `transientQueue`(排查"我的字为什么没上屏")。
+- 隐私边界: 助手常驻但**冷着**; 只有握拳(触发 start)才 `RecognizeAsync`, 松手/取消/关闭程序立刻停; ASR 未启用时**根本不 spawn**。
+- 证据: ① 助手实测(直接跑 PS): ready(识别器 MS-2052-80-DESK/zh-CN) → listening → stopping → idle → bye ✓; ② 隔离实例端到端(用 stub 引擎, 不需要麦克风): 触发握拳 → 松开 → **文字确实进了待发队列并上屏**(`current=听写测试文本`)✓; ③ `backend-flow` **154 PASS / 0 FAIL**(新增 3 条听写断言), 冒烟 15/15, 常规门禁 15 PASS。
+- 踩坑记录(字段撞名): 我加的 `transients`(数组)与 composer.status() 里既有的 `transients`(**数量**)撞名, 后者覆盖前者 → 断言报 `filter is not a function`; 改名 `transientQueue` 并在注释里写明"别再撞名" ✓。
+- 遗留: ① 真机麦克风实测(用户) —— SAPI 中文准确率一般, 先看够不够用; ② 不满意再上识别层②(复用 LiveTranslate 读 `_original.txt`)与 Vosk; ③ 临时结果(partial)目前只进日志, 还没做"边听边显示"的界面; ④ 切片 3: 射线键盘 + 自绘拼音候选。
+
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1532,5 +1543,6 @@
 | 248 | 2026-09-28 | 静音行为结论: **静音会抑制 Voice, 但不影响手势** —— 预设定稿 |
 | 249 | 2026-09-28 | 输入触发器 切片 1 落地: 只监听 + PTT 状态机 + 学习式绑定 |
 | 250 | 2026-09-28 | 「没反应」的根因是**我自己把测试端口写进了用户配置**(19199 ≠ 9001) + 端口可见性与告警加固 |
+| 251 | 2026-09-28 | 听写切片 2 落地: 握拳说话 -> 松开 -> 聊天框出字(Windows 离线识别, 静音也能用) |
 
 <!-- DEV-NOTES-INDEX:END -->

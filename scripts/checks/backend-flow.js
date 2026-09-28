@@ -577,6 +577,18 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     ok(!!(tg4.learn && tg4.learn.items.length === 1 && tg4.learn.items[0].param === 'GestureLeft'), '触发器: 学习模式收手势、滤噪声(' + JSON.stringify(((tg4.learn && tg4.learn.items) || []).map(function (x) { return x.param; })) + ')');
     const tg5 = JSON.parse((await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: false }) })).body.toString('utf8'));
     ok(!!(tg5.listening === false), '触发器: 关闭后停止监听');
+    // 听写(切片 2, M-20260928-02): 用测试引擎 stub 验证「触发 -> 识别 -> 上屏」整条链路(不需要麦克风)
+    const as1 = JSON.parse((await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: true, port: 19199, asr: { enabled: true, engine: 'stub' } }) })).body.toString('utf8'));
+    ok(!!(as1.asr && as1.asr.enabled === true && as1.asr.engine === 'stub'), '听写: 可启用测试引擎(engine=' + (as1.asr && as1.asr.engine) + ')');
+    await req('/api/triggers/simulate', { method: 'POST', body: JSON.stringify({ param: 'GestureRight', value: 1 }) });
+    await new Promise(function (r) { setTimeout(r, 500); });
+    await req('/api/triggers/simulate', { method: 'POST', body: JSON.stringify({ param: 'GestureRight', value: 0 }) });
+    await new Promise(function (r) { setTimeout(r, 2600); });
+    const stAsr = JSON.parse((await req('/api/status')).body.toString('utf8'));
+    const queued = ((stAsr.transientQueue || []).filter(function (x) { return x.text === '听写测试文本'; })[0]) || null;
+    ok(!!queued, '听写: 松开后文字已进待发队列(优先级 ' + (queued && queued.priority) + '; 当前上屏=' + (stAsr.current && stAsr.current.text) + ')');
+    const as2 = JSON.parse((await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: false, asr: { enabled: false } }) })).body.toString('utf8'));
+    ok(!!(as2.asr && as2.asr.enabled === false), '听写: 可关闭, 关闭后不再听');
     await req('/api/config', { method: 'POST', body: JSON.stringify({ specialEvents: [] }) });
   } catch (e) { ok(false, '启动彩蛋判定用例异常: ' + e.message); }
 
