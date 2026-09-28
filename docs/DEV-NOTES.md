@@ -1950,6 +1950,16 @@ VMD(自制 2 分钟动作, 12020 关键帧)
 - **另一个发现(修正上一轮的错误判断)**: 探针显示 VMT 设备的 `Prop_ControllerRoleHint = OptOut`(=None) -> **角色提示来自驱动自带的 `default.vrsettings`, 不是 SteamVR 用户配置**。我上一轮「恢复原样」把角色清掉了是**错的**; 已按**驱动作者的原命名法**(`TrackerRole_Waist` 混合大小写)写回 8 条。
 - VMT 管理器的定位: 只是**看状态**用的, 映射不需要它(已在配置里做好); 已确认它在跑(窗口标题 "VMT Manager", pid 19976), 并在**桌面创建了快捷方式「VMT 管理器」**方便以后找。
 - 下一步: ① 请用户**重启 SteamVR**(让驱动重载新角色配置, 也让日志重新开始记); ② 重启后我再发数据 + 跑探针, 看 有效 是否变 1、位移是否非 0。
+
+## 299. VMT 源码级排查: setting.json 本就不存在(Parse error 是正常的), enable 是设备类型不是开关(2026-09-29)
+- 为了不再猜, 直接读 VMT 的源码(MIT, 全部有据):
+  · `Config::LoadJson()` 读的是 **`<安装目录>\setting.json`**(即 `C:\vmt_driver\vmt\setting.json`) —— **这个文件本来就不存在**(驱动从未保存过设置) -> 所以日志里那句 `Parse error or load faild` 是**正常状态**, 不是谁弄坏的(我之前怀疑自己改了 default.vrsettings 是**多余的担心**; 那份文件是 SteamVR 的模板, 驱动自己不读它)。
+  · `Optout: Yes` 也是**正常的**: 作者对追踪器的默认就是"不参与手柄角色分配"(所以探针看到 `Prop_ControllerRoleHint = OptOut` 也不是"角色没设上", 而是**设计如此**)。-> 我前面两轮的判断都修正了。
+  · **`enable` 不是开关, 是设备类型**: `RegisterToVRSystem(enable)` 注释写明 `1=Tracker, 2=Controller Left, 3=Controller Right, 4=Tracking Reference` -> 我们发的 **1 是对的** ✓; 但**停止时我们发的 `enable=0` 是非法类型** ✗(会触发那条 missing argument / 无意义调用) -> 设计要改: **不停发 0, 而是保持发 1 或者干脆停发**(待定)。
+  · 姿势生效链: `OSCReceiver::SetPose()` -> `IsVMTDeviceIndex(idx)` 判断通过 -> `RegisterToVRSystem(enable)` + `SetRawPose(pose)`(`m_poweron = true`) -> `GetPose()` 在 `s_autoUpdate && m_alreadyRegistered && m_poweron` 时刷新姿势。
+  · 姿势投影: `RawPoseToPose()` 用 `Config::GetRoomToDriverMatrix()`(房间矩阵来自配置) —— 而**配置加载失败** -> 房间矩阵可能是退化值。**这解释了为什么 `/VMT/Room/*` 与 `/VMT/Raw/*` 都试过仍 `有效=0`**。
+- 当前状态: 探针显示 VMT_0..VMT_10 **设备在、SteamVR 认为已连接, 但 `bPoseIsValid = 0`**(头显与手柄正常, 所以探针本身没问题)。
+- 下一步(需要用户): **重启 SteamVR 让驱动日志重新开始记**(之前刷到 "Too many log", 现在看不到任何新信息) -> 然后我发数据并**立刻读日志**, 就能看到我们的包是被接受、还是被哪一条判断丢掉。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -2148,5 +2158,6 @@ VMD(自制 2 分钟动作, 12020 关键帧)
 | 296 | 2026-09-29 | 关键发现: VMT 的虚拟追踪器**有数据才出现**(用户的"没发现其它设备"是正常的) |
 | 297 | 2026-09-29 | **端到端打通**: VMT 追踪器出现在 SteamVR, VRChat 出现全身追踪校准(用户实测, 2026-09-29) |
 | 298 | 2026-09-29 | 探针实测定位真相: VMT 确实收到了我们的 OSC, 但设备姿势 有效=0(根因排查中) |
+| 299 | 2026-09-29 | VMT 源码级排查: setting.json 本就不存在(Parse error 是正常的), enable 是设备类型不是开关 |
 
 <!-- DEV-NOTES-INDEX:END -->
