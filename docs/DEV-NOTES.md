@@ -1324,6 +1324,9 @@
 - 待用户实机(下次第一件事): 开 VRChat + 游戏内开 OSC → node scripts/dev/osc-monitor.js --learn --seconds 60 --json osc-quest3.json → 期间握拳 / 张开、按语音键、切静音、做两个手势 → 输出给我, 据此定 **Quest 3 预设与真实延迟**; Index 志愿者跑同一份 → 补 Index 预设。
 - 落点: 技术研究 §9(要求拆解 / 触发器 / 识别层 / 拼音候选 / 工具 / 待实机清单 / 一句话结论)+ 主卡新增 §7(结论与下一步)+ scripts/pack-exclude.json 加 scripts\dev。
 - 教训/边界: 这轮**没有再猜设备映射** —— 上一轮我差点把 /input/* 当成"能读手柄按键"(方向搞反), 所以这次凡是"某设备上的某个按键会不会发出来"一律**让工具去测**, 而不是写死在代码里。
+- **追加(同日实测, 意外收获)**: 试跑一键批处理时发现**用户机器上 VRChat 正开着 OSC** —— 4 秒收到 **373 条** `/avatar/parameters/Upright`(中位间隔 **11ms**, 最小 5ms)。这条数据同时证明三件事: ① VRChat → 我们(9001)的链路**通** ✓; ② 参数里确实有**高频噪声**(Upright 这类姿态参数 ~90Hz 刷屏), 学习模式按「变化中位间隔」过滤**在真实数据上有效** ✓(前几行出现后即被过滤); ③ 9001 当前没有被别的工具占用 ✓。
+- **一键用法(给用户)**: 双击 `scripts/dev/osc-monitor.bat`(默认 60 秒; 也可以带秒数: `osc-monitor.bat 90`)—— 批处理会自己切到程序目录、找 node(找不到就用程序自带的 Electron 当 Node 跑)、跑完把数据写到 `logs/osc-quest3.json` 并暂停窗口; 窗口里会打印「接下来 60 秒请做哪些动作」的引导与「一条都没收到」时的排查清单。
+
 
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 

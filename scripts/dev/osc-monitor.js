@@ -84,7 +84,19 @@ port.on('message', function (msg) {
 });
 port.on('error', function (e) { console.log('OSC 监听出错: ' + ((e && e.message) || e)); });
 port.open();
-console.log('OSC 监听中: 127.0.0.1:' + PORT + (LEARN ? ' (学习模式: 只显示可当触发器的变化)' : '') + (SECONDS ? (', ' + SECONDS + ' 秒后结束') : ', Ctrl+C 结束'));
+console.log('');
+console.log('=== VRCLiveBoard OSC 监听器(实验工具, 只在监听, 不改任何东西) ===');
+console.log('要做的事:');
+console.log('  1) 先开 VRChat, 并在游戏里确认 OSC 已开: Action Menu -> Options -> OSC -> Enabled');
+console.log('  2) 戴上头显, 接下来 ' + (SECONDS || 60) + ' 秒按顺序做这些动作:');
+console.log('       a. 右手【握拳】保持 2 秒 -> 张开, 重复 3 次');
+console.log('       b. 按住【语音键】说一句话(2~3 秒), 重复 2 次');
+console.log('       c. 切一次【静音】, 再切回来');
+console.log('       d. 做两个手势: 食指指(Point)、胜利(V), 各保持 2 秒');
+console.log('  3) 结束后数据会自动存到 logs\\osc-quest3.json(程序目录下), 跟开发者说一声即可');
+console.log('');
+console.log('监听中: 127.0.0.1:' + PORT + (LEARN ? ' (学习模式: 只显示能当触发器的变化)' : '') + (SECONDS ? (', ' + SECONDS + ' 秒后结束') : ', 按 Ctrl+C 结束'));
+console.log('----------------------------------------------------------------');
 
 function summary() {
   const rows = Array.from(stats.entries()).sort(function (a, b) { return b[1].n - a[1].n; });
@@ -96,7 +108,16 @@ function summary() {
     console.log('  ' + a.padEnd(46) + String(s.n).padStart(5) + String(s.changes).padStart(6) + String(median(s.gaps) + 'ms').padStart(10) + String((s.gaps.length ? Math.min.apply(null, s.gaps) : 0) + 'ms').padStart(10) + '  ' + String(s.lastValue).slice(0, 14) + (isBuiltin(a) ? ' ★' : ''));
   });
   const builtinsSeen = rows.filter(function (kv) { return isBuiltin(kv[0]) && kv[1].changes > 0; }).map(function (kv) { return kv[0].split('/').pop(); });
-  console.log('内置参数里出现过的(可当触发器): ' + (builtinsSeen.length ? builtinsSeen.join(', ') : '(无 —— 确认游戏里 OSC 已开启, 且真的做了手势/按了语音键)'));
+  console.log('内置参数里出现过的(可当触发器): ' + (builtinsSeen.length ? builtinsSeen.join(', ') : '(无)'));
+  if (!raw.length) {
+    console.log('');
+    console.log('!!! 一条都没收到, 请按顺序检查:');
+    console.log('    1) VRChat 里 OSC 是不是真的开着(Action Menu -> Options -> OSC -> Enabled)');
+    console.log('    2) 有没有别的工具占用了 9001:  netstat -ano | findstr :9001');
+    console.log('    3) VRChat 是不是正在运行(参数要游戏在跑才会发)');
+    console.log('    4) 这 ' + Math.round((Date.now() - t0) / 1000) + ' 秒里有没有做动作(参数是"变化时才发", 不动就没有消息)');
+    console.log('    5) 也可以在游戏里走两步(移动本身也会发参数)来确认链路是否通');
+  }
   if (JSONOUT) { try { fs.writeFileSync(JSONOUT, JSON.stringify({ port: PORT, seconds: (Date.now() - t0) / 1000, messages: raw }, null, 1), 'utf8'); console.log('原始记录已写入: ' + JSONOUT); } catch (e) { console.log('写文件失败: ' + e.message); } }
 }
 
