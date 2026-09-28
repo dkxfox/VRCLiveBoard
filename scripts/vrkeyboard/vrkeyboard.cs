@@ -841,10 +841,13 @@ static class VRKeyboard
     static int GrabHandRole = 0;
     static int InteractionOn = 0;     // 交互开关被打开的次数(用于断言"平时不抢输入")
 
+    static bool InteractiveNow = false;   // 只在**状态变化**时切交互开关(每帧来回切会让画面闪)
     static void SetInteractive(bool on)
     {
         if (FlagRef == null) return;
+        if (on == InteractiveNow) return;
         FlagRef(OvRef, HandleRef, (int)FlagInteractive, on);
+        InteractiveNow = on;
         if (on) InteractionOn++;
     }
 
