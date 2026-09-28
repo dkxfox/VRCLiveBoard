@@ -1891,6 +1891,22 @@
 - **时机很好**: 当时 **SteamVR 没在运行**(vrserver 0 个) -> 说明没有正在进行的会话被打断; 驱动会在**下次 SteamVR 启动时自动加载**, 不需要特意重启。
 - 用户接下来要在管理器里做的事: 给**每个虚拟追踪点 index 指定身体部位**(我们的顺序: 0 hip / 1 chest / 2 head / 3 hand_L / 4 hand_R / 5 elbow_L / 6 elbow_R / 7 knee_L / 8 knee_R / 9 foot_L / 10 foot_R), 并确认监听端口为默认 **39570**。
 - **可逆性(重要, 已告知用户)**: 卸载跑 `C:\vmt_driver\unins000.exe`; 解除驱动注册跑 `vrpathreg removedriver C:\vmt_driver\vmt`。
+
+## 295. VMT 角色映射做好(8 点完整 FBT) + 一次我自己捅的 BOM 娄子(2026-09-29)
+- 用户: 「把映射做好」—— 我原本以为要在 VMT 管理器里手点, 结果在**驱动自带的设置文件**里找到了结构, 于是**直接写配置**:
+  · `C:\vmt_driver\vmt\resources\settings\default.vrsettings` 里是 `"trackers": { "/devices/vmt/VMT_0": "TrackerRole_None", ... }`(58 条);
+  · 用户配置 `C:\Program Files (x86)\Steam\config\steamvr.vrsettings` 也有顶层 `trackers` 段(生效的是这一份)。
+- **两个发现**:
+  1. 用户配置里**已经有一套正在使用的 Rebocap 角色**(`/devices/rebocap/rebo_id_*`, 12 条) —— 说明他这台机器**早就跑通过虚拟追踪器**(Rebocap 一个原理);
+  2. 它的**命名法是全大写**(`TrackerRole_WAIST` / `TrackerRole_LEFT_FOOT`), 与 VMT 默认文件里的混合大小写(`TrackerRole_Waist`)不同 -> **我采用了用户机器上已被证明能用的全大写写法**(最稳)。
+- **映射结果(8 点 = VRChat 的完整 FBT)**: VMT_0 WAIST / VMT_1 CHEST / VMT_5 LEFT_ELBOW / VMT_6 RIGHT_ELBOW / VMT_7 LEFT_KNEE / VMT_8 RIGHT_KNEE / VMT_9 LEFT_FOOT / VMT_10 RIGHT_FOOT;
+  · **故意不给头与双手角色**(VMT_2/3/4 留 None): 头部由头显提供、双手由手柄提供, 再给一份会**冲突**。
+  · 用户的 12 条 Rebocap 角色**一条没动**。
+- ⚠️ **给用户的提醒**: 用我们的方案时**别同时开着 Rebocap**(会重复角色: 两个 WAIST/两套脚), VRChat 的 IK 会打架。
+- **我自己捅的娄子(已修, 如实记)**: 中途我用 PowerShell `Set-Content -Encoding UTF8` 写配置文件, PS 5.1 会**加 UTF-8 BOM** -> SteamVR 的 JSON 解析**不认 BOM**; 而我当时只看到"实际改动 0 条", 以为没写坏。后来 Node 校验时报 `Unexpected token '\uFEFF'` 才发现。
+  · 修复: 去掉 BOM(比对备份确认原文件本来无 BOM), 现在两份配置都 JSON 合法; 备份留在 `steamvr.vrsettings.bak-vrcb-20260928-201947`。
+  · 教训(与之前 .ps1/.bat 编码坑同源): **改配置文件一律用 Node 写、不要用 PowerShell 的 Set-Content**(PS 5.1 的 UTF8 = 带 BOM)。
+- 证据: 两份配置 JSON 解析通过; 用户配置里 VMT 角色 8 条 ✓, Rebocap 12 条未动 ✓; 驱动默认设置同步更新 8 条 ✓。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -2085,5 +2101,6 @@
 | 292 | 2026-09-29 | 路线 B 管线打通: VMD -> 11 点追踪姿态 -> 60Hz /VMT/Room/Unity, 真 UDP 抓包 8 项全过 |
 | 293 | 2026-09-29 | **更正**: 不需要把 Virtual Desktop 切到 SteamVR —— VDXR 与 VRChat 无关(用户指正, 2026-… |
 | 294 | 2026-09-29 | VMT 已装好并注册为 SteamVR 驱动(用户: 「帮我装上吧」) |
+| 295 | 2026-09-29 | VMT 角色映射做好(8 点完整 FBT) + 一次我自己捅的 BOM 娄子 |
 
 <!-- DEV-NOTES-INDEX:END -->
