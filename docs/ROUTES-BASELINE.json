@@ -5,7 +5,7 @@
     "1": "一级密码(needL1(res) 或 !unlockState.level1 且回 403)",
     "2": "开发者密码(!unlockState.level2 且回 403)"
   },
-  "updatedAt": "2026-09-12",
+  "updatedAt": "2026-09-28",
   "notes": {
     "POST /api/security": "插件安全策略段零级可\"单向收紧/恢复默认\"; 提示词防线等其余字段一级(条目 98 用户拍板)",
     "POST /api/swearfilter": "开关零级; addWords 一级",
@@ -27,49 +27,9 @@
   "routes": [
     {
       "m": "POST",
-      "p": "/api/autostart",
-      "level": 0
-    },
-    {
-      "m": "GET",
-      "p": "/api/capture/preview",
-      "level": 0
-    },
-    {
-      "m": "GET",
-      "p": "/api/diag/perf",
+      "p": "/api/actions/release",
       "level": 0,
-      "note": "播放期性能取证报告(2026-09-27, M-20260927-07): 事件循环延迟 + 各进程 CPU + 视频响应投递曲线 + 源 tick 时轴 + 主进程慢操作 + 页面端 <video> 证据(解码/丢帧/缓冲) + env 快照; **读报告幂等**(可反复读, 不销毁会话; 会话到点自然结束并落盘 logs/perf-*.json, 最多留 10 份)。不含凭据"
-    },
-    {
-      "m": "POST",
-      "p": "/api/diag/perf",
-      "level": 0,
-      "note": "页面端把 <video> 卡顿事件与 rAF 掉帧送回来(同上); 只写内存会话, 不落盘、不影响播放"
-    },
-    {
-      "m": "GET",
-      "p": "/api/triggers",
-      "level": 0,
-      "note": "输入触发器状态(M-20260928-01, F-20260925-02 切片 1): 是否监听/端口/绑定/当前参数值/PTT 状态/学习模式候选。只读, 不含凭据"
-    },
-    {
-      "m": "POST",
-      "p": "/api/triggers",
-      "level": 0,
-      "note": "启用/停用触发器、切预设、改绑定(热生效 + persist); 只影响本机监听与绑定, 不向游戏发送任何 OSC"
-    },
-    {
-      "m": "POST",
-      "p": "/api/triggers/learn",
-      "level": 0,
-      "note": "学习模式: {seconds} 开始记录「真正变化过」的 OSC 参数(过滤 Upright 等高频噪声), {stop:true} 结束; 用于把绑定交给用户自己教"
-    },
-    {
-      "m": "POST",
-      "p": "/api/triggers/simulate",
-      "level": 0,
-      "note": "自测入口: 不走网络直接喂一条参数变化({param,value}), 供控制台测试与门禁断言用; 不发送任何 OSC"
+      "note": "一键释放所有动作(收干净, 防\"一直往前走\"); 关闭动作输出与程序退出时内部也会调用"
     },
     {
       "m": "GET",
@@ -85,21 +45,13 @@
     },
     {
       "m": "POST",
-      "p": "/api/actions/release",
-      "level": 0,
-      "note": "一键释放所有动作(收干净, 防\"一直往前走\"); 关闭动作输出与程序退出时内部也会调用"
+      "p": "/api/autostart",
+      "level": 0
     },
     {
       "m": "GET",
-      "p": "/api/pinyin",
-      "level": 0,
-      "note": "内置输入法候选(F-20260925-02 P2-a): ?keys=nihao&n=7 -> 候选词(带命中方式 full/prefix/initials 与词频); 只读"
-    },
-    {
-      "m": "POST",
-      "p": "/api/pinyin/learn",
-      "level": 0,
-      "note": "记住用户选过的候选词({word}), 下次同拼音优先(只写本机 logs/pinyin-learn.json, 不上传)"
+      "p": "/api/capture/preview",
+      "level": 0
     },
     {
       "m": "POST",
@@ -113,16 +65,6 @@
     },
     {
       "m": "GET",
-      "p": "/api/config",
-      "level": 0
-    },
-    {
-      "m": "POST",
-      "p": "/api/config",
-      "level": 0
-    },
-    {
-      "m": "GET",
       "p": "/api/config/export",
       "level": 1
     },
@@ -130,6 +72,16 @@
       "m": "POST",
       "p": "/api/config/import",
       "level": 1
+    },
+    {
+      "m": "GET",
+      "p": "/api/config",
+      "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/config",
+      "level": 0
     },
     {
       "m": "POST",
@@ -169,17 +121,24 @@
     },
     {
       "m": "GET",
+      "p": "/api/diag/perf",
+      "level": 0,
+      "note": "播放期性能取证报告(2026-09-27, M-20260927-07): 事件循环延迟 + 各进程 CPU + 视频响应投递曲线 + 源 tick 时轴 + 主进程慢操作 + 页面端 <video> 证据(解码/丢帧/缓冲) + env 快照; **读报告幂等**(可反复读, 不销毁会话; 会话到点自然结束并落盘 logs/perf-*.json, 最多留 10 份)。不含凭据"
+    },
+    {
+      "m": "POST",
+      "p": "/api/diag/perf",
+      "level": 0,
+      "note": "页面端把 <video> 卡顿事件与 rAF 掉帧送回来(同上); 只写内存会话, 不落盘、不影响播放"
+    },
+    {
+      "m": "GET",
       "p": "/api/diagnose",
       "level": 0
     },
     {
       "m": "GET",
       "p": "/api/efx/boot",
-      "level": 0
-    },
-    {
-      "m": "GET",
-      "p": "/api/env",
       "level": 0
     },
     {
@@ -190,6 +149,11 @@
     {
       "m": "POST",
       "p": "/api/env/install-winsdk",
+      "level": 0
+    },
+    {
+      "m": "GET",
+      "p": "/api/env",
       "level": 0
     },
     {
@@ -218,11 +182,6 @@
       "level": 0
     },
     {
-      "m": "GET",
-      "p": "/api/market",
-      "level": 0
-    },
-    {
       "m": "POST",
       "p": "/api/market/install",
       "level": 0
@@ -233,9 +192,21 @@
       "level": 0
     },
     {
-      "m": "POST",
-      "p": "/api/ocrtl",
+      "m": "GET",
+      "p": "/api/market",
       "level": 0
+    },
+    {
+      "m": "GET",
+      "p": "/api/mocap",
+      "level": 0,
+      "note": "动作播放状态(F-20260929-01 路线 B): 播放中/已发包数/时长/端口/可用动作列表(assets/motions 下的 .vmd; 只本机)"
+    },
+    {
+      "m": "POST",
+      "p": "/api/mocap",
+      "level": 0,
+      "note": "动作播放控制: action=start(file,port?,hz?)/stop/hold(sec); 只允许 assets/motions 下的 .vmd(防路径穿越); 目标是 VMT 默认 127.0.0.1:39570"
     },
     {
       "m": "GET",
@@ -248,9 +219,21 @@
       "level": 0
     },
     {
-      "m": "GET",
-      "p": "/api/plugins",
+      "m": "POST",
+      "p": "/api/ocrtl",
       "level": 0
+    },
+    {
+      "m": "POST",
+      "p": "/api/pinyin/learn",
+      "level": 0,
+      "note": "记住用户选过的候选词({word}), 下次同拼音优先(只写本机 logs/pinyin-learn.json, 不上传)"
+    },
+    {
+      "m": "GET",
+      "p": "/api/pinyin",
+      "level": 0,
+      "note": "内置输入法候选(F-20260925-02 P2-a): ?keys=nihao&n=7 -> 候选词(带命中方式 full/prefix/initials 与词频); 只读"
     },
     {
       "m": "POST",
@@ -265,11 +248,6 @@
     {
       "m": "POST",
       "p": "/api/plugins/call",
-      "level": 0
-    },
-    {
-      "m": "POST",
-      "p": "/api/plugins/open-dir",
       "level": 0
     },
     {
@@ -289,12 +267,17 @@
     },
     {
       "m": "POST",
+      "p": "/api/plugins/import-config",
+      "level": 0
+    },
+    {
+      "m": "POST",
       "p": "/api/plugins/import",
       "level": 0
     },
     {
       "m": "POST",
-      "p": "/api/plugins/import-config",
+      "p": "/api/plugins/open-dir",
       "level": 0
     },
     {
@@ -319,7 +302,7 @@
     },
     {
       "m": "GET",
-      "p": "/api/ports",
+      "p": "/api/plugins",
       "level": 0
     },
     {
@@ -338,14 +321,19 @@
       "level": 0
     },
     {
-      "m": "POST",
-      "p": "/api/security",
-      "level": 1
+      "m": "GET",
+      "p": "/api/ports",
+      "level": 0
     },
     {
       "m": "POST",
       "p": "/api/security-words",
       "level": 2
+    },
+    {
+      "m": "POST",
+      "p": "/api/security",
+      "level": 1
     },
     {
       "m": "POST",
@@ -369,22 +357,46 @@
     },
     {
       "m": "POST",
+      "p": "/api/swearfilter-words",
+      "level": 2
+    },
+    {
+      "m": "POST",
       "p": "/api/swearfilter",
       "level": 1
     },
     {
       "m": "POST",
-      "p": "/api/swearfilter-words",
-      "level": 2
+      "p": "/api/triggers/learn",
+      "level": 0,
+      "note": "学习模式: {seconds} 开始记录「真正变化过」的 OSC 参数(过滤 Upright 等高频噪声), {stop:true} 结束; 用于把绑定交给用户自己教"
+    },
+    {
+      "m": "POST",
+      "p": "/api/triggers/simulate",
+      "level": 0,
+      "note": "自测入口: 不走网络直接喂一条参数变化({param,value}), 供控制台测试与门禁断言用; 不发送任何 OSC"
     },
     {
       "m": "GET",
-      "p": "/api/version",
-      "level": 0
+      "p": "/api/triggers",
+      "level": 0,
+      "note": "输入触发器状态(M-20260928-01, F-20260925-02 切片 1): 是否监听/端口/绑定/当前参数值/PTT 状态/学习模式候选。只读, 不含凭据"
+    },
+    {
+      "m": "POST",
+      "p": "/api/triggers",
+      "level": 0,
+      "note": "启用/停用触发器、切预设、改绑定(热生效 + persist); 只影响本机监听与绑定, 不向游戏发送任何 OSC"
     },
     {
       "m": "GET",
       "p": "/api/version/check",
+      "level": 0
+    },
+    {
+      "m": "GET",
+      "p": "/api/version",
       "level": 0
     },
     {

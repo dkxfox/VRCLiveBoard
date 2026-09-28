@@ -21,7 +21,8 @@ function createServer(opts) {
   const triggerEngine = opts.triggers || null;   // 输入触发器(M-20260928-01); 未注入时相关接口如实报不可用
   const dictation = opts.dictation || null;
   const actionSender = opts.actions || null;
-  const ime = opts.ime || null;   // 内置输入法引擎(F-20260925-02 P2-a)   // 动作输出(F-20260928-01); 未注入时接口如实报不可用      // 语音听写(切片 2); 未注入或未启用时如实报不可用
+  const ime = opts.ime || null;
+  const mocap = opts.mocap || null;   // 动作播放(F-20260929-01 路线 B): VMD -> VMT 虚拟追踪器   // 内置输入法引擎(F-20260925-02 P2-a)   // 动作输出(F-20260928-01); 未注入时接口如实报不可用      // 语音听写(切片 2); 未注入或未启用时如实报不可用
   const logger = opts.logger;
   const webCfg = opts.web;
   const rootConfig = opts.config;
@@ -1212,6 +1213,35 @@ function effPluginSec() {
         const r = ime.learn(o.word);
         return json(res, r.ok ? 200 : 400, r);
       } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
+    });
+  });
+  // ===== 动作播放(F-20260929-01 路线 B) =====
+  // 只播 assets/motions 下的 .vmd; 目标是 VMT(默认 127.0.0.1:39570)。仅本机。
+  on('GET', '/api/mocap', function (req, res, url) {
+    if (!mocap) return json(res, 200, { ok: false, error: '动作服务不可用(非标准启动)' });
+    try { return json(res, 200, mocap.status()); } catch (e) { return json(res, 500, { ok: false, error: String(e.message) }); }
+  });
+  on('POST', '/api/mocap', function (req, res, url) {
+    return readBody(req, function (body) {
+      if (!mocap) return json(res, 200, { ok: false, error: '动作服务不可用(非标准启动)' });
+      let o = {};
+      try { o = JSON.parse(body || '{}'); } catch (e) { return json(res, 400, { ok: false, error: 'BAD_JSON' }); }
+      const act = String(o.action || '');
+      if (act === 'start') {
+        mocap.start(o.file, { port: o.port, hz: o.hz }).then(function (r) {
+          if (r && r.ok) logger.info("[动作] 开始播放 " + r.file + " (" + r.durationSec.toFixed(1) + " 秒 -> " + r.port + ")");
+          else logger.warn("[动作] 启动失败: " + ((r && r.error) || "未知"));
+          json(res, r && r.ok ? 200 : 400, r);
+        }).catch(function (e) { json(res, 500, { ok: false, error: String(e.message) }); });
+        return;
+      }
+      if (act === 'stop') { const r = mocap.stop('手动停止'); logger.info('[动作] 已停止'); return json(res, 200, r); }
+      if (act === 'hold') {
+        // 定住不动(校准全身追踪用): 复用播放器实例但如果没在播就先起一个
+        const r = mocap.hold ? mocap.hold(o.sec) : { ok: false, error: '不支持' };
+        return json(res, r.ok ? 200 : 400, r);
+      }
+      return json(res, 400, { ok: false, error: 'UNKNOWN_ACTION' });
     });
   });
   on('GET', '/api/actions', function (req, res, url) {

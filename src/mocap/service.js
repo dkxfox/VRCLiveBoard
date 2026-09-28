@@ -93,6 +93,20 @@ class MocapService {
       return { ok: false, error: e.message };
     }
   }
+  // 定住不动(校准全身追踪用): 没有播放器时先起一个(用第一个可用动作), 然后让追踪点静止。
+  async hold(sec, file) {
+    try {
+      if (!this.player) {
+        const list = this.listFiles();
+        const pick = file || (list[0] && list[0].file);
+        if (!pick) return { ok: false, error: "没有可用动作文件" };
+        const r = await this.start(pick, {});
+        if (!r.ok) return r;
+      }
+      this.player.hold(Number(sec || 0));
+      return { ok: true, holdAt: Number(sec || 0), file: this.current };
+    } catch (e) { this.lastError = e.message; return { ok: false, error: e.message }; }
+  }
   stop(why) {
     let stopped = false;
     if (this.player) { try { this.player.stop(why || '手动停止'); stopped = true; } catch (e) {} this.player = null; }

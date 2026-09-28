@@ -139,11 +139,10 @@ class MocapPlayer {
     this.holding = false;
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
     this.pausedAt = 0;
-    // 关键: 关掉所有虚拟追踪器。**必须带完整参数**(VMT 日志实测: 只发 3 个参数会报 "missing argument"),
-    // 所以用最后一帧的姿态 + enable=0 一起发。
+    // 停止时的处理(源码依据: enable 是**设备类型**, 1=Tracker, 0 是非法值):
+    // 所以不再发 enable=0, 而是用最后一帧姿态 + enable=1 让追踪点**冻结在原位**, 然后停止发送。
     const last = this._lastPts || this.sampleAt(0);
-    for (let i = 0; i < TRACKER_COUNT; i++) this._send(i, false, last);
-    if (wasPlaying) this.logger.info('[动作] 已停止并关闭追踪点(' + (why || '手动') + ')');
+    for (let i = 0; i < TRACKER_COUNT; i++) this._send(i, true, last);if (wasPlaying) this.logger.info('[动作] 已停止并关闭追踪点(' + (why || '手动') + ')');
     return { ok: true, sent: this.sent };
   }
   status() {

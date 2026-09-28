@@ -114,6 +114,11 @@ async function main() {
   const ime = new PinyinIME({ logger: logger, projectDir: projectDir });   // 注意是 projectDir(工程根), 不是 __dirname(src/)
   const { ActionSender } = require('./actions');
   const actions = new ActionSender({ logger: logger, osc: osc, config: config.actions });
+  // 动作播放(F-20260929-01 路线 B): VMD -> 11 个追踪点 -> 60Hz OSC 给 VMT(SteamVR 虚拟追踪器)。
+  // 只在用户点"开始"时才发; 停止时用最后一帧冻结(源码依据: enable 是设备类型, 0 是非法值)。
+  const { MocapService } = require('./mocap/service');
+  const mocap = new MocapService({ logger: logger });
+  process.on("exit", function () { try { mocap.stop("退出"); } catch (e) {} });
 
   const ivVrc = setInterval(function () {
     const st = getVrcStatus();
@@ -162,7 +167,7 @@ async function main() {
     if (!r.ok) logger.warn('[插件] 自动启用失败 ' + id + ': ' + r.error);
   }
 
-  const web = createServer({ web: config.web, config: config, configPath: configPath, composer: composer, logger: logger, projectDir: projectDir, pluginManager: pluginManager, osc: osc, triggers: triggers, dictation: dictation, actions: actions, ime: ime, onQuit: function () { shutdown('控制台退出'); }, onRestart: function (proceed) { shutdown('控制台重启', proceed); } });
+  const web = createServer({ mocap: mocap, web: config.web, config: config, configPath: configPath, composer: composer, logger: logger, projectDir: projectDir, pluginManager: pluginManager, osc: osc, triggers: triggers, dictation: dictation, actions: actions, ime: ime, onQuit: function () { shutdown('控制台退出'); }, onRestart: function (proceed) { shutdown('控制台重启', proceed); } });
   const consolePort = await web.start();
   // 桌面壳必须知道**实际**端口: 19190 被占时上面会回退, 写死 URL 就会白屏(M-20260911-08)
   process.env.VRCB_CONSOLE_PORT = String(consolePort);
