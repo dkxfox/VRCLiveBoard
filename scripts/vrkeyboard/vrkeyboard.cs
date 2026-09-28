@@ -592,7 +592,24 @@ static class VRKeyboard
                         // (legacy GetControllerState 对没有输入焦点的覆盖层应用返回不了状态, 见 DEV-NOTES 271/278)
                         bool down = (ev.eventType == EvMouseDown);
                         Log("[扳机] " + (down ? "按下" : "松开") + " button=" + ev.mouseButton + " 悬停键=" + (HoverKey == null ? "(无)" : HoverKey.Label));
-                        if (down && ev.mouseButton == MouseLeft && HoverKey != null)
+                        // 手柄射线常常打不中(握把朝向 vs 瞄准方向), 但**目光是可靠的**:
+                        // 所以按键时若自家悬停为空, 就回落到"你正在看的键"; 顺便用这次意图自校准那只手。
+                        Key pressKey = HoverKey;
+                        int pressRole = 0;
+                        for (int ci = 0; ci < ControllerIdx.Length; ci++) if (ControllerIdx[ci] == ev.trackedDeviceIndex) pressRole = ControllerRole[ci];
+                        if (pressKey == null) pressKey = GazeHoverKey;
+                        if (down && pressKey != null && pressRole != 0 && GazeHoverKey != null && LastHoverOrigin != null)
+                        {
+                            // 自校准: 把这只手的朝向, 旋到"它应该指向的那个键的中心"
+                            float ku = (GazeHoverKey.Rect.X + GazeHoverKey.Rect.Width / 2f) / W;
+                            float kv = 1f - ((GazeHoverKey.Rect.Y + GazeHoverKey.Rect.Height / 2f) / H);
+                            float[] tgt = KeyCenterWorld(ku, kv);
+                            float[] dir = Normalize(new float[] { tgt[0] - LastHoverOrigin[0], tgt[1] - LastHoverOrigin[1], tgt[2] - LastHoverOrigin[2] });
+                            float[] gripDir = Normalize(new float[] { -LastHandMatrix[pressRole].m2, -LastHandMatrix[pressRole].m6, -LastHandMatrix[pressRole].m10 });
+                            float ang = AngleBetween(gripDir, dir);
+                            if (ang < 30f && CalibrateHandDir(pressRole, gripDir, dir)) Log("[自校准] 手=" + (pressRole == RoleLeft ? "左" : "右") + " 用这次按键修正了 " + ang.ToString("0.0") + " 度(按的是「" + GazeHoverKey.Label + "」)");
+                        }
+                        if (down && ev.mouseButton == MouseLeft && pressKey != null)
                         {
                             clickCount++; LastClickAt = DateTime.Now;
                             if (PointerPy < 100f && LastHoverOrigin != null)
@@ -602,7 +619,7 @@ static class VRKeyboard
                                 GrabOffset = new float[] { PanelPos[0] - LastHoverOrigin[0], PanelPos[1] - LastHoverOrigin[1], PanelPos[2] - LastHoverOrigin[2] };
                                 Log("[抓取] 拿起键盘(顶部条)");
                             }
-                            else { PressKey(HoverKey, url); }
+                            else { PressKey(pressKey, url); }
                             dirty = true;
                         }
                         else if (!down && Grabbing)
@@ -873,6 +890,8 @@ static class VRKeyboard
     static int InteractionOn = 0;     // 交互开关被打开的次数(用于断言"平时不抢输入")
 
     static float[] LastHoverOrigin = null;   // 最近一次悬停在面板上时, 手柄所在位置(抓取时算相对位置用)
+    static Key GazeHoverKey = null;          // 目光(头显指向)当前落在哪个键 —— 可靠, 用作"用户想要哪个键"的基准
+    static float[] LastGazeOrigin = null;
     static bool InteractiveNow = false;   // 只在**状态变化**时切交互开关(每帧来回切会让画面闪)
     static void SetInteractive(bool on)
     {
@@ -986,6 +1005,7 @@ static class VRKeyboard
             return;
         }
         float[] d = new float[] { dx / len, dy / len, dz / len };
+        LastHandMatrix[role] = m;
         if (PendingCalib > 0) { PendingCalib--; CalibrateHand(role, o, d); }
         d = ApplyCalib(role, d);                       // 用校准过的朝向当瞄准方向(没校准过就是原样)
         VRControllerState_t st = new VRControllerState_t();
@@ -1152,6 +1172,54 @@ static class VRKeyboard
         PendingCalib = 2;   // 接下来两帧里, 每只出现的手柄都算一次
         Log("[校准] 收到校准请求: 请让手保持指向键盘中心");
     }
+    // ---- 自校准用的小工具 ----
+    static HmdMatrix34_t[] LastHandMatrix = new HmdMatrix34_t[3];
+
+    static float[] Normalize(float[] v)
+    {
+        float l = (float)Math.Sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+        if (l < 1e-6f) return new float[] { 0, 0, -1 };
+        return new float[] { v[0] / l, v[1] / l, v[2] / l };
+    }
+
+    static float AngleBetween(float[] a, float[] b)
+    {
+        float d = Math.Max(-1f, Math.Min(1f, a[0] * b[0] + a[1] * b[1] + a[2] * b[2]));
+        return (float)(Math.Acos(d) * 180.0 / Math.PI);
+    }
+
+    // 键中心的 UV -> 面板世界坐标
+    static float[] KeyCenterWorld(float u, float v)
+    {
+        float halfW = CurMeters * 0.5f;
+        float halfH = CurMeters * ((float)H / (float)W) * 0.5f;
+        float lx = (u - 0.5f) * 2f * halfW, ly = (v - 0.5f) * 2f * halfH;
+        return new float[] {
+            PanelPos[0] + PanelRight[0] * lx + PanelUp[0] * ly,
+            PanelPos[1] + PanelRight[1] * lx + PanelUp[1] * ly,
+            PanelPos[2] + PanelRight[2] * lx + PanelUp[2] * ly };
+    }
+
+    // 与 CalibrateHand 同一套轴角法, 但直接给"从哪个方向"到"哪个方向"
+    static bool CalibrateHandDir(int role, float[] from, float[] to)
+    {
+        float dot = Math.Max(-1f, Math.Min(1f, from[0] * to[0] + from[1] * to[1] + from[2] * to[2]));
+        if (dot > 0.99999f) return false;
+        float[] ax = new float[] { from[1] * to[2] - from[2] * to[1], from[2] * to[0] - from[0] * to[2], from[0] * to[1] - from[1] * to[0] };
+        float al = (float)Math.Sqrt(ax[0] * ax[0] + ax[1] * ax[1] + ax[2] * ax[2]);
+        if (al < 1e-6f) return false;
+        ax[0] /= al; ax[1] /= al; ax[2] /= al;
+        float ang = (float)Math.Acos(dot);
+        float c = (float)Math.Cos(ang), s = (float)Math.Sin(ang), tt = 1f - c;
+        float x = ax[0], y = ax[1], z = ax[2];
+        CalibRot[role] = new float[] {
+            tt*x*x + c,    tt*x*y - s*z,  tt*x*z + s*y,
+            tt*x*y + s*z,  tt*y*y + c,    tt*y*z - s*x,
+            tt*x*z - s*y,  tt*y*z + s*x,  tt*z*z + c };
+        SaveCalib();
+        return true;
+    }
+
     // ---- --sim: 不需要 VR 的断言(给门禁/自检用) ----
     static int SimTest()
     {
@@ -1335,6 +1403,10 @@ static class VRKeyboard
         float len = (float)Math.Sqrt(dx * dx + dy * dy + dz * dz);
         if (len <= 0.001f || float.IsNaN(o[0])) return;
         float[] d = new float[] { dx / len, dy / len, dz / len };
+        // 目光的悬停键单独记下来(自校准与"看着键扣扳机"都靠它)
+        float gu, gv;
+        if (RayToUv(o, d, out gu, out gv) && InPanelBox(gu, gv)) { GazeHoverKey = Hit(gu, gv); LastGazeOrigin = o; }
+        else GazeHoverKey = null;
         bool rising = trigger && !GazeTrigPrev;
         bool falling = !trigger && GazeTrigPrev;
         GazeTrigPrev = trigger;
