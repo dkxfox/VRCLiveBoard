@@ -89,6 +89,10 @@ static class VRKeyboard
     static int ClickCount2 = 0;
     static int EvCount2 = 0;
     static bool DumpedEvents = false;
+    static Key HoverKey = null;
+    static float HoverX = 0, HoverY = 0;
+    static int MoveLogged = 0;
+    static int HoverLogged = 0;
     static IntPtr OvRef = IntPtr.Zero;
     static ulong HandleRef = 0;
     static ShowOverlayFn ShowRef = null;
@@ -156,7 +160,8 @@ static class VRKeyboard
                 g.DrawString(Line.Length == 0 ? "(点字母开始打字)" : Line, f, b, lineRect.X + 12f, lineRect.Y + 8f);
             foreach (Key k in Keys)
             {
-                using (SolidBrush b = new SolidBrush(k.Special ? Color.FromArgb(255, 44, 58, 88) : Color.FromArgb(255, 38, 44, 60)))
+                bool hovered = (HoverKey != null && HoverKey.Value == k.Value);
+                using (SolidBrush b = new SolidBrush(hovered ? Color.FromArgb(255, 96, 132, 200) : (k.Special ? Color.FromArgb(255, 44, 58, 88) : Color.FromArgb(255, 38, 44, 60))))
                     g.FillRectangle(b, k.Rect);
                 using (Pen p = new Pen(Color.FromArgb(255, 92, 104, 132), 2f))
                     g.DrawRectangle(p, k.Rect.X, k.Rect.Y, k.Rect.Width, k.Rect.Height);
@@ -169,20 +174,24 @@ static class VRKeyboard
             }
             using (Font f = new Font("Microsoft YaHei UI", 18f))
             using (SolidBrush b = new SolidBrush(Color.FromArgb(255, 150, 200, 160)))
-                g.DrawString(Status, f, b, 20f, H - 44f);
+                g.DrawString(Status + "   [指针 " + HoverX.ToString("0.###") + "," + HoverY.ToString("0.###") + (HoverKey == null ? "" : (" -> " + HoverKey.Label)) + "]", f, b, 20f, H - 44f);
         }
         return bmp;
     }
 
-    static Key Hit(float u, float v)
+    // 命中测试: 先判断拿到的是 UV(0~1) 还是像素, 再翻 Y(GL 空间原点在左下角)
+    static Key Hit(float ax, float ay)
     {
+        float u, v;
+        if (Math.Abs(ax) <= 1.5f && Math.Abs(ay) <= 1.5f) { u = ax; v = ay; }
+        else { u = ax / W; v = ay / H; }
         float px = u * W;
         float py = (1f - v) * H;
+        if (px < 0 || py < 0 || px > W || py > H) return null;
         foreach (Key k in Keys)
             if (px >= k.Rect.X && px <= k.Rect.Right && py >= k.Rect.Y && py <= k.Rect.Bottom) return k;
         return null;
     }
-
     static void PressKey(Key k, string url)
     {
         if (k == null) return;
@@ -419,7 +428,7 @@ static class VRKeyboard
             Log("[信息] SetOverlaySortOrder -> " + Vt<SetOverlaySortOrderFn>(ov, 20)(ov, handle, 1u));
             Log("[信息] SetOverlayWidthInMeters(" + meters + ") -> " + Vt<SetOverlayWidthInMetersFn>(ov, 22)(ov, handle, meters));
             Log("[信息] SetOverlayInputMethod(Mouse) -> " + Vt<SetOverlayInputMethodFn>(ov, 50)(ov, handle, InputMethodMouse));
-            Log("[信息] SetOverlayMouseScale(" + W + "," + H + ") -> " + Vt<SetOverlayMouseScaleFn>(ov, 52)(ov, handle, W, H));
+            Log("[信息] SetOverlayMouseScale(1,1 -> 事件坐标用 UV) -> " + Vt<SetOverlayMouseScaleFn>(ov, 52)(ov, handle, 1f, 1f));
             HmdMatrix34_t m = new HmdMatrix34_t();
             m.m0 = 1f; m.m5 = 1f; m.m10 = 1f;
             if (fixedPos)
@@ -476,11 +485,22 @@ static class VRKeyboard
                         Log("[事件样本] type=" + ev.eventType + " device=" + ev.trackedDeviceIndex + " x=" + ev.mouseX + " y=" + ev.mouseY + " button=" + ev.mouseButton);
                     }
                     EvCount2 = evCount;
-                    if (ev.eventType == EvMouseDown && ev.mouseButton == MouseLeft)
+                    if (ev.eventType == EvMouseMove)
+                    {
+                        Key hk = Hit(ev.mouseX, ev.mouseY);
+                        if (MoveLogged < 8)
+                        {
+                            MoveLogged++;
+                            Log("[移动样本] 原始=(" + ev.mouseX.ToString("0.####") + "," + ev.mouseY.ToString("0.####") + ") -> " + (hk == null ? "面板外" : hk.Label));
+                        }
+                        if (hk != HoverKey) { HoverKey = hk; dirty = true; HoverLogged++; if (HoverLogged <= 25) Log("[悬停] -> " + (hk == null ? "面板外" : hk.Label) + "  原始=(" + ev.mouseX.ToString("0.####") + "," + ev.mouseY.ToString("0.####") + ")"); }
+                        HoverX = ev.mouseX; HoverY = ev.mouseY;
+                    }
+                    else if (ev.eventType == EvMouseDown || ev.eventType == EvMouseUp)
                     {
                         Key k = Hit(ev.mouseX, ev.mouseY);
-                        Log("[输入] 点击 uv=(" + ev.mouseX.ToString("0.###") + "," + ev.mouseY.ToString("0.###") + ") -> " + (k == null ? "没命中任何键" : k.Label));
-                        if (k != null) { clickCount++; PressKey(k, url); dirty = true; }
+                        Log("[输入] " + (ev.eventType == EvMouseDown ? "按下" : "松开") + " 原始=(" + ev.mouseX.ToString("0.####") + "," + ev.mouseY.ToString("0.####") + ") button=" + ev.mouseButton + " -> " + (k == null ? "没命中任何键" : k.Label));
+                        if (ev.eventType == EvMouseDown && k != null) { clickCount++; PressKey(k, url); dirty = true; }
                     }
                 }
                 else Thread.Sleep(15);
