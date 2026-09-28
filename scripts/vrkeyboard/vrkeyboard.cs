@@ -98,6 +98,8 @@ static class VRKeyboard
     static int AutoHideSec = 0;    // 默认**不**自动收起(45 秒那次把用户的面板收没了); 需要时 --auto-hide N
     static float CurMeters = 1.35f, CurDist = 1.3f, CurDrop = 0.28f;   // 多久没点就把键盘收起来(免得游戏一直收不到输入)
     static int HoverLogged = 0;
+    static float MinX = float.MaxValue, MaxX = float.MinValue, MinY = float.MaxValue, MaxY = float.MinValue;
+    static int MoveSeen = 0;
     static IntPtr OvRef = IntPtr.Zero;
     static ulong HandleRef = 0;
     static ShowOverlayFn ShowRef = null;
@@ -286,6 +288,7 @@ static class VRKeyboard
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int HideOverlayFn(IntPtr self, ulong handle);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int IsOverlayVisibleFn(IntPtr self, ulong handle);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int PollNextOverlayEventFn(IntPtr self, ulong handle, ref VREvent_t ev, uint size);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int PollRawFn(IntPtr self, ulong handle, IntPtr pEvent, uint size);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int SetOverlayInputMethodFn(IntPtr self, ulong handle, int method);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int SetOverlayMouseScaleFn(IntPtr self, ulong handle, float x, float y);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int SetOverlayFromFileFn(IntPtr self, ulong handle, string path);
@@ -446,7 +449,7 @@ static class VRKeyboard
             Log("[信息] SetOverlaySortOrder -> " + Vt<SetOverlaySortOrderFn>(ov, 20)(ov, handle, 1u));
             Log("[信息] SetOverlayWidthInMeters(" + meters + ") -> " + Vt<SetOverlayWidthInMetersFn>(ov, 22)(ov, handle, meters));
             Log("[信息] SetOverlayInputMethod(Mouse) -> " + Vt<SetOverlayInputMethodFn>(ov, 50)(ov, handle, InputMethodMouse));
-            Log("[信息] SetOverlayMouseScale(1,1 -> 事件坐标用 UV) -> " + Vt<SetOverlayMouseScaleFn>(ov, 52)(ov, handle, 1f, 1f));
+            Log("[信息] SetOverlayMouseScale(" + W + "x" + H + " -> 按官方注释: 鼠标尺度是 UI 像素尺寸) -> " + Vt<SetOverlayMouseScaleFn>(ov, 52)(ov, handle, W, H));
             HmdMatrix34_t m = new HmdMatrix34_t();
             m.m0 = 1f; m.m5 = 1f; m.m10 = 1f;
             if (!followHead)
@@ -471,6 +474,9 @@ static class VRKeyboard
             SetOverlayFromFileFn setFile = Vt<SetOverlayFromFileFn>(ov, 63);
             IsOverlayVisibleFn isVisible = Vt<IsOverlayVisibleFn>(ov, 45);
             PollNextOverlayEventFn poll = Vt<PollNextOverlayEventFn>(ov, 48);
+            PollRawFn pollRaw = Vt<PollRawFn>(ov, 48);
+            IntPtr evBuf = Marshal.AllocHGlobal(96);
+            byte[] evBytes = new byte[96];
             int dumped = 0;
             int frame = 0, rawErr = 0, evCount = 0, clickCount = 0;
             bool dirty = true;
@@ -497,6 +503,18 @@ static class VRKeyboard
                 if (poll(ov, handle, ref ev, 64u) != 0)
                 {
                     evCount++;
+                    if (dumped < 6 && ev.eventType != 300)
+                    {
+                        int rp = pollRaw(ov, handle, evBuf, 96u);
+                        if (rp != 0)
+                        {
+                            Marshal.Copy(evBuf, evBytes, 0, 96);
+                            StringBuilder sbd = new StringBuilder();
+                            for (int off = 8; off <= 40; off += 4)
+                                sbd.Append("[" + off + "]=" + BitConverter.ToSingle(evBytes, off).ToString("0.####") + " ");
+                            Log("[原始] type=" + BitConverter.ToInt32(evBytes, 0) + " " + sbd.ToString());
+                        }
+                    }
                     if (dumped < 6)
                     {
                         dumped++;
@@ -506,6 +524,7 @@ static class VRKeyboard
                     if (ev.eventType == EvMouseMove)
                     {
                         Key hk = Hit(ev.mouseX, ev.mouseY);
+                        MoveSeen++; if (ev.mouseX < MinX) MinX = ev.mouseX; if (ev.mouseX > MaxX) MaxX = ev.mouseX; if (ev.mouseY < MinY) MinY = ev.mouseY; if (ev.mouseY > MaxY) MaxY = ev.mouseY;
                         if (MoveLogged < 8)
                         {
                             MoveLogged++;
@@ -526,6 +545,7 @@ static class VRKeyboard
                 if ((DateTime.Now - lastBeat).TotalSeconds >= 5)
                 {
                     lastBeat = DateTime.Now;
+                    Log("[指针范围] n=" + MoveSeen + " x=[" + (MoveSeen > 0 ? MinX.ToString("0.##") : "-") + "," + (MoveSeen > 0 ? MaxX.ToString("0.##") : "-") + "] y=[" + (MoveSeen > 0 ? MinY.ToString("0.##") : "-") + "," + (MoveSeen > 0 ? MaxY.ToString("0.##") : "-") + "]");
                     Log("[心跳] 帧=" + frame + " 可见=" + isVisible(ov, handle) + " 原始推送返回=" + rawErr + " 事件=" + evCount + " 点击=" + clickCount + " 输入行='" + Line + "'");
                 }
                 if (Shown && AutoHideSec > 0 && (DateTime.Now - LastClickAt).TotalSeconds >= AutoHideSec)
