@@ -99,6 +99,19 @@ class MocapPlayer {
     if (ok !== false) { this.sent++; this.sentAt = Date.now(); }
     return ok !== false;
   }
+  // 定住不动: 反复发同一个时刻的姿态(供 VRChat 校准全身追踪用), 不推进时间轴
+  hold(sec) {
+    this.playing = false;
+    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    this.holdAt = Number(sec || 0);
+    this.holding = true;
+    const self = this;
+    const pts = this.sampleAt(this.holdAt);
+    this.timer = setInterval(function () { for (let i = 0; i < TRACKER_COUNT; i++) self._send(i, true, pts); }, Math.round(1000 / this.hz));
+    if (this.timer.unref) this.timer.unref();
+    this.logger.info('[动作] 已定住(第 ' + this.holdAt + ' 秒的姿态), 追踪点静止 —— 可以去 VRChat 校准全身追踪');
+    return { ok: true, holdAt: this.holdAt };
+  }
   tick() {   // 一次发送(测试里可以直接调, 不必等定时器)
     const sec = this.timeOffset * 0 + ((Date.now() - this.startedAt) / 1000) + this.pausedAt;
     if (sec > this.vmd.durationSec) { this.stop('播放结束'); return false; }
@@ -115,12 +128,14 @@ class MocapPlayer {
       try { if (!self.tick()) clearInterval(self.timer); }
       catch (e) { self.lastError = e.message; self.logger.warn('[动作] 发送出错: ' + e.message); self.stop('出错'); }
     }, Math.round(1000 / this.hz));
+    if (this.timer.unref) this.timer.unref();   // 不阻塞进程退出
     this.logger.info('[动作] 开始播放(每帧发 ' + TRACKER_COUNT + ' 个追踪点)');
     return { ok: true };
   }
   stop(why) {
     const wasPlaying = this.playing;
     this.playing = false;
+    this.holding = false;
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
     this.pausedAt = 0;
     for (let i = 0; i < TRACKER_COUNT; i++) this._send(i, false, null);   // 关键: 关掉所有虚拟追踪器
