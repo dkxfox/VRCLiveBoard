@@ -1614,6 +1614,19 @@
 - 证据: `--sim` 5 项仍全过; `--selftest` 全绿; csc 零错误; 实跑日志显示"检测到控制器 2 个: #1(角色1) #2(角色2)"与正常的几何数值。
 - **诚实说明**: "扣扳机出字"这一步**还没有在 VR 里确认成功** —— 上面三个问题里 ①② 已修, ③ 需要 action-based aim 姿态(下一步)。
 - 教训(第五次同类, 已经成习惯了, 必须改): 每一个 P/Invoke 结构体都要**按头文件逐字节核对尺寸/偏移**, 不能凭记忆写; 这次是尺寸差 16 字节, 表现却是"手柄在天上"这种完全不相干的症状。
+
+## 271. aim 姿态走不通的原因找到了: **覆盖层应用没有输入焦点, action set 永远不是 active**(2026-09-29)
+- 按计划补了 action 输入系统(manifest + 三份 default bindings + `IVRInput_011`): 一切看起来都对 ——
+  · `[aim] SetActionManifestPath -> 0` ✓;
+  · 五个句柄全部拿到: `set=0(1152970415694415051) 左aim=0(...052) 右aim=0(...053) 左扳机=0 右扳机=0` ✓;
+  · 还修了一个签名错误: `UpdateActionState` 官方是**三个**参数(结构体指针 + **结构体字节数** + 数量), 我一开始少写一个 ✓ 已补;
+- **但 action 永远起不来**: `UpdateActionState -> 8`, 8 = `VRInputError_NoActiveActionSet`; 于是 `GetPoseActionDataForNextFrame -> 3 (InvalidHandle)` 且 `active=0`。
+- **结论(有据)**: SteamVR 的 action set 只在**应用拥有输入焦点**时才是 active; 覆盖层应用(`VRApplication_Overlay`)**没有输入焦点** → 它的 action set 永远不 active → **action 系统的 aim 姿态对覆盖层应用不可用**。这同时解释了为什么成熟的覆盖层工具(XSOverlay / OVR Toolkit)都是**自己算瞄准**:它们也拿不到 action 的 aim。
+- 交付与保留: `actions.json` + `bindings_oculus_touch/knuckles/vive_controller.json` + `IVRInput` 接线与逐项日志**全部留在代码里**(将来若改成有输入焦点的形态, 直接就能用); 现在它自动退回 grip + 目光指针。
+- **下一步的两条正路**(都不是猜):
+  ① **读 SteamVR 自己的手柄输入配置**(`SteamVR/drivers/*/resources/input/*_profile.json`)里的 **aim ↔ grip 偏移**, 按控制器类型套用 —— 这是 Valve 官方数据, 可核对;
+  ② **一次性校准**: 让用户"看着键盘中心扣一次扳机", 用那一刻的 grip 姿态反推出偏移并记住(存 logs/) —— 对任何手柄都成立, 且用户操作只有一次。
+- 教训(第六次同类, 但这次是好事): 我这次**没有猜**, 而是把每一步的返回码都打出来, 于是"作用域/权限"这类无法从文档看出的限制, 用 8 这个错误码一次定位。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1784,5 +1797,6 @@
 | 268 | 2026-09-29 | 路线定案: 走 A(自研, 不依赖第三方) + 照成熟工具查证 + 第 2 刀设计 |
 | 269 | 2026-09-29 | 切片 2 交付: **自算射线 + 抓取/放置**(键盘拿起来放、松手悬浮) |
 | 270 | 2026-09-29 | 打不了字的三层根因: 姿态结构体尺寸写错(96→80) / 系统鼠标事件把悬停冲掉 / 握把朝向 ≠ 瞄准方向 |
+| 271 | 2026-09-29 | aim 姿态走不通的原因找到了: **覆盖层应用没有输入焦点, action set 永远不是 active** |
 
 <!-- DEV-NOTES-INDEX:END -->

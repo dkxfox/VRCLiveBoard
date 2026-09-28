@@ -1,0 +1,46 @@
+{
+  "controller_type": "oculus_touch",
+  "binding_url": "",
+  "bindings": {
+    "/actions/main": {
+      "sources": [
+        {
+          "path": "/user/hand/left/input/aim/pose",
+          "mode": "pose",
+          "inputs": {
+            "pose": {
+              "output": "/actions/main/in/pose_left"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/aim/pose",
+          "mode": "pose",
+          "inputs": {
+            "pose": {
+              "output": "/actions/main/in/pose_right"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/left/input/trigger",
+          "mode": "trigger",
+          "inputs": {
+            "click": {
+              "output": "/actions/main/in/trigger_left"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/trigger",
+          "mode": "trigger",
+          "inputs": {
+            "click": {
+              "output": "/actions/main/in/trigger_right"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "action_manifest_version": 0,
+  "app_key": "vrcliveboard.vrkeyboard",
+  "default_bindings": [
+    {
+      "controller_type": "oculus_touch",
+      "binding_url": "bindings_oculus_touch.json"
+    },
+    {
+      "controller_type": "knuckles",
+      "binding_url": "bindings_knuckles.json"
+    },
+    {
+      "controller_type": "vive_controller",
+      "binding_url": "bindings_vive_controller.json"
+    }
+  ],
+  "actions": [
+    {
+      "name": "pose_left",
+      "type": "pose",
+      "requirement": "optional"
+    },
+    {
+      "name": "pose_right",
+      "type": "pose",
+      "requirement": "optional"
+    },
+    {
+      "name": "trigger_left",
+      "type": "boolean",
+      "requirement": "optional"
+    },
+    {
+      "name": "trigger_right",
+      "type": "boolean",
+      "requirement": "optional"
+    }
+  ],
+  "action_sets": [
+    {
+      "name": "main",
+      "usage": "single"
+    }
+  ],
+  "localization": [
+    {
+      "language_tag": "en_US",
+      "action_sets": {
+        "main": {
+          "name": "Keyboard"
+        }
+      },
+      "actions": {
+        "pose_left": {
+          "name": "Left aim"
+        },
+        "pose_right": {
+          "name": "Right aim"
+        },
+        "trigger_left": {
+          "name": "Left trigger"
+        },
+        "trigger_right": {
+          "name": "Right trigger"
+        }
+      }
+    }
+  ]
+}

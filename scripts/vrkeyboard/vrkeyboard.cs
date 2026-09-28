@@ -470,6 +470,7 @@ static class VRKeyboard
             else { DoHide(); Log("[信息] 默认**隐藏**(避免一直吸着控制器激光让游戏收不到输入); 用 --toggle / 控制口 或 --show-at-start 显示"); }
             if (ctlPort > 0) StartControl(ctlPort);
             EnsureSystem();
+            InitActions();                      // 拿真正的 aim 姿态(拿不到就退回 grip + 目光指针)
             SetPanelFromMatrix(CurPanelMatrix());
             // 先把事件字段原样打几条出来(排障: 鼠标事件的坐标/按钮到底在哪个偏移)
             SetOverlayRawFn setRaw = Vt<SetOverlayRawFn>(ov, 62);
@@ -502,7 +503,8 @@ static class VRKeyboard
                     dirty = false;
                 }
                 // 每帧: 枚举手柄 -> 读姿态与扳机 -> 交给指针状态机(自算射线/近距戳键)
-                if (SysRef != IntPtr.Zero)
+                if (ActionsTick(url)) { /* action 输入已接管(用的是真 aim 姿态) */ }
+                else if (SysRef != IntPtr.Zero)
                 {
                     try
                     {
@@ -1167,7 +1169,129 @@ static class VRKeyboard
         PointerStepEdge(0, o, d, rising, falling, url);
     }
 
+// ================= action 输入系统: 拿真正的 **aim 姿态**(就是 SteamVR 激光指的那条线) =================
+    // 为什么必须走 action: legacy 的 GetDeviceToAbsoluteTrackingPose 给的是 **grip(握把)姿态**,
+    // 与瞄准方向差 ~26 度(实测), 所以射线系统性偏上。aim 姿态只有 action 系统给。
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int SetManifestFn(IntPtr self, string path);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int GetHandleFn(IntPtr self, string path, ref ulong handle);
+    // 注意: 官方签名是 UpdateActionState( VRActiveActionSet_t *pSets, uint32_t unSizeOfVRSelectedActionSet_t, uint32_t unSetCount )
+    // —— **三个**参数, 中间那个是结构体字节数。少写一个参数会让 action 永远起不来(表现为 GetPose 返回 3=InvalidHandle)。
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int UpdateActionsFn(IntPtr self, [In] ActiveActionSet_t[] sets, uint sizeOfSet, uint count);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int GetDigitalFn(IntPtr self, ulong handle, ref InputDigitalActionData_t data, uint size, ulong restrict);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int GetPoseActionFn(IntPtr self, ulong handle, int origin, ref InputPoseActionData_t data, uint size, ulong restrict);
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct ActiveActionSet_t { public ulong actionSet; public ulong restrictToDevice; }
+
+    // InputPoseActionData_t: bActive(1)+pad(7)+activeOrigin(8)+TrackedDevicePose_t(80) = 96, 矩阵在偏移 16
+    [StructLayout(LayoutKind.Explicit, Size = 96)]
+    struct InputPoseActionData_t { [FieldOffset(0)] public byte bActive; [FieldOffset(8)] public ulong activeOrigin; [FieldOffset(16)] public HmdMatrix34_t pose; }
+
+    // InputDigitalActionData_t: bActive(1)+pad(7)+activeOrigin(8)+bState(1)+bChanged(1)+pad(2)+fUpdateTime(4) = 24
+    [StructLayout(LayoutKind.Explicit, Size = 24)]
+    struct InputDigitalActionData_t { [FieldOffset(0)] public byte bActive; [FieldOffset(8)] public ulong activeOrigin; [FieldOffset(16)] public byte bState; [FieldOffset(17)] public byte bChanged; [FieldOffset(20)] public float fUpdateTime; }
+
+    static IntPtr InputRef = IntPtr.Zero;
+    static ulong SetMain = 0, ActPoseL = 0, ActPoseR = 0, ActTrigL = 0, ActTrigR = 0;
+    static UpdateActionsFn UpdateActionsRef = null;
+    static GetPoseActionFn GetPoseActionRef = null;
+    static GetDigitalFn GetDigitalRef = null;
+    static bool ActionsReady = false;
+    static bool AimActive = false;
+    static bool[] AimTrigPrev = new bool[3];
+    static DateTime LastAimLog = DateTime.MinValue;
+
+    static bool InitActions()
+    {
+        try
+        {
+            string dir = AppDomain.CurrentDomain.BaseDirectory;
+            string manifest = Path.Combine(dir, "actions.json");
+            if (!File.Exists(manifest))
+            {
+                Log("[aim] 找不到 " + manifest + " -> 退回 grip 姿态(射线会偏)");
+                return false;
+            }
+            int err = 0;
+            InputRef = VR_GetGenericInterface("IVRInput_011", ref err);
+            if (InputRef == IntPtr.Zero || err != 0)
+            {
+                for (int v = 10; v >= 1 && InputRef == IntPtr.Zero; v--)
+                {
+                    err = 0;
+                    InputRef = VR_GetGenericInterface("IVRInput_0" + v.ToString("00"), ref err);
+                    if (err != 0) InputRef = IntPtr.Zero;
+                }
+            }
+            if (InputRef == IntPtr.Zero) { Log("[aim] 拿不到 IVRInput 接口 -> 退回 grip 姿态"); return false; }
+            SetManifestFn setManifest = Vt<SetManifestFn>(InputRef, 0);
+            GetHandleFn getHandle = Vt<GetHandleFn>(InputRef, 2);
+            UpdateActionsRef = Vt<UpdateActionsFn>(InputRef, 4);
+            GetDigitalRef = Vt<GetDigitalFn>(InputRef, 5);
+            GetPoseActionRef = Vt<GetPoseActionFn>(InputRef, 8);
+            int e1 = setManifest(InputRef, manifest);
+            Log("[aim] SetActionManifestPath -> " + e1 + " (" + manifest + ")");
+            GetHandleFn setHandle = Vt<GetHandleFn>(InputRef, 1);
+            int e2 = setHandle(InputRef, "/actions/main", ref SetMain);
+            int e3 = getHandle(InputRef, "/actions/main/in/pose_left", ref ActPoseL);
+            int e4 = getHandle(InputRef, "/actions/main/in/pose_right", ref ActPoseR);
+            int e5 = getHandle(InputRef, "/actions/main/in/trigger_left", ref ActTrigL);
+            int e6 = getHandle(InputRef, "/actions/main/in/trigger_right", ref ActTrigR);
+            Log("[aim] 句柄: set=" + e2 + "(" + SetMain + ") 左aim=" + e3 + "(" + ActPoseL + ") 右aim=" + e4 + "(" + ActPoseR + ") 左扳机=" + e5 + " 右扳机=" + e6);
+            ActionsReady = (e2 == 0 && e3 == 0 && e4 == 0 && e5 == 0 && e6 == 0 && SetMain != 0);
+            Log(ActionsReady ? "[aim] action 输入就绪(用真正的 aim 姿态)" : "[aim] 有句柄没拿到 -> 退回 grip 姿态");
+            return ActionsReady;
+        }
+        catch (Exception ex) { Log("[aim] 初始化异常: " + ex.Message + " -> 退回 grip 姿态"); return false; }
+    }
+
+    // 每帧: 更新 action 状态, 取左右 aim 姿态与扳机 -> 交给同一个指针状态机
+    static bool ActionsTick(string url)
+    {
+        if (!ActionsReady || UpdateActionsRef == null || GetPoseActionRef == null) return false;
+        try
+        {
+            ActiveActionSet_t[] sets = new ActiveActionSet_t[1];
+            sets[0].actionSet = SetMain; sets[0].restrictToDevice = 0;
+            int ue = UpdateActionsRef(InputRef, sets, 16u, 1u);   // 16 = sizeof(VRActiveActionSet_t)
+            if (ue != 0 && (DateTime.Now - LastAimLog).TotalSeconds > 5) Log("[aim] UpdateActionState -> " + ue + " (非 0 = action 没激活)");
+            bool handled = false;
+            for (int k = 0; k < 2; k++)
+            {
+                int role = (k == 0) ? RoleLeft : RoleRight;
+                ulong poseH = (k == 0) ? ActPoseL : ActPoseR;
+                ulong trigH = (k == 0) ? ActTrigL : ActTrigR;
+                InputPoseActionData_t pd = new InputPoseActionData_t();
+                int pe = GetPoseActionRef(InputRef, poseH, UniverseStanding, ref pd, 96u, 0ul);
+                InputDigitalActionData_t td = new InputDigitalActionData_t();
+                int te = GetDigitalRef != null ? GetDigitalRef(InputRef, trigH, ref td, 24u, 0ul) : 1;
+                if ((DateTime.Now - LastAimLog).TotalSeconds > 5)
+                {
+                    LastAimLog = DateTime.Now;
+                    Log("[aim] " + (k == 0 ? "左" : "右") + " poseErr=" + pe + " active=" + pd.bActive + " trigErr=" + te + " trigActive=" + td.bActive + " trig=" + td.bState);
+                }
+                if (pe != 0 || pd.bActive == 0) continue;
+                handled = true;
+                AimActive = true;
+                float[] o = new float[] { pd.pose.m3, pd.pose.m7, pd.pose.m11 };
+                float dx = -pd.pose.m2, dy = -pd.pose.m6, dz = -pd.pose.m10;   // aim 姿态的 -Z 就是指向
+                float len = (float)Math.Sqrt(dx * dx + dy * dy + dz * dz);
+                if (len <= 0.001f || float.IsNaN(o[0])) continue;
+                float[] d = new float[] { dx / len, dy / len, dz / len };
+                bool trig = (td.bActive != 0) && (td.bState != 0);
+                bool prev = AimTrigPrev[role];
+                bool rising = trig && !prev;
+                bool falling = !trig && prev;
+                AimTrigPrev[role] = trig;
+                PointerStepEdge(role, o, d, rising, falling, url);
+            }
+            return handled;
+        }
+        catch (Exception ex) { if (MoveLogged < 3) Log("[aim] 每帧更新异常: " + ex.Message); return false; }
+    }
+
     static int Main(string[] args)
+
 
 
 
