@@ -21,6 +21,7 @@ function argOf(name, def) { const i = argv.indexOf('--' + name); return i >= 0 &
 const PORT = Number(argOf('port', 9001));
 const SECONDS = Number(argOf('seconds', 0));
 const LEARN = argv.indexOf('--learn') >= 0;
+const MUTEDTEST = argv.indexOf('--mutedtest') >= 0;
 const JSONOUT = argOf('json', '');
 const BUILTIN = ['Voice', 'GestureLeft', 'GestureRight', 'GestureLeftWeight', 'GestureRightWeight', 'MuteSelf', 'AFK', 'Seated', 'VRMode', 'Grounded', 'Viseme', 'Earmuffs', 'InStation'];
 
@@ -102,6 +103,16 @@ console.log('       a. 右手【握拳】保持 2 秒 -> 张开, 重复 3 次');
 console.log('       b. 按住【语音键】说一句话(2~3 秒), 重复 2 次');
 console.log('       c. 切一次【静音】, 再切回来');
 console.log('       d. 做两个手势: 食指指(Point)、胜利(V), 各保持 2 秒');
+if (MUTEDTEST) {
+  console.log('=== 静音说话测试(结论由窗口自动给出) ===');
+  console.log('请按顺序做:');
+  console.log('  1) 在 VRChat 里按静音键, 确认自己是【静音】(游戏里说话时静音图标会亮)');
+  console.log('  2) 保持静音, 正常说两句话(每句 3~4 秒), 中间停 2 秒');
+  console.log('  3) 说完等 3 秒');
+  console.log('  4) 取消静音, 再说一句话(3~4 秒) —— 这是对照组');
+  console.log('  5) 时间到了窗口会直接给出结论');
+  console.log('');
+}
 console.log('  3) 结束后数据会自动存到 logs\\osc-quest3.json(程序目录下), 跟开发者说一声即可');
 console.log('');
 console.log('监听中: 127.0.0.1:' + PORT + (LEARN ? ' (学习模式: 只显示能当触发器的变化)' : '') + (SECONDS ? (', ' + SECONDS + ' 秒后结束') : ', 按 Ctrl+C 结束'));
@@ -118,6 +129,7 @@ function summary() {
   });
   const builtinsSeen = rows.filter(function (kv) { return isBuiltin(kv[0]) && kv[1].changes > 0; }).map(function (kv) { return kv[0].split('/').pop(); });
   console.log('内置参数里出现过的(可当触发器): ' + (builtinsSeen.length ? builtinsSeen.join(', ') : '(无)'));
+  printMuteVerdict(raw);
   if (!raw.length) {
     console.log('');
     console.log('!!! 一条都没收到, 请按顺序检查:');
@@ -198,10 +210,45 @@ function analyzeFile(file) {
       if (ds.length) console.log('  ' + kv[0].replace('/avatar/parameters/', '').padEnd(20) + '事件 ' + ds.length + ' 次, 距前一次心跳: 中位 ' + median(ds) + 'ms / 最大 ' + Math.max.apply(null, ds) + 'ms');
     });
   }
+  printMuteVerdict(msgs);
   const noise = rows.filter(function (kv) { return !isBuiltin(kv[0]) && median(kv[1].gaps) > 0 && median(kv[1].gaps) < 150; });
   if (noise.length) {
     console.log('');
     console.log('=== 高频噪声(学习模式会自动过滤这些; 它们不适合当触发器) ===');
     noise.forEach(function (kv) { console.log('  ' + kv[0].padEnd(46) + '中位间隔 ' + median(kv[1].gaps) + 'ms'); });
+  }
+}
+
+// ---- 静音期间 Voice 行为(2026-09-28 加): 回答「静音玩家能不能用说话即听写」----
+function printMuteVerdict(msgs) {
+  const mutes = msgs.filter(function (m) { return m.addr === '/avatar/parameters/MuteSelf'; });
+  const voices = msgs.filter(function (m) { return m.addr === '/avatar/parameters/Voice'; });
+  if (!mutes.length || !voices.length) { return; }
+  let muted = null, onVoice = 0, offVoice = 0, unknown = 0, muteMax = 0, offMax = 0, lastState = null, lastMs = null, mutedMs = 0;
+  const endMs = msgs.length ? msgs[msgs.length - 1].ms : 0;
+  msgs.forEach(function (m) {
+    if (m.addr === '/avatar/parameters/MuteSelf') {
+      const v = String(m.value) === 'true';
+      if (lastState === true && lastMs !== null) mutedMs += (m.ms - lastMs);
+      lastState = v; lastMs = m.ms; muted = v;
+    } else if (m.addr === '/avatar/parameters/Voice') {
+      const val = Number(m.value) || 0;
+      if (muted === true) { onVoice++; if (val > muteMax) muteMax = val; }
+      else if (muted === false) { offVoice++; if (val > offMax) offMax = val; }
+      else unknown++;
+    }
+  });
+  if (lastState === true && lastMs !== null) mutedMs += Math.max(0, endMs - lastMs);   // 收尾时仍处于静音状态
+  console.log('');
+  console.log('=== 静音期间 Voice 行为(这次测试要回答的问题) ===');
+  console.log('  MuteSelf 切换 ' + mutes.length + ' 次; 静音累计约 ' + (mutedMs / 1000).toFixed(1) + 's');
+  console.log('  Voice 变化: 非静音期间 ' + offVoice + ' 次(峰值 ' + offMax.toFixed(4) + ') / 静音期间 ' + onVoice + ' 次(峰值 ' + muteMax.toFixed(4) + ')' + (unknown ? ' / 状态未知 ' + unknown + ' 次' : ''));
+  if (onVoice > 0 && muteMax > 0.005) {
+    console.log('  >>> 结论: **静音时 Voice 仍会上报说话电平** -> 「说话即听写」可以给静音玩家用(VRChat 的静音只是不外发声音, 本地电平照旧)。');
+  } else if (mutedMs >= 5000 && offVoice > 0) {
+    console.log('  >>> 结论: **静音的那 ' + (mutedMs / 1000).toFixed(1) + ' 秒里 Voice 一次都没动**(非静音时动了 ' + offVoice + ' 次) -> 若你静音时确实说了话, 就说明**静音会抑制 Voice**, 「说话即听写」只适合不静音的玩家, 静音玩家请用「握拳」这类手势触发器。');
+    console.log('      (若那段时间你其实没说话, 请重跑一次并确保: 先静音 -> 说话 -> 再取消静音。)');
+  } else {
+    console.log('  >>> 数据不足: 这次没有同时出现「静音状态切换」与「说话电平」。请确认: ① 真的切过静音键 ② 静音时说了话 ③ 监听窗口覆盖了这两件事。');
   }
 }
