@@ -19,7 +19,8 @@ const market = require('../market');   // 插件市场客户端(M-20260911-51)
 function createServer(opts) {
   const composer = opts.composer;
   const triggerEngine = opts.triggers || null;   // 输入触发器(M-20260928-01); 未注入时相关接口如实报不可用
-  const dictation = opts.dictation || null;      // 语音听写(切片 2); 未注入或未启用时如实报不可用
+  const dictation = opts.dictation || null;
+  const actionSender = opts.actions || null;   // 动作输出(F-20260928-01); 未注入时接口如实报不可用      // 语音听写(切片 2); 未注入或未启用时如实报不可用
   const logger = opts.logger;
   const webCfg = opts.web;
   const rootConfig = opts.config;
@@ -353,7 +354,7 @@ function effPluginSec() {
     const swf = (rootConfig.chatbox && rootConfig.chatbox.swearFilter) || {};
     // 空安全: 配置段缺失时宁可给空值, 也不能让这个高频接口抛未捕获异常(整个服务会因此不回包)
     const pgCfg = (rootConfig.sources && rootConfig.sources.pages) || {};
-    return json(res, 200, { pages: pgCfg.pages || [], rotationMs: pgCfg.rotationMs, sources: srcs, autostart: autostart, desktop: { showConsole: !((rootConfig.desktop || {}).showConsole === false), hardwareAcceleration: hwAccelMode() }, lang: (rootConfig.web && rootConfig.web.lang) || 'zh-CN', ocrtl: { delayMs: (rootConfig.ocrtl || {}).delayMs || 5000, displayMs: (rootConfig.ocrtl || {}).displayMs || 8000, loops: (rootConfig.ocrtl || {}).loops || 2, mode: (rootConfig.ocrtl || {}).mode || 'auto', vision: { apiBase: v.apiBase || '', model: v.model || 'deepseek-v4.1-flash', hasKey: !!v.apiKey, targetLang: v.targetLang || 'zh', promptMode: (v.promptMode === 'smart' ? 'smart' : 'full') }, capture: { mode: cap.mode || 'window', windowTitle: cap.windowTitle || 'VRChat', region: cap.region || { x: 0, y: 0, w: 0, h: 0 } }, security: { promptDefense: sec.promptDefense !== false, jsonMode: sec.jsonMode !== false, outputSanitize: sec.outputSanitize !== false, extraPrompt: sec.extraPrompt || '', blockWords: sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS } }, swearFilter: { enabled: swf.enabled !== false, words: swf.words && swf.words.length ? swf.words : swearfilter.DEFAULTS }, pluginsSecurity: effPluginSec(), branding: (rootConfig.branding || 'default'), specialEvents: (rootConfig.specialEvents || []), efx: { enabled: efxCfg().enabled, oncePerDay: efxCfg().oncePerDay, splashMaxMs: efxCfg().splashMaxMs }, market: { indexUrl: ((rootConfig.market || {}).indexUrl || ''), revokeUrl: ((rootConfig.market || {}).revokeUrl || ''), installed: rootConfig.marketInstalled || {} } });
+    return json(res, 200, { pages: pgCfg.pages || [], rotationMs: pgCfg.rotationMs, sources: srcs, autostart: autostart, actions: actionSender ? { enabled: actionSender.status().enabled, allowLocalApi: actionSender.status().allowLocalApi } : null, desktop: { showConsole: !((rootConfig.desktop || {}).showConsole === false), hardwareAcceleration: hwAccelMode() }, lang: (rootConfig.web && rootConfig.web.lang) || 'zh-CN', ocrtl: { delayMs: (rootConfig.ocrtl || {}).delayMs || 5000, displayMs: (rootConfig.ocrtl || {}).displayMs || 8000, loops: (rootConfig.ocrtl || {}).loops || 2, mode: (rootConfig.ocrtl || {}).mode || 'auto', vision: { apiBase: v.apiBase || '', model: v.model || 'deepseek-v4.1-flash', hasKey: !!v.apiKey, targetLang: v.targetLang || 'zh', promptMode: (v.promptMode === 'smart' ? 'smart' : 'full') }, capture: { mode: cap.mode || 'window', windowTitle: cap.windowTitle || 'VRChat', region: cap.region || { x: 0, y: 0, w: 0, h: 0 } }, security: { promptDefense: sec.promptDefense !== false, jsonMode: sec.jsonMode !== false, outputSanitize: sec.outputSanitize !== false, extraPrompt: sec.extraPrompt || '', blockWords: sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS } }, swearFilter: { enabled: swf.enabled !== false, words: swf.words && swf.words.length ? swf.words : swearfilter.DEFAULTS }, pluginsSecurity: effPluginSec(), branding: (rootConfig.branding || 'default'), specialEvents: (rootConfig.specialEvents || []), efx: { enabled: efxCfg().enabled, oncePerDay: efxCfg().oncePerDay, splashMaxMs: efxCfg().splashMaxMs }, market: { indexUrl: ((rootConfig.market || {}).indexUrl || ''), revokeUrl: ((rootConfig.market || {}).revokeUrl || ''), installed: rootConfig.marketInstalled || {} } });
   });
   const route_v1_chatbox = function (req, res, url) {
     return readBody(req, function (body) {
@@ -382,6 +383,11 @@ function effPluginSec() {
           if (rm >= 3000 && rm <= 300000) { if (!pg) return json(res, 400, { ok: false, error: '配置缺少 sources.pages 段' }); pg.rotationMs = rm; }
         }
         if (o.branding) rootConfig.branding = String(o.branding);
+        // 动作输出开关(F-20260928-01): 与 triggers 一样按子对象深合并, 免得提交子字段丢掉同段其它键
+        if (o.actions !== undefined && o.actions && typeof o.actions === 'object' && actionSender) {
+          rootConfig.actions = Object.assign({}, rootConfig.actions || {}, o.actions);
+          actionSender.apply(rootConfig.actions);
+        }
         if (o.specialEvents !== undefined) rootConfig.specialEvents = Array.isArray(o.specialEvents) ? o.specialEvents : [];
         if (Array.isArray(o.dailyEvents)) rootConfig.dailyEvents = o.dailyEvents;
         // 市场源可自定义(国内镜像/内网目录): 只收白名单字段, 空串=回落官方默认源
@@ -1184,6 +1190,28 @@ function effPluginSec() {
         return json(res, 200, Object.assign({ ok: true }, triggerEngine.inject(o.param, o.value)));
       } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
     });
+  });
+  // ===== 动作输出(反向 OSC, F-20260928-01 切片 1)=====
+  // 只驱动本机玩家; 默认关闭, 外部软件调用还要单独开 allowLocalApi; 轴/按钮一律自动复位。
+  on('GET', '/api/actions', function (req, res, url) {
+    if (!actionSender) return json(res, 200, { ok: false, error: '动作模块不可用(非标准启动)' });
+    return json(res, 200, Object.assign({ ok: true }, actionSender.status()));
+  });
+  on('POST', '/api/actions', function (req, res, url) {
+    return readBody(req, function (body) {
+      if (!actionSender) return json(res, 200, { ok: false, error: '动作模块不可用(非标准启动)' });
+      try {
+        const o = JSON.parse(body || '{}');
+        if (!o.action) return json(res, 400, { ok: false, error: 'action 为空' });
+        // 走 HTTP 进来的都算"外部软件调用" -> 必须显式打开 allowLocalApi
+        const r = actionSender.send(o.action, { value: o.value, holdMs: o.holdMs, hold: o.hold, external: true });
+        return json(res, r.ok ? 200 : (r.code || 400), r);
+      } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
+    });
+  });
+  on('POST', '/api/actions/release', function (req, res, url) {
+    if (!actionSender) return json(res, 200, { ok: false, error: '动作模块不可用(非标准启动)' });
+    return json(res, 200, Object.assign({ ok: true }, actionSender.resetAll('接口调用')));
   });
   on('GET', '/api/diagnose', function (req, res, url) {
     return diagnose({ config: rootConfig, composer: composer }).then(function (r) { return portCheck().then(function (pc) { r.ports = pc; r.gpu = shellGpuStatus(); r.hwAccel = { mode: hwAccelMode(), active: (process.env.VRCB_HW_MODE || 'unknown(非桌面壳)') }; json(res, 200, r); }); }).catch(function (e) { json(res, 500, { ok: false, error: String(e.message) }); });

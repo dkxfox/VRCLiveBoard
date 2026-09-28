@@ -664,6 +664,29 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     const stValve = JSON.parse((await req('/api/status')).body.toString('utf8'));
     const valveHit = ((stValve.transientQueue || []).filter(function (x) { return x.text === '时间戳远离任何语音窗口的一句'; })[0]) || null;
     ok(!!valveHit, '听写: 过滤后为空 -> 安全阀保留全部(不会再出现\"说完什么都没发\")');    await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: false, asr: { enabled: false } }) });
+    // 动作输出(反向 OSC, F-20260928-01 切片 1): 默认全关 -> 打开 -> 发送 -> 自动复位 -> 限速 -> 一键收干净
+    const ac0 = JSON.parse((await req('/api/actions')).body.toString('utf8'));
+    ok(!!(ac0.ok === true && ac0.enabled === false), '动作输出: 默认关闭(enabled=' + ac0.enabled + ')');
+    const ac1 = await req('/api/actions', { method: 'POST', body: JSON.stringify({ action: 'Jump' }) });
+    ok(!!(ac1.status === 403), '动作输出: 关闭时拒绝(403, 实得 ' + ac1.status + ')');
+    await req('/api/config', { method: 'POST', body: JSON.stringify({ actions: { enabled: true, allowLocalApi: true, maxRatePerSec: 3 } }) });
+    const ac2 = JSON.parse((await req('/api/actions', { method: 'POST', body: JSON.stringify({ action: 'Jump' }) })).body.toString('utf8'));
+    ok(!!(ac2.ok === true && ac2.kind === 'button' && ac2.autoResetMs === 150), '动作输出: 打开后按下 Jump 并安排自动复位(' + ac2.autoResetMs + 'ms)');
+    await waitMs(320);
+    const ac3 = JSON.parse((await req('/api/actions')).body.toString('utf8'));
+    ok(!!(ac3.held.length === 0 && ac3.stats.resets >= 1), '动作输出: 到时自动复位(held=' + ac3.held.length + ', resets=' + ac3.stats.resets + ')');
+    let rateRejected = 0;
+    for (let i = 0; i < 5; i++) { const rr = await req('/api/actions', { method: 'POST', body: JSON.stringify({ action: 'MoveForward', holdMs: 400 }) }); if (rr.status === 429) rateRejected++; }
+    ok(rateRejected > 0, '动作输出: 超过限速被拒(429 x' + rateRejected + ')');
+    const ac4 = JSON.parse((await req('/api/actions', { method: 'POST', body: JSON.stringify({ action: 'NoSuchThing' }) })).body.toString('utf8'));
+    ok(!!(ac4.error && String(ac4.error).indexOf('不支持的动作') >= 0), '动作输出: 未知动作被拒(' + ac4.error + ')');
+    await req('/api/actions', { method: 'POST', body: JSON.stringify({ action: 'Vertical', value: 9, hold: true }) });
+    const rel = JSON.parse((await req('/api/actions/release', { method: 'POST', body: '{}' })).body.toString('utf8'));
+    const ac5 = JSON.parse((await req('/api/actions')).body.toString('utf8'));
+    ok(!!(rel.ok === true && ac5.held.length === 0), '动作输出: 一键收干净(released=' + rel.released + ')');
+    await req('/api/config', { method: 'POST', body: JSON.stringify({ actions: { enabled: false, allowLocalApi: false } }) });
+    const ac6 = JSON.parse((await req('/api/actions')).body.toString('utf8'));
+    ok(!!(ac6.enabled === false && ac6.held.length === 0), '动作输出: 关闭后无残留按下');
     await waitMs(600);
     await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: false, asr: { enabled: false } }) });
     await new Promise(function (r) { setTimeout(r, 800); });

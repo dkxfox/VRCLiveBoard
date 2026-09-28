@@ -148,6 +148,14 @@
                 "played":  {
                            }
             },
+    "actions":  {
+                     "enabled":  false,
+                     "allowLocalApi":  false,
+                     "maxRatePerSec":  5,
+                     "defaultHoldMs":  150,
+                     "maxHoldMs":  3000,
+                     "axisResetMs":  300
+                 },
     "triggers":  {
                      "enabled":  false,
                      "port":  9001,

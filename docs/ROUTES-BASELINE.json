@@ -72,6 +72,24 @@
       "note": "自测入口: 不走网络直接喂一条参数变化({param,value}), 供控制台测试与门禁断言用; 不发送任何 OSC"
     },
     {
+      "m": "GET",
+      "p": "/api/actions",
+      "level": 0,
+      "note": "动作输出状态(F-20260928-01 反向 OSC): 是否开启/外部调用开关/当前按下/统计/支持的动作清单; 只读"
+    },
+    {
+      "m": "POST",
+      "p": "/api/actions",
+      "level": 0,
+      "note": "驱动本机玩家动作({action,value,holdMs,hold}); 默认关闭且外部调用需开 allowLocalApi(否则 403), 超速 429, 未知动作 400; 轴/按钮一律自动复位"
+    },
+    {
+      "m": "POST",
+      "p": "/api/actions/release",
+      "level": 0,
+      "note": "一键释放所有动作(收干净, 防\"一直往前走\"); 关闭动作输出与程序退出时内部也会调用"
+    },
+    {
       "m": "POST",
       "p": "/api/capture/set",
       "level": 0
