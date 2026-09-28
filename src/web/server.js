@@ -1153,12 +1153,12 @@ function effPluginSec() {
       try {
         const o = JSON.parse(body || '{}');
         const st = triggerEngine.apply(o);
-        rootConfig.triggers = Object.assign({}, rootConfig.triggers || {}, o);   // 只并入用户给的键, 保留其它
-        if (o.asr !== undefined && dictation) {
-          const asrCfg = Object.assign({}, (rootConfig.triggers && rootConfig.triggers.asr) || {}, o.asr);
-          rootConfig.triggers.asr = asrCfg;
-          dictation.apply(asrCfg);
-        }
+        // 嵌套对象必须深合并(2026-09-28 踩坑): 之前直接 Object.assign 把整个 asr 段换成补丁,
+        // 于是 {mineOnly:true} 一提交就把 enabled/engine 丢掉 -> 引擎还在听, 但主进程读不到开关 -> "只有第一次好用"。
+        const patch = Object.assign({}, o);
+        if (patch.asr !== undefined) patch.asr = Object.assign({}, (rootConfig.triggers && rootConfig.triggers.asr) || {}, patch.asr);
+        rootConfig.triggers = Object.assign({}, rootConfig.triggers || {}, patch);
+        if (patch.asr !== undefined && dictation) dictation.apply(patch.asr);
         persist();
         return json(res, 200, Object.assign({ ok: true, asr: dictation ? dictation.status() : null }, st));
       } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }

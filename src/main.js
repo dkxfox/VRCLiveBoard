@@ -61,7 +61,8 @@ async function main() {
   const asrCfg = (config.triggers && config.triggers.asr) || {};
   const dictation = new Dictation({ logger: logger, projectDir: projectDir, config: asrCfg, onText: function (t, final) { if (!final) { try { logger.info('[听写] 临时: ' + t); } catch (e) {} } } });
   if (asrCfg.enabled === true) dictation.warmup();
-  const asrOn = function () { return !!(config.triggers && config.triggers.asr && config.triggers.asr.enabled === true); };
+  // 单一事实来源: 直接问听写引擎(别再读 config —— 两份状态会漂移, 2026-09-28 踩过)
+  const asrOn = function () { try { return dictation.status().enabled === true; } catch (e) { return false; } };
 
   let lastTriggerStartAt = 0;
   const { TriggerEngine } = require('./triggers');
@@ -73,6 +74,7 @@ async function main() {
       try {
         if (ev.type === 'start') {
           logger.info('[触发器] 开始说话(' + (ev.param || '?') + ')'); osc.sendTyping(true);
+          if (!asrOn()) logger.info('[听写] 未启用(控制台高级设置里打开"识别层")');
           if (asrOn()) { const r = dictation.start(); if (!r.ok) logger.warn('[听写] 无法开始: ' + (r.error || '?')); }
         } else if (ev.type === 'send') {
           logger.info('[触发器] 说完/发送'); osc.sendTyping(false);

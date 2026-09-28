@@ -589,6 +589,12 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
     ok(!!queued, '听写: 松开后文字已进待发队列(优先级 ' + (queued && queued.priority) + '; 当前上屏=' + (stAsr.current && stAsr.current.text) + ')');
     const as2 = JSON.parse((await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: false, asr: { enabled: false } }) })).body.toString('utf8'));
     ok(!!(as2.asr && as2.asr.enabled === false), '听写: 可关闭, 关闭后不再听');
+    // 回归(2026-09-28 用户报"只有第一次好用"): 提交 asr 的**子字段**不能把同段其它键冲掉
+    await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: true, port: 19199, asr: { enabled: true, engine: 'stub' } }) });
+    await req('/api/triggers', { method: 'POST', body: JSON.stringify({ asr: { mineOnly: false } }) });
+    const stKeep = JSON.parse((await req('/api/triggers')).body.toString('utf8'));
+    ok(!!(stKeep.asr && stKeep.asr.enabled === true && stKeep.asr.engine === 'stub' && stKeep.asr.mineOnly === false), '听写: 提交子字段不丢同段其它键(enabled=' + (stKeep.asr && stKeep.asr.enabled) + ', engine=' + (stKeep.asr && stKeep.asr.engine) + ', mineOnly=' + (stKeep.asr && stKeep.asr.mineOnly) + ')');
+    await req('/api/triggers', { method: 'POST', body: JSON.stringify({ asr: { mineOnly: true } }) });   // 还原, 后面的用例依赖默认过滤
     // 听写助手(切片 2): 真起一次 PowerShell 助手 —— 要么 10 秒内就绪, 要么给出明确错误(不能静默卡住)
     await req('/api/triggers', { method: 'POST', body: JSON.stringify({ enabled: true, port: 19199, asr: { enabled: true, engine: 'sapi' } }) });
     let asrReady = null;
