@@ -123,7 +123,7 @@ if($('plgRefresh'))$('plgRefresh').onclick=async function(){try{await fetch('/ap
 // 打开插件文件夹(2026-09-19): 接口不收任何路径参数, 只开固定的 <程序目录>/plugins
 if($('plgOpenDir'))$('plgOpenDir').onclick=async function(){try{var j=await (await fetch('/api/plugins/open-dir',{method:'POST',body:'{}'})).json();if(j&&j.ok)note(tr('plgOpenDirOk')+(j.dir?(' '+j.dir):''),'ok');else note(tr('opFail')+': '+((j&&j.error)||''),'warn');}catch(e){apiFail('#plgMsg',e);}};
 if($('plgPrioReset'))$('plgPrioReset').onclick=async function(){try{var l=await (await fetch('/api/plugins')).json();var arr=Array.isArray(l)?l:(l.plugins||l.entries||[]);for(var i=0;i<arr.length;i++){await fetch('/api/plugins/config',{method:'POST',body:JSON.stringify({id:arr[i].id,cfg:{priority:null}})});}}catch(e){apiFail('#plgPrioReset',e);}loadPlugins();};
-(function(){fetch('/api/version').then(function(r){return r.json();}).then(function(j){var v=$('ver');if(v)v.textContent=tr('verLine')+(j.version||'')+tr('codeName');}).catch(function(e){apiFail('#ver',e);});
+(function(){fetch('/api/version').then(function(r){return r.json();}).then(function(j){var v=$('ver');if(v)v.textContent=tr('verLine')+(j.version||'')+tr('codeName')+tr('sigAuthor')+tr('sigBuiltWith');}).catch(function(e){apiFail('#ver',e);});
   // 检查更新(L1, 2026-09-19): 页头按钮 + 更新面板。
   //   更新内容走 jsDelivr 上的 version.json(国内可用), 产物体积/哈希走 GitHub API 的**可选增强** ——
   //   拉不到就退化成"打开下载页", 不影响看到更新内容。远端文本一律用 textContent 渲染, 绝不拼 innerHTML。

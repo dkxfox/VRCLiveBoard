@@ -59,3 +59,9 @@ Lite 包不带 electron(需系统 Node 22+), 其余依赖由 npm 按需安装, �
 | **pinyin-pro** | MIT | 同上, 给词表注音(词组级多音字) | 同上 |
 
 > 说明: 两个包由 npm i -D 安装, 发布包里没有它们; 词库文件是按词频排序的「词 + 拼音」数据, 随程序分发。
+
+## 小鲸鱼图标 src/web/public/whale.svg(署名区)
+- 来源: @deepseek-ai/dsh-web-frontend 的 dist/favicon.svg(DeepSeek Harness Web 前端 0.2.0-rc.2);
+- 许可: MIT(该包 package.json 的 license 字段);
+- 用途: 控制台署名区的纪念图标(鼠标悬停轻微游动), 与"使用 DeepSeek 开发"的署名同时出现;
+- 说明: 该图形是 DeepSeek 的品牌标识, 按用户要求作**致谢/纪念**用途; 若日后对外分发需要更严格的商标合规, 一行即可替换。
