@@ -124,13 +124,14 @@ function effPluginSec() {
   }
   // ===== 启动彩蛋决策(设计稿 §4 状态机, M-20260911-50) =====
   // 单一来源: 桌面壳启动画面与网页控制台都问 /api/efx/boot —— 两套判定必然漂移, 而"已播记录"只有服务端能写回 config
-  // 硬件加速档位(M-20260927-10): auto(默认) / decode(仅关闭视频硬解码) / off(全部关闭, 软件渲染)。
+  // 硬件加速档位(M-20260927-10): off(默认, 全部关闭/软件渲染) / decode(仅关闭视频硬解码) / auto(全开)。
+// 2026-09-29 用户拍板: **默认全部关闭**(之前默认 auto)。
   // 旧键 desktop.softwareVideoDecode 是 1.4.6 之前的写法, 仍然认(等价 decode), 避免用户配置失效。
   function hwAccelMode() {
     const d = (rootConfig.desktop && typeof rootConfig.desktop === 'object') ? rootConfig.desktop : {};
     const m = String(d.hardwareAcceleration || '').toLowerCase();
     if (m === 'auto' || m === 'decode' || m === 'off') return m;
-    return d.softwareVideoDecode === true ? 'decode' : 'auto';
+    return d.softwareVideoDecode === true ? 'decode' : 'off';
   }
   function efxCfg() {
     if (!rootConfig.efx || typeof rootConfig.efx !== 'object' || Array.isArray(rootConfig.efx)) rootConfig.efx = {};

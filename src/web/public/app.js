@@ -696,12 +696,6 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     if($('kbdSpace'))$('kbdSpace').onclick=function(){kbdKey('space');};
     if($('kbdClear'))$('kbdClear').onclick=function(){kbdKey('clear');};
     if($('kbdSend'))$('kbdSend').onclick=kbdSend;
-    if($('kbdCalib'))$('kbdCalib').onclick=function(){
-      // 覆盖层的控制口(本机 19192): 让工具"以你此刻的指向"为基准校准射线偏移
-      fetch('http://127.0.0.1:19192/calibrate').then(function(r){return r.json();}).then(function(){
-        if($('kbdCalibMsg'))$('kbdCalibMsg').textContent=tr('kbdCalibOk');
-      }).catch(function(){ if($('kbdCalibMsg'))$('kbdCalibMsg').textContent=tr('kbdCalibErr'); });
-    };
     // 物理键盘也能打(桌面/浏览器里测试用): 只在键盘页可见时接管
     document.addEventListener('keydown',function(ev){
       var p=document.getElementById('tab-kbd');
@@ -771,4 +765,63 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     },3000);
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',danceInit); else danceInit();
+})();
+
+// ===== 实验性功能门控(2026-09-29): 动作系统 / 听写 默认折叠, 由设置里的开关决定是否显示 =====
+(function(){
+  function applyExp(on){
+    var tab=document.querySelector('.tab[data-tab="dance"]');
+    var panel=document.getElementById('tab-dance');
+    if(tab) tab.style.display=on?'':'none';
+    if(panel&&!on) panel.hidden=true;
+    // 高级设置里的"识别层"(听写)两行
+    var e=document.getElementById('trigAsrEngine'), m=document.getElementById('trigAsrMine');
+    [e,m].forEach(function(el){ if(!el) return; var r=el.closest?el.closest('.row'):null; if(r) r.style.display=on?'':'none'; });
+  }
+  var box=document.getElementById('advExperimental');
+  function save(on){
+    fetch('/api/config',{method:'POST',body:JSON.stringify({ui:{experimental:on}})}).catch(function(){});
+  }
+  function load(){
+    fetch('/api/config').then(function(r){return r.json();}).then(function(c){
+      var on=!!(c&&c.ui&&c.ui.experimental);
+      if(box) box.checked=on;
+      applyExp(on);
+    }).catch(function(){ applyExp(false); });
+  }
+  if(box) box.onchange=function(){ applyExp(box.checked); save(box.checked); };
+  load();
+})();
+
+// ===== 常用页"功能开关"编辑: 选哪些插件/数据源出现在快捷开关里 =====
+(function(){
+  var hidden=[]; var editing=false;
+  function rows(){ return Array.prototype.slice.call(document.querySelectorAll('#tab-dash .frow')); }
+  function keyOf(row){ var sw=row.querySelector('.sw'); if(!sw) return null; return sw.getAttribute('data-plg')?'plg:'+sw.getAttribute('data-plg'):(sw.getAttribute('data-src')?'src:'+sw.getAttribute('data-src'):null); }
+  function paint(){
+    rows().forEach(function(row){
+      var k=keyOf(row); if(!k) return;
+      row.style.display=(!editing&&hidden.indexOf(k)>=0)?'none':'';
+      var cb=row.querySelector('.swpick');
+      if(editing&&!cb){
+        cb=document.createElement('input'); cb.type='checkbox'; cb.className='swpick';
+        cb.style.marginRight='6px'; cb.checked=hidden.indexOf(k)<0;
+        cb.onchange=function(){ var i=hidden.indexOf(k); if(cb.checked){ if(i>=0) hidden.splice(i,1); } else if(i<0) hidden.push(k); };
+        row.insertBefore(cb,row.firstChild);
+      } else if(!editing&&cb){ cb.remove(); }
+    });
+  }
+  function load(){
+    fetch('/api/config').then(function(r){return r.json();}).then(function(c){
+      hidden=(c&&c.ui&&Array.isArray(c.ui.dashHide))?c.ui.dashHide.slice():[];
+      paint();
+    }).catch(function(){ paint(); });
+  }
+  var btn=document.getElementById('swEditBtn');
+  if(btn) btn.onclick=function(){
+    if(!editing){ editing=true; btn.textContent=tr('btnSaveSwitches'); paint(); return; }
+    editing=false; btn.textContent=tr('btnEditSwitches'); paint();
+    fetch('/api/config',{method:'POST',body:JSON.stringify({ui:{dashHide:hidden}})}).catch(function(){});
+  };
+  load();
 })();

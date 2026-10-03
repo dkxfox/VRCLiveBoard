@@ -19,9 +19,13 @@
                 "openBrowser":  true,
                 "lang":  "zh-CN"
             },
+    "ui":  {
+                "experimental":  false,
+                "dashHide":  []
+            },
     "desktop":  {
                     "showConsole":  true,
-                    "hardwareAcceleration":  "auto"
+                    "hardwareAcceleration":  "off"
                 },
     "update":  {
                    "mirror":  "",
