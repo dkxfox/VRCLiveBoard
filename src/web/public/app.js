@@ -330,13 +330,28 @@ function trigRender(st){
   if(items.length){h+='<br>'+trigEsc(tr('trigLearned'))+': ';items.forEach(function(x){h+='<button class="small gray" data-trigbind="'+trigEsc(x.param)+'" data-trigbindv="'+trigEsc(x.value)+'">'+trigEsc(x.param)+' = '+trigEsc(x.value)+'</button> ';});}
   el.innerHTML=h;
 }
-function trigLoad(){fetch('/api/triggers').then(function(r){return r.json();}).then(function(st){if($('trigOn'))$('trigOn').checked=!!st.enabled;if($('trigPreset')&&st.preset)$('trigPreset').value=st.preset;if($('trigPort')&&st.port&&document.activeElement!==$('trigPort'))$('trigPort').value=st.port;if($('trigAsrEngine'))$('trigAsrEngine').value=(st.asr&&st.asr.enabled)?(st.asr.engine||'sapi'):'';if($('trigAsrMine'))$('trigAsrMine').checked=!!(st.asr&&st.asr.mineOnly!==false);trigRender(st);}).catch(function(e){apiFail('#trigStatus',e);});}
+function trigLoad(){fetch('/api/triggers').then(function(r){return r.json();}).then(function(st){if($('trigOn'))$('trigOn').checked=!!st.enabled;if(window.__dsel&&st.preset)window.__dsel.set('trigPreset',st.preset);if($('trigPort')&&st.port&&document.activeElement!==$('trigPort'))$('trigPort').value=st.port;if(window.__dsel)window.__dsel.set('trigAsrEngine',(st.asr&&st.asr.enabled)?(st.asr.engine||'sapi'):'');if($('trigAsrMine'))$('trigAsrMine').checked=!!(st.asr&&st.asr.mineOnly!==false);trigRender(st);}).catch(function(e){apiFail('#trigStatus',e);});}
 if($('trigStatus')){ trigLoad(); setInterval(function(){var tab=$('tab-adv');if(tab&&!tab.hasAttribute('hidden'))trigLoad();},3000); }
 if($('trigAsrMine'))$('trigAsrMine').onchange=function(){var v=this.checked;fetch('/api/triggers',{method:'POST',body:JSON.stringify({asr:{mineOnly:v}})}).then(function(r){return r.json();}).then(trigRender).catch(function(e){apiFail('#trigAsrMine',e);});};
 if($('trigAsrEngine'))$('trigAsrEngine').onchange=function(){var v=this.value;fetch('/api/triggers',{method:'POST',body:JSON.stringify({asr:{enabled:!!v,engine:v||'sapi'}})}).then(function(r){return r.json();}).then(trigRender).catch(function(e){apiFail('#trigAsrEngine',e);});};
 if($('trigPort'))$('trigPort').onchange=function(){var v=Number(this.value);if(!v||v<1024||v>65535){note(tr('saveFail'),'warn');return;}fetch('/api/triggers',{method:'POST',body:JSON.stringify({port:v})}).then(function(r){return r.json();}).then(trigRender).catch(function(e){apiFail('#trigPort',e);});};
 if($('trigOn'))$('trigOn').onchange=function(){var v=this.checked;fetch('/api/triggers',{method:'POST',body:JSON.stringify({enabled:v})}).then(function(r){return r.json();}).then(trigRender).catch(function(e){apiFail('#trigOn',e);});};
-if($('trigPreset'))$('trigPreset').onchange=function(){var v=this.value;fetch('/api/triggers',{method:'POST',body:JSON.stringify({preset:v})}).then(function(r){return r.json();}).then(trigRender).catch(function(e){apiFail('#trigPreset',e);});};
+// 触发器两处下拉改为自绘(VR 桌面视图里原生下拉点不着, F-20260929-02)
+if(window.__dsel){
+  window.__dsel.mount('trigPreset',{ options:[
+    { value:'quest3', labelKey:'trigPQuest' },
+    { value:'index',  labelKey:'trigPIndex' },
+    { value:'vad',    labelKey:'trigPVad' }
+  ], value:'quest3' });
+  window.__dsel.mount('trigAsrEngine',{ options:[
+    { value:'',              labelKey:'trigAsrOff' },
+    { value:'livetranslate', labelKey:'trigAsrLt' },
+    { value:'sapi',          labelKey:'trigAsrSapi' }
+  ], value:'' });
+}
+if(window.__dsel)window.__dsel.onChange('trigPreset',function(v){fetch('/api/triggers',{method:'POST',body:JSON.stringify({preset:v})}).then(function(r){return r.json();}).then(trigRender).catch(function(e){apiFail('#trigPreset',e);});});
+if(window.__dsel)window.__dsel.onChange('trigAsrEngine',function(v){fetch('/api/triggers',{method:'POST',body:JSON.stringify({asr:{enabled:!!v,engine:v||'sapi'}})}).then(function(r){return r.json();}).then(trigRender).catch(function(e){apiFail('#trigAsrEngine',e);});});
+if(false){var v=this.value;fetch('/api/triggers',{method:'POST',body:JSON.stringify({preset:v})}).then(function(r){return r.json();}).then(trigRender).catch(function(e){apiFail('#trigPreset',e);});};
 if($('trigLearn'))$('trigLearn').onclick=function(){fetch('/api/triggers/learn',{method:'POST',body:JSON.stringify({seconds:20})}).then(function(r){return r.json();}).then(function(st){trigRender(st);note(tr('trigLearnHint'),'ok');}).catch(function(e){apiFail('#trigLearn',e);});};
 if($('trigStatus'))$('trigStatus').onclick=function(ev){var b=(ev.target&&ev.target.closest)?ev.target.closest('[data-trigbind]'):null;if(!b)return;var p=b.getAttribute('data-trigbind');var raw=b.getAttribute('data-trigbindv');var v=(raw==='true')?true:(raw==='false')?false:(isNaN(Number(raw))?raw:Number(raw));fetch('/api/triggers',{method:'POST',body:JSON.stringify({bindings:{start:{param:p,eq:v}}})}).then(function(r){return r.json();}).then(function(st){trigRender(st);note(tr('trigBoundOk'),'ok');}).catch(function(e){apiFail('#trigStatus',e);});};
 if($('oscPort')){(async function(){try{var c2=await (await fetch('/api/config')).json();$('oscPort').value=(c2.osc&&c2.osc.port)||9000;}catch(e){apiFail('#oscPort',e);}})();$('oscApply').onclick=async function(){try{await fetch('/api/ports/osc',{method:'POST',body:JSON.stringify({port:Number($('oscPort').value)||9000})});note(tr('portApplied'),'ok');}catch(e){note(tr('applyFail'),'warn');}};}
