@@ -54,6 +54,9 @@ if (fs.existsSync(dselPath)) {
 // 6) 迁移进度
 const selCount = (html.match(/<select\b/gi) || []).length;
 console.log('[GHTML dsel-check] 自绘下拉: 已迁移 ' + dselIds.length + ' 个 / 剩余 <select> ' + selCount + ' 个');
+// 控制台里**不允许再出现原生 <select>**: 它的下拉是独立窗口, 在 VR 桌面视图里点不着(F-20260929-02)。
+// 需要多选一就用 class="dsel" 的自绘下拉。
+if (selCount > 0) fails.push('控制台里还有 ' + selCount + ' 个原生 <select>(VR 里点不着) -> 请改用 class="dsel" 的自绘下拉');
 for (const f of fails) console.log('  -> FAIL ' + f);
 if (!fails.length) console.log('  OK   自绘下拉契约满足(值/文案分离 + 引入顺序 + 无 .value 残留)');
 process.exitCode = fails.length ? 1 : 0;

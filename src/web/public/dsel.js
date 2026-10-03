@@ -22,8 +22,9 @@
   }
   function labelOf(it) {
     if (!it) return '';
-    if (it.labelKey) return t(it.labelKey, it.label || it.labelKey);
-    return it.label || String(it.value);
+    var pre = it.labelPrefix || '';   // 前缀不翻译(例如变量名 {cpu_util})
+    if (it.labelKey) return pre + t(it.labelKey, it.label || it.labelKey);
+    return pre + (it.label || String(it.value));
   }
   function find(id, value) {
     var st = reg[id]; if (!st) return null;

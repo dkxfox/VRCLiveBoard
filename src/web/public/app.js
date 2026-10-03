@@ -906,3 +906,21 @@ if(window.__dsel){
     { value:'en',    labelKey:'langNameEn' }
   ], value:'zh-CN' });
 }
+// 公告板变量插入(F-20260929-02 切片 5): 变量名做前缀不翻译, 说明沿用 app-security.js 已有 var* 键
+if(window.__dsel){
+  window.__dsel.mount('bdVar',{ options:[
+    { value:'{cpu_util}', labelPrefix:'{cpu_util} · ', labelKey:'varCpuUtil' },
+    { value:'{cpu_temp}', labelPrefix:'{cpu_temp} · ', labelKey:'varCpuTemp' },
+    { value:'{gpu_util}', labelPrefix:'{gpu_util} · ', labelKey:'varGpuUtil' },
+    { value:'{gpu_temp}', labelPrefix:'{gpu_temp} · ', labelKey:'varGpuTemp' },
+    { value:'{mem_used}', labelPrefix:'{mem_used} · ', labelKey:'varMemUsed' },
+    { value:'{mem_total}', labelPrefix:'{mem_total} · ', labelKey:'varMemTotal' },
+    { value:'{net_down}', labelPrefix:'{net_down} · ', labelKey:'varNetDown' },
+    { value:'{net_up}', labelPrefix:'{net_up} · ', labelKey:'varNetUp' },
+    { value:'{song}', labelPrefix:'{song} · ', labelKey:'varSong' },
+    { value:'{artist}', labelPrefix:'{artist} · ', labelKey:'varArtist' },
+    { value:'{album}', labelPrefix:'{album} · ', labelKey:'varAlbum' },
+    { value:'{date}', labelPrefix:'{date} · ', labelKey:'varDate' },
+    { value:'{time}', labelPrefix:'{time} · ', labelKey:'varTime' }
+  ], value:'{cpu_util}' });
+}
