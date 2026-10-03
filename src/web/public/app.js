@@ -90,17 +90,17 @@ if($('visSave'))$('visSave').onclick=async function(){try{var body={apiBase:(($(
 // 截图翻译的进度/结果落在按钮旁(M-20260911-22): 旧版写在 #ocrtlState/#ocrtlOut, 新版移植时改成了弹窗
 // —— 而且 alert 弹在**整轮跑完之后**(/api/ocrtl 是同步等待整条流水线), 只有一句"进行中", 用户等于得不到反馈。
 function shotHint(text,warn){var m=$('shotMsg');if(!m)return;m.textContent=text;try{m.style.color=warn?'var(--warn)':'var(--ok)';}catch(e){}}
-if($('btnShot'))$('btnShot').onclick=async function(){var btn=this;if(btn)btn.disabled=true;shotHint(tr('ocrRunning'),true);var out=$('shotOut');if(out){out.style.display='none';out.textContent='';}try{var ov={mode:(($('transMode')||{}).value)||undefined,delayMs:(Number(($('ocrDelay')||{}).value)||5)*1000,displayMs:(Number(($('ocrDisplay')||{}).value)||8)*1000,loops:Number(($('ocrLoops')||{}).value)||2};var j=await (await fetch('/api/ocrtl',{method:'POST',body:JSON.stringify(ov)})).json();if(j&&j.ok&&j.result){shotHint('',false);if(out){out.textContent=(j.result.visionError?(tr('visionFail')+j.result.visionError+'\n\n'):'')+tr('ocrSrcLabel')+'\n'+j.result.ocr+'\n\n'+tr('ocrTrLabel')+(j.result.model||'-')+tr('ocrTrLabel2')+'\n'+(j.result.translated||'');out.style.display='block';}if(j.result.visionError)shotHint(tr('visionFail')+String(j.result.visionError).slice(0,60),true);}else{shotHint(tr('loadFail')+((j&&j.error)||''),true);}}catch(e){shotHint(tr('loadFail')+e.message,true);}if(btn)btn.disabled=false;};
-if($('transRegion')){(async function(){try{var c=await (await fetch('/api/config')).json();var md=((c.ocrtl||{}).capture||{}).mode||'window';var v={window:0,region:1,screen:2}[md];var s=$('transRegion');if(s&&v!==undefined)s.selectedIndex=v;}catch(e){apiFail('#transRegion',e);}})();$('transRegion').onchange=async function(){var md=['window','region','screen'][this.selectedIndex]||'window';try{await fetch('/api/capture/set',{method:'POST',body:JSON.stringify({mode:md})});}catch(e){apiFail('#transRegion',e);}};}
-if($('capFullBtn'))$('capFullBtn').onclick=async function(){try{await fetch('/api/capture/set',{method:'POST',body:JSON.stringify({mode:'screen'})});var s=$('transRegion');if(s)s.selectedIndex=2;}catch(e){apiFail('#transRegion',e);}};
+if($('btnShot'))$('btnShot').onclick=async function(){var btn=this;if(btn)btn.disabled=true;shotHint(tr('ocrRunning'),true);var out=$('shotOut');if(out){out.style.display='none';out.textContent='';}try{var ov={mode:((window.__dsel?window.__dsel.get('transMode'):'')||undefined),delayMs:(Number(($('ocrDelay')||{}).value)||5)*1000,displayMs:(Number(($('ocrDisplay')||{}).value)||8)*1000,loops:Number(($('ocrLoops')||{}).value)||2};var j=await (await fetch('/api/ocrtl',{method:'POST',body:JSON.stringify(ov)})).json();if(j&&j.ok&&j.result){shotHint('',false);if(out){out.textContent=(j.result.visionError?(tr('visionFail')+j.result.visionError+'\n\n'):'')+tr('ocrSrcLabel')+'\n'+j.result.ocr+'\n\n'+tr('ocrTrLabel')+(j.result.model||'-')+tr('ocrTrLabel2')+'\n'+(j.result.translated||'');out.style.display='block';}if(j.result.visionError)shotHint(tr('visionFail')+String(j.result.visionError).slice(0,60),true);}else{shotHint(tr('loadFail')+((j&&j.error)||''),true);}}catch(e){shotHint(tr('loadFail')+e.message,true);}if(btn)btn.disabled=false;};
+if($('transRegion')){(async function(){try{var c=await (await fetch('/api/config')).json();var md=((c.ocrtl||{}).capture||{}).mode||'window';var v={window:0,region:1,screen:2}[md];if(window.__dsel)window.__dsel.set('transRegion',md);}catch(e){apiFail('#transRegion',e);}})();$('transRegion').onchange=async function(){var md=['window','region','screen'][this.selectedIndex]||'window';try{await fetch('/api/capture/set',{method:'POST',body:JSON.stringify({mode:md})});}catch(e){apiFail('#transRegion',e);}};}
+if($('capFullBtn'))$('capFullBtn').onclick=async function(){try{await fetch('/api/capture/set',{method:'POST',body:JSON.stringify({mode:'screen'})});if(window.__dsel)window.__dsel.set('transRegion','screen');}catch(e){apiFail('#transRegion',e);}};
 if($('capAdjBtn'))$('capAdjBtn').onclick=function(){window.open('/api/capture/preview','_blank');};
 // 识别方式与三个参数: 改了立刻落盘(M-20260911-23) —— 面板上的值都读自 config, 只读不写就是"改了等于没改", 重启回默认。
-function saveOcrtl(body,where){fetch('/api/ocrtl-vision',{method:'POST',body:JSON.stringify(body)}).then(function(r){return r.json();}).then(function(j){var o=(j&&j.ocrtl)||null;if(!o)return;if($('ocrDelay'))$('ocrDelay').value=Math.round(o.delayMs/1000);if($('ocrDisplay'))$('ocrDisplay').value=Math.round(o.displayMs/1000);if($('ocrLoops'))$('ocrLoops').value=o.loops;if($('transMode'))$('transMode').value=o.mode;if($('transScope')&&o.promptMode)$('transScope').value=o.promptMode;scopeDesc();}).catch(function(e){apiFail(where,e);});}
+function saveOcrtl(body,where){fetch('/api/ocrtl-vision',{method:'POST',body:JSON.stringify(body)}).then(function(r){return r.json();}).then(function(j){var o=(j&&j.ocrtl)||null;if(!o)return;if($('ocrDelay'))$('ocrDelay').value=Math.round(o.delayMs/1000);if($('ocrDisplay'))$('ocrDisplay').value=Math.round(o.displayMs/1000);if($('ocrLoops'))$('ocrLoops').value=o.loops;if(window.__dsel)window.__dsel.set('transMode',o.mode||'auto');if(window.__dsel&&o.promptMode)window.__dsel.set('transScope',o.promptMode);scopeDesc();}).catch(function(e){apiFail(where,e);});}
 if($('ocrDelay')){(async function(){try{var c=await (await fetch('/api/config')).json();var o=c.ocrtl||{};if($('ocrDelay'))$('ocrDelay').value=Math.round((Number(o.delayMs)||5000)/1000);if($('ocrDisplay'))$('ocrDisplay').value=Math.round((Number(o.displayMs)||8000)/1000);if($('ocrLoops'))$('ocrLoops').value=Number(o.loops)||2;}catch(e){apiFail('#ocrLoops',e);}})();[['ocrDelay','delayMs'],['ocrDisplay','displayMs'],['ocrLoops','loops']].forEach(function(p){var el=$(p[0]);if(!el)return;el.onchange=function(){var v=Number(this.value)||0;var b={};b[p[1]]=(p[1]==='loops')?Math.round(v):Math.round(v*1000);saveOcrtl(b,'#'+p[0]);};});}
-if($('transMode'))$('transMode').onchange=function(){saveOcrtl({mode:this.value},'#transMode');};
+// (transMode 的 onchange 已改为 __dsel.onChange, 见文件末尾)
 // 翻译范围两档(2026-09-12): 说明文字随选项变化, 改完立即落盘(与识别方式同口径)
-function scopeDesc(){var el=$('transScopeDesc');if(!el)return;var m=(($('transScope')||{}).value==='smart')?'smart':'full';el.textContent=tr(m==='smart'?'visScopeDescSmart':'visScopeDescFull');}
-if($('transScope'))$('transScope').onchange=function(){scopeDesc();saveOcrtl({promptMode:this.value},'#transScope');};
+function scopeDesc(){var el=$('transScopeDesc');if(!el)return;var m=((window.__dsel?window.__dsel.get('transScope'):'')==='smart')?'smart':'full';el.textContent=tr(m==='smart'?'visScopeDescSmart':'visScopeDescFull');}
+// (transScope 的 onchange 已改为 __dsel.onChange)
 if($('expCfg'))$('expCfg').onclick=async function(){try{var r=await fetch('/api/config/export');if(r.status===403){note(tr('needL1'),'warn');return;}var j=await r.json();if(!j||!j.ok){note(tr('saveFail'),'warn');return;}var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(j.config,null,2)],{type:'application/json'}));a.download=j.filename||'config.json';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);if(a.parentNode)a.parentNode.removeChild(a);},1500);}catch(e){note(tr('saveFail'),'warn');}};
 if($('impCfg'))$('impCfg').onclick=function(){var f=document.createElement('input');f.type='file';f.accept='.json';f.onchange=function(){var file=f.files&&f.files[0];if(!file)return;var rd=new FileReader();rd.onload=async function(){try{var j=await (await fetch('/api/config/import',{method:'POST',body:String(rd.result)})).json();note(j&&j.ok?tr('cfgImportOk'):(tr('cfgImportFail')+((j&&j.error)||'')));}catch(e){note(tr('cfgImportBad'),'warn');}};rd.readAsText(file);};f.click();};
 if($('webSave'))$('webSave').onclick=async function(){var v=Number(($('webPort')||{}).value);if(!v){note(tr('saveFail'),'warn');return;}try{var j=await (await fetch('/api/ports/web',{method:'POST',body:JSON.stringify({port:v})})).json();if(!j||!j.ok){note(tr('saveFail')+((j&&j.error)||''),'warn');return;}await fetch('/api/desktop/restart',{method:'POST',body:'{}'});}catch(e){note(tr('saveFail'),'warn');}};
@@ -304,7 +304,7 @@ async function renderEnv(){var tb=$('envRows');if(!tb)return;tb.innerHTML='';
   var em=$('envMsg');if(em)em.textContent=(ins.running||ins.ok===false)?(ins.msg||''):'';
   var st=$('ltStatus');if(st){st.textContent=lt.found?(tr('envLtConfigured')+' '+(lt.model||'')+' → '+(lt.targetLang||'')):tr('envLtNone');st.style.color=lt.found?'var(--ok)':'var(--warn)';}}
 function envInstall(what){fetch('/api/env/install-'+what,{method:'POST',body:'{}'}).then(function(r){return r.json();}).then(function(j){if(j&&!j.ok&&j.error){var mm=$('envMsg');if(mm)mm.textContent=j.error;}}).catch(function(e){apiFail('#envMsg',e);});setTimeout(renderEnv,1500);}
-async function loadTrans(){try{var c=await (await fetch('/api/config')).json();var o=c.ocrtl||{};var v=o.vision||{};if($('transMode'))$('transMode').value=o.mode||'auto';if($('transApiBase'))$('transApiBase').value=v.apiBase||'';if($('transApiModel'))$('transApiModel').value=v.model||'';if($('transApiKey')&&v.hasKey)$('transApiKey').placeholder='sk-••••••('+tr('envLtConfigured')+')';if($('transScope'))$('transScope').value=(v.promptMode==='smart'?'smart':'full');scopeDesc();}catch(e){apiFail('#transApiKey',e);}}
+async function loadTrans(){try{var c=await (await fetch('/api/config')).json();var o=c.ocrtl||{};var v=o.vision||{};if(window.__dsel)window.__dsel.set('transMode',o.mode||'auto');if($('transApiBase'))$('transApiBase').value=v.apiBase||'';if($('transApiModel'))$('transApiModel').value=v.model||'';if($('transApiKey')&&v.hasKey)$('transApiKey').placeholder='sk-••••••('+tr('envLtConfigured')+')';if(window.__dsel)window.__dsel.set('transScope',(v.promptMode==='smart'?'smart':'full'));scopeDesc();}catch(e){apiFail('#transApiKey',e);}}
 if($('transVoice'))$('transVoice').onchange=async function(){try{await fetch('/api/sources',{method:'POST',body:JSON.stringify({id:'livetranslate',enabled:this.checked})});}catch(e){apiFail('#transVoice',e);}pollStatus();};
 
 // 高级设置
@@ -349,8 +349,8 @@ if(window.__dsel){
     { value:'sapi',          labelKey:'trigAsrSapi' }
   ], value:'' });
 }
-if(window.__dsel)window.__dsel.onChange('trigPreset',function(v){fetch('/api/triggers',{method:'POST',body:JSON.stringify({preset:v})}).then(function(r){return r.json();}).then(trigRender).catch(function(e){apiFail('#trigPreset',e);});});
-if(window.__dsel)window.__dsel.onChange('trigAsrEngine',function(v){fetch('/api/triggers',{method:'POST',body:JSON.stringify({asr:{enabled:!!v,engine:v||'sapi'}})}).then(function(r){return r.json();}).then(trigRender).catch(function(e){apiFail('#trigAsrEngine',e);});});
+if(window.__dsel)window.__dsel.onChange('trigPreset',function(){fetch('/api/triggers',{method:'POST',body:JSON.stringify({preset:window.__dsel.get('trigPreset')})}).then(function(r){return r.json();}).then(trigRender).catch(function(e){apiFail('#trigPreset',e);});});
+if(window.__dsel)window.__dsel.onChange('trigAsrEngine',function(){var v=window.__dsel.get('trigAsrEngine');fetch('/api/triggers',{method:'POST',body:JSON.stringify({asr:{enabled:!!v,engine:v||'sapi'}})}).then(function(r){return r.json();}).then(trigRender).catch(function(e){apiFail('#trigAsrEngine',e);});});
 if(false){var v=this.value;fetch('/api/triggers',{method:'POST',body:JSON.stringify({preset:v})}).then(function(r){return r.json();}).then(trigRender).catch(function(e){apiFail('#trigPreset',e);});};
 if($('trigLearn'))$('trigLearn').onclick=function(){fetch('/api/triggers/learn',{method:'POST',body:JSON.stringify({seconds:20})}).then(function(r){return r.json();}).then(function(st){trigRender(st);note(tr('trigLearnHint'),'ok');}).catch(function(e){apiFail('#trigLearn',e);});};
 if($('trigStatus'))$('trigStatus').onclick=function(ev){var b=(ev.target&&ev.target.closest)?ev.target.closest('[data-trigbind]'):null;if(!b)return;var p=b.getAttribute('data-trigbind');var raw=b.getAttribute('data-trigbindv');var v=(raw==='true')?true:(raw==='false')?false:(isNaN(Number(raw))?raw:Number(raw));fetch('/api/triggers',{method:'POST',body:JSON.stringify({bindings:{start:{param:p,eq:v}}})}).then(function(r){return r.json();}).then(function(st){trigRender(st);note(tr('trigBoundOk'),'ok');}).catch(function(e){apiFail('#trigStatus',e);});};
@@ -841,3 +841,24 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
   };
   load();
 })();
+
+// 翻译系统三处下拉改为自绘(VR 桌面视图里原生下拉点不着, F-20260929-02 切片 3)
+if(window.__dsel){
+  window.__dsel.mount('transMode',{ options:[
+    { value:'auto',   labelKey:'visModeAuto' },
+    { value:'vision', labelKey:'visModeVision' },
+    { value:'ocr',    labelKey:'visModeOcr' }
+  ], value:'auto' });
+  window.__dsel.mount('transScope',{ options:[
+    { value:'full',  labelKey:'visScopeFull' },
+    { value:'smart', labelKey:'visScopeSmart' }
+  ], value:'full' });
+  window.__dsel.mount('transRegion',{ options:[
+    { value:'window', labelKey:'capModeWin' },
+    { value:'region', labelKey:'capModeReg' },
+    { value:'screen', labelKey:'capModeScr' }
+  ], value:'window' });
+  window.__dsel.onChange('transMode',function(){saveOcrtl({mode:window.__dsel.get('transMode')},'#transMode');});
+  window.__dsel.onChange('transScope',function(){scopeDesc();saveOcrtl({promptMode:window.__dsel.get('transScope')},'#transScope');});
+  window.__dsel.onChange('transRegion',function(){fetch('/api/capture/set',{method:'POST',body:JSON.stringify({mode:window.__dsel.get('transRegion')})}).catch(function(e){apiFail('#transRegion',e);});});
+}

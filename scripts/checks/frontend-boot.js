@@ -397,6 +397,15 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
     runUi(s5, order5(ROOT));
     const modeSel = s5.document.getElementById('transMode');
     if (!modeSel) problems.push('index.html 缺少 #transMode(识别方式)');
+    // 自绘下拉(F-20260929-02): 这类控件的"接线证据"是 __dsel.onChange 注册过, 且能真的发出 change。
+    // 断言方式与用户操作等价: 先 set 再 fire(不是伪造值)。
+    else if (s5.window && s5.window.__dsel && typeof s5.window.__dsel.get === 'function' && s5.window.__dsel.get('transMode') !== undefined) {
+      s5.window.__dsel.set('transMode', 'vision');
+      s5.window.__dsel.fire('transMode');
+      await new Promise(function (r) { setTimeout(r, 0); });
+      const hit0 = calls.filter(function (c) { return c.url.indexOf('/api/ocrtl-vision') >= 0 && String(c.opt.body || '').indexOf('vision') >= 0; })[0];
+      if (!hit0) problems.push('自绘下拉 #transMode 改识别方式没有把 mode 发到 /api/ocrtl-vision');
+    }
     else if (typeof modeSel.onchange !== 'function') problems.push('#transMode 未接线(改了识别方式不会落盘, 重启回默认)');
     else {
       modeSel.value = 'vision';

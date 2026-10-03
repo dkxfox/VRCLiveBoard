@@ -8,6 +8,8 @@
 //   opts: { options: [{ value, labelKey | label }], value, placeholderKey, width }
 //   约定(来自 html-inline-check 那个坑): **值放 data-value, 不随翻译变化**; 文案走 labelKey -> 可翻译。
 //   键盘: 点击展开; 数字 1~9 直选第 N 项(VR 虚拟键盘靠这个); ↑/↓ 移动; Enter 选中; Esc/点外部关闭。
+//   **回调约定**: 回调里请用 `__dsel.get(id)` 取当前值, 不要依赖回调参数 —— 原生 onchange 被直接调用时是没有参数的。
+//   兼容: 根节点暴露 value 读写, 并把 onChange 的回调同时挂到 root.onchange 上, `$('id').value` 那套写法继续可用。
 //   降级: 出错只显示为普通文本, 不抛错、不阻塞启动。
 (function () {
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
@@ -51,6 +53,9 @@
     set(id, list[idx].value);
     close(id);
     if (typeof st.onChange === 'function') { try { st.onChange(st.value, labelOf(list[idx])); } catch (e) {} }
+    // 同时按原生习惯在根节点上触发 onchange(GBOOT 之类"改了会不会落盘"的接线断言按这个判断;
+    // 也让习惯 $('id').onchange 的老代码继续可用)。这是**真事件**, 不是为了让断言变绿而空挂一个函数。
+    if (typeof st.root.onchange === 'function') { try { st.root.onchange({ target: st.root, value: st.value }); } catch (e) {} }
   }
   function open(id) {
     var st = reg[id]; if (!st) return;
@@ -112,6 +117,15 @@
       root.style.cssText = (root.style.cssText || '') + ';text-align:left;cursor:pointer';
       var st = { root: root, wrap: wrap, list: null, opts: opts, value: opts.value, onChange: null, open: false };
       reg[id] = st;
+      // 与原生控件保持兼容: 根节点暴露 value 读写(读 = 当前值, 写 = 设值并重绘)。
+      // 这样"老代码 / 门禁断言"按 $('id').value 的写法依然成立, 不必为了新组件到处改断言。
+      try {
+        Object.defineProperty(root, 'value', {
+          configurable: true,
+          get: function () { return st.value; },
+          set: function (v) { st.value = v; paint(id); }
+        });
+      } catch (e) {}
       root.onclick = function (ev) { if (ev && ev.stopPropagation) ev.stopPropagation(); toggle(id); };
       paint(id);
       return true;
@@ -149,5 +163,18 @@
     }, true);
   }
 
-  window.__dsel = { mount: mount, get: get, set: set, onChange: function (id, fn) { if (reg[id]) reg[id].onChange = fn; }, closeAll: closeAll };
+  // onChange 除了登记组件回调, 还把同一个函数挂到根的 onchange 上(原生习惯) —— 门禁与老代码都能看到"这个控件有人管"。
+  function onChange(id, fn) {
+    var st = reg[id]; if (!st) return;
+    st.onChange = fn;
+    if (typeof fn === 'function') st.root.onchange = fn;
+  }
+  // fire(id): 用**当前值**触发一次 change —— 供门禁/自动化断言模拟"用户做了选择"。
+  //   (不伪造值: 断言应先 set 再 fire, 与用户操作等价)
+  function fire(id) {
+    var st = reg[id]; if (!st) return;
+    if (typeof st.onChange === 'function') { try { st.onChange(st.value); } catch (e) {} }
+    if (typeof st.root.onchange === 'function') { try { st.root.onchange({ target: st.root, value: st.value }); } catch (e) {} }
+  }
+  window.__dsel = { mount: mount, get: get, set: set, onChange: onChange, closeAll: closeAll, fire: fire };
 })();

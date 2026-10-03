@@ -2092,6 +2092,18 @@ VMD(自制 2 分钟动作, 12020 关键帧)
 - 切片 2 迁移: `trigPreset`(预设)与 `trigAsrEngine`(识别层)两处 -> 选项搬到 JS(文案继续走 i18n 的 labelKey), `onchange` 换成 `__dsel.onChange`, `trigLoad` 里的赋值换成 `__dsel.set`。
 - 证据: dsel-check 报 **已迁移 3 个 / 剩余 <select> 12 个**(15 -> 14 -> 12), 契约全满足; 行为测试 18 条全过; `node --check` 通过; 门禁 15 PASS。
 - 工作方式收获: **把"自己试试"变成断言** 之后, 组件层三个 bug 都能在本地复现与锁定, 不必再让用户当测试机(用户这轮明确这么要求)。
+
+## 312. 自绘下拉切片 3: 翻译三处迁移 + 组件补原生兼容 + 门禁同步升级(2026-09-29)
+- 迁移: `transMode`(识别方式) / `transScope`(翻译范围) / `transRegion`(截取区域) —— 12 -> **9** 个 `<select>`;
+  · `transRegion` 顺手修正: 原来三个 `<option>` **没有显式 value**, 靠 `selectedIndex` 读写(正是 html-inline-check 那条坑的同源写法) -> 现在用明确的 `window/region/screen` 字符串。
+- **组件补了两处原生兼容**(都是通用能力, 不是为过断言):
+  · 根节点暴露 **`value` 读写**(读=当前值, 写=设值并重绘) -> `$('id').value` 那套写法继续成立;
+  · `onChange(id, fn)` 除了登记组件回调, 还把同一个函数挂到根的 **`onchange`** 上; 新增 **`fire(id)`**(用当前值触发一次 change)供门禁/自动化模拟"用户做了选择"。
+  · **回调约定写进文件头**: 回调里请用 `__dsel.get(id)` 取当前值, 不要依赖回调参数(原生 onchange 被直接调用时没有参数) —— 这正是这轮 GBOOT 断言失败提醒我的。
+- **门禁同步升级**(GBOOT): 原断言要求 `#transMode` 有 `onchange` —— 对自绘下拉, 它改为: **若 `__dsel` 管着这个控件, 就先 `set` 再 `fire`, 断言 mode 真的发到 `/api/ocrtl-vision`**(与用户操作等价, 不伪造值)。旧逻辑保留为兜底。
+- 中途踩坑并修复: 批量替换时漏了一个右括号 -> `app.js` 语法错误 -> GBOOT/G1 立刻红(门禁抓住了) -> 已补。
+- 证据: 剩余 `<select>` **9** 个; dsel-check 契约全满足(迁移 6 / 无 .value 残留); 行为测试 18 条全过; **门禁 15 PASS**。
+- 剩余 9 处待迁: langSel / bdVar(13 个中文选项, 需要补 i18n 键) / advHwAccel / psNet·psProc·psFsW·psFsR·psAi(环境检测 5 处) / brandSel。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -2303,5 +2315,6 @@ VMD(自制 2 分钟动作, 12020 关键帧)
 | 309 | 2026-09-29 | 用户实测两个 bug(都是我的): 下拉关不上 + 动作列表全是 0 |
 | 310 | 2026-09-29 | bug: 选完不收回下拉(第三次修同一个组件) —— 根因是"轮询把下拉重建了" |
 | 311 | 2026-09-29 | 自绘下拉切片 2: 触发器 2 处迁移 + 行为测试进 GHTML |
+| 312 | 2026-09-29 | 自绘下拉切片 3: 翻译三处迁移 + 组件补原生兼容 + 门禁同步升级 |
 
 <!-- DEV-NOTES-INDEX:END -->
