@@ -312,7 +312,7 @@ if($('advAuto')){(async function(){try{var c=await (await fetch('/api/config')).
 if($('advConsole')){(async function(){try{var c=await (await fetch('/api/config')).json();$('advConsole').checked=!((c.desktop||{}).showConsole===false);}catch(e){apiFail('#advConsole',e);}})();$('advConsole').onchange=async function(){try{var cj=await (await fetch('/api/desktop/console',{method:'POST',body:JSON.stringify({visible:this.checked})})).json();if(cj)note(cj.note?cj.note:tr('savedOk'),cj.note?'warn':'ok');}catch(e){apiFail('#advConsole',e);}};}
 // 硬件加速三档(M-20260927-10, 用户要求): 双显卡机器上 Chromium 硬解会出现"帧呈现跟不上"的周期性卡顿,
 // 以前只能手改 config.json —— 现在设置里就能改, 改完提示重启。
-if($('advHwAccel')){(async function(){try{var c=await (await fetch('/api/config')).json();$('advHwAccel').value=(((c.desktop||{}).hardwareAcceleration)||'auto');}catch(e){apiFail('#advHwAccel',e);}})();$('advHwAccel').onchange=async function(){var sel=this;try{var j=await (await fetch('/api/desktop/hw-accel',{method:'POST',body:JSON.stringify({mode:sel.value})})).json();note(j&&j.ok?tr('hwSaved'):tr('saveFail'),j&&j.ok?'ok':'warn');if(!(j&&j.ok)){var c2=await (await fetch('/api/config')).json();sel.value=(((c2.desktop||{}).hardwareAcceleration)||'auto');}}catch(e){apiFail('#advHwAccel',e);}};}
+if($('advHwAccel')){(async function(){try{var c=await (await fetch('/api/config')).json();window.__dsel.get('advHwAccel')=(((c.desktop||{}).hardwareAcceleration)||'auto');}catch(e){apiFail('#advHwAccel',e);}})();$('advHwAccel').onchange=async function(){var sel=this;try{var j=await (await fetch('/api/desktop/hw-accel',{method:'POST',body:JSON.stringify({mode:sel.value})})).json();note(j&&j.ok?tr('hwSaved'):tr('saveFail'),j&&j.ok?'ok':'warn');if(!(j&&j.ok)){var c2=await (await fetch('/api/config')).json();sel.value=(((c2.desktop||{}).hardwareAcceleration)||'auto');}}catch(e){apiFail('#advHwAccel',e);}};}
 // 输入触发器(M-20260928-01, F-20260925-02 切片 1): 开关 / 预设 / 学习绑定 —— 学习到的参数点一下就绑成"开始说话"。
 // 数据来源是 VRChat 回传的 OSC 参数(/avatar/parameters/*), 我们只监听, 不向游戏发送任何东西。
 function trigEsc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
@@ -861,4 +861,48 @@ if(window.__dsel){
   window.__dsel.onChange('transMode',function(){saveOcrtl({mode:window.__dsel.get('transMode')},'#transMode');});
   window.__dsel.onChange('transScope',function(){scopeDesc();saveOcrtl({promptMode:window.__dsel.get('transScope')},'#transScope');});
   window.__dsel.onChange('transRegion',function(){fetch('/api/capture/set',{method:'POST',body:JSON.stringify({mode:window.__dsel.get('transRegion')})}).catch(function(e){apiFail('#transRegion',e);});});
+}
+// 高级设置/环境检测/语言/皮肤 的下拉改为自绘(F-20260929-02 切片 4)
+if(window.__dsel){
+  window.__dsel.mount('advHwAccel',{ options:[
+    { value:'off',    labelKey:'hwOff' },
+    { value:'decode', labelKey:'hwDecode' },
+    { value:'auto',   labelKey:'hwAuto' }
+  ], value:'off' });
+  window.__dsel.mount('psNet',{ options:[
+    { value:'whitelist', labelKey:'polWhitelist' },
+    { value:'localOnly', labelKey:'polLocalOnly' },
+    { value:'off',       labelKey:'polOff' }
+  ], value:'whitelist' });
+  window.__dsel.mount('psProc',{ options:[
+    { value:'consent', labelKey:'polConsent' },
+    { value:'deny',    labelKey:'polDeny' }
+  ], value:'consent' });
+  window.__dsel.mount('psFsW',{ options:[
+    { value:'sandbox',  labelKey:'polSandbox' },
+    { value:'declared', labelKey:'polDeclared' },
+    { value:'deny',     labelKey:'polDeny' }
+  ], value:'sandbox' });
+  window.__dsel.mount('psFsR',{ options:[
+    { value:'self',     labelKey:'polSelf' },
+    { value:'declared', labelKey:'polDeclared' },
+    { value:'deny',     labelKey:'polDeny' }
+  ], value:'self' });
+  window.__dsel.mount('psAi',{ options:[
+    { value:'allow',     labelKey:'polAllow' },
+    { value:'localOnly', labelKey:'polLocalOnly' },
+    { value:'off',       labelKey:'polOff' }
+  ], value:'allow' });
+  window.__dsel.mount('brandSel',{ options:[
+    { value:'auto',   labelKey:'brandAuto' },
+    { value:'starry', labelKey:'brandStarry' },
+    { value:'normal', labelKey:'brandDefault' }
+  ], value:'auto' });
+  // 语言名的显示不翻译(专有名词: 各语言用自己写), 所以这里用 label 而不是 labelKey
+  // 语言名走 i18n 键(三语里的值相同: 每种语言用它自己的写法显示, 不做翻译)
+  window.__dsel.mount('langSel',{ options:[
+    { value:'zh-CN', labelKey:'langNameZhCN' },
+    { value:'zh-TW', labelKey:'langNameZhTW' },
+    { value:'en',    labelKey:'langNameEn' }
+  ], value:'zh-CN' });
 }

@@ -96,5 +96,19 @@ ok(__dsel.get('sel1') === 'c', '重复 mount 不丢当前值');
 btn.fire();
 ok(listOf(btn, wrap)[0].children.length === 3, '重复 mount 后列表内容仍正确');
 
+// 原生兼容层(切片 4 的 8 处转换都依赖它): value 读写 + onchange 直接赋值仍可用
+__dsel.mount('sel4', { options: [{ value: 'p', label: '甲' }, { value: 'q', label: '乙' }], value: 'p' });
+const b4 = dom.el('button'); dom.byId['sel4'] = b4;
+__dsel.mount('sel4', { options: [{ value: 'p', label: '甲' }, { value: 'q', label: '乙' }], value: 'p' });
+b4.value = 'q';
+ok(__dsel.get('sel4') === 'q', '老代码写 $("id").value 生效(兼容层)');
+ok(b4.value === 'q', '老代码读 $("id").value 也对');
+let seen = null;
+b4.onchange = function () { seen = this.value; };
+b4.fire();                                   // 点开再点第一项
+const l4 = b4.parentNode.children.filter(function (c) { return c.className === 'dsel-list'; })[0];
+l4.children[0].fire();
+ok(seen === 'p', '直接给 onchange 赋值仍能收到变更(this.value 正确)');
+
 console.log(fails.length ? ('== 行为测试 ' + fails.length + ' 项失败 ==') : '== 行为测试全部通过 ==');
 process.exit(fails.length ? 1 : 0);
