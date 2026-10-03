@@ -727,8 +727,13 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     if(st.error) s+='   |   '+tr('danceErr')+': '+st.error;
     el.textContent=s;
   }
+  var danceSig='';
   function danceFill(st){
     if(!st||!st.files) return;
+    // 列表没变就不重建: 页面每 3 秒轮询一次状态, 每次都重建会动 DOM(下拉组件已就地更新, 这里是第二道保险)
+    var sig=st.files.map(function(f){return f.file+':'+f.size;}).join('|');
+    if(sig===danceSig) return;
+    danceSig=sig;
     var cur=(window.__dsel?window.__dsel.get('danceFile'):null)||'';
     var opts=st.files.map(function(f){ return { value:f.file, label:f.file+'  ('+Math.round(f.durationSec)+'s / '+f.bones+tr('danceBones')+' / '+Math.round(f.size/1024)+'KB)' }; });
     if(window.__dsel){

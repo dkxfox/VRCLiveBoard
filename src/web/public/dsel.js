@@ -91,6 +91,17 @@
       if (!root) return false;
       opts = opts || {};
       opts.options = opts.options || [];
+      // **重复 mount 必须就地更新, 不能重建**: 页面会周期性刷新(动作页每 3 秒拉一次状态),
+      // 每次重建都会在 DOM 里留下一个旧的下拉列表 —— 表现就是"选完不收回、列表越堆越多"。
+      if (reg[id]) {
+        var st0 = reg[id];
+        if (st0.open) close(id);
+        st0.opts = opts;
+        if (opts.value !== undefined && opts.value !== null && opts.value !== '') st0.value = opts.value;
+        if (opts.width) st0.wrap.style.width = opts.width;
+        paint(id);
+        return true;
+      }
       var wrap = document.createElement('span');
       wrap.className = 'dsel-wrap';
       wrap.style.cssText = 'position:relative;display:inline-block';

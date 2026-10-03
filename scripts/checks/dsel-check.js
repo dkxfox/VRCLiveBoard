@@ -45,7 +45,13 @@ dselIds.forEach(function (id) {
   const re = new RegExp('(?:\\$|getElementById)\\(\\s*[\'"]' + e + '[\'"]\\s*\\)\\.value');
   if (re.test(js)) fails.push('#' + id + ' 已迁移到自绘下拉, 但前端代码仍在读 .value(应改用 __dsel.get)');
 });
-// 5) 迁移进度
+// 5) 重复 mount 必须就地更新(页面会轮询刷新; 重建会把旧列表留在 DOM 里 -> 选完不收回、列表越堆越多)
+if (fs.existsSync(dselPath)) {
+  const dsrc = fs.readFileSync(dselPath, 'utf8');
+  if (dsrc.indexOf('if (reg[id]) {') < 0) fails.push('dsel.js 的 mount 必须支持重复调用(就地更新), 不能每次重建');
+}
+
+// 6) 迁移进度
 const selCount = (html.match(/<select\b/gi) || []).length;
 console.log('[GHTML dsel-check] 自绘下拉: 已迁移 ' + dselIds.length + ' 个 / 剩余 <select> ' + selCount + ' 个');
 for (const f of fails) console.log('  -> FAIL ' + f);
