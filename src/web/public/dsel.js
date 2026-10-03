@@ -108,7 +108,17 @@
   }
 
   if (document.addEventListener) {
-    document.addEventListener('click', function () { closeAll(); }, true);
+    // 点击外部关闭。**必须忽略落在本组件内部的点击**(捕获阶段先于按钮自身的 onclick 执行,
+    // 否则"再点一次按钮关闭"会先被这里关掉、又被按钮打开 —— 表现就是"点按钮关不上")。
+    document.addEventListener('click', function (ev) {
+      var target = ev && ev.target;
+      Object.keys(reg).forEach(function (id) {
+        var st = reg[id];
+        if (!st || !st.open) return;
+        if (target && st.wrap && st.wrap.contains && st.wrap.contains(target)) return;   // 组件内部: 交给按钮自己的 onclick 处理
+        close(id);
+      });
+    }, true);
     document.addEventListener('keydown', function (ev) {
       if (!openOne) return;
       var st = reg[openOne]; if (!st) return;

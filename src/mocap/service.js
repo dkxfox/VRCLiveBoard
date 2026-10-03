@@ -26,11 +26,12 @@ class MocapService {
     this.startedAt = 0;
   }
   listFiles() {
+    const dir = this.dir;   // 必须在回调外捕获: 回调里的 this 不是实例(踩过: path.join(undefined, f) 抛错被内层 catch 吞掉 -> 列表全 0)
     try {
-      return fs.readdirSync(this.dir).filter(function (f) { return /\.vmd$/i.test(f); }).map(function (f) {
+      return fs.readdirSync(dir).filter(function (f) { return /\.vmd$/i.test(f); }).map(function (f) {
         let size = 0, durationSec = 0, bones = 0, frames = 0;
         try {
-          const full = path.join(this.dir, f);
+          const full = path.join(dir, f);
           size = fs.statSync(full).size;
           const v = parseVmd(fs.readFileSync(full));
           durationSec = v.durationSec; bones = v.boneCount; frames = v.boneFrameCount;
