@@ -2042,6 +2042,22 @@ VMD(自制 2 分钟动作, 12020 关键帧)
   · **D3 断言**: 新增检查脚本(注册进 run-gates) —— 方法齐全 / select 数逐片下降至 0 / 取的是值不是文案 / 数字键与 Esc·Enter 行为 / 现有 15 门禁不回归;
   · **D4**: 门禁全绿 + 提交 + **用户在自己实例的 VR 桌面视图里确认**(交互类必须人工确认)。
 - 状态: 功能卡置 **D1 完成**, 等用户过目后进 D2 切片 1。
+
+## 308. F-20260929-02 切片 1 完成: 自绘下拉组件 + 动作页 1 处迁移 + 断言(挂在 GHTML 下)(2026-09-29)
+- 交付:
+  · `src/web/public/dsel.js` —— 页面内自绘下拉组件(替代原生 `<select>`), 对外契约写在文件头:
+    `window.__dsel = { mount, get, set, onChange, closeAll }`; opts: `{ options:[{value,labelKey|label}], value, placeholderKey, width }`;
+    · 行为: 点击展开(列表在按钮下方, z-index 60) / 点击选项选中并回调 / 点外部·Esc 关闭 / ↑↓ 移动 / Enter 选中 / **数字键 1~9 直选第 N 项**(VR 虚拟键盘的关键);
+    · **值放 data-value, 文案走 labelKey**(把 html-inline-check 那条"下拉必须显式 value"的教训原样保留);
+    · 降级: 出错只显示为普通文本, 不抛错、不阻塞启动(GBOOT 仍绿)。
+  · `index.html`: 在 **app.js 之前**引入 `/dsel.js`; **动作页的动作文件下拉**由 `<select>` 换成自绘下拉(`<button class="dsel" id="danceFile" data-value="">`);
+  · `app.js`: 动作页改用 `__dsel.mount/get`(不再读 `.value`)。
+  · `scripts/checks/dsel-check.js`(新断言, **挂在 GHTML 下 —— 不新增门禁, 保持 15 条**):
+    ① 组件存在且五个方法齐全; ② `/dsel.js` 必须在 `/app.js` 之前引入; ③ 每个 `.dsel` 控件必须有 `data-value`;
+    ④ 已迁移控件**不许**再出现 `$('id').value` / `getElementById('id').value`(否则译文会被当值); ⑤ 报告迁移进度与剩余 `<select>` 数。
+- 证据: 断言输出 `已迁移 1 个 / 剩余 <select> 14 个`(15 -> 14), 契约全满足; 门禁 14 PASS(GSYNC 未提交属预期), 提交后 15 PASS。
+- **踩坑并修复(值得记)**: 用工具编辑 `.ps1` 会**丢掉 UTF-8 BOM** -> PowerShell 5.1 解析报 `UnexpectedToken`(中文串被当 ANSI 读); 已补回 BOM。项目早有".ps1 必须带 BOM"的规矩, 这次是编辑方式触发的。
+- D4: 待用户在 VR 桌面视图里确认——动作页的下拉能否展开、点中、以及**数字键 1~9 能否直选**。确认后进切片 2(触发器 3 处 + 键盘页)。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -2249,5 +2265,6 @@ VMD(自制 2 分钟动作, 12020 关键帧)
 | 305 | 2026-09-29 | UI 收口: 实验性功能开关 / 动作与听写折叠 / 键盘页清理 / 功能开关可编辑 / 硬件加速默认全关 |
 | 306 | 2026-09-29 | 立项调研: 输入法候选窗/下拉在 VR 桌面视图里点不着(F-20260929-02) |
 | 307 | 2026-09-29 | F-20260929-02 D0 答复 + D1 设计(自绘下拉替换 15 处 <select>) |
+| 308 | 2026-09-29 | F-20260929-02 切片 1 完成: 自绘下拉组件 + 动作页 1 处迁移 + 断言(挂在 GHTML 下) |
 
 <!-- DEV-NOTES-INDEX:END -->

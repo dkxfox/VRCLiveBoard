@@ -728,16 +728,12 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     el.textContent=s;
   }
   function danceFill(st){
-    var sel=$('danceFile'); if(!sel||!st||!st.files) return;
-    var keep=sel.value;
-    sel.innerHTML='';
-    st.files.forEach(function(f){
-      var o=document.createElement('option');
-      o.value=f.file;
-      o.textContent=f.file+'  ('+Math.round(f.durationSec)+'s / '+f.bones+tr('danceBones')+' / '+Math.round(f.size/1024)+'KB)';
-      sel.appendChild(o);
-    });
-    if(keep) sel.value=keep;
+    if(!st||!st.files) return;
+    var cur=(window.__dsel?window.__dsel.get('danceFile'):null)||'';
+    var opts=st.files.map(function(f){ return { value:f.file, label:f.file+'  ('+Math.round(f.durationSec)+'s / '+f.bones+tr('danceBones')+' / '+Math.round(f.size/1024)+'KB)' }; });
+    if(window.__dsel){
+      window.__dsel.mount('danceFile',{ options:opts, value:cur||(opts[0]&&opts[0].value)||'' });
+    }
   }
   function danceLoad(){
     fetch('/api/mocap').then(function(r){return r.json();}).then(function(st){
@@ -754,9 +750,9 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
   function danceInit(){
     if(!$('danceFile')) return;
     $('danceRefresh').onclick=danceLoad;
-    $('danceStart').onclick=function(){ dancePost({action:'start',file:$('danceFile').value},'danceStart'); };
+    $('danceStart').onclick=function(){ dancePost({action:'start',file:(window.__dsel?window.__dsel.get('danceFile'):'')},'danceStart'); };
     $('danceStop').onclick=function(){ dancePost({action:'stop'},'danceStop'); };
-    $('danceHold').onclick=function(){ dancePost({action:'hold',sec:0,file:$('danceFile').value},'danceHold'); };
+    $('danceHold').onclick=function(){ dancePost({action:'hold',sec:0,file:(window.__dsel?window.__dsel.get('danceFile'):'')},'danceHold'); };
     danceLoad();
     if(poll) clearInterval(poll);
     poll=setInterval(function(){

@@ -293,7 +293,7 @@ body.no-anim *{animation:none!important;transition:none!important}
     <div class="row" style="gap:8px;align-items:center"><b data-t="danceTitle">动作播放</b>
       <span class="sub" data-t="danceSub">VMD 动作 → 虚拟追踪器(VMT)</span></div>
     <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap">
-      <select id="danceFile" style="min-width:240px"></select>
+      <button class="dsel" id="danceFile" data-value="" style="min-width:240px"></button>
       <button id="danceStart" data-t="danceStart">开始</button>
       <button class="gray" id="danceHold" data-t="danceHold">定住不动(校准用)</button>
       <button class="gray" id="danceStop" data-t="danceStop">停止</button>
@@ -442,4 +442,4 @@ body.no-anim *{animation:none!important;transition:none!important}
   </div>
 </div>
 <div id="guideOverlay" hidden><div class="guidebox"><b class="guide-title" data-t="guideTitle"></b><div class="guide-body" data-t="guideText"></div><label class="row" style="gap:6px;align-items:center"><input type="checkbox" id="guideNoAuto"><span class="sub" data-t="guideNoAuto"></span></label><button id="guideOk" data-t="guideBtn"></button></div></div><div id="plgPanelOverlay" hidden><div class="guidebox" style="width:min(760px,86vw)"><div class="row" style="justify-content:space-between;align-items:center"><b class="guide-title" style="margin:0" data-t="plgTitle"></b><button class="small" id="plgPanelClose">✕</button></div><iframe id="plgPanelFrame" sandbox="allow-scripts allow-forms" style="width:100%;height:60vh;border:1px solid var(--border,#2a3543);border-radius:8px;background:#fff"></iframe></div></div><div id="note" hidden></div><script src="/skin.js"></script>
-<script src="/app.js"></script><script src="/app-security.js"></script><script src="/theme.js"></script><script src="/fx.js"></script></body></html>
+<script src="/dsel.js"></script><script src="/app.js"></script><script src="/app-security.js"></script><script src="/theme.js"></script><script src="/fx.js"></script></body></html>
