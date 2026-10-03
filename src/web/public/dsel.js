@@ -35,7 +35,10 @@
   function paint(id) {
     var st = reg[id]; if (!st) return;
     var it = find(id, st.value);
-    var label = it ? labelOf(it) : t(st.opts.placeholderKey, st.opts.placeholder || '');
+    // buttonTextKey: 按钮显示固定文案(例如语言按钮显示"简体 / 繁體 / English", 而不是当前语言名);
+    // 下拉列表里仍然高亮当前项, 所以"当前选的是哪个"照样看得出来。
+    var label = st.opts.buttonTextKey ? t(st.opts.buttonTextKey, st.opts.buttonText || '')
+      : (it ? labelOf(it) : t(st.opts.placeholderKey, st.opts.placeholder || ''));
     st.root.textContent = label;
     st.root.setAttribute('data-value', st.value === undefined || st.value === null ? '' : String(st.value));
     st.root.setAttribute('aria-expanded', st.open ? 'true' : 'false');

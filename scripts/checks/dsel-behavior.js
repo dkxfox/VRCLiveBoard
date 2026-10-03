@@ -38,7 +38,7 @@ function makeDom() {
 const dom = makeDom();
 const sandbox = { window: {}, document: dom.doc, console: console };
 sandbox.window.document = dom.doc;
-sandbox.window.tr = function (k) { return k; };
+sandbox.window.tr = function (k) { return 'T:' + k; };
 vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'web', 'public', 'dsel.js'), 'utf8'), sandbox);
 
@@ -109,6 +109,12 @@ b4.fire();                                   // 点开再点第一项
 const l4 = b4.parentNode.children.filter(function (c) { return c.className === 'dsel-list'; })[0];
 l4.children[0].fire();
 ok(seen === 'p', '直接给 onchange 赋值仍能收到变更(this.value 正确)');
+
+// buttonTextKey: 按钮显示固定文案(语言按钮显示三种语言名, 而不是当前语言名), 列表里仍高亮当前项
+const b5 = dom.el('button'); dom.byId['sel5'] = b5;
+__dsel.mount('sel5', { buttonTextKey: 'langButton', options: [{ value: 'zh-CN', label: '简体中文' }, { value: 'en', label: 'English' }], value: 'en' });
+ok(b5.textContent === 'T:langButton', 'buttonTextKey 生效(按钮显示固定文案, 而非当前项): ' + b5.textContent);
+ok(__dsel.get('sel5') === 'en', 'buttonTextKey 不影响取值');
 
 console.log(fails.length ? ('== 行为测试 ' + fails.length + ' 项失败 ==') : '== 行为测试全部通过 ==');
 process.exit(fails.length ? 1 : 0);

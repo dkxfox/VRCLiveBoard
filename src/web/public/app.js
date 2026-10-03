@@ -900,7 +900,7 @@ if(window.__dsel){
   ], value:'auto' });
   // 语言名的显示不翻译(专有名词: 各语言用自己写), 所以这里用 label 而不是 labelKey
   // 语言名走 i18n 键(三语里的值相同: 每种语言用它自己的写法显示, 不做翻译)
-  window.__dsel.mount('langSel',{ options:[
+  window.__dsel.mount('langSel',{ buttonTextKey:'langButton', options:[
     { value:'zh-CN', labelKey:'langNameZhCN' },
     { value:'zh-TW', labelKey:'langNameZhTW' },
     { value:'en',    labelKey:'langNameEn' }
