@@ -75,8 +75,26 @@ class PinyinIME {
   }
   // 整句候选: 把连写的拼音串按 HMM 解成最可能的汉字序列。
   // opts.dagOnly: 只跑词组层(几乎 0ms) —— 模糊音变体那种"猜测性"查询用这个, 不值得为它付 HMM 的几十到两百毫秒。
+  // 这串拼音能不能切成合法音节?(词表里的 406 个音节做 DP, O(n*6))
+  // 为什么必须有它: 引擎的 splitAsYinJie 会**枚举所有切分**, 对"切不动的串"会组合爆炸 ——
+  // 实测 'hhh...'(16 个 h)要 11.4 秒、6 个 h 要 3.3 秒, 直接把单线程的服务端堵死, 整个控制台跟着卡。
+  // 先做一次廉价的可行性判断, 切不动就根本不进引擎(hahaha 能切 -> 正常走引擎, 依然很快)。
+  canSegment(k) {
+    if (!this.syllables || !this.syllables.size) return true;   // 音节表还没建好时不拦
+    const n = k.length;
+    const ok = new Array(n + 1).fill(false);
+    ok[n] = true;
+    for (let i = n - 1; i >= 0; i--) {
+      const max = Math.min(n, i + 6);
+      for (let j = i + 1; j <= max; j++) {
+        if (ok[j] && this.syllables.has(k.slice(i, j))) { ok[i] = true; break; }
+      }
+    }
+    return ok[0];
+  }
   sentenceCandidates(k, want, opts) {
     if (!this.engineReady || !this.engine) return [];
+    if (!this.canSegment(k)) return [];      // 切不动 = 不是拼音, 不进引擎(见 canSegment 的说明)
     const dagOnly = !!(opts && opts.dagOnly);
     const out = [];
     try {
