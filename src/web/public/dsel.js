@@ -37,6 +37,9 @@
     var it = find(id, st.value);
     // buttonTextKey: 按钮显示固定文案(例如语言按钮显示"简体 / 繁體 / English", 而不是当前语言名);
     // 下拉列表里仍然高亮当前项, 所以"当前选的是哪个"照样看得出来。
+    // 值匹配不到任何选项时**不能显示空**(2026-10-05 用户实测: 品牌下拉首次启动是个空心胶囊):
+    // 回落顺序 = 第一个选项 -> 占位文案。同时把 st.value 纠正成这个有效值, 免得 get() 返回一个不存在的值。
+    if (!it && st.opts.options && st.opts.options.length) { it = st.opts.options[0]; st.value = it.value; }
     var label = st.opts.buttonTextKey ? t(st.opts.buttonTextKey, st.opts.buttonText || '')
       : (it ? labelOf(it) : t(st.opts.placeholderKey, st.opts.placeholder || ''));
     st.root.textContent = label;

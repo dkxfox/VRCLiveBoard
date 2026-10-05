@@ -116,5 +116,17 @@ __dsel.mount('sel5', { buttonTextKey: 'langButton', options: [{ value: 'zh-CN', 
 ok(b5.textContent === 'T:langButton', 'buttonTextKey 生效(按钮显示固定文案, 而非当前项): ' + b5.textContent);
 ok(__dsel.get('sel5') === 'en', 'buttonTextKey 不影响取值');
 
+
+// 值匹配不到任何选项时, 必须回落到第一个选项(2026-10-05 用户实测: 品牌下拉首次启动是空心胶囊)
+const btn2 = dom.el('button'); btn2.attrs = {}; dom.byId['sel2'] = btn2;
+const host2 = dom.el('div'); host2.appendChild(btn2);
+__dsel.mount('sel2', { options: [{ value: 'auto', label: '自动' }, { value: 'starry', label: '星轨茶会' }], value: '不存在的值' });
+ok(btn2.textContent === '自动', '值不在选项里时回落第一个选项(实得 ' + JSON.stringify(btn2.textContent) + ')');
+ok(__dsel.get('sel2') === 'auto', '并把值纠正为有效值(实得 ' + JSON.stringify(__dsel.get('sel2')) + ')');
+// 空值同理(且不同于 placeholder: 这里没有 placeholderKey)
+const btn3 = dom.el('button'); btn3.attrs = {}; dom.byId['sel3'] = btn3;
+const host3 = dom.el('div'); host3.appendChild(btn3);
+__dsel.mount('sel3', { options: [{ value: 'x', label: 'X' }], value: '' });
+ok(btn3.textContent === 'X', '空值也不留空(实得 ' + JSON.stringify(btn3.textContent) + ')');;
 console.log(fails.length ? ('== 行为测试 ' + fails.length + ' 项失败 ==') : '== 行为测试全部通过 ==');
 process.exit(fails.length ? 1 : 0);
