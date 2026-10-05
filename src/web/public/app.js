@@ -28,7 +28,7 @@ if (typeof window.tr !== 'function') {
 }
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 // tabs
-document.querySelectorAll('#tabs .tab').forEach(function(tab){tab.onclick=function(){document.querySelectorAll('#tabs .tab').forEach(function(x){x.classList.remove('on');});document.querySelectorAll('[id^=tab-]').forEach(function(p){p.hidden=true;});tab.classList.add('on');var p=$('tab-'+tab.dataset.tab);if(p)p.hidden=false;};});
+document.querySelectorAll('#tabs .tab').forEach(function(tab){tab.onclick=function(){document.querySelectorAll('#tabs .tab').forEach(function(x){x.classList.remove('on');});document.querySelectorAll('[id^=tab-]').forEach(function(p){p.hidden=true;});tab.classList.add('on');try{document.body.classList.toggle('kbd-tab', tab.dataset.tab==='kbd');}catch(e){}var p=$('tab-'+tab.dataset.tab);if(p)p.hidden=false;};});
 try{var qp=new URLSearchParams(location.search).get('tab');if(qp){var qbt=document.querySelector('.tab[data-tab="'+qp+'"]');if(qbt)qbt.click();}}catch(e){apiFail('app.js',e);}
 // composer
 var box=$('box'),cur=$('curChat');
@@ -754,7 +754,7 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     var num=document.createElement('div'); num.style.cssText='display:flex;gap:8px';
     '1234567890'.split('').forEach(function(c){
       var b=document.createElement('button'); b.textContent=c;
-      b.style.cssText='width:56px;height:56px;font-size:20px';
+      b.style.cssText='width:50px;height:50px;font-size:18px';
       b.onclick=function(){ kbdDigit(c); };   // 有候选时优先选候选(用户要求), 否则当普通数字打进去
       num.appendChild(b);
     });
@@ -764,7 +764,7 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
       var d=document.createElement('div'); d.style.cssText='display:flex;gap:8px;align-items:center';
       var mk=function(txt,fn,gap){
         var b=document.createElement('button'); b.textContent=txt;
-        b.style.cssText='width:56px;height:56px;font-size:20px'+(gap?';margin-left:14px':'');
+        b.style.cssText='width:50px;height:50px;font-size:18px'+(gap?';margin-left:12px':'');
         b.onclick=fn;
         return b;
       };

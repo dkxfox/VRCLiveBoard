@@ -272,16 +272,19 @@ body.no-anim *{animation:none!important;transition:none!important}
 <div id="tab-kbd" hidden>
   <style>
     /* VR 可读性 + 布局稳定(F-20260929-03 收尾微调): 字号调大; 选词区高度固定, 打字时不再上下跳 */
-    #kbdCands{min-height:104px;align-content:flex-start}
-    #kbdCands .small{font-size:17px;padding:10px 14px;min-width:56px}
-    #kbdKeys{min-height:196px}
-    #kbdKeys9{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:330px;margin:0 auto;min-height:196px}
-    #kbdKeys9 button.k9{display:flex;flex-direction:column;align-items:center;justify-content:center;height:62px;font-size:22px;line-height:1.05;padding:0}
+    /* 紧凑(F-20260929-06): 让候选 + 键盘尽量在一屏内完整显示(用户: 稍微挤一挤空间) */
+    #kbdCands{min-height:84px;align-content:flex-start}
+    #kbdCands .small{font-size:15px;padding:7px 11px;min-width:48px}
+    #kbdKeys{min-height:212px}
+    #kbdKeys9{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-width:300px;margin:0 auto;min-height:212px}
+    #kbdKeys9 button.k9{display:flex;flex-direction:column;align-items:center;justify-content:center;height:50px;font-size:19px;line-height:1.05;padding:0}
     #kbdKeys9 button.k9 i{font-style:normal;font-size:11px;opacity:.75;letter-spacing:1px}
-    #kbdKeys button{width:62px;height:62px;font-size:22px}
-    #kbdHintRow{font-size:13px;margin-top:10px;text-align:center}
-    #kbdStatus{font-size:12px;margin-top:8px;text-align:center}
-    #kbdActions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-start;margin-top:12px}
+    #kbdKeys button{width:50px;height:50px;font-size:19px}
+    /* 键盘页里"当前聊天框内容"是重复信息(输入框就在上面), 收起来给键盘腾高度 */
+    body.kbd-tab #curChat, body.kbd-tab [data-t="currentLabel"]{display:none}
+    #kbdHintRow{font-size:12px;margin-top:8px;text-align:center}
+    #kbdStatus{font-size:12px;margin-top:6px;text-align:center}
+    #kbdActions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-start;margin-top:10px}
     #box{font-size:18px;min-height:64px}
   </style>
   <div class="card" style="margin-bottom:10px">
