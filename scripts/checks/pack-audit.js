@@ -51,11 +51,39 @@ function readEntry(z, e) {
   return e.method === 0 ? Buffer.from(data) : zlib.inflateRawSync(data);
 }
 
+
+// 2026-10-05: 包里的前端文件必须与当前源码逐字节一致。
+// 背景: make-dist 曾静默吞掉 stage 清理失败 -> 包里混着上一版的 dsel.js, 用户白试一次;
+// 体积/条目数基线拦不住这种"同尺寸不同内容"。故意不进包的文件(排除清单)跳过。
+function sourceMirrorCheck(z, fails) {
+  let EX = {};
+  try { EX = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts', 'pack-exclude.json'), 'utf8')); } catch (e) { }
+  const globRe = (g) => new RegExp('^' + String(g).replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$', 'i');
+  const fileRes = (EX.files || []).map(globRe);
+  const dirRe = EX.dirNameRegex ? new RegExp(EX.dirNameRegex) : null;
+  const srcDir = path.join(ROOT, 'src', 'web', 'public');
+  let files = [];
+  try { files = fs.readdirSync(srcDir, { withFileTypes: true }); } catch (e) { return; }
+  let checked = 0, skipped = 0;
+  for (const f of files) {
+    if (!f.isFile()) continue;
+    if (fileRes.some((r) => r.test(f.name)) || (dirRe && dirRe.test(f.name))) { skipped++; continue; }
+    const rel = 'src/web/public/' + f.name;
+    const e = z.entries.find((x) => x.name === rel);
+    if (!e) { fails.push('源码里的前端文件没进包: ' + rel); continue; }
+    const inZip = readEntry(z, e);
+    checked++;
+    if (!inZip.equals(fs.readFileSync(path.join(srcDir, f.name)))) fails.push('包里的前端文件与当前源码不一致(疑似 stage 陈旧): ' + rel);
+  }
+  console.log('  源码一致性: 比对 ' + checked + ' 个前端文件, 跳过 ' + skipped + ' 个(在排除清单里)');
+}
+
 function audit(zp) {
   const label = path.basename(zp);
   const fails = [], warns = [];
   const z = readZip(zp);
   const names = z.entries.map((e) => e.name).filter((n) => n !== 'conflict-test');   // 开发自测夹具不进包, 也不要求它在包里(2026-09-11 审计 H2)
+  sourceMirrorCheck(z, fails);   // 2026-10-05: 包内前端文件必须与当前源码一致
 
   // 1. 文件名层
   let nonAscii = 0, noFlag = 0, badUtf8 = 0, backslash = 0;
