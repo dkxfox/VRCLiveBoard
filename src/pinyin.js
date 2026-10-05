@@ -107,7 +107,10 @@ class PinyinIME {
         // 交错能保证两者的首选都出现在最前面 —— 实测 DAG 对"明天见/真不错"更准, HMM 对生僻句更稳。
         let dagRes = [];
         try { dagRes = this.engine.dag.query({ yinJieList: seg, maxNum: Math.min(want, 6) }) || []; } catch (e) { dagRes = []; }
-        const hmmRes = dagOnly ? [] : this._hmmQuery(seg, Math.min(want, 6));
+        // HMM 只在**短串**(<=7 音节)上跑: 实测它与 DAG 的**首选完全一致**(DAG 用的是真实词组词典, 很强),
+        // 而成本差 100 倍(14 音节长句: 全量 163ms vs 仅 DAG 1ms)。长串用 DAG, 短串两个都跑(第二/第三候选更丰富)。
+        const useHmm = !dagOnly && seg.length <= 7;
+        const hmmRes = useHmm ? this._hmmQuery(seg, Math.min(want, 6)) : [];
         const res = [];
         for (let i = 0; i < Math.max(dagRes.length, hmmRes.length); i++) {
           if (dagRes[i]) res.push(dagRes[i]);
