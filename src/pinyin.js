@@ -280,6 +280,24 @@ class PinyinIME {
     out.sort((a, b) => b.f - a.f);
     return out.slice(0, want);
   }
+  // 繁体输出(F-20260929-05): 界面语言是繁體时, 把候选词做 简->繁 转换(OpenCC, MIT AND Apache-2.0)。
+  // 为什么用转换而不是繁体词库: 引擎(词组 14 万 + 语言模型)只有简体数据, 转换是唯一不动引擎就能拿到繁体的路子。
+  toTW(list) {
+    if (!list || !list.length) return list;
+    if (!this._tw) {
+      try {
+        const OpenCC = require('opencc-js');
+        this._tw = OpenCC.Converter({ from: 'cn', to: 'tw' });   // 含词汇级消歧(面/麵、里/裡 之类)
+      } catch (e) { this.logger.warn('[输入法] 繁体转换不可用: ' + e.message); this._tw = function (s) { return s; }; }
+    }
+    const conv = this._tw;
+    return list.map(function (e) {
+      const o = Object.assign({}, e);
+      o.w = conv(e.w);
+      if (e.seg) o.seg = e.seg.map(function (s) { return conv(s); });
+      return o;
+    });
+  }
   // 生成模糊音变体(有上限, 避免组合爆炸): zh->z, ch->c, sh->s, an->ang 及其反向
   fuzzyVariants(k) {
     const MAP = {

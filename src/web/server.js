@@ -1205,7 +1205,12 @@ function effPluginSec() {
       const n = Number(url.searchParams.get('n') || 7);
       // t9=1: 走九键(数字串按前缀匹配), 见 F-20260929-04; 默认仍是全拼
       const t9 = url.searchParams.get('t9') === '1';
-      return json(res, 200, { ok: true, keys: keys, t9: t9, candidates: t9 ? ime.t9Candidates(keys, n) : ime.candidates(keys, n) });
+      let list = t9 ? ime.t9Candidates(keys, n) : ime.candidates(keys, n);
+      // lang: 界面语言是繁體时把候选转成繁体(见 F-20260929-05); 简体/英文不转换
+      const lang = String(url.searchParams.get('lang') || '');
+      const tw = /^(zh-)?(tw|hant|hk|mo)$/i.test(lang);
+      if (tw) list = ime.toTW(list);
+      return json(res, 200, { ok: true, keys: keys, t9: t9, tw: tw, candidates: list });
     } catch (e) { return json(res, 500, { ok: false, error: String(e.message) }); }
   });
   on('POST', '/api/pinyin/learn', function (req, res, url) {

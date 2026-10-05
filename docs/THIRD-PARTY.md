@@ -71,3 +71,9 @@ Lite 包不带 electron(需系统 Node 22+), 其余依赖由 npm 按需安装, �
 - 许可: **MIT**(包的 package.json);
 - 处理: 它的 dist 是 TS 直出的 ESM 且相对导入缺扩展名, Node 直接 import 会失败 -> 由 `scripts/build-pinyin-engine.js` 补扩展名后输出到 `build/pinyin-engine/`(**不改内容**);
 - 体积提示: 包内含词典约 35MB; 当前只加载 HMM 一套(约 14MB), DAG 词组层待评估。
+
+## opencc-js(MIT AND Apache-2.0, 运行时依赖)
+- 用途: 输入法的**简->繁**转换(界面语言为繁體时, 候选词转成繁体; 支持词汇级消歧);
+- 许可: MIT AND Apache-2.0(两者都宽松);
+- 处理: **懒加载** —— 只有界面是繁體时才 require, 简体/英文界面完全不加载(包体约 6MB, 以词典为主);
+- 说明: 没有引入任何第三方词库, 繁体靠转换。

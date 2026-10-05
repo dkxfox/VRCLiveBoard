@@ -717,7 +717,8 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
       kbdTimer=null;
       // 缓冲区里有拼音走全拼; 只有数字就走九键(同一个界面里两套输入互不干扰)
       var keys=cur.py||cur.digits||'';
-      fetch('/api/pinyin?keys='+encodeURIComponent(keys)+(cur.py?'':'&t9=1')+'&n=20').then(function(r){return r.json();}).then(function(j){
+      var lc=(window.__lang?window.__lang():'zh-CN');   // 界面语言 -> 繁体候选(F-20260929-05)
+      fetch('/api/pinyin?keys='+encodeURIComponent(keys)+(cur.py?'':'&t9=1')+'&lang='+encodeURIComponent(lc)+'&n=20').then(function(r){return r.json();}).then(function(j){
         if(seq!==kbdSeq) return;          // 已经又打了新字母, 这份结果作废
         cur.list=(j&&j.candidates)||[];
         cur.page=0;
@@ -758,14 +759,22 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     });
     host.appendChild(num);
     var rows=['qwertyuiop','asdfghjkl','zxcvbnm'];
-    rows.forEach(function(row){
-      var d=document.createElement('div'); d.style.cssText='display:flex;gap:8px';
+    rows.forEach(function(row, ri){
+      var d=document.createElement('div'); d.style.cssText='display:flex;gap:8px;align-items:center';
+      var mk=function(txt,fn,gap){
+        var b=document.createElement('button'); b.textContent=txt;
+        b.style.cssText='width:56px;height:56px;font-size:20px'+(gap?';margin-left:14px':'');
+        b.onclick=fn;
+        return b;
+      };
+      // ZXC 行(用户要求): 左边加"大写", 右边加"中英切换", 与字母隔开一格
+      if(ri===2) d.appendChild(mk('\u21e7', function(){ window.KBD_CAPS=!window.KBD_CAPS; kbdPaintModes(); }, false));
       row.split('').forEach(function(c){
-        var b=document.createElement('button'); b.textContent=c.toUpperCase();
-        b.style.cssText='width:56px;height:56px;font-size:20px';
-        b.onclick=function(){kbdKey(c);};
-        d.appendChild(b);
+        d.appendChild(mk(c.toUpperCase(), function(){ kbdLetter(c); }, false));
       });
+      if(ri===2){
+        d.appendChild(mk(window.KBD_CN ? tr('kbdCnOn') : tr('kbdCnOff'), function(){ kbdCnSet(!window.KBD_CN); }, true));
+      }
       host.appendChild(d);
     });
   }
@@ -811,10 +820,12 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     var nine=(window.KBD_LAYOUT==='9');
     if($('kbdKeys'))$('kbdKeys').style.display=nine?'none':'flex';
     if($('kbdKeys9'))$('kbdKeys9').style.display=nine?'grid':'none';
+    if($('kbdModeRow9'))$('kbdModeRow9').style.display=nine?'block':'none';
     if(window.__dsel && $('kbdLayout')) __dsel.set('kbdLayout', nine?'9':'26');
     if(typeof window.__kbdRefresh==='function') window.__kbdRefresh();
   }
   buildPad();
+  (function(){ var r=$('kbdModeRow9'); if(r && !r.firstChild){ r.appendChild(kbdModeKeys()); } })();
   if(window.__dsel && $('kbdLayout')){
     __dsel.mount('kbdLayout',{ options:[{value:'26',labelKey:'kbdLayout26'},{value:'9',labelKey:'kbdLayout9'}], value:window.KBD_LAYOUT, width:110 });
     __dsel.onChange('kbdLayout',function(){
@@ -825,8 +836,39 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     });
   }
   applyLayout();
+  kbdPaintModes();
 })();
 
+  // ===== 中英切换 + 大写(F-20260929-05): 与界面语言联动 =====
+  window.KBD_CN = (function(){
+    try { var v=localStorage.getItem('kbdCn'); if(v==='1') return true; if(v==='0') return false; } catch(e){}
+    var lc=(window.__lang?window.__lang():'zh-CN');
+    return String(lc).toLowerCase().indexOf('zh')===0;   // 界面英文 -> 默认不调用中文输入法
+  })();
+  window.KBD_CAPS = false;
+  function kbdCnSet(on){ window.KBD_CN=!!on; try{ localStorage.setItem('kbdCn', on?'1':'0'); }catch(e){} kbdPaintModes(); }
+  function kbdPaintModes(){
+    var a=$('kbdCn'), b=$('kbdCaps');
+    if(a){ a.textContent = window.KBD_CN ? tr('kbdCnOn') : tr('kbdCnOff'); a.style.borderColor = window.KBD_CN ? 'var(--accent)' : ''; }
+    if(b){ b.textContent = '\u21e7'; b.style.borderColor = window.KBD_CAPS ? 'var(--accent)' : ''; }
+  }
+  function kbdLetter(ch){
+    // 物理键盘按住 Shift 时 ev.key 本身就是大写 -> 保留大写, 不要再被 KBD_CAPS 压回小写
+    var raw = String(ch);
+    var s = (window.KBD_CAPS || (raw >= 'A' && raw <= 'Z')) ? raw.toUpperCase() : raw.toLowerCase();
+    if(!window.KBD_CN){ kbdInsert(s); return; }            // 英文态: 直接上屏, 不走中文候选
+    if(window.KBD_CAPS){ kbdInsert(s); return; }           // 大写字母也不是拼音, 同样直接上屏
+    kbdKey(s);
+  }
+  function kbdModeKeys(){
+    var r=document.createElement('div'); r.style.cssText='display:flex;gap:8px;margin-top:8px;justify-content:center';
+    var c=document.createElement('button'); c.id='kbdCn'; c.className='small gray'; c.style.minWidth='64px';
+    c.onclick=function(){ kbdCnSet(!window.KBD_CN); };
+    var s=document.createElement('button'); s.id='kbdCaps'; s.className='small gray'; s.style.minWidth='64px';
+    s.onclick=function(){ window.KBD_CAPS=!window.KBD_CAPS; kbdPaintModes(); };
+    r.appendChild(s); r.appendChild(c);
+    return r;
+  }
   window.__kbdRefresh = function(){ kbdCands(); };
   function kbdInit(){
     kbdBuild(); kbdPaint();
@@ -839,14 +881,16 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
       var p=document.getElementById('tab-kbd');
       if(!p||p.hidden) return;
       var tag=(ev.target&&ev.target.tagName)||'';
-      if(tag==='INPUT'||tag==='TEXTAREA') return;
+      // 焦点在聊天框里也要接管字母(否则浏览器会直接把拉丁字母塞进去, 中文输入就被绕过了);
+      // 其它输入框/文本域一律不打扰。
+      if((tag==='INPUT'||tag==='TEXTAREA') && (!ev.target || ev.target.id!=='box')) return;
       if(ev.key==='Enter'){ kbdSend(); ev.preventDefault(); return; }
       if(ev.key==='Backspace'){ kbdKey('back'); ev.preventDefault(); return; }
       if(ev.key===' '){ kbdKey('space'); ev.preventDefault(); return; }
       if(/^[1-9]$/.test(ev.key)){ kbdKey(ev.key); ev.preventDefault(); return; }
       if(ev.key==='-'||ev.key==='PageUp'){ kbdKey('page-'); ev.preventDefault(); return; }
       if(ev.key==='='||ev.key==='PageDown'){ kbdKey('page+'); ev.preventDefault(); return; }
-      if(/^[a-zA-Z]$/.test(ev.key)) kbdKey(ev.key.toLowerCase());
+      if(/^[a-zA-Z]$/.test(ev.key)){ kbdLetter(ev.key); ev.preventDefault(); return; }
     });
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',kbdInit); else kbdInit();

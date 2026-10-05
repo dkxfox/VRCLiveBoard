@@ -18,6 +18,7 @@
     "@tesseract.js-data/chi_sim": "^1.0.0",
     "@tesseract.js-data/jpn": "^1.0.0",
     "electron": "43.4.0",
+    "opencc-js": "^1.4.2",
     "osc": "^2.4.5",
     "pinyin-input-method-engine": "^4.0.0",
     "systeminformation": "^5.33.5",
