@@ -72,14 +72,14 @@
   },
   "updatedAt": "2026-09-28",
   "zipVolumes": {
-    "asOf": "v1.4.5 三次打包(2026-09-29, 人工复核后更新体积基线):条目 Lite 175 -> 183(+8), Desktop 1352 -> 1465(+113); 字节 Lite +689KB, Desktop +6.2MB。复核结论(逐项看过 zip 内容): 增量全部来自 2026-09-27 之后的新功能与其测试/文档 ——输入触发器(src/triggers.js)、听写(src/dictation.js + src/helpers/dictation.ps1)、动作输出(src/actions.js)、内置输入法(src/pinyin.js + src/data/pinyin-dict.json 约 1.4MB, 即 Desktop 体积增量的主体)、以及对应的门禁脚本与文档; 机密扫描 CLEAN、无 .bak、无 logs/、无 node_modules、VR 覆盖层键盘(scripts/vrkeyboard) 已确认**不进包**(entries 命中 0)。",
+    "asOf": "v1.4.6 两次打包(2026-10-05, 人工复核后更新体积基线):条目 Lite 183 -> 205(+22), Desktop 1465 -> 1586(+121); 字节 Lite +246KB(9.21MB -> 9.46MB), Desktop +63.7MB(224.5MB -> 288.2MB)。复核结论(用 zip 条目清单逐项看过, 非只看总数): 增量只有两个来源 —— ① assets/videos/0428-anniv.mp4(52.1MB, 品牌门槛启动彩蛋视频, 已登记 docs/ASSET-PROVENANCE.json 且 distribution=self-contained);未登记的 0901-pv.mp4 与标为 local-only 的 fes-0615.mp4 **按规矩已排除**(打包日志可见); ② 内置输入法引擎词典(node_modules/pinyin-input-method-engine/dict: dag_phrase.json 18.3MB + hmm_transition.json 12.3MB 等, 压缩后约 11MB)与 src/data/pinyin-dict.json(运行期必须), 其余增量为本次新增源码/门禁/文档。机密扫描 CLEAN、无 .bak、无 logs/、Lite 正确排除彩蛋视频。",
     "Lite-RequiresNode": {
-      "entries": 183,
-      "bytes": 9208884
+      "entries": 205,
+      "bytes": 9455373
     },
     "Desktop-SelfContained": {
-      "entries": 1465,
-      "bytes": 224510351
+      "entries": 1586,
+      "bytes": 288242324
     }
   },
   "supplyChain": {
