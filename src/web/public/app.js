@@ -658,29 +658,74 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     if($('kbdText'))$('kbdText').textContent=cur.text;
     if($('kbdPinyin'))$('kbdPinyin').textContent=cur.py?cur.py:'';
   }
-  function kbdCands(){
+  var KBD_PAGE = 9;   // 候选条(F-20260929-03 切片 4): 一页 9 个 + 翻页 + 数字键直选
+  function kbdHowTag(how){
+    if(how==='sentence') return tr('kbdHowSentence');
+    if(how==='fuzzy') return tr('kbdHowFuzzy');
+    if(how==='initials') return tr('kbdHowInitials');
+    if(how==='prefix') return tr('kbdHowPrefix');
+    return '';
+  }
+  function kbdPick(i){
+    var c = cur.list && cur.list[i]; if(!c) return;
+    cur.text += c.w; cur.py = ''; cur.page = 0;
+    kbdPaint(); kbdCands();
+    fetch('/api/pinyin/learn',{method:'POST',body:JSON.stringify({word:c.w})}).catch(function(){});
+  }
+  function kbdRenderCands(){
     var el=$('kbdCands'); if(!el) return;
     el.innerHTML='';
-    if(!cur.py) return;
-    fetch('/api/pinyin?keys='+encodeURIComponent(cur.py)+'&n=7').then(function(r){return r.json();}).then(function(j){
-      var list=(j&&j.candidates)||[];
-      if(!list.length){el.innerHTML='<span class="sub">'+tr('kbdNoCand')+'</span>';return;}
-      list.forEach(function(c){
-        var b=document.createElement('button');
-        b.className='small'; b.textContent=c.w;
-        b.onclick=function(){
-          cur.text+=c.w; cur.py=''; kbdPaint(); kbdCands();
-          fetch('/api/pinyin/learn',{method:'POST',body:JSON.stringify({word:c.w})}).catch(function(){});
-        };
-        el.appendChild(b);
-      });
-    }).catch(function(){ el.innerHTML='<span class="sub">'+tr('kbdNoCand')+'</span>'; });
+    var list=cur.list||[];
+    if(!list.length){ el.innerHTML='<span class="sub">'+tr('kbdNoCand')+'</span>'; return; }
+    var pages=Math.max(1, Math.ceil(list.length/KBD_PAGE));
+    if(cur.page>=pages) cur.page=pages-1;
+    var from=cur.page*KBD_PAGE, slice=list.slice(from, from+KBD_PAGE);
+    var row=document.createElement('div'); row.style.cssText='display:flex;gap:6px;flex-wrap:wrap';
+    slice.forEach(function(c, k){
+      var b=document.createElement('button'); b.className='small';
+      var tag=kbdHowTag(c.how);
+      b.textContent=(k+1)+'. '+c.w+(tag?(' '+tag):'');
+      if(c.how==='sentence') b.title=(c.seg||[]).join(' | ');
+      b.onclick=function(){ kbdPick(from+k); };
+      row.appendChild(b);
+    });
+    el.appendChild(row);
+    if(pages>1){
+      var pr=document.createElement('div'); pr.style.cssText='display:flex;gap:6px;align-items:center;margin-top:6px';
+      var prev=document.createElement('button'); prev.className='small gray'; prev.textContent='\u2039';
+      prev.disabled=(cur.page===0); prev.onclick=function(){ if(cur.page>0){cur.page--; kbdRenderCands();} };
+      var info=document.createElement('span'); info.className='sub'; info.style.fontSize='12px';
+      info.textContent=tr('kbdPage').replace('{a}', cur.page+1).replace('{b}', pages);
+      var next=document.createElement('button'); next.className='small gray'; next.textContent='\u203a';
+      next.disabled=(cur.page>=pages-1); next.onclick=function(){ if(cur.page<pages-1){cur.page++; kbdRenderCands();} };
+      pr.appendChild(prev); pr.appendChild(info); pr.appendChild(next);
+      el.appendChild(pr);
+    }
+  }
+  function kbdCands(){
+    var el=$('kbdCands'); if(!el) return;
+    if(!cur.py){ cur.list=[]; cur.page=0; el.innerHTML=''; return; }
+    fetch('/api/pinyin?keys='+encodeURIComponent(cur.py)+'&n=20').then(function(r){return r.json();}).then(function(j){
+      cur.list=(j&&j.candidates)||[];
+      cur.page=0;
+      kbdRenderCands();
+    }).catch(function(){ cur.list=[]; kbdRenderCands(); });
   }
   function kbdKey(ch){
-    if(/^[a-z]$/.test(ch)){ if(cur.py.length<24) cur.py+=ch; }
-    else if(ch==='back'){ if(cur.py) cur.py=cur.py.slice(0,-1); else cur.text=cur.text.slice(0,-1); }
-    else if(ch==='space'){ cur.text+=' '; cur.py=''; }
-    else if(ch==='clear'){ cur.text=''; cur.py=''; }
+    if(/^[a-z]$/.test(ch)){ if(cur.py.length<24){ cur.py+=ch; cur.page=0; } }
+    else if(ch==='back'){ if(cur.py){ cur.py=cur.py.slice(0,-1); cur.page=0; } else cur.text=cur.text.slice(0,-1); }
+    else if(ch==='space'){
+      // 正在打字时空格 = 选第一个候选(输入法惯例); 没在打字才是真的空格
+      if(cur.py && (cur.list||[]).length){ kbdPick(cur.page*KBD_PAGE); return; }
+      cur.text+=' '; cur.py='';
+    }
+    else if(/^[1-9]$/.test(ch)){ if(cur.py && (cur.list||[]).length){ kbdPick(cur.page*KBD_PAGE + (parseInt(ch,10)-1)); return; } }
+    else if(ch==='page-' || ch==='page+'){
+      var pages=Math.max(1, Math.ceil(((cur.list||[]).length)/KBD_PAGE));
+      cur.page=Math.min(pages-1, Math.max(0, cur.page + (ch==='page+'?1:-1)));
+      kbdRenderCands(); return;
+    }
+    else if(ch==='clear'){ cur.text=''; cur.py=''; cur.page=0; }
     kbdPaint(); kbdCands();
   }
   function kbdBuild(){
@@ -720,6 +765,9 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
       if(ev.key==='Enter'){ kbdSend(); ev.preventDefault(); return; }
       if(ev.key==='Backspace'){ kbdKey('back'); ev.preventDefault(); return; }
       if(ev.key===' '){ kbdKey('space'); ev.preventDefault(); return; }
+      if(/^[1-9]$/.test(ev.key)){ kbdKey(ev.key); ev.preventDefault(); return; }
+      if(ev.key==='-'||ev.key==='PageUp'){ kbdKey('page-'); ev.preventDefault(); return; }
+      if(ev.key==='='||ev.key==='PageDown'){ kbdKey('page+'); ev.preventDefault(); return; }
       if(/^[a-zA-Z]$/.test(ev.key)) kbdKey(ev.key.toLowerCase());
     });
   }
