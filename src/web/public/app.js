@@ -748,6 +748,15 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
   }
   function kbdBuild(){
     var host=$('kbdKeys'); if(!host) return;
+    // 数字行(用户要求): 26 键也带一排小键盘数字 —— 数字键是"打字", 与字母一致
+    var num=document.createElement('div'); num.style.cssText='display:flex;gap:8px';
+    '1234567890'.split('').forEach(function(c){
+      var b=document.createElement('button'); b.textContent=c;
+      b.style.cssText='width:56px;height:56px;font-size:20px';
+      b.onclick=function(){ kbdInsert(c); };
+      num.appendChild(b);
+    });
+    host.appendChild(num);
     var rows=['qwertyuiop','asdfghjkl','zxcvbnm'];
     rows.forEach(function(row){
       var d=document.createElement('div'); d.style.cssText='display:flex;gap:8px';
@@ -771,17 +780,17 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
   function readLayout(){ try { return localStorage.getItem(LAYOUT_KEY)==='9' ? '9' : '26'; } catch(e){ return '26'; } }
   window.KBD_LAYOUT=readLayout();
   var PAD9=[
-    {d:'1',s:''}, {d:'2',s:'abc'}, {d:'3',s:'def'},
+    {d:'1',s:'，'}, {d:'2',s:'abc'}, {d:'3',s:'def'},
     {d:'4',s:'ghi'}, {d:'5',s:'jkl'}, {d:'6',s:'mno'},
     {d:'7',s:'pqrs'}, {d:'8',s:'tuv'}, {d:'9',s:'wxyz'},
-    {d:'*',s:''}, {d:'0',s:''}, {d:'#',s:''}
+    {d:'0',s:''}
   ];
   function padKey(d){
+    // 手机上 0 是空格、1 是标点; 退格/清空已经有专门的按钮, 所以不再需要 * 和 #(用户指出用不上, 已去掉)
     if(d==='0'){ kbdKey('space'); return; }
-    if(d==='*'){ kbdKey('back'); return; }
-    if(d==='#'){ kbdKey('clear'); return; }
-    if(d==='1'){ return; }
-    kbdKey(d);   // 数字键: 走九键输入
+    if(d==='1'){ kbdInsert('，'); return; }
+    if(window.KBD_LAYOUT==='9'){ kbdKey(d); }   // 九键模式: 数字进九键缓冲
+    else { kbdInsert(d); }                      // 26 键模式: 数字当普通字符打进去
   }
   function buildPad(){
     var box=$('kbdKeys9'); if(!box) return;
