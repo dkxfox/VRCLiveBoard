@@ -704,14 +704,25 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
       el.appendChild(pr);
     }
   }
+  var kbdTimer=null, kbdSeq=0;
   function kbdCands(){
     var el=$('kbdCands'); if(!el) return;
-    if(!cur.py){ cur.list=[]; cur.page=0; el.innerHTML=''; return; }
-    fetch('/api/pinyin?keys='+encodeURIComponent(cur.py)+'&n=20').then(function(r){return r.json();}).then(function(j){
-      cur.list=(j&&j.candidates)||[];
-      cur.page=0;
-      kbdRenderCands();
-    }).catch(function(){ cur.list=[]; kbdRenderCands(); });
+    if(!cur.py){ cur.list=[]; cur.page=0; el.innerHTML=''; if(kbdTimer){clearTimeout(kbdTimer);kbdTimer=null;} return; }
+    // 防抖 70ms(F-20260929-03 手感修复): 打字是连击, 不防抖则每个字母都发一次请求,
+    // 而长串的整句查询首帧可能要一两百毫秒(实测 9 音节 ~190ms, 6 音节 ~400ms)。
+    // 只保留最后一次请求, 并用序号丢弃过期响应。
+    if(kbdTimer) clearTimeout(kbdTimer);
+    var seq=++kbdSeq;
+    kbdTimer=setTimeout(function(){
+      kbdTimer=null;
+      var keys=cur.py;
+      fetch('/api/pinyin?keys='+encodeURIComponent(keys)+'&n=20').then(function(r){return r.json();}).then(function(j){
+        if(seq!==kbdSeq) return;          // 已经又打了新字母, 这份结果作废
+        cur.list=(j&&j.candidates)||[];
+        cur.page=0;
+        kbdRenderCands();
+      }).catch(function(){ if(seq!==kbdSeq) return; cur.list=[]; kbdRenderCands(); });
+    }, 70);
   }
   function kbdKey(ch){
     if(/^[a-z]$/.test(ch)){ if(cur.py.length<24){ cur.py+=ch; cur.page=0; } }

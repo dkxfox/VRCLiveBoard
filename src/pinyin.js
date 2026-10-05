@@ -39,6 +39,7 @@ class PinyinIME {
     // 用户词库(F-20260929-03 切片 3): 用户自己输入法导出的词, 只放本地 logs/(第三方数据, 绝不入库)。
     const { UserDict } = require('./pinyin-userdict');
     this.userDict = new UserDict({ logger: this.logger, file: opts.userDictFile || path.join(this.projectDir, 'logs', 'pinyin-user-dict.json') });
+    this._hmmCache = new Map();     // HMM 结果缓存(打字过程里同一批切分会被反复查询)
   }
   // 预热(异步, 由 main.js 启动时调用, 失败不影响旧的查表能力)
   async warmup() {
@@ -61,12 +62,26 @@ class PinyinIME {
       return false;
     }
   }
-  // 整句候选: 把连写的拼音串按 HMM 解成最可能的汉字序列
-  sentenceCandidates(k, want) {
+  // HMM 查询带缓存: 同一个切分在打字过程中会被反复问到(逐键请求 + 模糊音变体), 而 HMM 是这条路径上最贵的一步
+  // (实测: 3 音节 36ms / 5 音节 145ms / 9 音节 ~190ms; DAG 则几乎 0ms)
+  _hmmQuery(seg, n) {
+    const key = seg.join(' ') + '|' + n;
+    const hit = this._hmmCache.get(key);
+    if (hit) return hit;
+    const res = this.engine.hmm.query({ yinJieList: seg, maxNum: n }) || [];
+    if (this._hmmCache.size > 400) this._hmmCache.clear();
+    this._hmmCache.set(key, res);
+    return res;
+  }
+  // 整句候选: 把连写的拼音串按 HMM 解成最可能的汉字序列。
+  // opts.dagOnly: 只跑词组层(几乎 0ms) —— 模糊音变体那种"猜测性"查询用这个, 不值得为它付 HMM 的几十到两百毫秒。
+  sentenceCandidates(k, want, opts) {
     if (!this.engineReady || !this.engine) return [];
+    const dagOnly = !!(opts && opts.dagOnly);
     const out = [];
     try {
-      const segs = this.engine.splitAsYinJie(k) || [];
+      // 只取前 2 个切分: 引擎按可能性排序, 而切分数量会组合爆炸(10+ 个), 全部跑一遍是打字卡顿的主因
+      const segs = (this.engine.splitAsYinJie(k) || []).slice(0, 2);
       const seen = new Set();
       for (const seg of segs) {
         if (!seg || seg.length < 2) continue;
@@ -74,7 +89,7 @@ class PinyinIME {
         // 交错能保证两者的首选都出现在最前面 —— 实测 DAG 对"明天见/真不错"更准, HMM 对生僻句更稳。
         let dagRes = [];
         try { dagRes = this.engine.dag.query({ yinJieList: seg, maxNum: Math.min(want, 6) }) || []; } catch (e) { dagRes = []; }
-        const hmmRes = (this.engine.hmm.query({ yinJieList: seg, maxNum: Math.min(want, 6) }) || []);
+        const hmmRes = dagOnly ? [] : this._hmmQuery(seg, Math.min(want, 6));
         const res = [];
         for (let i = 0; i < Math.max(dagRes.length, hmmRes.length); i++) {
           if (dagRes[i]) res.push(dagRes[i]);
@@ -259,7 +274,9 @@ class PinyinIME {
     // (实测一个 42 字母的句子从 165ms 变成 4420ms), 而且没有意义。
     if (out.length < want && k.length >= 2 && k.length <= 12) {
       const seenW = new Set(out.map(function (e) { return e.w; }));
-      const variants = this.fuzzyVariants(k).slice(0, 6);
+      // 变体上限压到 3, 其中只给**前 2 个**跑引擎 —— 引擎查询是打字路径上最贵的一步(实测每个变体 20~100ms)
+      const variants = this.fuzzyVariants(k).slice(0, 3);
+      let engineTried = 0;
       for (let vi = 0; vi < variants.length && out.length < want * 2; vi++) {
         const v = variants[vi];
         const arr2 = this.byPinyin.get(v);
@@ -275,8 +292,9 @@ class PinyinIME {
         // 变体交给引擎时, 结果标 **sentence 而不是 fuzzy** —— 因为引擎对"变体"和对"原串"的打分是**同一套口径**,
         // 可以直接比大小; 而如果标成 fuzzy(优先级更高), 就会让"正确输入的引擎结果"被"错拼变体的引擎结果"压下去
         // (实测: shurufa 本来能出「输入法」, 却被 surufa 的「宿儒发」挤到后面)。
-        if (out.length < want && this.engineReady) {
-          this.sentenceCandidates(v, 3).forEach(function (e) {
+        if (out.length < want && this.engineReady && engineTried < 2) {
+          engineTried++;
+          this.sentenceCandidates(v, 3, { dagOnly: true }).forEach(function (e) {
             if (seenW.has(e.w)) return;
             seenW.add(e.w);
             out.push({ w: e.w, f: e.f, how: 'sentence', from: v });
