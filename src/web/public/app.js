@@ -669,7 +669,7 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
   function kbdPaint(){
     if($('kbdPinyin'))$('kbdPinyin').textContent=cur.py?cur.py:'';
   }
-  function kbdPageSize(){ return (typeof window.KBD_PAGE_SIZE === 'number' && window.KBD_PAGE_SIZE >= 3 && window.KBD_PAGE_SIZE <= 20) ? window.KBD_PAGE_SIZE : 9; }   // 候选条(F-20260929-03 切片 4): 一页 9 个 + 翻页 + 数字键直选
+  function kbdPageSize(){ return (typeof window.KBD_PAGE_SIZE === 'number' && window.KBD_PAGE_SIZE >= 5 && window.KBD_PAGE_SIZE <= 12) ? window.KBD_PAGE_SIZE : 9; }   // 候选条(F-20260929-03 切片 4): 一页 9 个 + 翻页 + 数字键直选
   function kbdPick(i){
     var c = cur.list && cur.list[i]; if(!c) return;
     kbdInsert(c.w); cur.py = ''; cur.page = 0;
@@ -1023,11 +1023,11 @@ if(window.__dsel){
 (function(){
   var KEY='kbdPageSize';
   var def=9;
-  function read(){ try { var v=parseInt(localStorage.getItem(KEY)||'',10); return (v>=3&&v<=20)?v:def; } catch(e){ return def; } }
+  function read(){ try { var v=parseInt(localStorage.getItem(KEY)||'',10); return (v>=5&&v<=12)?v:def; } catch(e){ return def; } }
   if(typeof window.KBD_PAGE_SIZE==='undefined') window.KBD_PAGE_SIZE=read();
   if(window.__dsel && $('kbdPageSize')){
     __dsel.mount('kbdPageSize',{
-      options:[{value:'6',labelKey:'kbdPage6'},{value:'9',labelKey:'kbdPage9'},{value:'12',labelKey:'kbdPage12'},{value:'15',labelKey:'kbdPage15'}],
+      options:[5,6,7,8,9,10,11,12].map(function(v){ return { value:String(v), label:String(v) }; }),
       value:String(window.KBD_PAGE_SIZE),
       width:110
     });
