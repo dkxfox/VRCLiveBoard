@@ -270,12 +270,21 @@ body.no-anim *{animation:none!important;transition:none!important}
 </div>
 <!-- 高级设置 -->
 <div id="tab-kbd" hidden>
+  <style>
+    /* VR 可读性 + 布局稳定(F-20260929-03 收尾微调): 字号调大; 选词区高度固定, 打字时不再上下跳 */
+    #kbdCands{min-height:104px;align-content:flex-start}
+    #kbdCands .small{font-size:17px;padding:10px 14px;min-width:56px}
+    #kbdKeys{min-height:196px}
+    #kbdKeys button{width:62px;height:62px;font-size:22px}
+    #kbdHintRow{font-size:13px;margin-top:8px}
+    #box{font-size:18px;min-height:64px}
+  </style>
   <div class="card" style="margin-bottom:12px">
     <div class="row" style="gap:8px;align-items:center"><b data-t="kbdPreview">输入内容</b>
-      <span class="sub" id="kbdPinyin" style="font-family:monospace;color:var(--accent)"></span></div>
-    <div id="kbdText" style="min-height:52px;background:#0b0e16;border:1px solid rgba(96,128,180,.35);border-radius:8px;padding:10px 12px;font-size:22px;letter-spacing:1px"></div>
+      <span class="sub" id="kbdPinyin" style="font-family:monospace;color:var(--accent);font-size:16px"></span></div>
+    <div class="sub" id="kbdHintRow" data-t="kbdTypesAbove">打字会直接写进上面的聊天框(这里不再单独放一个输入框)</div>
     <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap" id="kbdCands"></div>
-    <div class="sub" data-t="kbdHint" style="font-size:12px;margin-top:8px"></div>
+    <div class="sub" data-t="kbdHint" style="font-size:13px;margin-top:8px"></div>
   </div>
   <div class="card">
     <div id="kbdKeys" style="display:flex;flex-direction:column;gap:8px;align-items:center"></div>
@@ -295,21 +304,6 @@ body.no-anim *{animation:none!important;transition:none!important}
     </div>
     <textarea id="dictPaste" rows="3" style="width:100%;margin-top:6px;font-family:monospace;font-size:12px"></textarea>
     <div class="sub" data-t="dictHint" style="font-size:12px;margin-top:4px"></div>
-  </div>
-</div>
-<div id="tab-dance" hidden>
-  <div class="card">
-    <div class="row" style="gap:8px;align-items:center"><b data-t="danceTitle">动作播放</b>
-      <span class="sub" data-t="danceSub">VMD 动作 → 虚拟追踪器(VMT)</span></div>
-    <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap">
-      <button class="dsel" id="danceFile" data-value="" style="min-width:240px"></button>
-      <button id="danceStart" data-t="danceStart">开始</button>
-      <button class="gray" id="danceHold" data-t="danceHold">定住不动(校准用)</button>
-      <button class="gray" id="danceStop" data-t="danceStop">停止</button>
-      <button class="gray" id="danceRefresh" data-t="danceRefresh">刷新</button>
-    </div>
-    <div class="sub" id="danceStatus" style="font-size:13px;margin-top:10px;font-family:monospace"></div>
-    <div class="sub" data-t="danceHint" style="font-size:12px;margin-top:10px"></div>
   </div>
 </div>
 <div id="tab-adv" hidden>

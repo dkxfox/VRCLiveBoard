@@ -654,8 +654,19 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
 // 为什么先做网页版: 原生覆盖层的瞄准还差一次校准, 先用这条链路把"能打中文"跑通并验 UX。
 (function(){
   var cur={py:'',text:''};
+  // 打字直接写进上面的聊天框(F-20260929-03 收尾: 去掉重复输入框)
+  function kbdInsert(s){
+    var box=$('box');
+    if(!box){ return; }
+    try {
+      var a=box.selectionStart, b=box.selectionEnd;
+      if(typeof a==='number' && typeof b==='number'){
+        box.setRangeText(s, a, b, 'end');
+      } else { box.value = (box.value||'') + s; }
+    } catch(e){ box.value = (box.value||'') + s; }
+    box.focus();
+  }
   function kbdPaint(){
-    if($('kbdText'))$('kbdText').textContent=cur.text;
     if($('kbdPinyin'))$('kbdPinyin').textContent=cur.py?cur.py:'';
   }
   var KBD_PAGE = 9;   // 候选条(F-20260929-03 切片 4): 一页 9 个 + 翻页 + 数字键直选
@@ -668,7 +679,7 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
   }
   function kbdPick(i){
     var c = cur.list && cur.list[i]; if(!c) return;
-    cur.text += c.w; cur.py = ''; cur.page = 0;
+    kbdInsert(c.w); cur.py = ''; cur.page = 0;
     kbdPaint(); kbdCands();
     fetch('/api/pinyin/learn',{method:'POST',body:JSON.stringify({word:c.w})}).catch(function(){});
   }
@@ -713,11 +724,11 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
   }
   function kbdKey(ch){
     if(/^[a-z]$/.test(ch)){ if(cur.py.length<24){ cur.py+=ch; cur.page=0; } }
-    else if(ch==='back'){ if(cur.py){ cur.py=cur.py.slice(0,-1); cur.page=0; } else cur.text=cur.text.slice(0,-1); }
+    else if(ch==='back'){ if(cur.py){ cur.py=cur.py.slice(0,-1); cur.page=0; } else { var bx=$("box"); if(bx){ bx.value=(bx.value||"").slice(0,-1); bx.focus(); } } }
     else if(ch==='space'){
       // 正在打字时空格 = 选第一个候选(输入法惯例); 没在打字才是真的空格
       if(cur.py && (cur.list||[]).length){ kbdPick(cur.page*KBD_PAGE); return; }
-      cur.text+=' '; cur.py='';
+      kbdInsert(" "); cur.py="";
     }
     else if(/^[1-9]$/.test(ch)){ if(cur.py && (cur.list||[]).length){ kbdPick(cur.page*KBD_PAGE + (parseInt(ch,10)-1)); return; } }
     else if(ch==='page-' || ch==='page+'){
@@ -725,7 +736,7 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
       cur.page=Math.min(pages-1, Math.max(0, cur.page + (ch==='page+'?1:-1)));
       kbdRenderCands(); return;
     }
-    else if(ch==='clear'){ cur.text=''; cur.py=''; cur.page=0; }
+    else if(ch==='clear'){ var bx2=$("box"); if(bx2){ bx2.value=""; bx2.focus(); } cur.py=""; cur.page=0; }
     kbdPaint(); kbdCands();
   }
   function kbdBuild(){
@@ -743,12 +754,9 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     });
   }
   function kbdSend(){
-    var txt=(cur.text||'').trim();
-    if(!txt){ if($('kbdStatus'))$('kbdStatus').textContent=tr('kbdEmpty'); return; }
-    fetch('/v1/chatbox',{method:'POST',body:JSON.stringify({text:txt,priority:80})}).then(function(r){return r.json();}).then(function(j){
-      if($('kbdStatus'))$('kbdStatus').textContent=(j&&j.ok)?tr('kbdSent'):tr('kbdErr');
-      if(j&&j.ok){cur.text='';cur.py='';kbdPaint();kbdCands();}
-    }).catch(function(){ if($('kbdStatus'))$('kbdStatus').textContent=tr('kbdErr'); });
+    // 与聊天框共用同一个发送按钮(F-20260929-03 收尾: 两个输入框合并后, 发送也只留一条路)
+    var btn=$('send'); if(btn){ btn.click(); if($('kbdStatus'))$('kbdStatus').textContent=tr('kbdSent'); return; }
+    if($('kbdStatus'))$('kbdStatus').textContent=tr('kbdErr');
   }
   function kbdInit(){
     kbdBuild(); kbdPaint();
