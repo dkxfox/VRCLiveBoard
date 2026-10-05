@@ -749,6 +749,7 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
   }
   function kbdBuild(){
     var host=$('kbdKeys'); if(!host) return;
+    host.innerHTML='';   // 重建前先清空(切换大写时要重建, 否则会重复叠加)
     // 数字行(用户要求): 26 键也带一排小键盘数字 —— 数字键是"打字", 与字母一致
     var num=document.createElement('div'); num.style.cssText='display:flex;gap:8px';
     '1234567890'.split('').forEach(function(c){
@@ -768,12 +769,14 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
         return b;
       };
       // ZXC 行(用户要求): 左边加"大写", 右边加"中英切换", 与字母隔开一格
-      if(ri===2) d.appendChild(mk('\u21e7', function(){ window.KBD_CAPS=!window.KBD_CAPS; kbdPaintModes(); }, false));
+      if(ri===2){ var capsBtn=mk('\u21e7', function(){ window.KBD_CAPS=!window.KBD_CAPS; kbdBuild(); kbdPaintModes(); }, false); capsBtn.className='kbd-caps'; d.appendChild(capsBtn); }
       row.split('').forEach(function(c){
-        d.appendChild(mk(c.toUpperCase(), function(){ kbdLetter(c); }, false));
+        d.appendChild(mk(window.KBD_CAPS ? c.toUpperCase() : c.toLowerCase(), function(){ kbdLetter(c); }, false));   // 键面跟着大小写状态变
       });
       if(ri===2){
-        d.appendChild(mk(window.KBD_CN ? tr('kbdCnOn') : tr('kbdCnOff'), function(){ kbdCnSet(!window.KBD_CN); }, true));
+        var cnBtn=mk(window.KBD_CN ? tr('kbdCnOn') : tr('kbdCnOff'), function(){ kbdCnSet(!window.KBD_CN); }, true);
+        cnBtn.className='kbd-cn';
+        d.appendChild(cnBtn);
       }
       host.appendChild(d);
     });
@@ -847,10 +850,20 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
   })();
   window.KBD_CAPS = false;
   function kbdCnSet(on){ window.KBD_CN=!!on; try{ localStorage.setItem('kbdCn', on?'1':'0'); }catch(e){} kbdPaintModes(); }
+  // 用**类名**而不是 id: 大写/中英两个键在 26 键和九键里各有一份(之前只更新了九键那份, 26 键那个按了没反应)
   function kbdPaintModes(){
-    var a=$('kbdCn'), b=$('kbdCaps');
-    if(a){ a.textContent = window.KBD_CN ? tr('kbdCnOn') : tr('kbdCnOff'); a.style.borderColor = window.KBD_CN ? 'var(--accent)' : ''; }
-    if(b){ b.textContent = '\u21e7'; b.style.borderColor = window.KBD_CAPS ? 'var(--accent)' : ''; }
+    var on=window.KBD_CAPS, cn=window.KBD_CN;
+    Array.prototype.forEach.call(document.querySelectorAll('.kbd-caps'), function(b){
+      b.textContent = '\u21e7' + (on ? (' ' + tr('kbdCapsOn')) : '');   // 开着时键面上直接写"大写"
+      b.style.borderColor = on ? 'var(--accent)' : '';
+      b.style.background = on ? 'var(--accent)' : '';
+      b.style.color = on ? '#0b1020' : '';
+      b.style.minWidth = on ? '104px' : '56px';
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.kbd-cn'), function(b){
+      b.textContent = cn ? tr('kbdCnOn') : tr('kbdCnOff');
+      b.style.borderColor = cn ? 'var(--accent)' : '';
+    });
   }
   function kbdLetter(ch){
     // 物理键盘按住 Shift 时 ev.key 本身就是大写 -> 保留大写, 不要再被 KBD_CAPS 压回小写
@@ -862,10 +875,10 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
   }
   function kbdModeKeys(){
     var r=document.createElement('div'); r.style.cssText='display:flex;gap:8px;margin-top:8px;justify-content:center';
-    var c=document.createElement('button'); c.id='kbdCn'; c.className='small gray'; c.style.minWidth='64px';
+    var c=document.createElement('button'); c.className='small gray kbd-cn'; c.style.minWidth='64px';
     c.onclick=function(){ kbdCnSet(!window.KBD_CN); };
-    var s=document.createElement('button'); s.id='kbdCaps'; s.className='small gray'; s.style.minWidth='64px';
-    s.onclick=function(){ window.KBD_CAPS=!window.KBD_CAPS; kbdPaintModes(); };
+    var s=document.createElement('button'); s.className='small gray kbd-caps'; s.style.minWidth='56px';
+    s.onclick=function(){ window.KBD_CAPS=!window.KBD_CAPS; kbdBuild(); kbdPaintModes(); };   // 重建键盘: 字母跟着变大写
     r.appendChild(s); r.appendChild(c);
     return r;
   }
