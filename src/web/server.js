@@ -191,8 +191,17 @@ function effPluginSec() {
     const dateInvalid = !!raw && !parsed;
     const cfgList = Array.isArray(rootConfig.specialEvents) ? rootConfig.specialEvents : [];
     const list = cfgList.length ? cfgList : localSpecialEvents();
+    // 品牌门槛(2026-10-05 用户要求): 事件可带 brand 字段, 只在"客户端判定自己是该品牌"时才启动。
+    // 例: 星轨茶会的周年视频只在 branding==='starry' 的包装里播。未带 brand 的事件不受影响。
+    const curBrand = String(rootConfig.branding || '');
     let hit = null;
-    for (let i = 0; i < list.length; i++) { if (efxInWindow(day, list[i])) { hit = list[i]; break; } }
+    for (let i = 0; i < list.length; i++) {
+      const it = list[i];
+      if (!efxInWindow(day, it)) continue;
+      const need = String((it && it.brand) || '');
+      if (need && need !== curBrand) continue;         // 品牌不符 -> 跳过, 继续看后面的事件
+      hit = it; break;
+    }
     if (hit) {
       const id = String(hit.id || hit.video || 'special');
       const ver = Number(hit.version || 1) || 1;
