@@ -1,6 +1,6 @@
 {
   "说明": "随包素材的来源与许可登记。make-dist 只把**登记齐全(source / license / confirmedBy 三者非空 且 distribution 不是 local-only)**的素材打进包; 其余会被移除并在日志里点名 —— 来路不明的素材不进包(见 docs/THIRD-PARTY.md §5 规则 3)。",
-  "updatedAt": "2026-09-27",
+  "updatedAt": "2026-10-05",
   "assets": [
     {
       "file": "fes-0615.mp4",
@@ -10,6 +10,15 @@
       "license": "",
       "confirmedBy": "",
       "note": "distribution=local-only ⇒ **永不随包**(即使日后补齐 license/confirmedBy 也不会自动进包, 要进包必须显式改成 package)。本机测试: events.json 里的触发日期已临时改成 09-27(今天)。"
+    },
+    {
+      "file": "0428-anniv.mp4",
+      "kind": "启动彩蛋视频(只进自包含包, Lite 不含)",
+      "distribution": "self-contained",
+      "source": "用户提供并放入 assets/videos/(2026-10-05) —— 用于特定品牌包装的启动画面, 事件表里带 brand 门槛",
+      "license": "用户确认可随自包含包分发",
+      "confirmedBy": "dkxfox(用户, 2026-10-05)",
+      "note": "事件表 assets/videos/events.json 为 gitignored; 打包时 make-dist 只收字段齐全且 distribution != local-only 的素材"
     }
   ]
 }
