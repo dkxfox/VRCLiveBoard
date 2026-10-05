@@ -30,3 +30,18 @@ ok(parseOk, 'make-dist.ps1 能被 Windows PowerShell 5.1 解析' + (parseOk ? ''
 
 console.log('  [pack-script-check] ' + (fail ? (fail + ' 项未通过') : 'make-dist.ps1 健康'));
 process.exit(fail ? 1 : 0);
+
+// 2026-10-05: make-dist 的 stage 清理必须"删不掉就中止" —— 曾经用 SilentlyContinue 静默保留陈旧文件,
+// 导致打出的包里混着上一版的文件(用户实测: 一个 10-03 的 dsel.js 让他白试了一次)。
+(function () {
+  const path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'make-dist.ps1'), 'utf8');
+  const swallowed = /Remove-Item \$stage[^\n]*SilentlyContinue/.test(src);
+  const loud = src.indexOf('stage 目录清不掉') >= 0;
+  const ok = !swallowed && loud;
+  console.log((ok ? '  PASS ' : '  FAIL ') + 'stage 清理不得静默失败(删不掉要中止打包)');
+  if (!ok) {
+    console.log('    ' + (swallowed ? '仍在用 -ErrorAction SilentlyContinue 吞掉清理失败' : '缺少"清不掉就报错中止"的分支'));
+    process.exitCode = 1;
+  }
+})();

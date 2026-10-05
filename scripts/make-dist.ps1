@@ -23,6 +23,10 @@ Get-ChildItem $pubDir -Filter 'SHA256SUMS-*.txt' -File -ErrorAction SilentlyCont
 Get-ChildItem $appDir -Filter '*.zip' -File -ErrorAction SilentlyContinue | Remove-Item -Force
 # 打包中途失败会留下完整 stage 副本(dist\stage-*): 每次开跑先清历史残留(审计 M1)
 Get-ChildItem $dist -Directory -Filter 'stage-*' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+# 交付物只有 zip; 若 公开版 里出现"解压目录"(历史遗留或人工解压的), 提醒一句 —— 本脚本从不刷新它, 别拿它当交付物
+Get-ChildItem $pubDir -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -like 'VRCLiveBoard-*' } | ForEach-Object {
+  Write-Output ('[WARN] ' + $pubDir + ' 里有解压目录(不是交付物, 交付物只有 zip, 本脚本也不会刷新它): ' + $_.Name)
+}
 # exclude dirs whose names match test/OCR material (Unicode-safe: via variables, not literals)
 $userDirs = @(Get-ChildItem $p -Directory | Where-Object { $_.Name -match '测试|OCR|截图' } | ForEach-Object { $_.Name })
 $exclDirs = @('node_modules','logs','.electron-cache','.ocr-cache','.ocr-langs','.pydist','.git') + $userDirs
@@ -160,7 +164,18 @@ function Prune-Docs($dir) {
 
 Write-Output '==== 2. stage self-contained (full deps) ===='
 $stage = Join-Path $dist ('stage-sc-' + $ver)
-Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
+# 清理 stage(2026-10-05 修): 原来这里用 -ErrorAction SilentlyContinue —— 删不掉(被占用/权限)时会**静默保留陈旧文件**,
+# 而 robocopy /E 只覆盖不删除 -> 打出的包里混着上一版的文件(实测: 一个 10-03 的 dsel.js 让用户白试了一次)。
+# 现在改成: 清不掉就**报错并中止打包** —— 宁可不打包, 也不出一个内容不纯的包。
+if (Test-Path $stage) {
+  try { Remove-Item $stage -Recurse -Force -ErrorAction Stop }
+  catch {
+    Write-Output ('[PROBLEM] stage 目录清不掉(多半是被占用了): ' + $stage)
+    Write-Output '          请先关掉正在运行的 VRCLiveBoard(或占用该目录的资源管理器窗口), 再重新打包。'
+    exit 1
+  }
+}
+if (Test-Path $stage) { Write-Output ('[PROBLEM] stage 目录清理后仍然存在: ' + $stage); exit 1 }
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 robocopy $p $stage /E /NFL /NDL /NJH /NJS /XD $exclAbs /XF $peFiles | Out-Null   # peFiles = 清单文件段 + 历史字面量(M-20260911-46: 之前只用了清单的目录段)
 robocopy (Join-Path $p 'node_modules') (Join-Path $stage 'node_modules') /E /NFL /NDL /NJH /NJS | Out-Null
