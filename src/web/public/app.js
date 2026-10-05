@@ -669,7 +669,7 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
   function kbdPaint(){
     if($('kbdPinyin'))$('kbdPinyin').textContent=cur.py?cur.py:'';
   }
-  var KBD_PAGE = 9;   // 候选条(F-20260929-03 切片 4): 一页 9 个 + 翻页 + 数字键直选
+  function kbdPageSize(){ return (typeof window.KBD_PAGE_SIZE === 'number' && window.KBD_PAGE_SIZE >= 3 && window.KBD_PAGE_SIZE <= 20) ? window.KBD_PAGE_SIZE : 9; }   // 候选条(F-20260929-03 切片 4): 一页 9 个 + 翻页 + 数字键直选
   function kbdPick(i){
     var c = cur.list && cur.list[i]; if(!c) return;
     kbdInsert(c.w); cur.py = ''; cur.page = 0;
@@ -681,9 +681,9 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     el.innerHTML='';
     var list=cur.list||[];
     if(!list.length){ el.innerHTML='<span class="sub">'+tr('kbdNoCand')+'</span>'; return; }
-    var pages=Math.max(1, Math.ceil(list.length/KBD_PAGE));
+    var pages=Math.max(1, Math.ceil(list.length/kbdPageSize()));
     if(cur.page>=pages) cur.page=pages-1;
-    var from=cur.page*KBD_PAGE, slice=list.slice(from, from+KBD_PAGE);
+    var from=cur.page*kbdPageSize(), slice=list.slice(from, from+kbdPageSize());
     var row=document.createElement('div'); row.style.cssText='display:flex;gap:6px;flex-wrap:wrap';
     slice.forEach(function(c, k){
       var b=document.createElement('button'); b.className='small';
@@ -729,12 +729,12 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     else if(ch==='back'){ if(cur.py){ cur.py=cur.py.slice(0,-1); cur.page=0; } else { var bx=$("box"); if(bx){ bx.value=(bx.value||"").slice(0,-1); bx.focus(); } } }
     else if(ch==='space'){
       // 正在打字时空格 = 选第一个候选(输入法惯例); 没在打字才是真的空格
-      if(cur.py && (cur.list||[]).length){ kbdPick(cur.page*KBD_PAGE); return; }
+      if(cur.py && (cur.list||[]).length){ kbdPick(cur.page*kbdPageSize()); return; }
       kbdInsert(" "); cur.py="";
     }
-    else if(/^[1-9]$/.test(ch)){ if(cur.py && (cur.list||[]).length){ kbdPick(cur.page*KBD_PAGE + (parseInt(ch,10)-1)); return; } }
+    else if(/^[1-9]$/.test(ch)){ if(cur.py && (cur.list||[]).length){ kbdPick(cur.page*kbdPageSize() + (parseInt(ch,10)-1)); return; } }
     else if(ch==='page-' || ch==='page+'){
-      var pages=Math.max(1, Math.ceil(((cur.list||[]).length)/KBD_PAGE));
+      var pages=Math.max(1, Math.ceil(((cur.list||[]).length)/kbdPageSize()));
       cur.page=Math.min(pages-1, Math.max(0, cur.page + (ch==='page+'?1:-1)));
       kbdRenderCands(); return;
     }
@@ -760,6 +760,7 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     var btn=$('send'); if(btn){ btn.click(); if($('kbdStatus'))$('kbdStatus').textContent=tr('kbdSent'); return; }
     if($('kbdStatus'))$('kbdStatus').textContent=tr('kbdErr');
   }
+  window.__kbdRefresh = function(){ kbdCands(); };
   function kbdInit(){
     kbdBuild(); kbdPaint();
     if($('kbdBack'))$('kbdBack').onclick=function(){kbdKey('back');};
@@ -1016,4 +1017,25 @@ if(window.__dsel){
     fetch('/api/pinyin/import',{method:'POST',body:JSON.stringify({clear:true})}).then(function(r){return r.json();}).then(function(){ dictLoad(); }).catch(function(){});
   };
   dictLoad();
+})();
+
+// ===== 候选数量设置(F-20260929-03 收尾): 每页显示几个候选, 存在本机浏览器里 =====
+(function(){
+  var KEY='kbdPageSize';
+  var def=9;
+  function read(){ try { var v=parseInt(localStorage.getItem(KEY)||'',10); return (v>=3&&v<=20)?v:def; } catch(e){ return def; } }
+  if(typeof window.KBD_PAGE_SIZE==='undefined') window.KBD_PAGE_SIZE=read();
+  if(window.__dsel && $('kbdPageSize')){
+    __dsel.mount('kbdPageSize',{
+      options:[{value:'6',labelKey:'kbdPage6'},{value:'9',labelKey:'kbdPage9'},{value:'12',labelKey:'kbdPage12'},{value:'15',labelKey:'kbdPage15'}],
+      value:String(window.KBD_PAGE_SIZE),
+      width:110
+    });
+    __dsel.onChange('kbdPageSize',function(){
+      var v=parseInt(__dsel.get('kbdPageSize'),10)||def;
+      window.KBD_PAGE_SIZE=v;
+      try { localStorage.setItem(KEY,String(v)); } catch(e){}
+      if(window.__kbdRefresh) window.__kbdRefresh();
+    });
+  }
 })();
