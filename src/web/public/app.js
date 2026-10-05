@@ -783,14 +783,16 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     {d:'1',s:'，'}, {d:'2',s:'abc'}, {d:'3',s:'def'},
     {d:'4',s:'ghi'}, {d:'5',s:'jkl'}, {d:'6',s:'mno'},
     {d:'7',s:'pqrs'}, {d:'8',s:'tuv'}, {d:'9',s:'wxyz'},
-    {d:'0',s:''}
+    {d:'*',s:'。'}, {d:'0',k:'kbdSpaceMark'}, {d:'#',k:'kbdModeKey'}
   ];
   function padKey(d){
-    // 手机上 0 是空格、1 是标点; 退格/清空已经有专门的按钮, 所以不再需要 * 和 #(用户指出用不上, 已去掉)
+    // 用户定的版式(F-20260929-04 微调): * = 句号, # = 数字/拼音切换, 0 = 空格(放中间)
+    if(d==='*'){ kbdInsert('。'); return; }
+    if(d==='#'){ window.KBD_NUM=!window.KBD_NUM; buildPad(); return; }   // 切换后重画笔键盘(标签跟着变)
     if(d==='0'){ kbdKey('space'); return; }
     if(d==='1'){ kbdInsert('，'); return; }
-    if(window.KBD_LAYOUT==='9'){ kbdKey(d); }   // 九键模式: 数字进九键缓冲
-    else { kbdInsert(d); }                      // 26 键模式: 数字当普通字符打进去
+    if(window.KBD_LAYOUT==='9' && !window.KBD_NUM){ kbdKey(d); }   // 拼音态: 数字进九键缓冲(查候选)
+    else { kbdInsert(d); }                                        // 数字态(或 26 键): 数字当普通字符打进去
   }
   function buildPad(){
     var box=$('kbdKeys9'); if(!box) return;
@@ -798,7 +800,9 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     PAD9.forEach(function(k){
       var b=document.createElement('button');
       b.className='k9';
-      b.innerHTML='<b>'+k.d+'</b>'+(k.s?('<i>'+k.s+'</i>'):'');
+      var mark = k.k ? tr(k.k==='kbdModeKey' ? (window.KBD_NUM ? 'kbdModeNumOn' : 'kbdModePyOn') : k.k) : (k.s || '');
+      b.innerHTML='<b>'+k.d+'</b>'+(mark?('<i>'+mark+'</i>'):'');
+      if(k.d==='#') b.style.borderColor='var(--accent)';
       b.onclick=function(){ padKey(k.d); };
       box.appendChild(b);
     });
