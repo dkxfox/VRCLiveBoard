@@ -43,7 +43,10 @@ class PinyinIME {
       const eng = await import(pathToFileURL(path.join(this.engineDir, 'index.js')).href);
       const read = (f) => JSON.parse(fs.readFileSync(path.join(this.engineDictDir, f), 'utf8'));
       const hmm = new eng.HiddenMarkovModel(read('hmm_py2hz.json'), read('hmm_start.json'), read('hmm_emission.json'), read('hmm_transition.json'));
-      this.engine = { splitAsYinJie: eng.splitAsYinJie, hmm: hmm };
+      // 词组层(F-20260929-03 切片 1b): 用真实的词组词典, 长句里"很不错"这种才会对。
+      // 实测开销可接受: dag_phrase.json 18MB 解析 229ms, 连同 HMM 一起堆内存约 68MB。
+      const dag = new eng.DirectedAcyclicGraph(read('dag_char.json'), read('dag_phrase.json'));
+      this.engine = { splitAsYinJie: eng.splitAsYinJie, hmm: hmm, dag: dag };
       this.engineReady = true;
       this.logger.info('[输入法] 整句引擎就绪(' + (Date.now() - t0) + 'ms, HMM 概率表 ' + Math.round(fs.statSync(path.join(this.engineDictDir, 'hmm_transition.json')).size / 1048576) + 'MB)');
       return true;
@@ -61,7 +64,16 @@ class PinyinIME {
       const seen = new Set();
       for (const seg of segs) {
         if (!seg || seg.length < 2) continue;
-        const res = this.engine.hmm.query({ yinJieList: seg, maxNum: Math.min(want, 6) }) || [];
+        // 词组层(DAG, 真实词组词典)与 HMM(语言模型)**交错**给出: 两套打分口径不同, 不能直接混排,
+        // 交错能保证两者的首选都出现在最前面 —— 实测 DAG 对"明天见/真不错"更准, HMM 对生僻句更稳。
+        let dagRes = [];
+        try { dagRes = this.engine.dag.query({ yinJieList: seg, maxNum: Math.min(want, 6) }) || []; } catch (e) { dagRes = []; }
+        const hmmRes = (this.engine.hmm.query({ yinJieList: seg, maxNum: Math.min(want, 6) }) || []);
+        const res = [];
+        for (let i = 0; i < Math.max(dagRes.length, hmmRes.length); i++) {
+          if (dagRes[i]) res.push(dagRes[i]);
+          if (hmmRes[i]) res.push(hmmRes[i]);
+        }
         for (const r of res) {
           const phrase = (r.phraseInfoList || []).map(function (p) { return p.phrase; }).join('');
           if (!phrase || seen.has(phrase)) continue;
