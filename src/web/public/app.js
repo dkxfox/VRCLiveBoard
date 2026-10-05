@@ -555,7 +555,7 @@ window.__plgset_netease_lyrics=function(p,body){
 
 // 品牌选择: 变更即保存 + 回显已保存值
 if($('brandSel'))$('brandSel').onchange=function(){try{fetch('/api/config',{method:'POST',body:JSON.stringify({branding:this.value})});}catch(e){apiFail('#brandSel',e);}};
-(async function(){try{var _c=await (await fetch('/api/config')).json();var _bs=$('brandSel');if(_bs&&_c.branding)_bs.value=_c.branding;}catch(e){apiFail('#brandSel',e);}})();
+(async function(){try{var _c=await (await fetch('/api/config')).json();var _bs=$('brandSel');if(_bs)_bs.value=_c.branding||'auto';}catch(e){apiFail('#brandSel',e);}})();
 
 // 新手引导(M-20260911-29): 旧版首访自动弹一次并可勾选"不再自动"(localStorage vrcbGuideDone), 移植时整块丢失。
 function guideShow(){var ov=$('guideOverlay');if(ov)ov.hidden=false;}
