@@ -924,3 +924,38 @@ if(window.__dsel){
     { value:'{time}', labelPrefix:'{time} · ', labelKey:'varTime' }
   ], value:'{cpu_util}' });
 }
+
+// ===== 词库迁移(F-20260929-03 切片 3): 导入自己输入法导出的词表 =====
+(function(){
+  function dictPaint(j){
+    var el=$('dictStatus'); if(!el||!j) return;
+    var s=tr('dictStatusFmt').replace('{u}', j.user||0).replace('{b}', j.builtin||0);
+    if(j.source) s+=' · '+j.source;
+    if(j.skippedNoPinyin) s+=' · '+tr('dictSkipped')+' '+(j.skippedNoPinyin+j.skippedNonHan||0);
+    el.textContent=s;
+  }
+  function dictLoad(){ fetch('/api/pinyin/dict').then(function(r){return r.json();}).then(dictPaint).catch(function(){}); }
+  function dictImport(text, source){
+    fetch('/api/pinyin/import',{method:'POST',body:JSON.stringify({text:text,source:source})}).then(function(r){return r.json();}).then(function(r){
+      if(!r||!r.ok){ note(tr('dictFail'),'warn'); return; }
+      note(tr('dictDoneFmt').replace('{a}', r.added||0).replace('{s}', r.skipped||0),'ok');
+      dictLoad();
+    }).catch(function(){ note(tr('dictFail'),'warn'); });
+  }
+  var f=$('dictFile');
+  if(f)f.onchange=function(){
+    var file=f.files&&f.files[0]; if(!file) return;
+    var rd=new FileReader();
+    rd.onload=function(){ dictImport(String(rd.result||''), file.name); };
+    rd.readAsText(file,'utf-8');
+  };
+  if($('dictImport'))$('dictImport').onclick=function(){
+    var pasted=$('dictPaste')?$('dictPaste').value:'';
+    if(!pasted.trim()){ note(tr('dictEmpty'),'warn'); return; }
+    dictImport(pasted, tr('dictPasteSource'));
+  };
+  if($('dictClear'))$('dictClear').onclick=function(){
+    fetch('/api/pinyin/import',{method:'POST',body:JSON.stringify({clear:true})}).then(function(r){return r.json();}).then(function(){ dictLoad(); }).catch(function(){});
+  };
+  dictLoad();
+})();

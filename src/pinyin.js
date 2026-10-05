@@ -36,6 +36,9 @@ class PinyinIME {
     this.engineDictDir = opts.engineDictDir || path.join(this.projectDir, 'node_modules', 'pinyin-input-method-engine', 'dict');
     this.engine = null;
     this.engineReady = false;
+    // 用户词库(F-20260929-03 切片 3): 用户自己输入法导出的词, 只放本地 logs/(第三方数据, 绝不入库)。
+    const { UserDict } = require('./pinyin-userdict');
+    this.userDict = new UserDict({ logger: this.logger, file: opts.userDictFile || path.join(this.projectDir, 'logs', 'pinyin-user-dict.json') });
   }
   // 预热(异步, 由 main.js 启动时调用, 失败不影响旧的查表能力)
   async warmup() {
@@ -103,6 +106,21 @@ class PinyinIME {
       this.byPinyin.get(py).push({ w: w, f: f });
     });
     this.byPinyin.forEach(function (arr) { arr.sort(function (a, b) { return b.f - a.f; }); });
+    // 并入用户词库: 给一个很高的基频, 保证"你自己常用的词"排在同 rank 的最前面
+    try {
+      this.userDict.load();
+      const self2 = this;
+      this.userDict.entries.forEach(function (v, w) {
+        const py = v.pinyin;
+        if (!py) return;
+        if (!self2.byPinyin.has(py)) self2.byPinyin.set(py, []);
+        self2.byPinyin.get(py).push({ w: w, f: 10000000 + (v.freq || 0), user: true });
+      });
+      if (this.userDict.entries.size) {
+        this.keysSorted = Array.from(this.byPinyin.keys()).sort();
+        this.stats.userWords = this.userDict.entries.size;
+      }
+    } catch (e) { this.logger.warn('[输入法] 用户词库并入失败: ' + e.message); }
     this.keysSorted = Array.from(this.byPinyin.keys()).sort();
     // 单字拼音就是合法音节表: 用它把词的连写拼音切成音节, 再取首字母
     list.forEach((e) => { if (e[0].length === 1) this.syllables.add(e[1]); });
@@ -168,6 +186,20 @@ class PinyinIME {
     hi = this.keysSorted.length;
     while (lo < hi) { const mid = (lo + hi) >> 1; if (this.keysSorted[mid] < keys + '\uffff') lo = mid + 1; else hi = mid; }
     return [start, lo];
+  }
+  // 词库导入(F-20260929-03 切片 3): 文本 -> 用户词库 -> 热并入(不用重启)
+  importUserDict(text, source) {
+    const r = this.userDict.importText(text, source);
+    if (r.ok) {
+      this.dict = null;                 // 让下次 load() 重建索引, 把新词并进去
+      this.byPinyin = new Map(); this.keysSorted = []; this.byInitials = new Map();
+      this.load();
+    }
+    return r;
+  }
+  dictStatus() {
+    const u = this.userDict.status();
+    return { ok: true, builtin: this.dict ? this.stats.words : 0, user: u.words, source: u.source, importedAt: u.importedAt, skippedNoPinyin: u.noPinyin, skippedNonHan: u.bad, engine: this.engineReady, sentence: this.sentenceEnabled, fuzzy: this.fuzzyGroups };
   }
   // 生成模糊音变体(有上限, 避免组合爆炸): zh->z, ch->c, sh->s, an->ang 及其反向
   fuzzyVariants(k) {

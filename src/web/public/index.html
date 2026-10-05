@@ -286,6 +286,15 @@ body.no-anim *{animation:none!important;transition:none!important}
       <button id="kbdSend" data-t="kbdSend">发送到聊天框</button>
     </div>
     <div class="sub" id="kbdStatus" style="font-size:12px;margin-top:8px"></div>
+    <div class="row" style="margin-top:14px;gap:8px;flex-wrap:wrap;align-items:center">
+      <b style="font-size:13px" data-t="dictTitle">词库迁移</b>
+      <input type="file" id="dictFile" accept=".txt,.csv,.dict,text/plain" style="max-width:260px">
+      <button class="small" id="dictImport" data-t="dictImport">导入</button>
+      <button class="small gray" id="dictClear" data-t="dictClear">清空</button>
+      <span class="sub" id="dictStatus" style="font-size:12px"></span>
+    </div>
+    <textarea id="dictPaste" rows="3" style="width:100%;margin-top:6px;font-family:monospace;font-size:12px"></textarea>
+    <div class="sub" data-t="dictHint" style="font-size:12px;margin-top:4px"></div>
   </div>
 </div>
 <div id="tab-dance" hidden>

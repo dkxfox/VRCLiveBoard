@@ -1245,6 +1245,24 @@ function effPluginSec() {
       return json(res, 400, { ok: false, error: 'UNKNOWN_ACTION' });
     });
   });
+  // 词库迁移(F-20260929-03 切片 3): 状态 + 导入(只本机; 数据只落本地 logs/)
+  on('GET', '/api/pinyin/dict', function (req, res, url) {
+    if (!ime) return json(res, 200, { ok: false, error: '输入法引擎不可用(非标准启动)' });
+    try { return json(res, 200, ime.dictStatus()); } catch (e) { return json(res, 500, { ok: false, error: String(e.message) }); }
+  });
+  on('POST', '/api/pinyin/import', function (req, res, url) {
+    return readBody(req, function (body) {
+      if (!ime) return json(res, 200, { ok: false, error: '输入法引擎不可用(非标准启动)' });
+      let o = {};
+      try { o = JSON.parse(body || '{}'); } catch (e) { return json(res, 400, { ok: false, error: 'BAD_JSON' }); }
+      if (o.clear === true) { try { return json(res, 200, ime.userDict.clear()); } catch (e) { return json(res, 500, { ok: false, error: String(e.message) }); } }
+      const text = String(o.text || '');
+      if (!text.trim()) return json(res, 400, { ok: false, error: "EMPTY" });
+      if (text.length > 8388608) return json(res, 413, { ok: false, error: "TOO_LARGE" });
+      try { const r = ime.importUserDict(text, String(o.source || '').slice(0, 80) || 'import'); return json(res, r.ok ? 200 : 400, r); }
+      catch (e) { return json(res, 500, { ok: false, error: String(e.message) }); }
+    });
+  });
   on('GET', '/api/actions', function (req, res, url) {
     if (!actionSender) return json(res, 200, { ok: false, error: '动作模块不可用(非标准启动)' });
     return json(res, 200, Object.assign({ ok: true }, actionSender.status()));

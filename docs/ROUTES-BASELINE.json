@@ -5,7 +5,7 @@
     "1": "一级密码(needL1(res) 或 !unlockState.level1 且回 403)",
     "2": "开发者密码(!unlockState.level2 且回 403)"
   },
-  "updatedAt": "2026-09-28",
+  "updatedAt": "2026-10-05",
   "notes": {
     "POST /api/security": "插件安全策略段零级可\"单向收紧/恢复默认\"; 提示词防线等其余字段一级(条目 98 用户拍板)",
     "POST /api/swearfilter": "开关零级; addWords 一级",
@@ -222,6 +222,18 @@
       "m": "POST",
       "p": "/api/ocrtl",
       "level": 0
+    },
+    {
+      "m": "GET",
+      "p": "/api/pinyin/dict",
+      "level": 0,
+      "note": "输入法词库状态(F-20260929-03 切片 3): 内置词条数 / 用户词条数 / 来源 / 引擎与模糊音开关(只本机)"
+    },
+    {
+      "m": "POST",
+      "p": "/api/pinyin/import",
+      "level": 0,
+      "note": "导入用户词库(自己输入法导出的词表): body {text, source}; 逐行解析\"词 拼音 词频\"; 数据只落本地 logs/pinyin-user-dict.json, 不入库"
     },
     {
       "m": "POST",
