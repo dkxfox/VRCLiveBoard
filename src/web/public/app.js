@@ -737,7 +737,7 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     else if(/^[1-9]$/.test(ch)){
       // 九键模式: 屏幕上的数字键是"打字"(数字进 digits); 26 键模式: 数字键是"选第 N 个候选"
       if(window.KBD_LAYOUT==='9' && !cur.py){ if((cur.digits||'').length<24) cur.digits=(cur.digits||'')+ch; cur.page=0; }
-      else if(cur.py && (cur.list||[]).length){ kbdPick(cur.page*kbdPageSize() + (parseInt(ch,10)-1)); return; }
+      else if((cur.py||cur.digits) && (cur.list||[]).length){ kbdPick(cur.page*kbdPageSize() + (parseInt(ch,10)-1)); return; }
     }
     else if(ch==='page-' || ch==='page+'){
       var pages=Math.max(1, Math.ceil(((cur.list||[]).length)/kbdPageSize()));
@@ -755,7 +755,7 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     '1234567890'.split('').forEach(function(c){
       var b=document.createElement('button'); b.textContent=c;
       b.style.cssText='width:56px;height:56px;font-size:20px';
-      b.onclick=function(){ kbdInsert(c); };
+      b.onclick=function(){ kbdDigit(c); };   // 有候选时优先选候选(用户要求), 否则当普通数字打进去
       num.appendChild(b);
     });
     host.appendChild(num);
@@ -803,8 +803,11 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     if(d==='#'){ window.KBD_NUM=!window.KBD_NUM; buildPad(); return; }   // 切换后重画笔键盘(标签跟着变)
     if(d==='0'){ kbdKey('space'); return; }
     if(d==='1'){ kbdInsert('，'); return; }
-    if(window.KBD_LAYOUT==='9' && !window.KBD_NUM){ kbdKey(d); }   // 拼音态: 数字进九键缓冲(查候选)
-    else { kbdInsert(d); }                                        // 数字态(或 26 键): 数字当普通字符打进去
+    if(window.KBD_LAYOUT==='9' && !window.KBD_NUM){                // 拼音态: 数字进九键缓冲(查候选)
+      if((cur.digits||'').length<24) cur.digits=(cur.digits||'')+d;
+      cur.page=0; kbdPaint(); kbdCands();
+    }
+    else { kbdInsert(d); }                                        // 数字态: 数字当普通字符打进去
   }
   function buildPad(){
     var box=$('kbdKeys9'); if(!box) return;
@@ -865,6 +868,16 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
       b.style.borderColor = cn ? 'var(--accent)' : '';
     });
   }
+  // 数字键(26 键那一排 / 物理键盘): **正在打拼音且有候选时, 数字=选第 N 个候选**; 否则才是打数字
+  // (九键的九宫格不受影响 —— 那里的数字是输入本身, 选词靠点候选)
+  function kbdDigit(d){
+    var n = parseInt(d, 10);
+    if(!isNaN(n) && n >= 1 && (cur.py || cur.digits) && (cur.list || []).length){
+      var gi = cur.page * kbdPageSize() + (n - 1);
+      if(cur.list[gi]){ kbdPick(gi); return; }
+    }
+    kbdInsert(d);
+  }
   function kbdLetter(ch){
     // 物理键盘按住 Shift 时 ev.key 本身就是大写 -> 保留大写, 不要再被 KBD_CAPS 压回小写
     var raw = String(ch);
@@ -900,7 +913,7 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
       if(ev.key==='Enter'){ kbdSend(); ev.preventDefault(); return; }
       if(ev.key==='Backspace'){ kbdKey('back'); ev.preventDefault(); return; }
       if(ev.key===' '){ kbdKey('space'); ev.preventDefault(); return; }
-      if(/^[1-9]$/.test(ev.key)){ kbdKey(ev.key); ev.preventDefault(); return; }
+      if(/^[1-9]$/.test(ev.key)){ kbdDigit(ev.key); ev.preventDefault(); return; }
       if(ev.key==='-'||ev.key==='PageUp'){ kbdKey('page-'); ev.preventDefault(); return; }
       if(ev.key==='='||ev.key==='PageDown'){ kbdKey('page+'); ev.preventDefault(); return; }
       if(/^[a-zA-Z]$/.test(ev.key)){ kbdLetter(ev.key); ev.preventDefault(); return; }
