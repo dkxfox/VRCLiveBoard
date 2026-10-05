@@ -19,6 +19,7 @@
     "@tesseract.js-data/jpn": "^1.0.0",
     "electron": "43.4.0",
     "osc": "^2.4.5",
+    "pinyin-input-method-engine": "^4.0.0",
     "systeminformation": "^5.33.5",
     "tesseract.js": "^7.0.0"
   },

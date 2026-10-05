@@ -65,3 +65,9 @@ Lite 包不带 electron(需系统 Node 22+), 其余依赖由 npm 按需安装, �
 - 许可: MIT(该包 package.json 的 license 字段);
 - 用途: 控制台署名区的纪念图标(鼠标悬停轻微游动), 与"使用 DeepSeek 开发"的署名同时出现;
 - 说明: 该图形是 DeepSeek 的品牌标识, 按用户要求作**致谢/纪念**用途; 若日后对外分发需要更严格的商标合规, 一行即可替换。
+
+## pinyin-input-method-engine(MIT, 运行时依赖)
+- 用途: 内置输入法的**整句转换**(HMM/Viterbi)与拼音音节拆分;
+- 许可: **MIT**(包的 package.json);
+- 处理: 它的 dist 是 TS 直出的 ESM 且相对导入缺扩展名, Node 直接 import 会失败 -> 由 `scripts/build-pinyin-engine.js` 补扩展名后输出到 `build/pinyin-engine/`(**不改内容**);
+- 体积提示: 包内含词典约 35MB; 当前只加载 HMM 一套(约 14MB), DAG 词组层待评估。

@@ -19,6 +19,9 @@
                 "openBrowser":  true,
                 "lang":  "zh-CN"
             },
+    "pinyin":  {
+                   "sentence":  true
+               },
     "ui":  {
                 "experimental":  false,
                 "dashHide":  []

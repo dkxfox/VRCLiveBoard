@@ -25,7 +25,56 @@ class PinyinIME {
     this.byInitials = new Map();   // 'nh' -> [{w,f}]
     this.syllables = new Set();
     this.learned = new Map();      // 词 -> 选中次数
-    this.stats = { words: 0, syllables: 0, lookups: 0 };
+    this.stats = { words: 0, syllables: 0, lookups: 0, sentenceHits: 0 };
+    // 整句转换(F-20260929-03 切片 1): 用 pinyin-input-method-engine(MIT)的 HMM + 自带概率表。
+    // 它的 dist 相对导入没带扩展名, 所以由 scripts/build-pinyin-engine.js 补好扩展名后放进 build/pinyin-engine/。
+    this.sentenceEnabled = opts.sentence !== false;
+    this.engineDir = opts.engineDir || path.join(this.projectDir, 'build', 'pinyin-engine');
+    this.engineDictDir = opts.engineDictDir || path.join(this.projectDir, 'node_modules', 'pinyin-input-method-engine', 'dict');
+    this.engine = null;
+    this.engineReady = false;
+  }
+  // 预热(异步, 由 main.js 启动时调用, 失败不影响旧的查表能力)
+  async warmup() {
+    if (!this.sentenceEnabled || this.engineReady) return false;
+    try {
+      const t0 = Date.now();
+      const { pathToFileURL } = require('url');
+      const eng = await import(pathToFileURL(path.join(this.engineDir, 'index.js')).href);
+      const read = (f) => JSON.parse(fs.readFileSync(path.join(this.engineDictDir, f), 'utf8'));
+      const hmm = new eng.HiddenMarkovModel(read('hmm_py2hz.json'), read('hmm_start.json'), read('hmm_emission.json'), read('hmm_transition.json'));
+      this.engine = { splitAsYinJie: eng.splitAsYinJie, hmm: hmm };
+      this.engineReady = true;
+      this.logger.info('[输入法] 整句引擎就绪(' + (Date.now() - t0) + 'ms, HMM 概率表 ' + Math.round(fs.statSync(path.join(this.engineDictDir, 'hmm_transition.json')).size / 1048576) + 'MB)');
+      return true;
+    } catch (e) {
+      this.logger.warn('[输入法] 整句引擎加载失败(退回查表): ' + e.message);
+      return false;
+    }
+  }
+  // 整句候选: 把连写的拼音串按 HMM 解成最可能的汉字序列
+  sentenceCandidates(k, want) {
+    if (!this.engineReady || !this.engine) return [];
+    const out = [];
+    try {
+      const segs = this.engine.splitAsYinJie(k) || [];
+      const seen = new Set();
+      for (const seg of segs) {
+        if (!seg || seg.length < 2) continue;
+        const res = this.engine.hmm.query({ yinJieList: seg, maxNum: Math.min(want, 6) }) || [];
+        for (const r of res) {
+          const phrase = (r.phraseInfoList || []).map(function (p) { return p.phrase; }).join('');
+          if (!phrase || seen.has(phrase)) continue;
+          seen.add(phrase);
+          // 分数是极小的小数, 转成"相对词频"便于和查表结果一起排序(取对数后线性化)
+          const score = Math.max(0, Math.log10(Math.max(r.score, 1e-300)) + 300);
+          out.push({ w: phrase, f: Math.round(score * 100), how: 'sentence', seg: (r.phraseInfoList || []).map(function (p) { return p.phrase; }) });
+        }
+        if (out.length >= want) break;
+      }
+      this.stats.sentenceHits += out.length ? 1 : 0;
+    } catch (e) { return []; }
+    return out.slice(0, want);
   }
   load() {
     if (this.dict) return this.dict;
@@ -112,6 +161,12 @@ class PinyinIME {
     if (!k) return [];
     const out = [];
     const push = function (arr, how) { arr.forEach(function (e) { out.push({ w: e.w, f: e.f, how: how }); }); };
+    // 整句优先(F-20260929-03): 输入较长(>=4 个字母)且引擎就绪时, 先给整句候选
+    if (k.length >= 4) {
+      const sent = this.sentenceCandidates(k, Math.max(1, Math.min(5, want)));
+      if (sent.length) out.push.apply(out, sent);
+    }
+    // 注意: 这里有整句时也要继续走查表(单字/词候选跟在后面), 用户可能只想选一个词
     const exact = this.byPinyin.get(k);
     if (exact) push(exact, 'full');
     if (out.length < want * 3 && k.length >= 2) {

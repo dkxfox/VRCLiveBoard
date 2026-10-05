@@ -1,0 +1,4 @@
+{
+  "type": "module",
+  "note": "由 scripts/build-pinyin-engine.js 生成: 只是为了让 Node 按 ESM 加载(否则有告警)"
+}

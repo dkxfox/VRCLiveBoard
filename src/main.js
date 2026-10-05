@@ -111,7 +111,9 @@ async function main() {
 
   // 内置输入法引擎(F-20260925-02 P2-a): 拼音串 -> 候选词; 词库懒加载(首次调用才读 1.4MB 词表)
   const { PinyinIME } = require('./pinyin');
-  const ime = new PinyinIME({ logger: logger, projectDir: projectDir });   // 注意是 projectDir(工程根), 不是 __dirname(src/)
+  const ime = new PinyinIME({ logger: logger, projectDir: projectDir, sentence: !(config.pinyin && config.pinyin.sentence === false) });   // 注意是 projectDir(工程根), 不是 __dirname(src/)
+  // 整句引擎预热(F-20260929-03 切片 1): 异步加载概率表, 失败只降级(旧的查表能力不受影响), 不阻塞启动
+  ime.warmup().catch(function () {});
   const { ActionSender } = require('./actions');
   const actions = new ActionSender({ logger: logger, osc: osc, config: config.actions });
   // 动作播放(F-20260929-01 路线 B): VMD -> 11 个追踪点 -> 60Hz OSC 给 VMT(SteamVR 虚拟追踪器)。
