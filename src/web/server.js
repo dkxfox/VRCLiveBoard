@@ -1203,7 +1203,9 @@ function effPluginSec() {
     try {
       const keys = url.searchParams.get('keys') || '';
       const n = Number(url.searchParams.get('n') || 7);
-      return json(res, 200, { ok: true, keys: keys, candidates: ime.candidates(keys, n) });
+      // t9=1: 走九键(数字串按前缀匹配), 见 F-20260929-04; 默认仍是全拼
+      const t9 = url.searchParams.get('t9') === '1';
+      return json(res, 200, { ok: true, keys: keys, t9: t9, candidates: t9 ? ime.t9Candidates(keys, n) : ime.candidates(keys, n) });
     } catch (e) { return json(res, 500, { ok: false, error: String(e.message) }); }
   });
   on('POST', '/api/pinyin/learn', function (req, res, url) {

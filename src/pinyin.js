@@ -40,6 +40,8 @@ class PinyinIME {
     const { UserDict } = require('./pinyin-userdict');
     this.userDict = new UserDict({ logger: this.logger, file: opts.userDictFile || path.join(this.projectDir, 'logs', 'pinyin-user-dict.json') });
     this._hmmCache = new Map();     // HMM 结果缓存(打字过程里同一批切分会被反复查询)
+    this.byDigits = null;           // 九键(T9)索引: '6426' -> [{w,f}] (F-20260929-04)
+    this.digitKeys = null;
   }
   // 预热(异步, 由 main.js 启动时调用, 失败不影响旧的查表能力)
   async warmup() {
@@ -236,6 +238,47 @@ class PinyinIME {
   dictStatus() {
     const u = this.userDict.status();
     return { ok: true, builtin: this.dict ? this.stats.words : 0, user: u.words, source: u.source, importedAt: u.importedAt, skippedNoPinyin: u.noPinyin, skippedNonHan: u.bad, engine: this.engineReady, sentence: this.sentenceEnabled, fuzzy: this.fuzzyGroups };
+  }
+  // 九键(T9)索引(F-20260929-04 路线 A): 把词库建成"数字串 -> [词]"
+  // 数字映射就是手机键盘: 2abc 3def 4ghi 5jkl 6mno 7pqrs 8tuv 9wxyz
+  buildDigits() {
+    const D = { a: '2', b: '2', c: '2', d: '3', e: '3', f: '3', g: '4', h: '4', i: '4', j: '5', k: '5', l: '5', m: '6', n: '6', o: '6', p: '7', q: '7', r: '7', s: '7', t: '8', u: '8', v: '8', w: '9', x: '9', y: '9', z: '9' };
+    const map = new Map();
+    this.byPinyin.forEach(function (arr, py) {
+      let d = '';
+      for (let i = 0; i < py.length; i++) { const c = D[py[i]]; if (!c) { d = ''; break; } d += c; }
+      if (!d) return;
+      if (!map.has(d)) map.set(d, []);
+      const bucket = map.get(d);
+      for (let i = 0; i < arr.length; i++) bucket.push(arr[i]);
+    });
+    this.byDigits = map;
+    this.digitKeys = Array.from(map.keys()).sort();
+  }
+  // 九键候选: 数字串按**前缀**匹配(打 6 / 64 / 642 …), 命中后按词频排序
+  t9Candidates(digits, n) {
+    this.load();
+    const k = String(digits || '').replace(/[^0-9]/g, '');
+    const want = Math.max(1, Math.min(20, Number(n) || 9));
+    this.stats.lookups++;
+    if (!k) return [];
+    if (!this.byDigits || !this.digitKeys) this.buildDigits();
+    let lo = 0, hi = this.digitKeys.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (this.digitKeys[mid] < k) lo = mid + 1; else hi = mid; }
+    const start = lo;
+    hi = this.digitKeys.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (this.digitKeys[mid] < k + '\uffff') lo = mid + 1; else hi = mid; }
+    const seen = new Set(), out = [];
+    for (let i = start; i < lo && out.length < want * 4; i++) {
+      const arr = this.byDigits.get(this.digitKeys[i]);
+      for (let j = 0; j < arr.length && out.length < want * 4; j++) {
+        if (seen.has(arr[j].w)) continue;
+        seen.add(arr[j].w);
+        out.push({ w: arr[j].w, f: arr[j].f, how: 't9', digits: this.digitKeys[i] });
+      }
+    }
+    out.sort((a, b) => b.f - a.f);
+    return out.slice(0, want);
   }
   // 生成模糊音变体(有上限, 避免组合爆炸): zh->z, ch->c, sh->s, an->ang 及其反向
   fuzzyVariants(k) {

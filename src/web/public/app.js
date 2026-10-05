@@ -653,7 +653,7 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
 // ===== 键盘页(网页版输入法, F-20260925-02 过渡链路): 字母 -> 拼音 -> 候选 -> 发送 =====
 // 为什么先做网页版: 原生覆盖层的瞄准还差一次校准, 先用这条链路把"能打中文"跑通并验 UX。
 (function(){
-  var cur={py:'',text:''};
+  var cur={py:'',text:'',digits:''};
   // 打字直接写进上面的聊天框(F-20260929-03 收尾: 去掉重复输入框)
   function kbdInsert(s){
     var box=$('box');
@@ -667,12 +667,12 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     box.focus();
   }
   function kbdPaint(){
-    if($('kbdPinyin'))$('kbdPinyin').textContent=cur.py?cur.py:'';
+    if($('kbdPinyin'))$('kbdPinyin').textContent=(cur.py||cur.digits||'');
   }
   function kbdPageSize(){ return (typeof window.KBD_PAGE_SIZE === 'number' && window.KBD_PAGE_SIZE >= 5 && window.KBD_PAGE_SIZE <= 12) ? window.KBD_PAGE_SIZE : 9; }   // 候选条(F-20260929-03 切片 4): 一页 9 个 + 翻页 + 数字键直选
   function kbdPick(i){
     var c = cur.list && cur.list[i]; if(!c) return;
-    kbdInsert(c.w); cur.py = ''; cur.page = 0;
+    kbdInsert(c.w); cur.py = ''; cur.digits = ''; cur.page = 0;
     kbdPaint(); kbdCands();
     fetch('/api/pinyin/learn',{method:'POST',body:JSON.stringify({word:c.w})}).catch(function(){});
   }
@@ -707,7 +707,7 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
   var kbdTimer=null, kbdSeq=0;
   function kbdCands(){
     var el=$('kbdCands'); if(!el) return;
-    if(!cur.py){ cur.list=[]; cur.page=0; el.innerHTML=''; if(kbdTimer){clearTimeout(kbdTimer);kbdTimer=null;} return; }
+    if(!cur.py && !cur.digits){ cur.list=[]; cur.page=0; el.innerHTML=''; if(kbdTimer){clearTimeout(kbdTimer);kbdTimer=null;} return; }
     // 防抖 70ms(F-20260929-03 手感修复): 打字是连击, 不防抖则每个字母都发一次请求,
     // 而长串的整句查询首帧可能要一两百毫秒(实测 9 音节 ~190ms, 6 音节 ~400ms)。
     // 只保留最后一次请求, 并用序号丢弃过期响应。
@@ -715,8 +715,9 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     var seq=++kbdSeq;
     kbdTimer=setTimeout(function(){
       kbdTimer=null;
-      var keys=cur.py;
-      fetch('/api/pinyin?keys='+encodeURIComponent(keys)+'&n=20').then(function(r){return r.json();}).then(function(j){
+      // 缓冲区里有拼音走全拼; 只有数字就走九键(同一个界面里两套输入互不干扰)
+      var keys=cur.py||cur.digits||'';
+      fetch('/api/pinyin?keys='+encodeURIComponent(keys)+(cur.py?'':'&t9=1')+'&n=20').then(function(r){return r.json();}).then(function(j){
         if(seq!==kbdSeq) return;          // 已经又打了新字母, 这份结果作废
         cur.list=(j&&j.candidates)||[];
         cur.page=0;
@@ -725,20 +726,24 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     }, 70);
   }
   function kbdKey(ch){
-    if(/^[a-z]$/.test(ch)){ if(cur.py.length<24){ cur.py+=ch; cur.page=0; } }
-    else if(ch==='back'){ if(cur.py){ cur.py=cur.py.slice(0,-1); cur.page=0; } else { var bx=$("box"); if(bx){ bx.value=(bx.value||"").slice(0,-1); bx.focus(); } } }
+    if(/^[a-z]$/.test(ch)){ if(cur.py.length<24){ cur.py+=ch; cur.digits=''; cur.page=0; } }
+    else if(ch==='back'){ if(cur.py){ cur.py=cur.py.slice(0,-1); cur.page=0; } else if(cur.digits){ cur.digits=cur.digits.slice(0,-1); cur.page=0; } else { var bx=$("box"); if(bx){ bx.value=(bx.value||"").slice(0,-1); bx.focus(); } } }
     else if(ch==='space'){
       // 正在打字时空格 = 选第一个候选(输入法惯例); 没在打字才是真的空格
-      if(cur.py && (cur.list||[]).length){ kbdPick(cur.page*kbdPageSize()); return; }
+      if((cur.py||cur.digits) && (cur.list||[]).length){ kbdPick(cur.page*kbdPageSize()); return; }
       kbdInsert(" "); cur.py="";
     }
-    else if(/^[1-9]$/.test(ch)){ if(cur.py && (cur.list||[]).length){ kbdPick(cur.page*kbdPageSize() + (parseInt(ch,10)-1)); return; } }
+    else if(/^[1-9]$/.test(ch)){
+      // 九键模式: 屏幕上的数字键是"打字"(数字进 digits); 26 键模式: 数字键是"选第 N 个候选"
+      if(window.KBD_LAYOUT==='9' && !cur.py){ if((cur.digits||'').length<24) cur.digits=(cur.digits||'')+ch; cur.page=0; }
+      else if(cur.py && (cur.list||[]).length){ kbdPick(cur.page*kbdPageSize() + (parseInt(ch,10)-1)); return; }
+    }
     else if(ch==='page-' || ch==='page+'){
       var pages=Math.max(1, Math.ceil(((cur.list||[]).length)/kbdPageSize()));
       cur.page=Math.min(pages-1, Math.max(0, cur.page + (ch==='page+'?1:-1)));
       kbdRenderCands(); return;
     }
-    else if(ch==='clear'){ var bx2=$("box"); if(bx2){ bx2.value=""; bx2.focus(); } cur.py=""; cur.page=0; }
+    else if(ch==='clear'){ var bx2=$("box"); if(bx2){ bx2.value=""; bx2.focus(); } cur.py=""; cur.digits=""; cur.page=0; }
     kbdPaint(); kbdCands();
   }
   function kbdBuild(){
@@ -760,6 +765,55 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     var btn=$('send'); if(btn){ btn.click(); if($('kbdStatus'))$('kbdStatus').textContent=tr('kbdSent'); return; }
     if($('kbdStatus'))$('kbdStatus').textContent=tr('kbdErr');
   }
+
+(function(){
+  var LAYOUT_KEY='kbdLayout';
+  function readLayout(){ try { return localStorage.getItem(LAYOUT_KEY)==='9' ? '9' : '26'; } catch(e){ return '26'; } }
+  window.KBD_LAYOUT=readLayout();
+  var PAD9=[
+    {d:'1',s:''}, {d:'2',s:'abc'}, {d:'3',s:'def'},
+    {d:'4',s:'ghi'}, {d:'5',s:'jkl'}, {d:'6',s:'mno'},
+    {d:'7',s:'pqrs'}, {d:'8',s:'tuv'}, {d:'9',s:'wxyz'},
+    {d:'*',s:''}, {d:'0',s:''}, {d:'#',s:''}
+  ];
+  function padKey(d){
+    if(d==='0'){ kbdKey('space'); return; }
+    if(d==='*'){ kbdKey('back'); return; }
+    if(d==='#'){ kbdKey('clear'); return; }
+    if(d==='1'){ return; }
+    kbdKey(d);   // 数字键: 走九键输入
+  }
+  function buildPad(){
+    var box=$('kbdKeys9'); if(!box) return;
+    box.innerHTML='';
+    PAD9.forEach(function(k){
+      var b=document.createElement('button');
+      b.className='k9';
+      b.innerHTML='<b>'+k.d+'</b>'+(k.s?('<i>'+k.s+'</i>'):'');
+      b.onclick=function(){ padKey(k.d); };
+      box.appendChild(b);
+    });
+  }
+  function applyLayout(){
+    var nine=(window.KBD_LAYOUT==='9');
+    if($('kbdKeys'))$('kbdKeys').style.display=nine?'none':'flex';
+    if($('kbdKeys9'))$('kbdKeys9').style.display=nine?'grid':'none';
+    if(window.__dsel && $('kbdLayout')) __dsel.set('kbdLayout', nine?'9':'26');
+    if(typeof window.__kbdRefresh==='function') window.__kbdRefresh();
+  }
+  buildPad();
+  if(window.__dsel && $('kbdLayout')){
+    __dsel.mount('kbdLayout',{ options:[{value:'26',labelKey:'kbdLayout26'},{value:'9',labelKey:'kbdLayout9'}], value:window.KBD_LAYOUT, width:110 });
+    __dsel.onChange('kbdLayout',function(){
+      window.KBD_LAYOUT = __dsel.get('kbdLayout')==='9' ? '9' : '26';
+      try { localStorage.setItem(LAYOUT_KEY, window.KBD_LAYOUT); } catch(e){}
+      kbdKey('clear');
+      applyLayout();
+    });
+  }
+  applyLayout();
+})();
+
   window.__kbdRefresh = function(){ kbdCands(); };
   function kbdInit(){
     kbdBuild(); kbdPaint();

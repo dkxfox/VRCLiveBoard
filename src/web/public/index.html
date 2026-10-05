@@ -275,6 +275,9 @@ body.no-anim *{animation:none!important;transition:none!important}
     #kbdCands{min-height:104px;align-content:flex-start}
     #kbdCands .small{font-size:17px;padding:10px 14px;min-width:56px}
     #kbdKeys{min-height:196px}
+    #kbdKeys9{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:330px;margin:0 auto;min-height:196px}
+    #kbdKeys9 button.k9{display:flex;flex-direction:column;align-items:center;justify-content:center;height:62px;font-size:22px;line-height:1.05;padding:0}
+    #kbdKeys9 button.k9 i{font-style:normal;font-size:11px;opacity:.75;letter-spacing:1px}
     #kbdKeys button{width:62px;height:62px;font-size:22px}
     #kbdHintRow{font-size:13px;margin-top:10px;text-align:center}
     #kbdStatus{font-size:12px;margin-top:8px;text-align:center}
@@ -288,6 +291,8 @@ body.no-anim *{animation:none!important;transition:none!important}
     <div id="kbdActions">
       <span class="sub" data-t="kbdPageSizeLabel" style="font-size:13px">候选数量</span>
       <button class="dsel" id="kbdPageSize" data-value="9"></button>
+      <span class="sub" data-t="kbdLayoutLabel" style="font-size:13px;margin-left:8px">键盘</span>
+      <button class="dsel" id="kbdLayout" data-value="26"></button>
       <button class="gray" id="kbdBack" data-t="kbdBack">退格</button>
       <button class="gray" id="kbdSpace" data-t="kbdSpace">空格</button>
       <button class="gray" id="kbdClear" data-t="kbdClear">清空</button>
@@ -297,6 +302,7 @@ body.no-anim *{animation:none!important;transition:none!important}
   </div>
   <div class="card">
     <div id="kbdKeys" style="display:flex;flex-direction:column;gap:8px;align-items:center"></div>
+    <div id="kbdKeys9" style="display:none"></div>
     <div class="sub" id="kbdHintRow" data-t="kbdHint">点字母打字, 上方候选选中文; 也可以直接用电脑键盘打(输入会写进上面的聊天框)</div>
     <div class="row" style="margin-top:14px;gap:8px;flex-wrap:wrap;align-items:center">
       <b style="font-size:13px" data-t="dictTitle">词库迁移</b>
