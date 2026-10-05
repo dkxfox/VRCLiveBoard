@@ -29,8 +29,6 @@ try {
 ok(parseOk, 'make-dist.ps1 能被 Windows PowerShell 5.1 解析' + (parseOk ? '' : ' — ' + detail.slice(0, 160)));
 
 console.log('  [pack-script-check] ' + (fail ? (fail + ' 项未通过') : 'make-dist.ps1 健康'));
-process.exit(fail ? 1 : 0);
-
 // 2026-10-05: make-dist 的 stage 清理必须"删不掉就中止" —— 曾经用 SilentlyContinue 静默保留陈旧文件,
 // 导致打出的包里混着上一版的文件(用户实测: 一个 10-03 的 dsel.js 让他白试了一次)。
 (function () {
@@ -45,3 +43,5 @@ process.exit(fail ? 1 : 0);
     process.exitCode = 1;
   }
 })();
+
+process.exit(fail ? 1 : 0);
