@@ -670,13 +670,6 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     if($('kbdPinyin'))$('kbdPinyin').textContent=cur.py?cur.py:'';
   }
   var KBD_PAGE = 9;   // 候选条(F-20260929-03 切片 4): 一页 9 个 + 翻页 + 数字键直选
-  function kbdHowTag(how){
-    if(how==='sentence') return tr('kbdHowSentence');
-    if(how==='fuzzy') return tr('kbdHowFuzzy');
-    if(how==='initials') return tr('kbdHowInitials');
-    if(how==='prefix') return tr('kbdHowPrefix');
-    return '';
-  }
   function kbdPick(i){
     var c = cur.list && cur.list[i]; if(!c) return;
     kbdInsert(c.w); cur.py = ''; cur.page = 0;
@@ -694,9 +687,7 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     var row=document.createElement('div'); row.style.cssText='display:flex;gap:6px;flex-wrap:wrap';
     slice.forEach(function(c, k){
       var b=document.createElement('button'); b.className='small';
-      var tag=kbdHowTag(c.how);
-      b.textContent=(k+1)+'. '+c.w+(tag?(' '+tag):'');
-      if(c.how==='sentence') b.title=(c.seg||[]).join(' | ');
+      b.textContent=(k+1)+'. '+c.w;
       b.onclick=function(){ kbdPick(from+k); };
       row.appendChild(b);
     });
