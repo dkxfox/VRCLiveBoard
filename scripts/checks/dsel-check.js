@@ -60,3 +60,6 @@ if (selCount > 0) fails.push('控制台里还有 ' + selCount + ' 个原生 <sel
 for (const f of fails) console.log('  -> FAIL ' + f);
 if (!fails.length) console.log('  OK   自绘下拉契约满足(值/文案分离 + 引入顺序 + 无 .value 残留)');
 process.exitCode = fails.length ? 1 : 0;
+
+// 默认值检查(2026-10-05): 见 dsel-defaults.js —— 自绘下拉不得空心
+require('./dsel-defaults.js');

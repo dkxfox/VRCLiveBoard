@@ -12,6 +12,20 @@ const FILE = path.join(ROOT, 'scripts', 'make-dist.ps1');
 let fail = 0;
 function ok(cond, msg) { if (cond) console.log('  OK   ' + msg); else { console.log('  FAIL ' + msg); fail++; } }
 
+
+// 2026-10-05: stage 清理必须【严格 + 删不掉就中止】—— 正面检查, 不去猜旧写法
+// (上次写反了正则, 把自己写的注释也当成旧写法, 误判 FAIL)
+(function () {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'make-dist.ps1'), 'utf8');
+  const strict = src.indexOf('Remove-Item $stage -Recurse -Force -ErrorAction Stop') >= 0;
+  const loud = src.indexOf('stage 目录清不掉') >= 0;
+  const ok = strict && loud;
+  console.log((ok ? '  OK   ' : '  FAIL ') + 'make-dist 的 stage 清理严格且会中止(不得静默保留陈旧文件)');
+  if (!ok) {
+    console.log('    strict=' + strict + '  loud=' + loud + '  (两者都要 true)');
+    process.exitCode = 1;
+  }
+})();
 if (!fs.existsSync(FILE)) { console.log('  FAIL 找不到 ' + FILE); process.exit(1); }
 const buf = fs.readFileSync(FILE);
 const hasBom = buf.length >= 3 && buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF;
