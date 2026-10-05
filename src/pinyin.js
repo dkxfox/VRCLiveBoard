@@ -29,6 +29,9 @@ class PinyinIME {
     // 整句转换(F-20260929-03 切片 1): 用 pinyin-input-method-engine(MIT)的 HMM + 自带概率表。
     // 它的 dist 相对导入没带扩展名, 所以由 scripts/build-pinyin-engine.js 补好扩展名后放进 build/pinyin-engine/。
     this.sentenceEnabled = opts.sentence !== false;
+    // 模糊音(F-20260929-03 切片 2): 只做"兜底"—— 精确查不到足够结果时才用变体再查一遍,
+    // 这样既不会让精确匹配变慢/变乱, 又能救回"打错一个音"的情况。默认开最常用的四组(可配置)。
+    this.fuzzyGroups = Array.isArray(opts.fuzzy) ? opts.fuzzy.slice() : ['zh', 'ch', 'sh', 'an'];
     this.engineDir = opts.engineDir || path.join(this.projectDir, 'build', 'pinyin-engine');
     this.engineDictDir = opts.engineDictDir || path.join(this.projectDir, 'node_modules', 'pinyin-input-method-engine', 'dict');
     this.engine = null;
@@ -86,6 +89,7 @@ class PinyinIME {
       }
       this.stats.sentenceHits += out.length ? 1 : 0;
     } catch (e) { return []; }
+
     return out.slice(0, want);
   }
   load() {
@@ -165,6 +169,38 @@ class PinyinIME {
     while (lo < hi) { const mid = (lo + hi) >> 1; if (this.keysSorted[mid] < keys + '\uffff') lo = mid + 1; else hi = mid; }
     return [start, lo];
   }
+  // 生成模糊音变体(有上限, 避免组合爆炸): zh->z, ch->c, sh->s, an->ang 及其反向
+  fuzzyVariants(k) {
+    const MAP = {
+      zh: ['z'], ch: ['c'], sh: ['s'],
+      z: ['zh'], c: ['ch'], s: ['sh'],
+      an: ['ang'], ang: ['an'], in: ['ing'], ing: ['in'], l: ['n'], n: ['l'], f: ['h'], h: ['f']
+    };
+    // 注意: 方向要**双向**都要试 —— 配置里写 'sh' 表示"sh 与 s 互相混淆",
+    // 所以既要把输入里的 sh 换成 s, 也要把 s 换成 sh(踩过一次: 只做了前一个方向, 于是 surufa 生不出变体)。
+    const pairs = [];
+    this.fuzzyGroups.forEach(function (g) {
+      const alts = MAP[g];
+      if (!alts) return;
+      alts.forEach(function (a) { pairs.push([g, a]); pairs.push([a, g]); });
+    });
+    let out = new Set([k]);
+    pairs.forEach(function (p) {
+      const from = p[0], to = p[1];
+      const next = new Set(out);
+      out.forEach(function (s) {
+        let idx = s.indexOf(from, 0);
+        while (idx >= 0) {
+          next.add(s.slice(0, idx) + to + s.slice(idx + from.length));
+          idx = s.indexOf(from, idx + 1);
+        }
+      });
+      out = next;
+    });
+    out.delete(k);
+    // 变体可能不少(组合爆炸), 但**查不到的会被查表阶段自然跳过**, 所以只做上限保护即可。
+    return Array.from(out).slice(0, 24);
+  }
   candidates(keys, n) {
     this.load();
     const k = String(keys || '').toLowerCase().replace(/[^a-z]/g, '');
@@ -173,11 +209,6 @@ class PinyinIME {
     if (!k) return [];
     const out = [];
     const push = function (arr, how) { arr.forEach(function (e) { out.push({ w: e.w, f: e.f, how: how }); }); };
-    // 整句优先(F-20260929-03): 输入较长(>=4 个字母)且引擎就绪时, 先给整句候选
-    if (k.length >= 4) {
-      const sent = this.sentenceCandidates(k, Math.max(1, Math.min(5, want)));
-      if (sent.length) out.push.apply(out, sent);
-    }
     // 注意: 这里有整句时也要继续走查表(单字/词候选跟在后面), 用户可能只想选一个词
     const exact = this.byPinyin.get(k);
     if (exact) push(exact, 'full');
@@ -191,12 +222,45 @@ class PinyinIME {
       pref.sort(function (a, b) { return b.f - a.f; });
       push(pref, 'prefix');
     }
+    // 模糊音兜底: 前面的精确/前缀/简拼都没凑够时, 用变体再查一遍(结果标 how:'fuzzy' 便于界面区分)
+    // 只对"词/短语"做模糊音(k.length<=12): 长串是整句输入, 不是打错字 —— 对长串跑变体会拖到几秒
+    // (实测一个 42 字母的句子从 165ms 变成 4420ms), 而且没有意义。
+    if (out.length < want && k.length >= 2 && k.length <= 12) {
+      const seenW = new Set(out.map(function (e) { return e.w; }));
+      const variants = this.fuzzyVariants(k).slice(0, 6);
+      for (let vi = 0; vi < variants.length && out.length < want * 2; vi++) {
+        const v = variants[vi];
+        const arr2 = this.byPinyin.get(v);
+        if (arr2) {
+          for (let j = 0; j < arr2.length && out.length < want * 2; j++) {
+            if (seenW.has(arr2[j].w)) continue;
+            seenW.add(arr2[j].w);
+            out.push({ w: arr2[j].w, f: arr2[j].f, how: 'fuzzy', from: v });
+          }
+        }
+        // 关键: 我们自己的词库只有 6 万条, 引擎的词表大得多(词组 14 万) —— 纠错主要靠它。
+        // 例: surufa -> shurufa -> 「输入法」, 而 shurufa 并不在我们词库里。
+        // 变体交给引擎时, 结果标 **sentence 而不是 fuzzy** —— 因为引擎对"变体"和对"原串"的打分是**同一套口径**,
+        // 可以直接比大小; 而如果标成 fuzzy(优先级更高), 就会让"正确输入的引擎结果"被"错拼变体的引擎结果"压下去
+        // (实测: shurufa 本来能出「输入法」, 却被 surufa 的「宿儒发」挤到后面)。
+        if (out.length < want && this.engineReady) {
+          this.sentenceCandidates(v, 3).forEach(function (e) {
+            if (seenW.has(e.w)) return;
+            seenW.add(e.w);
+            out.push({ w: e.w, f: e.f, how: 'sentence', from: v });
+          });
+        }
+      }
+    }
     if (out.length < want * 3 && k.length >= 2 && k.length <= 4) {
       const ini = this.byInitials.get(k);
       if (ini) push(ini.slice(0, 40), 'initials');
     }
-    // 去重 + 排序: 先看"学过的"(提升), 再看命中方式(完整 > 前缀 > 简拼), 最后看词频
-    const howRank = { full: 0, prefix: 1, initials: 2 };
+    // 去重 + 排序: 先看"学过的"(提升), 再看命中方式, 最后看词频。
+    // 命中方式的口径(F-20260929-03): 完整词 > 模糊音纠错 > 前缀 > 整句(语言模型猜测) > 简拼。
+    // 注意: 任何新加的 how **必须**在这里登记 —— 漏了会算出 NaN, 排序直接崩(这条踩过一次)。
+    const howRank = { full: 0, fuzzy: 1, prefix: 2, sentence: 3, initials: 4 };
+    const rankOf = function (how) { return howRank[how] === undefined ? 99 : howRank[how]; };
     const seen = new Set();
     const merged = [];
     out.forEach(function (e) {
@@ -208,9 +272,23 @@ class PinyinIME {
     merged.sort(function (a, b) {
       const la = self.learned.get(a.w) || 0, lb = self.learned.get(b.w) || 0;
       if ((la > 0) !== (lb > 0)) return lb - la;
-      if (howRank[a.how] !== howRank[b.how]) return howRank[a.how] - howRank[b.how];
+      if (rankOf(a.how) !== rankOf(b.how)) return rankOf(a.how) - rankOf(b.how);
       return (b.f * self.boost(b)) - (a.f * self.boost(a));
     });
+    // 整句候选在**最后**补进来(F-20260929-03): 字典/模糊命中("你大概率就是想打这个词")优先于
+    // 语言模型对错拼的猜测; 而长句(词典必然查不到)只有它一个来源, 所以照样会排在第一位。
+    if (k.length >= 4 && merged.length < want * 2) {
+      const seenW2 = new Set(merged.map(function (e) { return e.w; }));
+      this.sentenceCandidates(k, Math.max(1, Math.min(5, want))).forEach(function (e) {
+        if (!seenW2.has(e.w)) { seenW2.add(e.w); merged.push(e); }
+      });
+      merged.sort(function (a, b) {
+        const la = self.learned.get(a.w) || 0, lb = self.learned.get(b.w) || 0;
+        if ((la > 0) !== (lb > 0)) return lb - la;
+        if (rankOf(a.how) !== rankOf(b.how)) return rankOf(a.how) - rankOf(b.how);
+        return (b.f * self.boost(b)) - (a.f * self.boost(a));
+      });
+    }
     return merged.slice(0, want);
   }
   status() {
