@@ -2473,6 +2473,14 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 - 修法(两处): ① `data-value` 默认改成 `auto`(与下拉里的"自动(按社区身份)"一致); ② 回显改成 `_bs.value = _c.branding || 'auto'`(配置缺字段也回落到自动)。
 - **顺手扫了全部 13 个自绘下拉**(凡是 HTML 里 data-value 为空、值要靠挂载给的): 逐个核对了挂载里的 value —— 12 个都显式给了非空值(语言 zh-CN / 公告板变量 {cpu_util} / 翻译模式 auto / 权限四项 …), 只有品牌这一个缺省 -> **同类隐患只有这一处**, 已修。
 - 记一笔待办(不在本次发布范围): `dsel.js` 可以在"值匹配不到任何选项"时回落到第一个选项的文案, 这样这类问题从根上不会再出现; 本次只修数据, 不动组件。
+
+## 345. 调研归档: VR 覆盖层(Overlay)路线 —— 为 1.5 预留(2026-10-05)
+- 用户在工作区发现第三方程序 `VRPhoneScreenOverlay`(把手机屏幕投成 VR 覆盖层, 可在 VR 里操作), 让我们看看是什么、有没有恶意代码、能不能借鉴。
+- **它是什么**: .NET 10 桌面程序; OpenVR + Vortice.Direct3D11(覆盖层/纹理); NAudio + Concentus(Opus); 手机侧 MediaCodec 硬编 H.264 经 WebSocket 传输 -> **真机投屏, 不是模拟器**; 自有程序集 19 个(Android/Media/Input/Network/Protocols/PhotoSync/Settings/Diagnostics/Presentation/SteamVR/Core/Contracts)。
+- **安全体检(只读扫描, 从未执行它)**: 对它自己的 19 个程序集做 UTF-16 字符串提取 -> **自有代码只连一个域名** `hoshinochika.cloud`(诊断上报 + 更新清单); 未发现挖矿/键盘记录/剪贴板窃取/自启/可疑下载源(扫到的 Registry/Startup 命中全来自其自带的 .NET 运行时字符串); 剪贴板同步可选且默认关; 19 个自有程序集**全部未签名**(第一次误把 .NET 运行时的微软签名当成它的); 启动会联网(个人域名), 但核心投屏是本地, 拦掉不影响使用; 版本 0.2.6-beta。
+- **最值得学的是它的输入配方**: `manifest.vrmanifest`(注册为 SteamVR 应用) + `action_manifest.json`(动作定义 + 7 种手柄默认绑定: vive/wmr/knuckles/oculus_touch/hp_wmr/pico/pico_ice) + `bindings/*.json` + 绑定工具; 关键是**应用自己提交 action manifest 并监听绑定变化**、用**覆盖层自身鼠标通道**做点击、D3D11 纹理喂帧、`VROverlayTransform_DashboardTab` 挂仪表盘。
+- **对照我们的前车之鉴**(`scripts/vrkeyboard` 已暂停): 当初三个死结(拿不到手柄输入 `NoActiveActionSet` / 纹理直推闪烁与泄漏 / 仪表盘不接纳) —— 样本**逐条证明可行**, 尤其第一条的死结就在"自己提交 manifest + 提供绑定"这一步。
+- 归档为 `docs/VR-OVERLAY-NOTES.md`(含"重启时先做的最小验证顺序"与"1.5 可能的样子"), **不含任何第三方代码、不含彩蛋内容**。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -2717,5 +2725,6 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 | 342 | 2026-09-29 | 键盘页再挤一挤空间: 让候选 + 键盘在一屏内完整显示(用户要求) |
 | 343 | 2026-09-29 | 内置输入法模块**固化**(用户决定: 够用了) |
 | 344 | 2026-10-05 | 修"品牌下拉首次启动像空心胶囊"(用户实测发现) |
+| 345 | 2026-10-05 | 调研归档: VR 覆盖层(Overlay)路线 —— 为 1.5 预留 |
 
 <!-- DEV-NOTES-INDEX:END -->
