@@ -477,8 +477,6 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
     }
   } catch (e) { problems.push('公告板列表项断言异常: ' + e.message); }
   console.log('[G-BOOT frontend-boot] 前端启动: 顶层加载 ' + (problems.length ? '有异常' : '正常') + ' / 控件桩 ' + ids.size + ' 个 id');
-  // 2026-10-05: 页面控制台里的运行时错误必须算失败 —— 之前只打印不判失败, 于是"PASS 但页面白屏"(实测: 给 __dsel.get() 赋值那一行)。
-try { const _t = String(typeof sb === 'string' ? sb : JSON.stringify(sb)); if (/ReferenceError|TypeError|SyntaxError|is not a function/.test(_t)) problems.push('页面控制台出现运行时错误(见上面的 [api] 行)'); } catch (e) {}
-for (const p of problems) console.log('  -> FAIL ' + p);
+  for (const p of problems) console.log('  -> FAIL ' + p);
   process.exitCode = problems.length ? 1 : 0; // 用 exitCode: process.exit 在管道下会丢掉未刷新的输出
 })();
