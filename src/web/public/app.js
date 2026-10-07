@@ -1029,19 +1029,42 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     // 快捷开关的行是**硬编码在 index.html 里的 8 行**, 而数据源/插件实际有 13 项 ->
     // 没被硬编码的项(直播互动、区域 OCR、测试插件…)勾了也没有对应行。这里把"未被隐藏但缺行"的补出来。
     if(!editing){
-      var anyRow=document.querySelector('#tab-dash .frow');
-      var host=anyRow?anyRow.parentNode:null;
-      if(host){
+      // 2026-10-05 修(用户: 「插件功能的放到插件那一列里, 然后这个 ocregion 又是啥?」):
+      //   ① 之前补的行都塞到容器末尾 -> 全跑到左边那列了; 卡片其实分 .fgroup 两组(数据源/插件), 要各自补到本组里;
+      //   ② 数据源的名字要走现成的 i18n 映射 NM(id) / DSC(id)(app.js 里本来就有), 否则会显示成 ocregion 这种 id。
+      var grid=document.querySelector('#tab-dash .funcgrid');
+      var groups=grid?grid.querySelectorAll('.fgroup'):null;
+      var srcGroup=groups&&groups[0], plgGroup=groups&&groups[1];
+      if(srcGroup&&plgGroup){
         var seen={};
-        panelSrcs.concat(panelPlgs).forEach(function(it){
+        var addRow=function(container,it,isSrc){
           if(hidden.indexOf(it.k)>=0) return;
           if(seen[it.k]) return; seen[it.k]=1;                       // 同一项只补一行
-          var isSrc=(it.k.indexOf('src:')===0), key=it.k.slice(4);
+          var key=it.k.slice(4);
           if(document.querySelector('#tab-dash .sw[data-'+(isSrc?'src':'plg')+'="'+key+'"]')) return;   // 已有行(静态或补过)
           var row=document.createElement('div'); row.className='frow';
           var kk=document.createElement('span'); kk.className='k';
-          var label=function(on){ return on ? it.n : (it.n + ' (' + tr('swDisabled') + ')'); };
-          kk.textContent=label(!!it.off===false);
+          var base=isSrc?tr(NM(key)):it.n;                            // 数据源用现成的 i18n 名, 插件用插件自己的名字
+          var label=function(on){ return on ? base : (base + ' (' + tr('swDisabled') + ')'); };
+          var nm=document.createElement('span'); nm.textContent=label(!it.off);
+          var ds=isSrc?tr(DSC(key)):'';
+          if(ds){ var d=document.createElement('span'); d.className='d'; d.textContent=' '+ds; kk.appendChild(nm); kk.appendChild(d); }
+          else kk.appendChild(nm);
+          var sw=document.createElement('div'); sw.className='sw'+(it.off?'':' on');
+          sw.setAttribute(isSrc?'data-src':'data-plg',key);
+          sw.onclick=async function(){
+            var wantOn=!sw.classList.contains('on'); sw.classList.toggle('on',wantOn);
+            nm.textContent=label(wantOn);
+            try{
+              if(isSrc){ await fetch('/api/sources',{method:'POST',body:JSON.stringify({id:key,enabled:wantOn})}); pollStatus(); }
+              else { await fetch(wantOn?'/api/plugins/enable':'/api/plugins/disable',{method:'POST',body:JSON.stringify({id:key})}); }
+            }catch(e){}
+          };
+          row.appendChild(kk); row.appendChild(sw);
+          container.appendChild(row);
+        };
+        panelSrcs.forEach(function(it){ addRow(srcGroup,it,true); });    // 数据源 -> 左列
+        panelPlgs.forEach(function(it){ addRow(plgGroup,it,false); });   // 插件   -> 右列
           // 2026-10-05: 补的行**必须有开关** —— 用户原话「你这样我怎么打开啊? 我怎么知道开了没啊?」
           var sw=document.createElement('div'); sw.className='sw'+(it.off?'':' on');
           sw.setAttribute(isSrc?'data-src':'data-plg',key);
@@ -1054,8 +1077,10 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
             }catch(e){}
           };
           row.appendChild(kk); row.appendChild(sw);
-          host.appendChild(row);
-        });
+          container.appendChild(row);
+        };
+        panelSrcs.forEach(function(it){ addRow(srcGroup,it,true); });    // 数据源 -> 左列(.fgroup[0])
+        panelPlgs.forEach(function(it){ addRow(plgGroup,it,false); });   // 插件   -> 右列(.fgroup[1])
       }
     }
   }
