@@ -1025,6 +1025,25 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
         row.insertBefore(cb,row.firstChild);
       } else if(!editing&&cb){ cb.remove(); }
     });
+    // 2026-10-05 修(用户实测: 勾了「B站直播互动」保存后不显示):
+    // 快捷开关的行是**硬编码在 index.html 里的 8 行**, 而数据源/插件实际有 13 项 ->
+    // 没被硬编码的项(直播互动、区域 OCR、测试插件…)勾了也没有对应行。这里把"未被隐藏但缺行"的补出来。
+    if(!editing){
+      var anyRow=document.querySelector('#tab-dash .frow');
+      var host=anyRow?anyRow.parentNode:null;
+      if(host){
+        panelSrcs.concat(panelPlgs).forEach(function(it){
+          if(hidden.indexOf(it.k)>=0) return;
+          var sel=(it.k.indexOf('src:')===0)?('.sw[data-src="'+it.k.slice(4)+'"]'):('.sw[data-plg="'+it.k.slice(4)+'"]');
+          if(document.querySelector('#tab-dash '+sel)) return;      // 已有静态行, 不重复
+          var row=document.createElement('div'); row.className='frow';
+          var kk=document.createElement('span'); kk.className='k';
+          kk.textContent=it.n+(it.off?(' ('+tr('swDisabled')+')'):'');
+          row.appendChild(kk);
+          host.appendChild(row);
+        });
+      }
+    }
   }
   function load(){
     fetch('/api/config').then(function(r){return r.json();}).then(function(c){
