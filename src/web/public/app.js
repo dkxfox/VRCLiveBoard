@@ -1037,6 +1037,7 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
       var srcGroup=groups&&groups[0], plgGroup=groups&&groups[1];
       if(srcGroup&&plgGroup){
         var seen={};
+        var plgNameOf=function(pid){ var p=null; for(var i=0;i<panelPlgs.length;i++){ if(panelPlgs[i].k==='plg:'+pid){ p=panelPlgs[i]; break; } } return p?p.n:pid; };
         var addRow=function(container,it,isSrc){
           if(hidden.indexOf(it.k)>=0) return;
           if(seen[it.k]) return; seen[it.k]=1;                       // 同一项只补一行
@@ -1044,10 +1045,13 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
           if(document.querySelector('#tab-dash .sw[data-'+(isSrc?'src':'plg')+'="'+key+'"]')) return;   // 已有行(静态或补过)
           var row=document.createElement('div'); row.className='frow';
           var kk=document.createElement('span'); kk.className='k';
-          var base=isSrc?tr(NM(key)):it.n;                            // 数据源用现成的 i18n 名, 插件用插件自己的名字
+          // 2026-10-05: 形如 "bilibili-live:roominfo" 的数据源是**插件提供的**(插件 id + ':' + 键),
+          // 这种要按插件名显示并归到插件那一组, 否则用户看到的是 "bilibili-live:roominfo" 这种 id。
+          var owner=(isSrc&&key.indexOf(':')>0)?key.split(':')[0]:'';
+          var base=isSrc?(owner?plgNameOf(owner):tr(NM(key))):it.n;
           var label=function(on){ return on ? base : (base + ' (' + tr('swDisabled') + ')'); };
           var nm=document.createElement('span'); nm.textContent=label(!it.off);
-          var ds=isSrc?tr(DSC(key)):'';
+          var ds=(isSrc&&!owner)?tr(DSC(key)):'';
           if(ds){ var d=document.createElement('span'); d.className='d'; d.textContent=' '+ds; kk.appendChild(nm); kk.appendChild(d); }
           else kk.appendChild(nm);
           var sw=document.createElement('div'); sw.className='sw'+(it.off?'':' on');
@@ -1063,8 +1067,11 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
           row.appendChild(kk); row.appendChild(sw);
           container.appendChild(row);
         };
-        panelSrcs.forEach(function(it){ addRow(srcGroup,it,true); });    // 数据源 -> 左列
-        panelPlgs.forEach(function(it){ addRow(plgGroup,it,false); });   // 插件   -> 右列
+        panelSrcs.forEach(function(it){                                  // 数据源: 内置的进左列, 插件提供的进右列
+          var k=String(it.k||'').slice(4);
+          addRow(k.indexOf(':')>0?plgGroup:srcGroup, it, true);          // 注意: 插件提供的数据源仍是"数据源"(走 /api/sources), 只是显示在插件组
+        });
+        panelPlgs.forEach(function(it){ addRow(plgGroup,it,false); });   // 插件本体 -> 右列
 
       }
     }
