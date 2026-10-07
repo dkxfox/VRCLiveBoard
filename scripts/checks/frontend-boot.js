@@ -124,6 +124,8 @@ function makeSandbox() {
   return sb;
 }
 const problems = [];
+const pageErrs = [];   // 2026-10-05: 必须在模块级 —— 之前声明在 try 块内, 汇总处看不见, 一引用就抛错,
+                       // 结果"有异常"打印了、process.exitCode 那行却没跑到, 退出码仍是 0(反证才发现)
 // 2026-09-25: 每个沙箱都要先执行 lang.js —— 浏览器里它在 <head> 最先加载, 而 app.js/app-security.js 都依赖 tr()。
 // (此前阶段 2/3 只跑 ui 文件, 靠 app-security.js 自己定义 tr 才没暴露; tr 归位到 lang.js 后必须显式补上。)
 const LANG_SRC = fs.readFileSync(path.join(PUB, 'lang.js'), 'utf8');
@@ -144,7 +146,6 @@ try {
   // 2026-10-05: 页面里的运行时错误必须算失败。此前这类错误只被沙箱打印出来(形如 [api] #advHwAccel ReferenceError),
   // 判定却看不见 -> 出现"门禁 PASS, 但页面白屏"(实测: 给 __dsel.get() 赋值那一行, 整页卡在启动画面)。
   // 做法: 跑 UI 文件之前把沙箱 console 包一层, 只收集运行时错误, 照旧打印, 最后并进 problems。
-  const pageErrs = [];
   try {
     const base = sb.console || {};
     const wrap = function (name) {
@@ -493,8 +494,8 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
       if (snip && !snip.title) problems.push('公告板列表项的长文本没有 title(两行截断后无法查看全文)');
     }
   } catch (e) { problems.push('公告板列表项断言异常: ' + e.message); }
-  console.log('[G-BOOT frontend-boot] 前端启动: 顶层加载 ' + (problems.length ? '有异常' : '正常') + ' / 控件桩 ' + ids.size + ' 个 id');
   if (pageErrs.length) problems.push('页面控制台出现运行时错误(会让页面白屏/卡在启动画面): ' + pageErrs[0].slice(0, 140));
+  console.log('[G-BOOT frontend-boot] 前端启动: 顶层加载 ' + (problems.length ? '有异常' : '正常') + ' / 控件桩 ' + ids.size + ' 个 id');
 for (const p of problems) console.log('  -> FAIL ' + p);
   process.exitCode = problems.length ? 1 : 0; // 用 exitCode: process.exit 在管道下会丢掉未刷新的输出
 })();
