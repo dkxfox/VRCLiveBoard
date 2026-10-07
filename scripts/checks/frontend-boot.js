@@ -141,6 +141,23 @@ try {
     else if (trEarly('bootTagline') === 'bootTagline') problems.push('lang.js 执行后 tr 取不到文案(词典没生效?)');
     else if (sb.window.t !== sb.window.tr) problems.push('lang.js 没把 window.t 指向同一个取词函数(兼容别名丢了)');
   }
+  // 2026-10-05: 页面里的运行时错误必须算失败。此前这类错误只被沙箱打印出来(形如 [api] #advHwAccel ReferenceError),
+  // 判定却看不见 -> 出现"门禁 PASS, 但页面白屏"(实测: 给 __dsel.get() 赋值那一行, 整页卡在启动画面)。
+  // 做法: 跑 UI 文件之前把沙箱 console 包一层, 只收集运行时错误, 照旧打印, 最后并进 problems。
+  const pageErrs = [];
+  try {
+    const base = sb.console || {};
+    const wrap = function (name) {
+      const orig = typeof base[name] === 'function' ? base[name].bind(base) : function () {};
+      return function () {
+        const s = Array.prototype.slice.call(arguments).join(' ');
+        if (/ReferenceError|TypeError|SyntaxError|is not a function/.test(s)) pageErrs.push(s);
+        orig.apply(null, arguments);
+      };
+    };
+    sb.console = Object.assign({}, base, { error: wrap('error'), warn: wrap('warn'), log: wrap('log') });
+  } catch (e) { problems.push('沙箱 console 包装失败: ' + e.message); }
+
   // 执行顺序 = index.html 里 script src 的真实顺序(app.js 先定义 $/feErr, 主题与动效在其后)
   const { uiJsOrder } = require('./_ui-files.js');
   for (const fp of uiJsOrder(ROOT)) {
@@ -477,6 +494,7 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
     }
   } catch (e) { problems.push('公告板列表项断言异常: ' + e.message); }
   console.log('[G-BOOT frontend-boot] 前端启动: 顶层加载 ' + (problems.length ? '有异常' : '正常') + ' / 控件桩 ' + ids.size + ' 个 id');
-  for (const p of problems) console.log('  -> FAIL ' + p);
+  if (pageErrs.length) problems.push('页面控制台出现运行时错误(会让页面白屏/卡在启动画面): ' + pageErrs[0].slice(0, 140));
+for (const p of problems) console.log('  -> FAIL ' + p);
   process.exitCode = problems.length ? 1 : 0; // 用 exitCode: process.exit 在管道下会丢掉未刷新的输出
 })();
