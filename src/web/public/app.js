@@ -1033,10 +1033,20 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     }).catch(function(){ paint(); });
   }
   var btn=document.getElementById('swEditBtn');
+  var snapshot=[];   // 进入编辑前的勾选状态: 取消时还原(F-20261005-01 切片 3)
+  function showCancel(v){ var cb=document.getElementById('swCancelBtn'); if(cb) cb.style.display=v?'':'none'; }
   if(btn) btn.onclick=function(){
-    if(!editing){ editing=true; btn.textContent=tr('btnSaveSwitches'); paint(); return; }
-    editing=false; btn.textContent=tr('btnEditSwitches'); paint();
+    if(!editing){ editing=true; snapshot=hidden.slice(); btn.textContent=tr('btnSaveSwitches'); showCancel(true); paint(); return; }
+    editing=false; btn.textContent=tr('btnEditSwitches'); showCancel(false); paint();
     fetch('/api/config',{method:'POST',body:JSON.stringify({ui:{dashHide:hidden}})}).catch(function(){});
+  };
+  var cbtn=document.getElementById('swCancelBtn');
+  if(cbtn) cbtn.onclick=function(){
+    hidden=snapshot.slice();                       // 还原, 不落库
+    editing=false;
+    if(btn) btn.textContent=tr('btnEditSwitches');
+    showCancel(false);
+    paint();
   };
   load();
   // ===== 快捷开关自定义(F-20261005-01): 编辑模式列出**全量**数据源/插件 =====
@@ -1054,7 +1064,9 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
       var head=card.querySelector('.card-head');
       if(head&&head.parentNode) head.parentNode.insertBefore(fullPanel, head.nextSibling); else card.insertBefore(fullPanel, card.firstChild);
     }
-    fullPanel.innerHTML='<div class="sub" style="font-size:12px;margin-bottom:6px">'+esc0(tr('swFullHint'))+'</div>';
+    var allKeys=panelSrcs.concat(panelPlgs).map(function(x){ return x.k; });                      // 切片 2: 数量提示
+    var shownCnt=allKeys.filter(function(k){ return hidden.indexOf(k)<0; }).length;                // 纯数字, 不新增 i18n 键
+    fullPanel.innerHTML='<div class="sub" style="font-size:12px;margin-bottom:6px">'+esc0(tr('swFullHint'))+'  <b>'+shownCnt+' / '+allKeys.length+'</b></div>';
     var sec=function(title,items){
       var d=document.createElement('div');
       d.innerHTML='<div style="font-size:12px;opacity:.8;margin:6px 0 2px">'+esc0(title)+'</div>';
