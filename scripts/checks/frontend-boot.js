@@ -493,6 +493,21 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
       if (!first.querySelector('.ops')) problems.push('公告板列表项缺少 .ops(↑↓ 按钮区)');
       if (snip && !snip.title) problems.push('公告板列表项的长文本没有 title(两行截断后无法查看全文)');
     }
+    // F-20261005-01 切片 4: 快捷开关自定义必须真的能拉出全量清单
+    // 这条能抓住"按钮在、处理器没接上"那类半成品(本期真出现过一次, 已撤)
+    try {
+      const swBtn = s8.document.getElementById('swEditBtn');
+      const swCancel = s8.document.getElementById('swCancelBtn');
+      if (!swBtn) problems.push('快捷开关缺少编辑按钮 #swEditBtn');
+      if (!swCancel) problems.push('快捷开关缺少取消按钮 #swCancelBtn');
+      if (typeof s8.window.__swPanel !== 'function') problems.push('未暴露 window.__swPanel(全量清单无法被测试)');
+      else {
+        s8.window.__swPanel();
+        const panel = s8.document.getElementById('swFull');
+        if (!panel) problems.push('全量清单 #swFull 没有渲染出来(编辑按钮可能是死的)');
+        else if (String(panel.textContent || '').indexOf('/') < 0) problems.push('全量清单缺少"已选/总数"数量提示');
+      }
+    } catch (e) { problems.push('快捷开关断言异常: ' + e.message); }
   } catch (e) { problems.push('公告板列表项断言异常: ' + e.message); }
   if (pageErrs.length) problems.push('页面控制台出现运行时错误(会让页面白屏/卡在启动画面): ' + pageErrs[0].slice(0, 140));
   console.log('[G-BOOT frontend-boot] 前端启动: 顶层加载 ' + (problems.length ? '有异常' : '正常') + ' / 控件桩 ' + ids.size + ' 个 id');

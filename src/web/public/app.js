@@ -1033,6 +1033,7 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     }).catch(function(){ paint(); });
   }
   var btn=document.getElementById('swEditBtn');
+  if(typeof window!=='undefined') window.__swPanel=function(){ buildPanel(); };   // 测试钩子(GBOOT 行为断言用)
   var snapshot=[];   // 进入编辑前的勾选状态: 取消时还原(F-20261005-01 切片 3)
   function showCancel(v){ var cb=document.getElementById('swCancelBtn'); if(cb) cb.style.display=v?'':'none'; }
   if(btn) btn.onclick=function(){
@@ -1055,7 +1056,11 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
   var fullPanel=null;
   function esc0(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
   function buildPanel(){
-    var card=document.getElementById('switches'); if(!card) return;
+    // 2026-10-05 修: 原来按 id="switches" 找卡片, 但页面里**根本没有这个 id** -> buildPanel 每次都提前 return,
+    // 全量清单从来没渲染出来过(这个"死代码"是被 GBOOT 的新行为断言当场抓出来的)。改成从编辑按钮往上找卡片。
+    var anchor=document.getElementById('swEditBtn');
+    var card=anchor?(anchor.closest?anchor.closest('.card'):anchor.parentNode):null;
+    if(!card) return;
     if(!editing){ if(fullPanel){ fullPanel.remove(); fullPanel=null; } return; }
     if(!fullPanel){
       fullPanel=document.createElement('div');
