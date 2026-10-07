@@ -1067,9 +1067,14 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
           row.appendChild(kk); row.appendChild(sw);
           container.appendChild(row);
         };
-        panelSrcs.forEach(function(it){                                  // 数据源: 内置的进左列, 插件提供的进右列
+        panelSrcs.forEach(function(it){
+          // 2026-10-05 修(用户: 「怎么两个B站互动?」):
+          // 形如 "bilibili-live:roominfo" 的是**插件自己的数据源**, 它和插件本体共用一个开关语义 ->
+          // 在面板里**不再单独列一行**(否则插件名会重复出现两次)。
+          // 例外: 若它已被隐藏(dashHide 里有), 仍然列出来, 否则用户没法把它勾回来。
           var k=String(it.k||'').slice(4);
-          addRow(k.indexOf(':')>0?plgGroup:srcGroup, it, true);          // 注意: 插件提供的数据源仍是"数据源"(走 /api/sources), 只是显示在插件组
+          if(k.indexOf(':')>0 && hidden.indexOf(it.k)<0) return;
+          addRow(srcGroup, it, true);                                    // 内置数据源 -> 左列(插件数据源只在"被隐藏过"时出现, 也放左列)
         });
         panelPlgs.forEach(function(it){ addRow(plgGroup,it,false); });   // 插件本体 -> 右列
 
