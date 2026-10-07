@@ -1032,14 +1032,28 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
       var anyRow=document.querySelector('#tab-dash .frow');
       var host=anyRow?anyRow.parentNode:null;
       if(host){
+        var seen={};
         panelSrcs.concat(panelPlgs).forEach(function(it){
           if(hidden.indexOf(it.k)>=0) return;
-          var sel=(it.k.indexOf('src:')===0)?('.sw[data-src="'+it.k.slice(4)+'"]'):('.sw[data-plg="'+it.k.slice(4)+'"]');
-          if(document.querySelector('#tab-dash '+sel)) return;      // 已有静态行, 不重复
+          if(seen[it.k]) return; seen[it.k]=1;                       // 同一项只补一行
+          var isSrc=(it.k.indexOf('src:')===0), key=it.k.slice(4);
+          if(document.querySelector('#tab-dash .sw[data-'+(isSrc?'src':'plg')+'="'+key+'"]')) return;   // 已有行(静态或补过)
           var row=document.createElement('div'); row.className='frow';
           var kk=document.createElement('span'); kk.className='k';
-          kk.textContent=it.n+(it.off?(' ('+tr('swDisabled')+')'):'');
-          row.appendChild(kk);
+          var label=function(on){ return on ? it.n : (it.n + ' (' + tr('swDisabled') + ')'); };
+          kk.textContent=label(!!it.off===false);
+          // 2026-10-05: 补的行**必须有开关** —— 用户原话「你这样我怎么打开啊? 我怎么知道开了没啊?」
+          var sw=document.createElement('div'); sw.className='sw'+(it.off?'':' on');
+          sw.setAttribute(isSrc?'data-src':'data-plg',key);
+          sw.onclick=async function(){
+            var wantOn=!sw.classList.contains('on'); sw.classList.toggle('on',wantOn);
+            kk.textContent=label(wantOn);
+            try{
+              if(isSrc){ await fetch('/api/sources',{method:'POST',body:JSON.stringify({id:key,enabled:wantOn})}); pollStatus(); }
+              else { await fetch(wantOn?'/api/plugins/enable':'/api/plugins/disable',{method:'POST',body:JSON.stringify({id:key})}); }
+            }catch(e){}
+          };
+          row.appendChild(kk); row.appendChild(sw);
           host.appendChild(row);
         });
       }
