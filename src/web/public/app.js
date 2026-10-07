@@ -1124,7 +1124,9 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
       var head=card.querySelector('.card-head');
       if(head&&head.parentNode) head.parentNode.insertBefore(fullPanel, head.nextSibling); else card.insertBefore(fullPanel, card.firstChild);
     }
-    var allKeys=panelSrcs.concat(panelPlgs).map(function(x){ return x.k; });                      // 切片 2: 数量提示
+    // 切片 2: 数量提示 —— 计数必须与**实际列出的行**一致(插件自己的数据源不列, 就不该算进总数)
+    var listedSrcs=panelSrcs.filter(function(x){ return !(String(x.k).slice(4).indexOf(':')>0 && hidden.indexOf(x.k)<0); });
+    var allKeys=listedSrcs.concat(panelPlgs).map(function(x){ return x.k; });
     var shownCnt=allKeys.filter(function(k){ return hidden.indexOf(k)<0; }).length;                // 纯数字, 不新增 i18n 键
     fullPanel.innerHTML='<div class="sub" style="font-size:12px;margin-bottom:6px">'+esc0(tr('swFullHint'))+'  <b>'+shownCnt+' / '+allKeys.length+'</b></div>';
     var sec=function(title,items){
