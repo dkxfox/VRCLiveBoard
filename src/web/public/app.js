@@ -1065,22 +1065,7 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
         };
         panelSrcs.forEach(function(it){ addRow(srcGroup,it,true); });    // 数据源 -> 左列
         panelPlgs.forEach(function(it){ addRow(plgGroup,it,false); });   // 插件   -> 右列
-          // 2026-10-05: 补的行**必须有开关** —— 用户原话「你这样我怎么打开啊? 我怎么知道开了没啊?」
-          var sw=document.createElement('div'); sw.className='sw'+(it.off?'':' on');
-          sw.setAttribute(isSrc?'data-src':'data-plg',key);
-          sw.onclick=async function(){
-            var wantOn=!sw.classList.contains('on'); sw.classList.toggle('on',wantOn);
-            kk.textContent=label(wantOn);
-            try{
-              if(isSrc){ await fetch('/api/sources',{method:'POST',body:JSON.stringify({id:key,enabled:wantOn})}); pollStatus(); }
-              else { await fetch(wantOn?'/api/plugins/enable':'/api/plugins/disable',{method:'POST',body:JSON.stringify({id:key})}); }
-            }catch(e){}
-          };
-          row.appendChild(kk); row.appendChild(sw);
-          container.appendChild(row);
-        };
-        panelSrcs.forEach(function(it){ addRow(srcGroup,it,true); });    // 数据源 -> 左列(.fgroup[0])
-        panelPlgs.forEach(function(it){ addRow(plgGroup,it,false); });   // 插件   -> 右列(.fgroup[1])
+
       }
     }
   }
