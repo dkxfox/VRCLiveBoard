@@ -1039,6 +1039,57 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     fetch('/api/config',{method:'POST',body:JSON.stringify({ui:{dashHide:hidden}})}).catch(function(){});
   };
   load();
+  // ===== 快捷开关自定义(F-20261005-01): 编辑模式列出**全量**数据源/插件 =====
+  // 背景: 原来的编辑模式只给"已经渲染出来的行"加复选框, 被停用/被隐藏的项根本不出现在列表里,
+  // 于是成了单向开关("只能关掉, 不能勾回来")。这里在编辑模式下自己渲染一份全量清单。
+  var fullPanel=null;
+  function esc0(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
+  function buildPanel(){
+    var card=document.getElementById('switches'); if(!card) return;
+    if(!editing){ if(fullPanel){ fullPanel.remove(); fullPanel=null; } return; }
+    if(!fullPanel){
+      fullPanel=document.createElement('div');
+      fullPanel.id='swFull';
+      fullPanel.style.cssText='margin:8px 0 4px;padding:8px 10px;border:1px dashed var(--border);border-radius:8px';
+      var head=card.querySelector('.card-head');
+      if(head&&head.parentNode) head.parentNode.insertBefore(fullPanel, head.nextSibling); else card.insertBefore(fullPanel, card.firstChild);
+    }
+    fullPanel.innerHTML='<div class="sub" style="font-size:12px;margin-bottom:6px">'+esc0(tr('swFullHint'))+'</div>';
+    var sec=function(title,items){
+      var d=document.createElement('div');
+      d.innerHTML='<div style="font-size:12px;opacity:.8;margin:6px 0 2px">'+esc0(title)+'</div>';
+      items.forEach(function(it){
+        var lab=document.createElement('label');
+        lab.style.cssText='display:inline-flex;align-items:center;gap:4px;margin:2px 12px 2px 0;font-size:13px;cursor:pointer';
+        var cb=document.createElement('input'); cb.type='checkbox';
+        cb.checked=hidden.indexOf(it.k)<0;                       // 打钩 = 显示
+        cb.onchange=function(){ var i=hidden.indexOf(it.k); if(cb.checked){ if(i>=0) hidden.splice(i,1); } else if(i<0) hidden.push(it.k); paint(); };
+        var s=document.createElement('span'); s.textContent=it.n+(it.off?(' ('+tr('swDisabled')+')'):'');
+        if(it.off) s.style.opacity='.6';
+        lab.appendChild(cb); lab.appendChild(s); d.appendChild(lab);
+      });
+      if(!items.length) d.innerHTML+='<span class="sub" style="font-size:12px">'+esc0(tr('swNone'))+'</span>';
+      return d;
+    };
+    fullPanel.appendChild(sec(tr('swSecSources'), panelSrcs));
+    fullPanel.appendChild(sec(tr('swSecPlugins'), panelPlgs));
+  }
+  var panelSrcs=[], panelPlgs=[];
+  function loadFull(){
+    fetch('/api/config').then(function(r){return r.json();}).then(function(c){
+      var srcs=(c&&Array.isArray(c.sources))?c.sources:[];
+      panelSrcs=srcs.map(function(s){ return { k:'src:'+(s&&(s.id||s.name)), n:String((s&&(s.name||s.id))||'?'), off: !!s && s.enabled === false }; });
+      buildPanel();
+    }).catch(function(){ buildPanel(); });
+    fetch('/api/plugins').then(function(r){return r.json();}).then(function(j){
+      var list=(j&&(j.plugins||j.list))||[];
+      panelPlgs=list.map(function(p){ return { k:'plg:'+(p&&(p.id||p.name)), n:String((p&&(p.name||p.id))||'?'), off: !!p && p.enabled === false }; });
+      buildPanel();
+    }).catch(function(){ buildPanel(); });
+  }
+  var swBtn=document.getElementById('swEditBtn');
+  if(swBtn) swBtn.addEventListener('click', function(){ setTimeout(buildPanel, 0); });
+  loadFull();
 })();
 
 // 翻译系统三处下拉改为自绘(VR 桌面视图里原生下拉点不着, F-20260929-02 切片 3)
