@@ -799,8 +799,11 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
   ];
   function padKey(d){
     // 用户定的版式(F-20260929-04 微调): * = 句号, # = 数字/拼音切换, 0 = 空格(放中间)
+    // # 永远当切换键(否则切进数字态就出不来); 数字态下除 # 以外的键一律**直接上屏**——
+    // 修 2026-10-05 用户实测: 数字态下按 0 还是打空格(0/1/* 之前被无条件当成空格/标点)。
+    if(d==='#'){ window.KBD_NUM=!window.KBD_NUM; buildPad(); return; }
+    if(window.KBD_LAYOUT==='9' && window.KBD_NUM){ kbdInsert(d); return; }
     if(d==='*'){ kbdInsert('。'); return; }
-    if(d==='#'){ window.KBD_NUM=!window.KBD_NUM; buildPad(); return; }   // 切换后重画笔键盘(标签跟着变)
     if(d==='0'){ kbdKey('space'); return; }
     if(d==='1'){ kbdInsert('，'); return; }
     if(window.KBD_LAYOUT==='9' && !window.KBD_NUM){                // 拼音态: 数字进九键缓冲(查候选)
