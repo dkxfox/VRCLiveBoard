@@ -366,7 +366,7 @@ function effPluginSec() {
     const swf = (rootConfig.chatbox && rootConfig.chatbox.swearFilter) || {};
     // 空安全: 配置段缺失时宁可给空值, 也不能让这个高频接口抛未捕获异常(整个服务会因此不回包)
     const pgCfg = (rootConfig.sources && rootConfig.sources.pages) || {};
-    return json(res, 200, { pages: pgCfg.pages || [], rotationMs: pgCfg.rotationMs, sources: srcs, autostart: autostart, actions: actionSender ? { enabled: actionSender.status().enabled, allowLocalApi: actionSender.status().allowLocalApi } : null, desktop: { showConsole: !((rootConfig.desktop || {}).showConsole === false), hardwareAcceleration: hwAccelMode() }, lang: (rootConfig.web && rootConfig.web.lang) || 'zh-CN', ocrtl: { delayMs: (rootConfig.ocrtl || {}).delayMs || 5000, displayMs: (rootConfig.ocrtl || {}).displayMs || 8000, loops: (rootConfig.ocrtl || {}).loops || 2, mode: (rootConfig.ocrtl || {}).mode || 'auto', vision: { apiBase: v.apiBase || '', model: v.model || 'deepseek-v4.1-flash', hasKey: !!v.apiKey, targetLang: v.targetLang || 'zh', promptMode: (v.promptMode === 'smart' ? 'smart' : 'full') }, capture: { mode: cap.mode || 'window', windowTitle: cap.windowTitle || 'VRChat', region: cap.region || { x: 0, y: 0, w: 0, h: 0 } }, security: { promptDefense: sec.promptDefense !== false, jsonMode: sec.jsonMode !== false, outputSanitize: sec.outputSanitize !== false, extraPrompt: sec.extraPrompt || '', blockWords: sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS } }, swearFilter: { enabled: swf.enabled !== false, words: swf.words && swf.words.length ? swf.words : swearfilter.DEFAULTS }, pluginsSecurity: effPluginSec(), branding: (rootConfig.branding || 'default'), specialEvents: (rootConfig.specialEvents || []), efx: { enabled: efxCfg().enabled, oncePerDay: efxCfg().oncePerDay, splashMaxMs: efxCfg().splashMaxMs }, market: { indexUrl: ((rootConfig.market || {}).indexUrl || ''), revokeUrl: ((rootConfig.market || {}).revokeUrl || ''), installed: rootConfig.marketInstalled || {} } });
+    return json(res, 200, { ui: (rootConfig.ui && typeof rootConfig.ui === 'object') ? rootConfig.ui : {}, pages: pgCfg.pages || [], rotationMs: pgCfg.rotationMs, sources: srcs, autostart: autostart, actions: actionSender ? { enabled: actionSender.status().enabled, allowLocalApi: actionSender.status().allowLocalApi } : null, desktop: { showConsole: !((rootConfig.desktop || {}).showConsole === false), hardwareAcceleration: hwAccelMode() }, lang: (rootConfig.web && rootConfig.web.lang) || 'zh-CN', ocrtl: { delayMs: (rootConfig.ocrtl || {}).delayMs || 5000, displayMs: (rootConfig.ocrtl || {}).displayMs || 8000, loops: (rootConfig.ocrtl || {}).loops || 2, mode: (rootConfig.ocrtl || {}).mode || 'auto', vision: { apiBase: v.apiBase || '', model: v.model || 'deepseek-v4.1-flash', hasKey: !!v.apiKey, targetLang: v.targetLang || 'zh', promptMode: (v.promptMode === 'smart' ? 'smart' : 'full') }, capture: { mode: cap.mode || 'window', windowTitle: cap.windowTitle || 'VRChat', region: cap.region || { x: 0, y: 0, w: 0, h: 0 } }, security: { promptDefense: sec.promptDefense !== false, jsonMode: sec.jsonMode !== false, outputSanitize: sec.outputSanitize !== false, extraPrompt: sec.extraPrompt || '', blockWords: sec.blockWords && sec.blockWords.length ? sec.blockWords : DEFAULT_BLOCK_WORDS } }, swearFilter: { enabled: swf.enabled !== false, words: swf.words && swf.words.length ? swf.words : swearfilter.DEFAULTS }, pluginsSecurity: effPluginSec(), branding: (rootConfig.branding || 'default'), specialEvents: (rootConfig.specialEvents || []), efx: { enabled: efxCfg().enabled, oncePerDay: efxCfg().oncePerDay, splashMaxMs: efxCfg().splashMaxMs }, market: { indexUrl: ((rootConfig.market || {}).indexUrl || ''), revokeUrl: ((rootConfig.market || {}).revokeUrl || ''), installed: rootConfig.marketInstalled || {} } });
   });
   const route_v1_chatbox = function (req, res, url) {
     return readBody(req, function (body) {
@@ -395,6 +395,19 @@ function effPluginSec() {
           if (rm >= 3000 && rm <= 300000) { if (!pg) return json(res, 400, { ok: false, error: '配置缺少 sources.pages 段' }); pg.rotationMs = rm; }
         }
         if (o.branding) rootConfig.branding = String(o.branding);
+        // 2026-10-05 修(用户实测: 快捷开关改完重启就回默认):
+        // 前端一直在 POST {ui:{dashHide:[...]}}(以及 {ui:{experimental:bool}}), 但**服务端从来没处理过 ui 段**,
+        // 所以那些设置只活到刷新为止。这里补上并做基本校验(字符串数组、去重、限量)。
+        if (o.ui && typeof o.ui === 'object') {
+          rootConfig.ui = (rootConfig.ui && typeof rootConfig.ui === 'object') ? rootConfig.ui : {};
+          if (Object.prototype.hasOwnProperty.call(o.ui, 'dashHide')) {
+            const seen = new Set();
+            rootConfig.ui.dashHide = (Array.isArray(o.ui.dashHide) ? o.ui.dashHide : [])
+              .filter(function (x) { return typeof x === 'string' && x.length > 0 && x.length < 80 && !seen.has(x) && (seen.add(x), true); })
+              .slice(0, 200);
+          }
+          if (Object.prototype.hasOwnProperty.call(o.ui, 'experimental')) rootConfig.ui.experimental = !!o.ui.experimental;
+        }
         // 动作输出开关(F-20260928-01): 与 triggers 一样按子对象深合并, 免得提交子字段丢掉同段其它键
         if (o.actions !== undefined && o.actions && typeof o.actions === 'object' && actionSender) {
           rootConfig.actions = Object.assign({}, rootConfig.actions || {}, o.actions);
