@@ -1033,7 +1033,7 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
     }).catch(function(){ paint(); });
   }
   var btn=document.getElementById('swEditBtn');
-  if(typeof window!=='undefined') window.__swPanel=function(){ buildPanel(); };   // 测试钩子(GBOOT 行为断言用)
+  if(typeof window!=='undefined') window.__swPanel=function(){ buildPanel(); return fullPanel; };   // 测试钩子(GBOOT 断言用: 直接返回面板对象)
   var snapshot=[];   // 进入编辑前的勾选状态: 取消时还原(F-20261005-01 切片 3)
   function showCancel(v){ var cb=document.getElementById('swCancelBtn'); if(cb) cb.style.display=v?'':'none'; }
   if(btn) btn.onclick=function(){

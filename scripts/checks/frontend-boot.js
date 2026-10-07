@@ -502,9 +502,8 @@ const SEA = { c1: '#f59e0b', c2: '#f87171', greet: '秋意渐浓', deco: '🍂' 
       if (!swCancel) problems.push('快捷开关缺少取消按钮 #swCancelBtn');
       if (typeof s8.window.__swPanel !== 'function') problems.push('未暴露 window.__swPanel(全量清单无法被测试)');
       else {
-        s8.window.__swPanel();
-        const panel = s8.document.getElementById('swFull');
-        if (!panel) problems.push('全量清单 #swFull 没有渲染出来(编辑按钮可能是死的)');
+        const panel = s8.window.__swPanel();   // 桩件的 getElementById 只认 index.html 静态 id, 所以用返回值判定
+        if (!panel) problems.push('全量清单没有渲染出来(编辑按钮可能是死的)');
         else if (String(panel.textContent || '').indexOf('/') < 0) problems.push('全量清单缺少"已选/总数"数量提示');
       }
     } catch (e) { problems.push('快捷开关断言异常: ' + e.message); }
