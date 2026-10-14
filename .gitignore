@@ -39,6 +39,10 @@ ui-dashboard-preview.html
 .serve-easteregg.js
 .serve-egtest.js
 
+# 相机手册与素材(2026-10-14 用户放进项目根目录供开发参考; 属用户个人作品, 不进仓库)
+VR chat相机入门手册原始文件.docx
+*相机手册*.docx
+
 # 系统文件
 Thumbs.db
 desktop.ini
