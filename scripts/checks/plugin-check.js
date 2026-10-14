@@ -62,6 +62,26 @@ for (const id of dirs) {
     if (typeof m.ai !== 'object' || m.ai === null || !Array.isArray(m.ai.tasks)) problems.push('ai 声明必须是 { tasks: [...] }');
     else for (const t of m.ai.tasks) { if (t !== 'translate' && t !== 'chat') problems.push('ai.tasks 非法任务: ' + t + '(允许 translate/chat)'); }
   }
+  // F-20261014-01: manifest.actions(控制台按钮 -> 插件方法)的静态校验。
+  //   安全底线 = "只允许声明过的名字被调用", 所以这里挡住三类: 格式非法 / 危险原型名 / 重名。
+  if (m.actions !== undefined) {
+    if (!Array.isArray(m.actions)) problems.push('actions 必须是数组');
+    else {
+      const seen = new Set();
+      const DANGEROUS = new Set(['constructor', 'prototype', '__proto__', 'toString', 'valueOf', 'hasOwnProperty', 'isPrototypeOf', 'apply', 'call', 'bind']);
+      for (const a of m.actions) {
+        if (typeof a !== 'object' || a === null) { problems.push('actions 项必须是对象'); continue; }
+        const nm = String(a.name || '');
+        if (!/^[A-Za-z][A-Za-z0-9_-]{0,40}$/.test(nm)) problems.push('actions.name 非法: ' + JSON.stringify(nm));
+        else if (DANGEROUS.has(nm)) problems.push('actions.name 命中危险原型名: ' + nm);
+        if (seen.has(nm)) problems.push('actions.name 重名: ' + nm);
+        seen.add(nm);
+        if (!a.label) problems.push('actions[' + nm + '] 缺 label(控制台按钮要显示)');
+        if (a.confirm !== undefined && typeof a.confirm !== 'boolean') problems.push('actions[' + nm + '].confirm 必须是布尔');
+      }
+      if (m.actions.length > 12) problems.push('actions 超过 12 个(插件卡放不下)');
+    }
+  }
   // vendor 依赖真实存在(cpexcel 那类坑)
   const idx = fs.existsSync(path.join(dir, 'index.js')) ? fs.readFileSync(path.join(dir, 'index.js'), 'utf8') : '';
   for (const rel of [...idx.matchAll(/require\(\s*['"]\.\/([^'"]+)['"]\s*\)/g)].map((x) => x[1])) {
