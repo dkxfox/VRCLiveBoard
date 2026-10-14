@@ -1,0 +1,56 @@
+{
+  "id": "camera-path",
+  "name": "相机运镜控制",
+  "version": "0.1.0",
+  "author": "VRCLiveBoard 官方",
+  "description": "实验功能: 用 OSC 控制 VRChat 官方相机(拍照/定时拍照/飞行模式/镜头参数/图层开关/UI 图层), 并管理运镜文件(导入导出/轨迹预览)。不依赖 VRChat 的运镜功能即可完成拍摄类动作; 相机位姿无法用 OSC 指定(已实测)。",
+  "api": "2.0.0",
+  "permissions": {
+    "network": [
+      "127.0.0.1"
+    ],
+    "filesystem": {
+      "read": [],
+      "write": []
+    },
+    "process": false,
+    "ports": []
+  },
+  "dependencies": {},
+  "conflicts": [],
+  "exclusive": [],
+  "loadOrder": 60,
+  "settings": [
+    {
+      "key": "oscPort",
+      "label": "VRChat OSC 接收端口",
+      "type": "number",
+      "default": 9000,
+      "hint": "VRChat 默认 9000; 改了游戏侧设置才需要改这里"
+    },
+    {
+      "key": "autoCaptureOnEvent",
+      "label": "事件触发自动拍照",
+      "type": "bool",
+      "default": false,
+      "hint": "先留空: 等事件映射做好再启用"
+    },
+    {
+      "key": "hideUiInPhoto",
+      "label": "拍照时隐藏 UI 图层",
+      "type": "bool",
+      "default": true,
+      "hint": "打开后拍照前自动关闭 ShowUIInCamera, 拍完还原(聊天框不会被拍进照片)"
+    },
+    {
+      "key": "probeOnApply",
+      "label": "启用时探测端点",
+      "type": "bool",
+      "default": true,
+      "hint": "启用时检查相机 OSC 端点是否可用, 不可用则在状态里标明"
+    }
+  ],
+  "changelog": [
+    "0.1.0 首次: OSC 发送(含包体自检)+ 端点能力探测 + 自动隐藏 UI 拍照; 运镜文件与轨迹预览留待后续切片"
+  ]
+}

@@ -24,6 +24,7 @@
     "plugins\\conflict-test",
     "plugins\\conflict-test-b",
     "plugins\\conflict-test-dep",
+    "plugins\\camera-path",
     "插件研发",
     "market",
     "_removed-plugins",
