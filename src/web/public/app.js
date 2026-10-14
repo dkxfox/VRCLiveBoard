@@ -1004,7 +1004,12 @@ if($('mktList'))setTimeout(function(){loadMarket(false);},0);
       applyExp(on);
     }).catch(function(){ applyExp(false); });
   }
-  if(box) box.onchange=function(){ applyExp(box.checked); save(box.checked); };
+  if(box) box.onchange=function(){
+    applyExp(box.checked); save(box.checked);
+    // F-20261014-01: 实验插件按开关**即时**显隐 —— 过滤在 /api/plugins 里做, 这里重新拉一次列表即可,
+    // 免得用户还要手动刷新页面(2026-10-14 用户要求"加上立刻生效")。
+    try { if (typeof loadPlugins === 'function') loadPlugins(); } catch (e) {}
+  };
   load();
 })();
 
