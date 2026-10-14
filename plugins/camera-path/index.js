@@ -11,6 +11,8 @@
 
 const dgram = require('dgram');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 
 // ---------- OSC 编码: 唯一正确实现, 被 audit() 与单测共同约束 ----------
 function oscString(s) {
@@ -46,12 +48,84 @@ function auditPacket(buf) {
   return problems;
 }
 
+
+// ================= 切片 4a: dolly 引擎(已实证部分) =================
+// 已实证(2026-10-14):
+//   /dolly/Play true|false      可播可停
+//   /dolly/PlayDelayed N        延迟 N 秒后开始播放(发完 Play 会变 true)
+//   播放的是**运镜面板里当前选中的那条路径**
+// 未证实(不要当结论):  /dolly/Import 的字符串语义(试过 4 种写法均无明显反应)
+const DOLLY = {
+  play: '/dolly/Play',
+  playDelayed: '/dolly/PlayDelayed',
+  importPath: '/dolly/Import',
+  exportPath: '/dolly/Export',
+  exportLocal: '/dolly/ExportLocal',
+};
+
+// 解析 VRChat 运镜导出 JSON —— 字段已实测(18 个)
+function parseVrcPath(json) {
+  const arr = Array.isArray(json) ? json : [];
+  if (!arr.length) return { ok: false, error: '不是关键帧数组' };
+  const segs = {};
+  arr.forEach(function (k, i) {
+    const p = Number(k.PathIndex) || 0;
+    (segs[p] = segs[p] || []).push(k);
+  });
+  let dist = 0;
+  Object.keys(segs).forEach(function (p) {
+    const s = segs[p];
+    for (let i = 1; i < s.length; i++) {
+      const a = s[i - 1].Position || {}, b = s[i].Position || {};
+      dist += Math.hypot((b.X || 0) - (a.X || 0), (b.Y || 0) - (a.Y || 0), (b.Z || 0) - (a.Z || 0));
+    }
+  });
+  // 时间模式判定(实测): Duration != 2(默认) 表示该段是"时间模式", 值 = A 到 B 的秒数
+  const durs = [];
+  Object.keys(segs).forEach(function (p) {
+    const s = segs[p];
+    for (let i = 1; i < s.length; i++) {
+      const d = Number(s[i].Duration);
+      if (isFinite(d) && Math.abs(d - 2) > 0.001) durs.push(d);
+    }
+  });
+  const speeds = [];
+  arr.forEach(function (k) { const v = Number(k.Speed); if (isFinite(v) && Math.abs(v - 0.4) > 0.001) speeds.push(v); });
+  const timeSec = durs.reduce(function (a, b) { return a + b; }, 0);
+  return {
+    ok: true,
+    points: arr.length,
+    segments: Object.keys(segs).length,
+    local: !!arr[0].IsLocal,
+    distance: Math.round(dist * 100) / 100,
+    // 时间模式: 精确; 速度模式: 文件里没有最终时长(实测 363 秒的运镜文件里写着 7.057), 只能标"未知"
+    durationSec: durs.length ? Math.round(timeSec * 1000) / 1000 : null,
+    mode: durs.length ? 'time' : (speeds.length ? 'speed' : 'unknown'),
+    tailHoldMs: 3000,     // 运镜默认在最后一点静止 3 秒(用户实测)
+  };
+}
+function listPathFiles(dir) {
+  try {
+    return fs.readdirSync(dir).filter(function (f) { return /\.json$/i.test(f); })
+      .map(function (f) {
+        const full = path.join(dir, f);
+        let info = { file: f, ok: false };
+        try { info = Object.assign(info, parseVrcPath(JSON.parse(fs.readFileSync(full, 'utf8')))); }
+        catch (e) { info.error = String(e.message || e).slice(0, 80); }
+        try { info.mtime = fs.statSync(full).mtimeMs; } catch (e) {}
+        return info;
+      })
+      .sort(function (a, b) { return (b.mtime || 0) - (a.mtime || 0); });
+  } catch (e) { return []; }
+}
+
 module.exports = function (ctx) {
   const cfg = (ctx && ctx.config) || {};
   const port = Number(cfg.oscPort) > 0 ? Number(cfg.oscPort) : 9000;
   const host = '127.0.0.1';
   const sock = dgram.createSocket('udp4');
-  let sent = 0, failed = 0, lastError = '';
+  let sent = 0, failed = 0, lastError = '', playing = false;
+  function pathsDir() { return String(cfg.pathsDir || '').trim() || path.join(require('os').homedir(), 'Documents', 'VRChat', 'CameraPaths'); }
   const caps = { checked: false, camera: null, note: '' };
 
   function send(address, args) {
@@ -187,6 +261,34 @@ module.exports = function (ctx) {
         },
       },
       _lastPulse: function () { return lastPulse; },
+
+      // ===== 切片 4a: dolly 引擎(全部为已实证能力)=====
+      dolly: {
+        // 列出运镜面板可用的路径文件(只读; 目录可在设置里改)
+        list: function () { return listPathFiles(pathsDir()); },
+        // 触发播放: 默认延迟 1 秒(给自己一点准备时间); 返回"预计时长"(仅时间模式可信)
+        play: async function (opts) {
+          const o = opts || {};
+          const delay = Math.max(0, Math.min(60, Number(o.delaySec) || 1));
+          const ok = await send(DOLLY.playDelayed, [delay]);   // 已实证: 发完 /dolly/Play 会变 true
+          playing = true;
+          const notes = [];
+          if (o.expectedSec) notes.push('预计 ' + o.expectedSec + ' 秒(时间模式按 Duration 求和 + 末端静止)');
+          if (o.mode === 'speed') notes.push('⚠️ 速度模式的时长无法从文件得知(实测: 文件写着 7.057 秒, 实际跑了 363 秒), 只能靠计时或人工观察');
+          return { ok: ok, delaySec: delay, notes: notes };
+        },
+        stop: async function () { const r = await send(DOLLY.play, [false]); playing = false; return { ok: r }; },
+        // 播放进度**读不到**(/dolly 只有 Import/Export/Play/PlayDelayed), 只能靠计时
+        status: async function () { return { playing: playing, playValue: await getCap(DOLLY.play), playDelayed: await getCap(DOLLY.playDelayed) }; },
+        // ⚠️ /dolly/Import 的字符串语义**未证实**(试过绝对路径/文件名等 4 种写法均无明显反应) -> 不做承诺
+        importUnverified: async function (s) { return { ok: await send(DOLLY.importPath, [String(s)]), note: '语义未证实, 仅作实验入口' }; },
+        // 建议时长: 时间模式精确; 速度模式未知(如实返回 null)
+        guessDurationMs: function (info) {
+          if (!info || !info.ok) return null;
+          if (info.mode === 'time' && info.durationSec != null) return Math.round(info.durationSec * 1000 + (info.tailHoldMs || 3000));
+          return null;
+        },
+      },
     },
   };
 };

@@ -10,7 +10,9 @@
       "127.0.0.1"
     ],
     "filesystem": {
-      "read": [],
+      "read": [
+        "Documents/VRChat/CameraPaths"
+      ],
       "write": []
     },
     "process": false,
@@ -41,6 +43,13 @@
       "type": "bool",
       "default": true,
       "hint": "打开后拍照前自动关闭 ShowUIInCamera, 拍完还原(聊天框不会被拍进照片)"
+    },
+    {
+      "key": "pathsDir",
+      "label": "运镜路径目录",
+      "type": "string",
+      "default": "",
+      "hint": "留空 = 用户文档/VRChat/CameraPaths"
     },
     {
       "key": "probeOnApply",
