@@ -5,6 +5,7 @@
   "author": "VRCLiveBoard 官方",
   "description": "实验功能: 用 OSC 控制 VRChat 官方相机(拍照/定时拍照/飞行模式/镜头参数/图层开关/UI 图层), 并管理运镜文件(导入导出/轨迹预览)。不依赖 VRChat 的运镜功能即可完成拍摄类动作; 相机位姿无法用 OSC 指定(已实测)。",
   "api": "2.0.0",
+  "experimental": true,
   "permissions": {
     "network": [
       "127.0.0.1"

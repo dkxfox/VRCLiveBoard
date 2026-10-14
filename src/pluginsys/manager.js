@@ -353,6 +353,7 @@ class PluginManager {
         return {
           id: e.id, name: e.manifest.name, version: e.manifest.version, author: e.manifest.author || '',
           description: e.manifest.description || '', api: e.manifest.api || '', approved: e.approved,
+          experimental: !!e.manifest.experimental,   // F-20261014-01: 实验插件 -> 由"显示实验性功能"开关控制是否出现在列表里
           enabled: e.enabled, error: e.error || null,
           permissions: permsViewOf(e.manifest),
           conflicts: conf[e.id] || [],

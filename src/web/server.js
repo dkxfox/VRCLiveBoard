@@ -442,7 +442,12 @@ function effPluginSec() {
     });
   });
   on('GET', '/api/plugins', function (req, res, url) {
-    return json(res, 200, pluginManager ? pluginManager.status() : { plugins: [], audit: [], api: '2' });
+    const st = pluginManager ? pluginManager.status() : { plugins: [], audit: [], api: '2' };
+    // F-20261014-01: 实验插件(manifest.experimental=true)只有打开「显示实验性功能」时才出现在列表里。
+    //   只影响**显示**(插件本身的启用状态与安全策略不受影响)。
+    const expOn = !!(rootConfig.ui && rootConfig.ui.experimental);
+    if (!expOn && Array.isArray(st.plugins)) st.plugins = st.plugins.filter(function (p) { return !p.experimental; });
+    return json(res, 200, st);
   });
   on('POST', '/api/plugins/enable', function (req, res, url) {
     return readBody(req, function (body) {
