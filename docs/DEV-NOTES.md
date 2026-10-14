@@ -2534,6 +2534,29 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 - **可疑方向(give 用户)**: 三个虚拟显示器驱动并存且偏旧 —— Virtual Desktop Monitor(2024-05-21)、MuMu(2026-03)、GameViewer(2026-02);
   VRChat 日志显示正在用 `Virtual Desktop Audio` -> 虚拟显示器/串流驱动是这类 0x0A 的常见来源。
 - 建议: 更新(或暂卸)虚拟显示器驱动、更新 NVIDIA 驱动、用 WinDbg 看 `Probably caused by`、必要时测内存/关超频。
+
+## 350. 相机 OSC 打通 + 「相机运镜控制」插件落地(2026-10-14)
+- 用户带着"想用 OSC 控制 VRChat 相机 / 做兼容运镜"的目标, 一整天在 VR 里配合实测。
+- **相机 OSC 全链路实证**(全程用户肉眼+照片双重确认):
+  - 破题: 我手搓的 OSC 报文漏了 **NUL 结尾 + 4 字节对齐** -> VRChat 静默忽略 -> 我一度误判"VRChat 不支持相机端点";
+    修正后 `/usercamera/SmoothMovement` 往返成功, `/usercamera/Capture` 拍到 8K 照片(我先还查错了目录: 照片在 **年月子目录** 下);
+  - 通过 **OSCQuery**(端口每次启动都变, 本次 54420/55719/63295/54510/54510)拿到 `/usercamera/` **完整 38 项清单**;
+  - 实测有效: Capture/CaptureDelayed/Close · ShowUIInCamera · GreenScreen · LocalPlayer/RemotePlayer/Environment
+    · LookAtMe(+XY 偏移) · Zoom/Exposure/Aperture/FocalDistance · OrientationIsLandscape(照片变 4320x7680)
+    · ⭐ **Environment=false 出的是 86% 像素全透明的 RGBA 8K 图**(免抠像);
+  - 写了 **A/B 受控实验**(唯一变量 ShowUIInCamera -> 照片里的聊天框消失, 差异 3.65%);
+  - 无效: Hue/Saturation/Lightness(HSL 滤镜经 OSC 设置不生效); 位姿类端点**不存在**;
+  - PC/VR 差异: `/input` 推镜**只在 VR 模式有效**(PC 飞行要按住鼠标中键) —— 关 UI 后受控实测 50.16% vs PC 的 0.19%。
+- **运镜(Camera Dolly)**: 导出 JSON 格式破解(18 字段 / Local+World / PathIndex 分段 / Speed 与 Duration);
+  网格房间标定(FlySpeed 0.2 ≈ 3 格/秒; TurnSpeed 下限 0.1 ≈ 40-60 度/秒);
+  ⭐ **发现 `/dolly/Play|PlayDelayed|Import|Export` 可写** -> 发 `PlayDelayed 3` 相机**真的环绕起来**(用户确认)。
+- **插件「相机运镜控制」(`plugins/camera-path`, 实验功能, 不随包出厂)**:
+  切片1 OSC 发送+**包体自检**(把今天的坑写成不变量)/ 能力探测与降级;切片3 运动原语(try/finally 保证归零);
+  切片4a dolly 引擎(解析 8 个真实文件全通过 + list/play/stop/status + 时间模式精确时长、速度模式如实返回 null);
+  **端到端验证**: 用插件自己的 `dolly.play` 触发, 用户看到相机环绕 ✓。
+- **两张卡**: `F-20261006-01 直播镜头联动`(需求+实测记录共 35 节) · `F-20261014-01 插件动作桥`(补上"控制台按钮 -> 插件 api 方法"的通路, 切片1 已完成并反证)。
+- **实验插件显隐**: `manifest.experimental` + `/api/plugins` 按 `ui.experimental` 过滤(只影响显示), 且开关**即时生效**。
+- 另: 用户报"关游戏导致重启", 排查为**内核 bugcheck 0x0000000A**(08-24 已有同类转储), 与本次改动无关(详见 DEV-NOTES 349)。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -2783,5 +2806,6 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 | 347 | 2026-10-05 | GBOOT 盲区定位到**具体那一处** |
 | 348 | 2026-10-05 | docs 整理 + 质量门清单(PROCESS-05) |
 | 349 | 2026-10-14 | 用户报"关游戏导致电脑重启" —— 排查结论: 内核蓝屏, 与本次改动无关 |
+| 350 | 2026-10-14 | 相机 OSC 打通 + 「相机运镜控制」插件落地 |
 
 <!-- DEV-NOTES-INDEX:END -->
