@@ -71,6 +71,44 @@ module.exports = function (ctx) {
     });
   }
 
+  // ---------- 运动原语(切片 3) ----------
+  const AXES = ['MoveForward', 'MoveBackward', 'MoveLeft', 'MoveRight', 'LookLeft', 'LookRight'];
+  let lastPulse = null;
+  const sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+  function getCap(path) {                      // 读 OSCQuery(能力查询); 拿不到就返回 null, 不抛
+    return new Promise(function (resolve) {
+      const ports = caps.queryPort ? [caps.queryPort] : [54420, 9001, 55719];
+      let idx = 0;
+      const tryOne = function () {
+        if (idx >= ports.length) return resolve(null);
+        const p = ports[idx++];
+        const req = http.get('http://127.0.0.1:' + p + path, { timeout: 1500 }, function (res) {
+          let d = ''; res.on('data', function (c) { d += c; });
+          res.on('end', function () { try { caps.queryPort = p; resolve(JSON.parse(d).VALUE); } catch (e) { tryOne(); } });
+        });
+        req.on('error', function () { tryOne(); });
+        req.on('timeout', function () { req.destroy(); tryOne(); });
+      };
+      tryOne();
+    });
+  }
+  // ⚠️ 安全不变量: 任何脉冲都必须**保证归零** —— 用 try/finally, 否则一次异常会把某个轴卡在"按住"状态
+  async function zeroAll() {
+    for (const a of AXES) { await send('/input/' + a, [false]); await sleep(40); }
+  }
+  async function pulse(axis, ms) {
+    const dur = Math.max(50, Math.min(20000, Number(ms) || 300));
+    lastPulse = { axis: axis, ms: dur, at: Date.now() };
+    let ok = false;
+    try {
+      ok = await send('/input/' + axis, [true]);
+      await sleep(dur);
+    } finally {
+      await send('/input/' + axis, [false]);   // 无论成功失败都要松开
+    }
+    return ok;
+  }
+
   // 能力探测: 相机端点是否被 VRChat 暴露(用 OSCQuery; 端口每次启动都变, 先探测再回退)
   function probe(queryPort) {
     return new Promise(function (resolve) {
@@ -118,6 +156,37 @@ module.exports = function (ctx) {
       send: send,
       _audit: auditPacket,   // 供单测直接使用
       _encode: oscMessage,
+
+      // ===== 运动原语(切片 3)=====
+      // ⚠️ 只在 **VR 模式** 下有效: 2026-10-14 实测 Flying=true 后
+      //    /input/MoveForward 脉冲 2.5 秒 -> 画面差异 50%(PC 模式下同一实验仅 0.19%, 因为 PC 飞行要按住鼠标中键)。
+      // ⚠️ 开环: 没有位姿反馈, 推多远/转到哪程序并不知道 —— 因此**只做短脉冲**, 并把每次动作都记进状态。
+      motion: {
+        moveForward: function (ms) { return pulse('MoveForward', ms); },
+        moveBackward: function (ms) { return pulse('MoveBackward', ms); },
+        moveLeft: function (ms) { return pulse('MoveLeft', ms); },
+        moveRight: function (ms) { return pulse('MoveRight', ms); },
+        lookLeft: function (ms) { return pulse('LookLeft', ms); },
+        lookRight: function (ms) { return pulse('LookRight', ms); },
+        setFlying: function (on) { return send('/usercamera/Flying', [!!on]); },
+        setFlySpeed: function (v) { return send('/usercamera/FlySpeed', [Number(v) || 0.2]); },
+        setTurnSpeed: function (v) { return send('/usercamera/TurnSpeed', [Number(v) || 1]); },
+        stopAll: zeroAll,
+        // 一个"推轨"组合: 开飞行 -> 设速度 -> 前进 -> 停 -> (可选)还原飞行
+        dolly: async function (opts) {
+          const o = opts || {};
+          const ms = Math.max(50, Math.min(20000, Number(o.ms) || 800));
+          const back = o.restoreFlying !== false;
+          const wasFlying = String(await getCap('/usercamera/Flying')) === 'true';
+          await send('/usercamera/Flying', [true]); await sleep(400);
+          if (o.flySpeed) { await send('/usercamera/FlySpeed', [o.flySpeed]); await sleep(400); }
+          const ok = await pulse('MoveForward', ms);
+          if (o.lookMs) await pulse(o.lookLeft ? 'LookLeft' : 'LookRight', o.lookMs);
+          if (back && !wasFlying) await send('/usercamera/Flying', [false]);
+          return { ok: ok, ms: ms, drift: '开环: 位移未知, 会累积' };
+        },
+      },
+      _lastPulse: function () { return lastPulse; },
     },
   };
 };
