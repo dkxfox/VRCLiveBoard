@@ -19,6 +19,7 @@
 //   move-left <米>             闭环: 相机向左平移 N 米后停住并报误差(默认 1.000)
 //   move-vertical <米>         闭环竖直移动(正=上/负=下; 实测 /input/LookVertical 就是上下平移轴)
 //   move-to <前> <左> <上>    三维点到点(相机系, 米; 正=前/左/上, 负=后/右/下)
+//   rotate <角度>             闭环转向(正=右转/负=左转; 临时 TurnSpeed=0.1 求精度, 结束还原)
 //   axis <轴名> <值> <毫秒>    通用 float 轴探针(保持-读数-归零; 例: axis LookVertical 1 200)
 //   selftest-move              离线自测(不连 VRChat): 模拟不同真实速度, 校验控制律
 //   zero                       所有输入轴归零
@@ -434,6 +435,84 @@ async function moveTo(frontM, leftM, upM) {
   }
 }
 
+// ===== 偏航闭环转向(2026-10-22): /input/LookLeft|LookRight(bool) =====
+// 依据: 上一会话实测 LookRight 300ms -> yaw +54.44°(TurnSpeed=1 ≈ 181.5°/s), 闭环可收敛到 ±3.4°.
+// 本次改进: 临时把 TurnSpeed 降到 0.1(≈18°/s)再闭环 —— 30ms 最短脉冲只有 ~0.54°, 精度目标 <1°; 结束还原.
+function wrap180(d) { const x = ((Number(d) || 0) % 360 + 360) % 360; return x > 180 ? x - 360 : x; }
+async function turnBy(deltaDeg) {
+  const delta = Math.max(-180, Math.min(180, Number(deltaDeg) || 0));
+  if (Math.abs(delta) < 0.5) throw new Error('转角太小(用法: rotate <角度>, 正=右转/负=左转)');
+  lastPose = null; lastPoseAt = 0; poseT0 = 0; poseSamples.length = 0;
+  const one = (v) => (Array.isArray(v) ? v[0] : v);
+  const pre = { flying: one(await getVal('/usercamera/Flying')), turnSpeed: one(await getVal('/usercamera/TurnSpeed')) };
+  console.log('前置: Flying=' + JSON.stringify(pre.flying) + ' TurnSpeed=' + JSON.stringify(pre.turnSpeed) + ' | 目标转角 ' + delta.toFixed(1) + '°(' + (delta > 0 ? '右' : '左') + ')');
+  poseSock = await bindPose();
+  const ts0 = Number(pre.turnSpeed);
+  try {
+    if (pre.flying !== true) { await send('/usercamera/Flying', [true]); await sleep(500); console.log('飞行模式已打开 -> ' + JSON.stringify(await getVal('/usercamera/Flying'))); }
+    let usedTs = pre.turnSpeed;
+    if (isFinite(ts0) && ts0 !== 0.1) {
+      await sendF('/usercamera/TurnSpeed', 0.1); await sleep(400);
+      usedTs = one(await getVal('/usercamera/TurnSpeed'));
+      console.log('TurnSpeed 临时降到 0.1 -> 读回 ' + JSON.stringify(usedTs) + '(原值 ' + JSON.stringify(pre.turnSpeed) + ', 结束还原)');
+    }
+    if (!lastPose) { await pulseAxis('MoveForward', 40); if (!(await waitPose(0, 2500))) throw new Error('收不到 /usercamera/Pose'); }
+    await sleep(300);
+    const startPos = lastPose.pos.slice();
+    const startYaw = wrap180(lastPose.rot[1]);
+    // 探针: 100ms 右转 -> 判断方向与速率
+    const probeBefore = lastPose.rot[1];
+    await pulseAxis('LookRight', 100);
+    const probeDelta = wrap180(lastPose.rot[1] - probeBefore);
+    if (Math.abs(probeDelta) < 0.5) throw new Error('LookRight 没让相机偏航(轴无效/被占用), 已停止(不盲目重试)');
+    const rightSign = probeDelta > 0 ? 1 : -1;
+    const rate = Math.abs(probeDelta) / 0.1;
+    const incAxis = rightSign > 0 ? 'LookRight' : 'LookLeft';
+    const decAxis = rightSign > 0 ? 'LookLeft' : 'LookRight';
+    const minStep = rate * 0.03;
+    const tolDeg = Math.max(1.0, minStep * 1.2);
+    console.log('探针: LookRight 100ms -> Δyaw ' + probeDelta.toFixed(2) + '° -> 速率 ' + rate.toFixed(1) + ' °/s; 判线 ±' + tolDeg.toFixed(1) + '°');
+    const targetYaw = wrap180(startYaw + delta);
+    let pulses = 1;
+    let curYaw = wrap180(lastPose.rot[1]);
+    for (let i = 0; i < 30; i++) {
+      const err = wrap180(targetYaw - curYaw);
+      if (Math.abs(err) <= tolDeg) break;
+      const ms = Math.max(30, Math.min(600, Math.round(Math.abs(err) / rate * 1000 * 0.6)));
+      await pulseAxis(err > 0 ? incAxis : decAxis, ms);
+      pulses++;
+      curYaw = wrap180(lastPose.rot[1]);
+    }
+    const endYaw = wrap180(lastPose.rot[1]);
+    const actual = wrap180(endYaw - startYaw);
+    const error = wrap180(actual - delta);
+    const posDrift = Math.hypot(lastPose.pos[0] - startPos[0], lastPose.pos[1] - startPos[1], lastPose.pos[2] - startPos[2]);
+    const out = {
+      at: new Date().toISOString(),
+      delta: round3(delta), direction: delta > 0 ? '右' : '左',
+      startYaw: round3(startYaw), targetYaw: round3(targetYaw), endYaw: round3(endYaw),
+      actualDelta: round3(actual), error: round3(error), tolerance: +tolDeg.toFixed(2),
+      pass: Math.abs(error) <= tolDeg,
+      pulses: pulses, rateDegPerSec: +rate.toFixed(1), turnSpeedUsed: usedTs, posDrift: round3(posDrift),
+      pre: pre, poseSamples: poseSamples.length, samples: poseSamples,
+    };
+    try {
+      fs.mkdirSync('logs', { recursive: true });
+      out.file = 'logs/pose-turn-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.json';
+      fs.writeFileSync(out.file, JSON.stringify(out, null, 1), 'utf8');
+    } catch (e) { out.file = null; }
+    console.log('结果: yaw ' + startYaw.toFixed(2) + '° -> ' + endYaw.toFixed(2) + '°(实际转 ' + actual.toFixed(2) + '°, 误差 ' + error.toFixed(2) + '°); 位置漂移 ' + (posDrift * 100).toFixed(1) + ' cm / 脉冲 ' + pulses + ' 次 / Pose 采样 ' + poseSamples.length + ' 条');
+    if (out.file) console.log('      明细已存 ' + out.file);
+    return out;
+  } finally {
+    try { await send('/input/LookLeft', [false]); await send('/input/LookRight', [false]); } catch (e) {}
+    try { await zeroAll(); } catch (e) {}
+    if (isFinite(ts0) && ts0 !== 0.1) { try { await sendF('/usercamera/TurnSpeed', ts0); await sleep(250); console.log('TurnSpeed 已还原 -> ' + JSON.stringify(await getVal('/usercamera/TurnSpeed'))); } catch (e) {} }
+    if (pre.flying === false) { try { await send('/usercamera/Flying', [false]); await sleep(250); } catch (e) {} }
+    if (poseSock) { try { poseSock.close(); } catch (e) {} poseSock = null; }
+  }
+}
+
 (async () => {
   const [cmd, a1, a2, a3] = process.argv.slice(2);
   const parse = v => v === 'true' ? true : (v === 'false' ? false : (isFinite(Number(v)) ? (String(v).indexOf('.') >= 0 ? Number(v) : Number(v)) : v));
@@ -482,6 +561,12 @@ async function moveTo(frontM, leftM, upM) {
     const r = await moveVertical(Number(a1) || 1);
     console.log('');
     console.log('⭐ ' + (r.pass ? 'PASS' : 'FAIL') + ': ' + r.label + ' 目标 ΔY ' + r.target.toFixed(3) + ' m / 实际 ΔY ' + r.dy.toFixed(3) + ' m / 误差 ' + (r.error * 100).toFixed(1) + ' cm(判线 ±' + (r.tolerance * 100).toFixed(0) + ' cm, 水平漂移 ' + (r.horiz * 100).toFixed(1) + ' cm)');
+    sock.close(); return;
+  }
+  if (cmd === 'rotate') {
+    const r = await turnBy(Number(a1) || 45);
+    console.log('');
+    console.log('⭐ ' + (r.pass ? 'PASS' : 'FAIL') + ': ' + r.direction + '转 目标 ' + r.delta.toFixed(1) + '° / 实际 ' + r.actualDelta.toFixed(1) + '° / 误差 ' + r.error.toFixed(2) + '°(判线 ±' + r.tolerance.toFixed(1) + '°)');
     sock.close(); return;
   }
   if (cmd === 'move-to') {
