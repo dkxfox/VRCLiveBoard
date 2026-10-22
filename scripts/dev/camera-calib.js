@@ -18,6 +18,7 @@
 //   move-forward <米>          闭环: 相机向前自动走 N 米后停住并报误差(默认 1.000)
 //   move-left <米>             闭环: 相机向左平移 N 米后停住并报误差(默认 1.000)
 //   move-vertical <米>         闭环竖直移动(正=上/负=下; 实测 /input/LookVertical 就是上下平移轴)
+//   move-to <前> <左> <上>    三维点到点(相机系, 米; 正=前/左/上, 负=后/右/下)
 //   axis <轴名> <值> <毫秒>    通用 float 轴探针(保持-读数-归零; 例: axis LookVertical 1 200)
 //   selftest-move              离线自测(不连 VRChat): 模拟不同真实速度, 校验控制律
 //   zero                       所有输入轴归零
@@ -338,6 +339,101 @@ async function moveVertical(targetM) {
   }
 }
 
+// ===== 三维点到点(2026-10-22): 相机系(前/左/上) -> 分段闭环 -> 期望世界向量对照 =====
+// 前置假设: 相机水平(pitch≈0), 这样 MoveForward 只改变水平位置; 俯仰不为 0 时直接报错停下.
+// 分段顺序: 前 -> 左 -> 上; 每段用 120ms 标定 + 分步逼近(与单轴闭环同一控制律).
+async function moveTo(frontM, leftM, upM) {
+  const target = { front: Number(frontM) || 0, left: Number(leftM) || 0, up: Number(upM) || 0 };
+  const tol = 0.15;
+  if (!target.front && !target.left && !target.up) throw new Error('三个分量都是 0; 用法: move-to <前> <左> <上>');
+  lastPose = null; lastPoseAt = 0; poseT0 = 0; poseSamples.length = 0;
+  const one = (v) => (Array.isArray(v) ? v[0] : v);
+  const pre = { flying: one(await getVal('/usercamera/Flying')), smoothing: one(await getVal('/usercamera/SmoothingStrength')) };
+  console.log('目标(相机系): 前 ' + target.front.toFixed(3) + ' / 左 ' + target.left.toFixed(3) + ' / 上 ' + target.up.toFixed(3) + ' m | 前置 Flying=' + JSON.stringify(pre.flying) + ' Smoothing=' + JSON.stringify(pre.smoothing));
+  poseSock = await bindPose();
+  const s0 = Number(pre.smoothing);
+  try {
+    if (pre.flying !== true) { await send('/usercamera/Flying', [true]); await sleep(500); console.log('飞行模式已打开 -> ' + JSON.stringify(await getVal('/usercamera/Flying'))); }
+    if (isFinite(s0) && s0 !== 0) { await sendF('/usercamera/SmoothingStrength', 0); await sleep(400); console.log('SmoothingStrength 写 0 -> 读回 ' + JSON.stringify(await getVal('/usercamera/SmoothingStrength')) + '(原值 ' + JSON.stringify(pre.smoothing) + ', 结束还原)'); }
+    if (!lastPose) { await pulseAxis('MoveForward', 40); if (!(await waitPose(0, 2500))) throw new Error('收不到 /usercamera/Pose'); }
+    await sleep(300);
+    const start = lastPose.pos.slice();
+    const yaw0 = Number(lastPose.rot[1]) || 0;
+    let p0 = ((Number(lastPose.rot[0]) % 360) + 360) % 360; if (p0 > 180) p0 -= 360;
+    if (Math.abs(p0) > 5) throw new Error('相机俯仰 ' + p0.toFixed(1) + '°, 不是水平状态; 前进会带高度分量, 先停(请把相机放平再试)');
+    // 分段闭环(共用 lastPose / poseSock)
+    const seg = async function (kind, amount, axisName, dir) {
+      const segTarget = Math.max(0.03, Math.min(10, amount));
+      const doPulse = kind === 'float'
+        ? function (ms) { return holdFloat(axisName, dir, ms); }
+        : function (ms) { return pulseAxis(axisName, ms); };
+      const segStart = lastPose.pos.slice();
+      const calBefore = lastPose.pos.slice();
+      await doPulse(120);
+      const calDist = dist3(lastPose.pos, calBefore);
+      if (calDist <= 0.005) throw new Error(axisName + ' 标定无位移, 已停止(不盲目重试)');
+      let speed = calDist / 0.12;
+      let pulses = 1;
+      for (let i = 0; i < 24; i++) {
+        const travelled = dist3(lastPose.pos, segStart);
+        const err = segTarget - travelled;
+        if (err <= 0.05) break;
+        const ms = nextPulseMs(err, speed);
+        if (!ms) break;
+        const before = lastPose.pos.slice();
+        await doPulse(ms);
+        const d = dist3(lastPose.pos, before);
+        pulses++;
+        if (d > 0.005) speed = d / (ms / 1000);
+      }
+      const segEnd = lastPose.pos.slice();
+      const moved = dist3(segEnd, segStart);
+      console.log('  段 ' + axisName + ': 目标 ' + segTarget.toFixed(3) + ' m / 实际 ' + moved.toFixed(3) + ' m(' + pulses + ' 脉冲)');
+      return { axis: axisName, direction: dir || 0, target: round3(segTarget), moved: round3(moved), pulses: pulses, speed: +speed.toFixed(2) };
+    };
+    const segs = [];
+    if (Math.abs(target.front) > 0.02) segs.push(await seg('bool', Math.abs(target.front), target.front >= 0 ? 'MoveForward' : 'MoveBackward'));
+    if (Math.abs(target.left) > 0.02) segs.push(await seg('bool', Math.abs(target.left), target.left >= 0 ? 'MoveLeft' : 'MoveRight'));
+    if (Math.abs(target.up) > 0.02) segs.push(await seg('float', Math.abs(target.up), 'LookVertical', target.up >= 0 ? 1 : -1));
+    const end = lastPose.pos.slice();
+    const th = yaw0 * Math.PI / 180;
+    const expected = [
+      round3(Math.sin(th) * target.front - Math.cos(th) * target.left),
+      round3(target.up),
+      round3(Math.cos(th) * target.front + Math.sin(th) * target.left),
+    ];
+    const actual = [round3(end[0] - start[0]), round3(end[1] - start[1]), round3(end[2] - start[2])];
+    const errVec = [round3(actual[0] - expected[0]), round3(actual[1] - expected[1]), round3(actual[2] - expected[2])];
+    const errNorm = round3(Math.hypot(errVec[0], errVec[1], errVec[2]));
+    const pass = errNorm <= tol;
+    const out = {
+      at: new Date().toISOString(),
+      cameraFrameTarget: target, tolerance: tol,
+      yawStart: round3(yaw0), pitchStart: round3(p0),
+      start: start.map(round3), end: end.map(round3),
+      expectedWorld: expected, actualVector: actual, errorVector: errVec, errorNorm: errNorm, pass: pass,
+      segments: segs, pulseTotal: segs.reduce(function (a, s) { return a + s.pulses; }, 0),
+      poseSamples: poseSamples.length, samples: poseSamples, pre: pre,
+    };
+    try {
+      fs.mkdirSync('logs', { recursive: true });
+      out.file = 'logs/pose-point-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.json';
+      fs.writeFileSync(out.file, JSON.stringify(out, null, 1), 'utf8');
+    } catch (e) { out.file = null; }
+    console.log('结果: 起点 [' + start.map(function (x) { return x.toFixed(2); }).join(', ') + '] -> 终点 [' + end.map(function (x) { return x.toFixed(2); }).join(', ') + ']');
+    console.log('      实际向量 [' + actual.join(', ') + '] m | 期望向量 [' + expected.join(', ') + '] m(按起始 yaw=' + yaw0.toFixed(1) + '° 换算)');
+    console.log('      误差向量 [' + errVec.join(', ') + '] m -> 误差 ' + (errNorm * 100).toFixed(1) + ' cm(判线 ±' + (tol * 100).toFixed(0) + ' cm)');
+    if (out.file) console.log('      明细已存 ' + out.file);
+    return out;
+  } finally {
+    try { await sendF('/input/LookVertical', 0); } catch (e) {}
+    try { await zeroAll(); } catch (e) {}
+    if (isFinite(s0) && s0 !== 0) { try { await sendF('/usercamera/SmoothingStrength', s0); await sleep(250); console.log('SmoothingStrength 已还原 -> ' + JSON.stringify(await getVal('/usercamera/SmoothingStrength'))); } catch (e) {} }
+    if (pre.flying === false) { try { await send('/usercamera/Flying', [false]); await sleep(250); } catch (e) {} }
+    if (poseSock) { try { poseSock.close(); } catch (e) {} poseSock = null; }
+  }
+}
+
 (async () => {
   const [cmd, a1, a2, a3] = process.argv.slice(2);
   const parse = v => v === 'true' ? true : (v === 'false' ? false : (isFinite(Number(v)) ? (String(v).indexOf('.') >= 0 ? Number(v) : Number(v)) : v));
@@ -386,6 +482,12 @@ async function moveVertical(targetM) {
     const r = await moveVertical(Number(a1) || 1);
     console.log('');
     console.log('⭐ ' + (r.pass ? 'PASS' : 'FAIL') + ': ' + r.label + ' 目标 ΔY ' + r.target.toFixed(3) + ' m / 实际 ΔY ' + r.dy.toFixed(3) + ' m / 误差 ' + (r.error * 100).toFixed(1) + ' cm(判线 ±' + (r.tolerance * 100).toFixed(0) + ' cm, 水平漂移 ' + (r.horiz * 100).toFixed(1) + ' cm)');
+    sock.close(); return;
+  }
+  if (cmd === 'move-to') {
+    const r = await moveTo(Number(a1) || 0, Number(a2) || 0, Number(a3) || 0);
+    console.log('');
+    console.log('⭐ ' + (r.pass ? 'PASS' : 'FAIL') + ': 三维点到点 误差 ' + (r.errorNorm * 100).toFixed(1) + ' cm(判线 ±' + (r.tolerance * 100).toFixed(0) + ' cm)');
     sock.close(); return;
   }
   if (cmd === 'pose-listen') {
