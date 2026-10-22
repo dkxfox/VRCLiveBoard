@@ -536,17 +536,23 @@ async function rangeProbe(axisName, seconds, value) {
     const start = lastPose.pos.slice();
     const yaw0 = wrap180(lastPose.rot[1]);
     const track = [];
-    let lastPos = start.slice();
-    let lastMoveAt = Date.now();
+    let dirUnit = null;              // 实际前进方向(由最初 >0.25 m 的位移确定)
+    let lastProgress = 0;            // 沿该方向的最大前进距离
+    let lastProgressAt = Date.now(); // 最近一次"前进"增长的时刻(顶到边界后不再增长)
     const t0 = Date.now();
     await axisSet(isFloat ? val : 1);
     while (Date.now() - t0 < secs * 1000) {
       await sleep(100);
       const p = lastPose.pos.slice();
       const el = Date.now() - t0;
-      const d = dist3(p, lastPos);
-      track.push({ ms: el, pos: p.map(round3) });
-      if (d > 0.01) { lastPos = p.slice(); lastMoveAt = Date.now(); }
+      track.push({ ms: el, pos: p.map(round3), rot: lastPose.rot.map((x) => +Number(x).toFixed(2)) });
+      const rel = [p[0] - start[0], p[1] - start[1], p[2] - start[2]];
+      const relLen = Math.hypot(rel[0], rel[1], rel[2]);
+      if (!dirUnit && relLen > 0.25) dirUnit = [rel[0] / relLen, rel[1] / relLen, rel[2] / relLen];
+      if (dirUnit) {
+        const prog = rel[0] * dirUnit[0] + rel[1] * dirUnit[1] + rel[2] * dirUnit[2];
+        if (prog > lastProgress + 0.02) { lastProgress = prog; lastProgressAt = Date.now(); }
+      }
     }
     await axisSet(isFloat ? 0 : 0);
     await sleep(800);
@@ -555,7 +561,8 @@ async function rangeProbe(axisName, seconds, value) {
     const total = round3(Math.hypot(vec[0], vec[1], vec[2]));
     const horiz = round3(Math.hypot(vec[0], vec[2]));
     const vert = round3(vec[1]);
-    const plateauMs = Math.max(0, (t0 + secs * 1000) - lastMoveAt);
+    const plateauMs = Math.max(0, (t0 + secs * 1000) - lastProgressAt);
+    const stopAtMs = Math.max(0, secs * 1000 - plateauMs);
     let maxSpeed = 0;
     for (let i = 1; i < track.length; i++) {
       const a = track[i - 1].pos, b = track[i].pos;
@@ -566,7 +573,8 @@ async function rangeProbe(axisName, seconds, value) {
       at: new Date().toISOString(), axis: axisName, holdSec: secs, value: isFloat ? val : 1,
       start: start.map(round3), end: end.map(round3), offsetFromStart: vec,
       distance: total, horizontal: horiz, vertical: vert,
-      yawStart: round3(yaw0), plateauMs: Math.round(plateauMs),
+      yawStart: round3(yaw0), dir: dirUnit ? dirUnit.map(round3) : null,
+      progress: round3(lastProgress), plateauMs: Math.round(plateauMs), stopAtSec: +(stopAtMs / 1000).toFixed(2),
       stoppedEarly: plateauMs >= 400,
       maxSpeed: round3(maxSpeed), samples: poseSamples.length, track: track,
     };
@@ -577,7 +585,11 @@ async function rangeProbe(axisName, seconds, value) {
     } catch (e) { out.file = null; }
     console.log('结果: 起点 [' + start.map((x) => x.toFixed(2)).join(', ') + '] -> 终点 [' + end.map((x) => x.toFixed(2)).join(', ') + ']');
     console.log('      位移 ' + total.toFixed(3) + ' m(水平 ' + horiz.toFixed(3) + ' / 垂直 ' + vert.toFixed(3) + '); 峰值速度 ' + maxSpeed.toFixed(2) + ' m/s');
-    console.log('      ' + (out.stoppedEarly ? ('⚠️ 后段停住 ' + (plateauMs / 1000).toFixed(2) + ' 秒不动 -> 已到范围边界或撞到物体') : '全程持续移动, 未触到边界'));
+    console.log('      ' + (!out.dir
+      ? '⚠️ 全程几乎没动(受阻/边界或轴无效)'
+      : (out.stoppedEarly
+        ? ('⚠️ 前进在 ' + (stopAtMs / 1000).toFixed(2) + ' 秒后停住(共 ' + lastProgress.toFixed(2) + ' m) -> 到边界/受阻; 之后又有 ' + (total - lastProgress).toFixed(2) + ' m 位移(沿边界滑动或下沉)')
+        : '全程持续前进, 未触边界')));
     if (out.file) console.log('      明细已存 ' + out.file);
     return out;
   } finally {
@@ -641,7 +653,7 @@ async function rangeProbe(axisName, seconds, value) {
     if (!a1) { console.log('用法: node scripts/dev/camera-calib.js range <轴> <秒> [值]  例: range MoveForward 4 / range LookVertical 3 1'); sock.close(); return; }
     const r = await rangeProbe(String(a1), Number(a2) || 3, a3);
     console.log('');
-    console.log('⭐ 范围探针: ' + r.axis + ' 保持 ' + r.holdSec + ' 秒 -> 位移 ' + r.distance.toFixed(2) + ' m' + (r.stoppedEarly ? ('(后段 ' + (r.plateauMs / 1000).toFixed(2) + ' 秒未动)') : '(未触边界)'));
+    console.log('⭐ 范围探针: ' + r.axis + ' 保持 ' + r.holdSec + ' 秒 -> 位移 ' + r.distance.toFixed(2) + ' m' + (r.stoppedEarly ? ('(前进 ' + r.progress.toFixed(2) + ' m 后停住, 之后沿边界再滑 ' + (r.distance - r.progress).toFixed(2) + ' m)') : '(未触边界)'));
     sock.close(); return;
   }
   if (cmd === 'rotate') {
