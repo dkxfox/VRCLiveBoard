@@ -20,6 +20,7 @@
 //   move-vertical <米>         闭环竖直移动(正=上/负=下; 实测 /input/LookVertical 就是上下平移轴)
 //   move-to <前> <左> <上>    三维点到点(相机系, 米; 正=前/左/上, 负=后/右/下)
 //   rotate <角度>             闭环转向(正=右转/负=左转; 临时 TurnSpeed=0.1 求精度, 结束还原)
+//   range <轴> <秒> [值]      范围探针: 按住轴 N 秒记录轨迹, 判断"在哪里停住"(跟随模式包络线用)
 //   axis <轴名> <值> <毫秒>    通用 float 轴探针(保持-读数-归零; 例: axis LookVertical 1 200)
 //   selftest-move              离线自测(不连 VRChat): 模拟不同真实速度, 校验控制律
 //   zero                       所有输入轴归零
@@ -513,6 +514,79 @@ async function turnBy(deltaDeg) {
   }
 }
 
+// ===== 运动范围探针(2026-10-22): 按住一个输入轴 N 秒, 全程采样 Pose, 判断"在哪里停住" =====
+// 用途: 跟随玩家(自拍杆)模式的运动包络线; 也可用于自由模式测速度/撞墙.
+// 用法: range MoveForward 4 | range LookVertical 3 1 | range LookVertical 3 -1
+const FLOAT_AXES = { LookVertical: true, LookHorizontal: true, Vertical: true, Horizontal: true };
+async function rangeProbe(axisName, seconds, value) {
+  const secs = Math.max(0.5, Math.min(8, Number(seconds) || 3));
+  const isFloat = !!FLOAT_AXES[axisName];
+  const val = isFloat ? (Number(value) < 0 ? -1 : 1) : 1;
+  lastPose = null; lastPoseAt = 0; poseT0 = 0; poseSamples.length = 0;
+  const one = (v) => (Array.isArray(v) ? v[0] : v);
+  const pre = { flying: one(await getVal('/usercamera/Flying')), smoothing: one(await getVal('/usercamera/SmoothingStrength')) };
+  console.log('范围探针: ' + axisName + (isFloat ? ('=' + val) : '') + ' 保持 ' + secs + ' 秒 | Flying=' + JSON.stringify(pre.flying) + ' Smoothing=' + JSON.stringify(pre.smoothing));
+  poseSock = await bindPose();
+  const axisSet = isFloat
+    ? function (v) { return sendF('/input/' + axisName, v); }
+    : function (v) { return send('/input/' + axisName, [!!v]); };
+  try {
+    if (!lastPose) { await pulseAxis('MoveForward', 40); if (!(await waitPose(0, 2500))) throw new Error('收不到 /usercamera/Pose'); }
+    await sleep(300);
+    const start = lastPose.pos.slice();
+    const yaw0 = wrap180(lastPose.rot[1]);
+    const track = [];
+    let lastPos = start.slice();
+    let lastMoveAt = Date.now();
+    const t0 = Date.now();
+    await axisSet(isFloat ? val : 1);
+    while (Date.now() - t0 < secs * 1000) {
+      await sleep(100);
+      const p = lastPose.pos.slice();
+      const el = Date.now() - t0;
+      const d = dist3(p, lastPos);
+      track.push({ ms: el, pos: p.map(round3) });
+      if (d > 0.01) { lastPos = p.slice(); lastMoveAt = Date.now(); }
+    }
+    await axisSet(isFloat ? 0 : 0);
+    await sleep(800);
+    const end = lastPose.pos.slice();
+    const vec = [round3(end[0] - start[0]), round3(end[1] - start[1]), round3(end[2] - start[2])];
+    const total = round3(Math.hypot(vec[0], vec[1], vec[2]));
+    const horiz = round3(Math.hypot(vec[0], vec[2]));
+    const vert = round3(vec[1]);
+    const plateauMs = Math.max(0, (t0 + secs * 1000) - lastMoveAt);
+    let maxSpeed = 0;
+    for (let i = 1; i < track.length; i++) {
+      const a = track[i - 1].pos, b = track[i].pos;
+      const dt = (track[i].ms - track[i - 1].ms) / 1000;
+      if (dt > 0) maxSpeed = Math.max(maxSpeed, Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) / dt);
+    }
+    const out = {
+      at: new Date().toISOString(), axis: axisName, holdSec: secs, value: isFloat ? val : 1,
+      start: start.map(round3), end: end.map(round3), offsetFromStart: vec,
+      distance: total, horizontal: horiz, vertical: vert,
+      yawStart: round3(yaw0), plateauMs: Math.round(plateauMs),
+      stoppedEarly: plateauMs >= 400,
+      maxSpeed: round3(maxSpeed), samples: poseSamples.length, track: track,
+    };
+    try {
+      fs.mkdirSync('logs', { recursive: true });
+      out.file = 'logs/pose-range-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.json';
+      fs.writeFileSync(out.file, JSON.stringify(out, null, 1), 'utf8');
+    } catch (e) { out.file = null; }
+    console.log('结果: 起点 [' + start.map((x) => x.toFixed(2)).join(', ') + '] -> 终点 [' + end.map((x) => x.toFixed(2)).join(', ') + ']');
+    console.log('      位移 ' + total.toFixed(3) + ' m(水平 ' + horiz.toFixed(3) + ' / 垂直 ' + vert.toFixed(3) + '); 峰值速度 ' + maxSpeed.toFixed(2) + ' m/s');
+    console.log('      ' + (out.stoppedEarly ? ('⚠️ 后段停住 ' + (plateauMs / 1000).toFixed(2) + ' 秒不动 -> 已到范围边界或撞到物体') : '全程持续移动, 未触到边界'));
+    if (out.file) console.log('      明细已存 ' + out.file);
+    return out;
+  } finally {
+    try { await axisSet(isFloat ? 0 : 0); } catch (e) {}
+    try { await zeroAll(); } catch (e) {}
+    if (poseSock) { try { poseSock.close(); } catch (e) {} poseSock = null; }
+  }
+}
+
 (async () => {
   const [cmd, a1, a2, a3] = process.argv.slice(2);
   const parse = v => v === 'true' ? true : (v === 'false' ? false : (isFinite(Number(v)) ? (String(v).indexOf('.') >= 0 ? Number(v) : Number(v)) : v));
@@ -561,6 +635,13 @@ async function turnBy(deltaDeg) {
     const r = await moveVertical(Number(a1) || 1);
     console.log('');
     console.log('⭐ ' + (r.pass ? 'PASS' : 'FAIL') + ': ' + r.label + ' 目标 ΔY ' + r.target.toFixed(3) + ' m / 实际 ΔY ' + r.dy.toFixed(3) + ' m / 误差 ' + (r.error * 100).toFixed(1) + ' cm(判线 ±' + (r.tolerance * 100).toFixed(0) + ' cm, 水平漂移 ' + (r.horiz * 100).toFixed(1) + ' cm)');
+    sock.close(); return;
+  }
+  if (cmd === 'range') {
+    if (!a1) { console.log('用法: node scripts/dev/camera-calib.js range <轴> <秒> [值]  例: range MoveForward 4 / range LookVertical 3 1'); sock.close(); return; }
+    const r = await rangeProbe(String(a1), Number(a2) || 3, a3);
+    console.log('');
+    console.log('⭐ 范围探针: ' + r.axis + ' 保持 ' + r.holdSec + ' 秒 -> 位移 ' + r.distance.toFixed(2) + ' m' + (r.stoppedEarly ? ('(后段 ' + (r.plateauMs / 1000).toFixed(2) + ' 秒未动)') : '(未触边界)'));
     sock.close(); return;
   }
   if (cmd === 'rotate') {
