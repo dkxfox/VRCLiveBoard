@@ -21,7 +21,7 @@
 //   move-to <前> <左> <上>    三维点到点(相机系, 米; 正=前/左/上, 负=后/右/下)
 //   rotate <角度>             闭环转向(正=右转/负=左转; 临时 TurnSpeed=0.1 求精度, 结束还原)
 //   range <轴> <秒> [值]      范围探针: 按住轴 N 秒记录轨迹, 判断"在哪里停住"(跟随模式包络线用)
-//   record <秒>               录制轨迹(用户自由飞, Pose 约 61Hz) -> logs/traj-<时间>.json
+//   record <秒> [auto]        录制轨迹(用户自由飞, Pose 约 61Hz) -> logs/traj-<时间>.json; auto=等你开始飞再录
 //   traj-info <文件>          查看轨迹统计(样本/时长/范围/路径长/俯仰范围)
 //   replay <文件> [步长秒]    重放轨迹(相对起点: 位置+偏航; 路点串行, 比原速慢; 俯仰无法重放)
 //   axis <轴名> <值> <毫秒>    通用 float 轴探针(保持-读数-归零; 例: axis LookVertical 1 200)
@@ -603,15 +603,23 @@ async function rangeProbe(axisName, seconds, value) {
 }
 
 // ===== 轨迹录制(2026-10-22, 重放准备): 用户用飞行模式自由飞, Pose 约 61Hz 存盘 =====//  格式沿用上一会话: { recordedAt, durationSec, hz, start, startRot, samples:[{t,pos,rot}] }
-async function recordTrajectory(seconds) {
+async function recordTrajectory(seconds, auto) {
   const secs = Math.max(2, Math.min(120, Number(seconds) || 10));
   lastPose = null; lastPoseAt = 0; poseT0 = 0; poseSamples.length = 0;
   poseSock = await bindPose();
   try {
     if (!lastPose) { await pulseAxis('MoveForward', 40); if (!(await waitPose(0, 2500))) throw new Error('收不到 /usercamera/Pose'); }
     await sleep(300);
+    const nudgeAt = Date.now();
+    if (auto) {
+      console.log('auto 模式: 等你开始飞(收到新的 Pose)… 最多等 120 秒(现在可以开始飞了)');
+      const waitStart = Date.now();
+      while (Date.now() - waitStart < 120000 && lastPoseAt <= nudgeAt + 200) await sleep(150);
+      if (lastPoseAt <= nudgeAt + 200) throw new Error('auto 等待超时(120 秒内没检测到相机移动)');
+      console.log('检测到相机开始移动 -> 开始录制 ' + secs + ' 秒');
+    }
     poseSamples.length = 0; poseT0 = 0; lastPoseAt = 0;
-    console.log('开始录制 ' + secs + ' 秒: 请用飞行模式自由飞(平移 + 左右转; 尽量别抬头/低头)…');
+    if (!auto) console.log('开始录制 ' + secs + ' 秒: 请用飞行模式自由飞(平移 + 左右转; 尽量别抬头/低头)…');
     const t0 = Date.now();
     let warned = false;
     while (Date.now() - t0 < secs * 1000) {
@@ -890,7 +898,7 @@ async function replayTraj(file, stepSec, dry) {
     sock.close(); return;
   }
   if (cmd === 'record') {
-    await recordTrajectory(Number(a1) || 10);
+    await recordTrajectory(Number(a1) || 10, String(a2) === 'auto');
     sock.close(); return;
   }
   if (cmd === 'traj-info') {
