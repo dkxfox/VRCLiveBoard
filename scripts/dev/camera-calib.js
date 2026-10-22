@@ -21,6 +21,9 @@
 //   move-to <前> <左> <上>    三维点到点(相机系, 米; 正=前/左/上, 负=后/右/下)
 //   rotate <角度>             闭环转向(正=右转/负=左转; 临时 TurnSpeed=0.1 求精度, 结束还原)
 //   range <轴> <秒> [值]      范围探针: 按住轴 N 秒记录轨迹, 判断"在哪里停住"(跟随模式包络线用)
+//   record <秒>               录制轨迹(用户自由飞, Pose 约 61Hz) -> logs/traj-<时间>.json
+//   traj-info <文件>          查看轨迹统计(样本/时长/范围/路径长/俯仰范围)
+//   replay <文件> [步长秒]    重放轨迹(相对起点: 位置+偏航; 路点串行, 比原速慢; 俯仰无法重放)
 //   axis <轴名> <值> <毫秒>    通用 float 轴探针(保持-读数-归零; 例: axis LookVertical 1 200)
 //   selftest-move              离线自测(不连 VRChat): 模拟不同真实速度, 校验控制律
 //   zero                       所有输入轴归零
@@ -599,6 +602,224 @@ async function rangeProbe(axisName, seconds, value) {
   }
 }
 
+// ===== 轨迹录制(2026-10-22, 重放准备): 用户用飞行模式自由飞, Pose 约 61Hz 存盘 =====//  格式沿用上一会话: { recordedAt, durationSec, hz, start, startRot, samples:[{t,pos,rot}] }
+async function recordTrajectory(seconds) {
+  const secs = Math.max(2, Math.min(120, Number(seconds) || 10));
+  lastPose = null; lastPoseAt = 0; poseT0 = 0; poseSamples.length = 0;
+  poseSock = await bindPose();
+  try {
+    if (!lastPose) { await pulseAxis('MoveForward', 40); if (!(await waitPose(0, 2500))) throw new Error('收不到 /usercamera/Pose'); }
+    await sleep(300);
+    poseSamples.length = 0; poseT0 = 0; lastPoseAt = 0;
+    console.log('开始录制 ' + secs + ' 秒: 请用飞行模式自由飞(平移 + 左右转; 尽量别抬头/低头)…');
+    const t0 = Date.now();
+    let warned = false;
+    while (Date.now() - t0 < secs * 1000) {
+      await sleep(100);
+      if (!lastPose && !warned && Date.now() - t0 > 2500) { warned = true; console.log('⚠️ 还没收到 Pose(相机还没动?)'); }
+    }
+    await sleep(700);
+    const n = poseSamples.length;
+    if (n < 10) throw new Error('录制到的 Pose 太少(' + n + ' 条) —— 相机可能没动');
+    const first = poseSamples[0];
+    const samples = poseSamples.map(function (s) { return { t: +((s.ms - first.ms) / 1000).toFixed(3), pos: s.pos, rot: s.rot }; });
+    const dur = samples[samples.length - 1].t;
+    const rng = function (get) { const v = samples.map(get); return { min: Math.min.apply(null, v), max: Math.max.apply(null, v) }; };
+    const px = rng(function (s) { return s.pos[0]; }), py = rng(function (s) { return s.pos[1]; }), pz = rng(function (s) { return s.pos[2]; });
+    const pt = rng(function (s) { return s.rot[0]; }), yw = rng(function (s) { return s.rot[1]; }), rl = rng(function (s) { return s.rot[2]; });
+    let pathLen = 0;
+    for (let i = 1; i < samples.length; i++) pathLen += dist3(samples[i].pos, samples[i - 1].pos);
+    const out = {
+      at: new Date().toISOString(), recordedAt: new Date().toISOString(),
+      durationSec: +dur.toFixed(3), hz: +(n / Math.max(0.001, dur)).toFixed(1),
+      start: samples[0].pos.slice(), startRot: samples[0].rot.slice(),
+      ranges: { posX: px, posY: py, posZ: pz, pitch: pt, yaw: yw, roll: rl },
+      pathLength: +pathLen.toFixed(3), samples: samples,
+    };
+    fs.mkdirSync('logs', { recursive: true });
+    out.file = 'logs/traj-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.json';
+    fs.writeFileSync(out.file, JSON.stringify(out, null, 1), 'utf8');
+    console.log('录制完成: ' + n + ' 条 / ' + dur.toFixed(2) + ' 秒 / ' + out.hz + ' Hz / 路径长 ' + pathLen.toFixed(2) + ' m');
+    console.log('  位置范围 X ' + px.min.toFixed(2) + '~' + px.max.toFixed(2) + ' / Y ' + py.min.toFixed(2) + '~' + py.max.toFixed(2) + ' / Z ' + pz.min.toFixed(2) + '~' + pz.max.toFixed(2));
+    console.log('  姿态范围 pitch ' + pt.min.toFixed(1) + '~' + pt.max.toFixed(1) + '° / yaw ' + yw.min.toFixed(1) + '~' + yw.max.toFixed(1) + '° / roll ' + rl.min.toFixed(1) + '~' + rl.max.toFixed(1) + '°');
+    console.log('  已存 ' + out.file);
+    return out;
+  } finally {
+    try { await zeroAll(); } catch (e) {}
+    if (poseSock) { try { poseSock.close(); } catch (e) {} poseSock = null; }
+  }
+}
+
+// ===== 轨迹信息 =====// 用途: 重放前先看轨迹是否可用(样本/时长/路径长/俯仰范围)
+function trajInfo(file) {
+  const j = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const raw = Array.isArray(j.samples) ? j.samples : [];
+  if (raw.length < 5) throw new Error('轨迹样本太少: ' + raw.length);
+  const b = raw[0]; const dur = raw[raw.length - 1].t;
+  let path = 0, maxFromStart = 0; let pMin = 999, pMax = -999, yMin = 999, yMax = -999;
+  for (let i = 1; i < raw.length; i++) path += dist3(raw[i].pos, raw[i - 1].pos);
+  for (const s of raw) { maxFromStart = Math.max(maxFromStart, dist3(s.pos, b.pos)); pMin = Math.min(pMin, s.rot[0]); pMax = Math.max(pMax, s.rot[0]); yMin = Math.min(yMin, s.rot[1]); yMax = Math.max(yMax, s.rot[1]); }
+  console.log('轨迹: ' + file);
+  console.log('  样本 ' + raw.length + ' 条 / 时长 ' + dur.toFixed(2) + ' s / 平均 ' + (raw.length / Math.max(0.001, dur)).toFixed(1) + ' Hz');
+  console.log('  路径长 ' + path.toFixed(2) + ' m / 离起点最远 ' + maxFromStart.toFixed(2) + ' m');
+  console.log('  起点 pos=[' + b.pos.map(function (x) { return x.toFixed(2); }).join(', ') + '] yaw=' + b.rot[1].toFixed(1) + '°');
+  console.log('  俯仰范围 ' + pMin.toFixed(1) + '~' + pMax.toFixed(1) + '°' + (Math.max(Math.abs(pMin), Math.abs(pMax)) > 5 ? ' ⚠️ 俯仰无法重放' : '') + ' / 偏航范围 ' + yMin.toFixed(1) + '~' + yMax.toFixed(1) + '°');
+  return { file: file, n: raw.length, durSec: dur, pathLength: path, maxFromStart: maxFromStart };
+}
+
+// ===== 轨迹重放(2026-10-22, 准备版) =====
+// 原理: 轨迹是**世界坐标绝对位置**; 重放时以"当前相机位姿"为起点, 只重放**相对位移 + 相对偏航**
+//       (等价于"玩家相对坐标"在玩家不动时的效果) -> 同一世界/不同世界都能重放.
+// 执行: 每个路点"先转向 -> 再按相机系(前/左/上)三段闭环平移"; 串行执行, 比原速慢.
+// 限制: 相机俯仰无 OSC 入口 -> 录制时保持水平; 重放前会检查当前俯仰.
+async function replayTraj(file, stepSec, dry) {
+  const step = Math.max(0.3, Math.min(5, Number(stepSec) || 1.0));
+  const j = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const raw = Array.isArray(j.samples) ? j.samples : [];
+  if (raw.length < 5) throw new Error('轨迹样本太少: ' + raw.length);
+  const b = raw[0];
+  const dur = raw[raw.length - 1].t;
+  // 相对偏航必须先"展开"(连续累计) —— 否则 360° 环绕会被折成 ±180 的跳变
+  const relYawArr = [];
+  let prevRaw = Number(b.rot[1]) || 0, accYaw = 0;
+  for (const s of raw) { accYaw += wrap180((Number(s.rot[1]) || 0) - prevRaw); prevRaw = Number(s.rot[1]) || 0; relYawArr.push(accYaw); }
+  const waypoints = [];
+  let nextT = step, lastK = -1;
+  for (let i = 0; i < raw.length; i++) {
+    const s = raw[i];
+    if (s.t >= nextT || i === raw.length - 1) {
+      if (lastK >= 0) {
+        const prevWp = waypoints[lastK];
+        const dPos = dist3(s.pos, raw[prevWp.idx].pos);
+        const dYaw = Math.abs(relYawArr[i] - relYawArr[prevWp.idx]);
+        const isLast = (i === raw.length - 1);
+        if (!isLast && dPos < 0.05 && dYaw < 3) { nextT = s.t + step; continue; }
+      }
+      waypoints.push({ idx: i, t: s.t, pos: s.pos, yawRel: relYawArr[i] });
+      lastK = waypoints.length - 1;
+      nextT = s.t + step;
+    }
+  }
+  let path = 0, maxOff = 0, pMin = 999, pMax = -999;
+  for (let i = 1; i < raw.length; i++) path += dist3(raw[i].pos, raw[i - 1].pos);
+  for (const s of raw) { maxOff = Math.max(maxOff, dist3(s.pos, b.pos)); pMin = Math.min(pMin, s.rot[0]); pMax = Math.max(pMax, s.rot[0]); }
+  console.log('轨迹: ' + file + ' | 样本 ' + raw.length + ' | 时长 ' + dur.toFixed(2) + 's | 路径长 ' + path.toFixed(2) + 'm | 离起点最远 ' + maxOff.toFixed(2) + 'm');
+  console.log('俯仰范围 ' + pMin.toFixed(1) + '~' + pMax.toFixed(1) + '°' + (Math.max(Math.abs(pMin), Math.abs(pMax)) > 5 ? ' ⚠️ 俯仰无法重放(按水平处理)' : '') + ' | 路点数 ' + waypoints.length + '(步长 ' + step + 's)');
+  for (let k = 0; k < waypoints.length; k++) {
+    const wp = waypoints[k];
+    const rel = [wp.pos[0] - b.pos[0], wp.pos[1] - b.pos[1], wp.pos[2] - b.pos[2]];
+    console.log('  #' + (k + 1) + ' t=' + wp.t.toFixed(1) + 's rel=[' + rel.map(function (x) { return x.toFixed(2); }).join(', ') + '] Δyaw=' + wp.yawRel.toFixed(1) + '°');
+  }
+  if (dry) { console.log('(dry: 只打印路点, 相机不动)'); return { dry: true, waypoints: waypoints.length }; }
+  lastPose = null; lastPoseAt = 0; poseT0 = 0; poseSamples.length = 0;
+  const one = (v) => (Array.isArray(v) ? v[0] : v);
+  const pre = { flying: one(await getVal('/usercamera/Flying')), smoothing: one(await getVal('/usercamera/SmoothingStrength')), turnSpeed: one(await getVal('/usercamera/TurnSpeed')) };
+  poseSock = await bindPose();
+  const s0 = Number(pre.smoothing), ts0 = Number(pre.turnSpeed);
+  try {
+    if (pre.flying !== true) { await send('/usercamera/Flying', [true]); await sleep(500); }
+    if (isFinite(s0) && s0 !== 0) { await sendF('/usercamera/SmoothingStrength', 0); await sleep(300); }
+    if (isFinite(ts0) && ts0 !== 0.1) { await sendF('/usercamera/TurnSpeed', 0.1); await sleep(300); console.log('TurnSpeed 临时 0.1(转向精度), 结束还原'); }
+    if (!lastPose) { await pulseAxis('MoveForward', 40); if (!(await waitPose(0, 2500))) throw new Error('收不到 /usercamera/Pose'); }
+    await sleep(300);
+    const origin = lastPose.pos.slice();
+    const yaw0 = wrap180(lastPose.rot[1]);
+    let pNow = ((Number(lastPose.rot[0]) % 360) + 360) % 360; if (pNow > 180) pNow -= 360;
+    if (Math.abs(pNow) > 5) throw new Error('相机俯仰 ' + pNow.toFixed(1) + '°, 请先把相机放平再重放');
+    let turnRate = null, turnSign = 1;
+    const turnTo = async function (targetYaw) {
+      if (turnRate === null) {
+        const y0 = wrap180(lastPose.rot[1]);
+        await pulseAxis('LookRight', 100);
+        const d = wrap180(wrap180(lastPose.rot[1]) - y0);
+        if (Math.abs(d) < 0.3) throw new Error('LookRight 无效, 无法重放转向');
+        turnSign = d > 0 ? 1 : -1; turnRate = Math.abs(d) / 0.1;
+      }
+      for (let i = 0; i < 25; i++) {
+        const cur = wrap180(lastPose.rot[1]);
+        const err = wrap180(targetYaw - cur);
+        if (Math.abs(err) <= 2) return cur;
+        const ms = Math.max(30, Math.min(600, Math.round(Math.abs(err) / turnRate * 1000 * 0.6)));
+        const dir = Math.sign(err) * turnSign;
+        await pulseAxis(dir > 0 ? 'LookRight' : 'LookLeft', ms);
+      }
+      throw new Error('转向未收敛(目标 ' + targetYaw.toFixed(1) + '°)');
+    };
+    const moveBy = async function (front, left, up) {
+      const segs = [];
+      const doSeg = async function (axis, amount, floatDir) {
+        const target = Math.abs(amount);
+        if (target < 0.03) return;
+        const isFloat = axis === 'LookVertical';
+        const doPulse = isFloat ? function (ms) { return holdFloat(axis, floatDir, ms); } : function (ms) { return pulseAxis(axis, ms); };
+        const segStart = lastPose.pos.slice();
+        const calBefore = lastPose.pos.slice();
+        await doPulse(120);
+        const calDist = dist3(lastPose.pos, calBefore);
+        if (calDist <= 0.005) throw new Error(axis + ' 标定无位移(边界/受阻?)');
+        let speed = calDist / 0.12, pulses = 1;
+        for (let i = 0; i < 20; i++) {
+          const err = target - dist3(lastPose.pos, segStart);
+          if (err <= 0.05) break;
+          const ms = nextPulseMs(err, speed);
+          if (!ms) break;
+          const before = lastPose.pos.slice();
+          await doPulse(ms);
+          const d = dist3(lastPose.pos, before); pulses++;
+          if (d > 0.005) speed = d / (ms / 1000);
+        }
+        segs.push({ axis: axis, target: +target.toFixed(3), moved: +dist3(lastPose.pos, segStart).toFixed(3), pulses: pulses });
+      };
+      if (Math.abs(front) > 0.03) await doSeg(front >= 0 ? 'MoveForward' : 'MoveBackward', front);
+      if (Math.abs(left) > 0.03) await doSeg(left >= 0 ? 'MoveLeft' : 'MoveRight', left);
+      if (Math.abs(up) > 0.03) await doSeg('LookVertical', up, up >= 0 ? 1 : -1);
+      return segs;
+    };
+    const results = [];
+    const tStart = Date.now();
+    for (let k = 0; k < waypoints.length; k++) {
+      const wp = waypoints[k];
+      const rel = [wp.pos[0] - b.pos[0], wp.pos[1] - b.pos[1], wp.pos[2] - b.pos[2]];
+      const targetWorld = [origin[0] + rel[0], origin[1] + rel[1], origin[2] + rel[2]];
+      const targetYaw = wrap180(yaw0 + wp.yawRel);
+      await turnTo(targetYaw);
+      const th = wrap180(lastPose.rot[1]) * Math.PI / 180;
+      const dx = targetWorld[0] - lastPose.pos[0], dy = targetWorld[1] - lastPose.pos[1], dz = targetWorld[2] - lastPose.pos[2];
+      const front = dx * Math.sin(th) + dz * Math.cos(th);
+      const left = -dx * Math.cos(th) + dz * Math.sin(th);
+      const segs = await moveBy(front, left, dy);
+      const reached = lastPose.pos.slice();
+      const posErr = dist3(reached, targetWorld);
+      const yawErr = wrap180(targetYaw - wrap180(lastPose.rot[1]));
+      results.push({ k: k + 1, t: wp.t, targetWorld: targetWorld.map(round3), reached: reached.map(round3), posErr: round3(posErr), yawErr: round3(yawErr), segs: segs });
+      console.log('  路点 ' + (k + 1) + '/' + waypoints.length + ' (t=' + wp.t.toFixed(1) + 's): 位置误差 ' + (posErr * 100).toFixed(1) + ' cm / 偏航误差 ' + yawErr.toFixed(2) + '°');
+    }
+    const elapsed = (Date.now() - tStart) / 1000;
+    const maxPosErr = Math.max.apply(null, results.map(function (r) { return r.posErr; }));
+    const maxYawErr = Math.max.apply(null, results.map(function (r) { return Math.abs(r.yawErr); }));
+    const lastRes = results[results.length - 1];
+    const out = { at: new Date().toISOString(), file: file, waypoints: waypoints.length, stepSec: step,
+      origin: origin.map(round3), yaw0: round3(yaw0), recordedPitchRange: [round3(pMin), round3(pMax)],
+      elapsedSec: +elapsed.toFixed(1), maxPosErr: round3(maxPosErr), maxYawErr: round3(maxYawErr), finalPosErr: lastRes.posErr,
+      results: results, poseSamples: poseSamples.length, samples: poseSamples };
+    fs.mkdirSync('logs', { recursive: true });
+    out.fileOut = 'logs/replay-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.json';
+    fs.writeFileSync(out.fileOut, JSON.stringify(out, null, 1), 'utf8');
+    console.log('');
+    console.log('重放完成: ' + waypoints.length + ' 路点 / 用时 ' + elapsed.toFixed(1) + ' s(原轨迹 ' + dur.toFixed(1) + ' s)');
+    console.log('  最大位置误差 ' + (maxPosErr * 100).toFixed(1) + ' cm / 最大偏航误差 ' + maxYawErr.toFixed(2) + '° / 最终位置误差 ' + (lastRes.posErr * 100).toFixed(1) + ' cm');
+    console.log('  明细已存 ' + out.fileOut);
+    return out;
+  } finally {
+    try { await sendF('/input/LookVertical', 0); } catch (e) {}
+    try { await zeroAll(); } catch (e) {}
+    if (isFinite(ts0) && ts0 !== 0.1) { try { await sendF('/usercamera/TurnSpeed', ts0); await sleep(200); } catch (e) {} }
+    if (isFinite(s0) && s0 !== 0) { try { await sendF('/usercamera/SmoothingStrength', s0); await sleep(200); } catch (e) {} }
+    if (pre.flying === false) { try { await send('/usercamera/Flying', [false]); await sleep(200); } catch (e) {} }
+    if (poseSock) { try { poseSock.close(); } catch (e) {} poseSock = null; }
+  }
+}
+
 (async () => {
   const [cmd, a1, a2, a3] = process.argv.slice(2);
   const parse = v => v === 'true' ? true : (v === 'false' ? false : (isFinite(Number(v)) ? (String(v).indexOf('.') >= 0 ? Number(v) : Number(v)) : v));
@@ -666,6 +887,20 @@ async function rangeProbe(axisName, seconds, value) {
     const r = await moveTo(Number(a1) || 0, Number(a2) || 0, Number(a3) || 0);
     console.log('');
     console.log('⭐ ' + (r.pass ? 'PASS' : 'FAIL') + ': 三维点到点 误差 ' + (r.errorNorm * 100).toFixed(1) + ' cm(判线 ±' + (r.tolerance * 100).toFixed(0) + ' cm)');
+    sock.close(); return;
+  }
+  if (cmd === 'record') {
+    await recordTrajectory(Number(a1) || 10);
+    sock.close(); return;
+  }
+  if (cmd === 'traj-info') {
+    if (!a1) { console.log('用法: node scripts/dev/camera-calib.js traj-info <轨迹文件>'); sock.close(); return; }
+    trajInfo(String(a1));
+    sock.close(); return;
+  }
+  if (cmd === 'replay') {
+    if (!a1) { console.log('用法: node scripts/dev/camera-calib.js replay <轨迹文件> [步长秒=1] [dry]'); sock.close(); return; }
+    await replayTraj(String(a1), Number(a2) || 1.0, String(a3) === 'dry');
     sock.close(); return;
   }
   if (cmd === 'pose-listen') {
