@@ -16,6 +16,7 @@
 //   dolly-import <字符串>      试导入(语义未证实)
 //   pose-listen [秒]          只监听 Pose 并打印(诊断 9001 是否空闲、游戏是否在发)
 //   move-forward <米>          闭环: 相机向前自动走 N 米后停住并报误差(默认 1.000)
+//   move-left <米>             闭环: 相机向左平移 N 米后停住并报误差(默认 1.000)
 //   selftest-move              离线自测(不连 VRChat): 模拟不同真实速度, 校验控制律
 //   zero                       所有输入轴归零
 const dgram = require('dgram'); const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
@@ -127,7 +128,8 @@ async function pulseAxis(axis, ms) {
   finally { await send('/input/' + axis, [false]); }
   await sleep(600);   // 等相机停稳; Pose 事件驱动, 最后一帧就是终点
 }
-async function moveForwardClosed(targetM) {
+async function moveClosed(axis, targetM) {
+  const label = axis === 'MoveLeft' ? '向左' : (axis === 'MoveRight' ? '向右' : (axis === 'MoveBackward' ? '向后' : '向前'));
   const target = Math.max(0.05, Math.min(20, Number(targetM) || 1));
   const tol = 0.15;         // 判 PASS 的误差线(米)
   const stopAt = 0.05;      // 控制器提前量(比判线更紧)
@@ -155,17 +157,22 @@ async function moveForwardClosed(targetM) {
     }
     // 1) 取初始姿态: 相机静止时 Pose 不发 -> 先轻推 100ms(位置以推完后的姿态为起点)
     if (!lastPose) {
-      await pulseAxis('MoveForward', 100);
+      await pulseAxis(axis, 100);
+      if (!(await waitPose(0, 2000)) && axis !== 'MoveForward') {
+        console.log('⚠️ ' + label + ' 微推后收不到 Pose, 改用 MoveForward 取姿态');
+        await pulseAxis('MoveForward', 100);
+      }
       if (!(await waitPose(0, 2500))) throw new Error('收不到 /usercamera/Pose(检查: 9001 是否被占用 / 是否已在世界里 / 相机是否可动)');
     }
     await sleep(300);
     const start = lastPose.pos.slice();
     // 2) 标定脉冲 120ms -> 实测速度(不依赖 OSC 读回; 教训: 读回值≠真实速度)
     const calBefore = lastPose.pos.slice();
-    await pulseAxis('MoveForward', 120);
+    await pulseAxis(axis, 120);
     const calDist = dist3(lastPose.pos, calBefore);
-    let speed = calDist > 0.01 ? calDist / 0.12 : 2.86;
-    console.log('标定: 120ms 位移 ' + calDist.toFixed(3) + ' m -> 估速度 ' + speed.toFixed(2) + ' m/s');
+    if (calDist <= 0.005) throw new Error(label + '(' + axis + ') 未产生位移 —— 该方向可能不可用, 已停止(不盲目重试)');
+    let speed = calDist / 0.12;
+    console.log('标定: ' + label + ' 120ms 位移 ' + calDist.toFixed(3) + ' m -> 估速度 ' + speed.toFixed(2) + ' m/s');
     // 3) 闭环逐步逼近(短脉冲, 每次读 Pose 算误差)
     let pulses = 1;
     for (let i = 0; i < 24; i++) {
@@ -175,7 +182,7 @@ async function moveForwardClosed(targetM) {
       const ms = nextPulseMs(err, speed);
       if (!ms) break;
       const before = lastPose.pos.slice();
-      await pulseAxis('MoveForward', ms);
+      await pulseAxis(axis, ms);
       const d = dist3(lastPose.pos, before);
       pulses++;
       if (d > 0.005) speed = d / (ms / 1000);   // 用实测更新速度估计
@@ -184,8 +191,10 @@ async function moveForwardClosed(targetM) {
     const travelled = dist3(end, start);
     const out = {
       at: new Date().toISOString(),
+      axis: axis, label: label,
       target: round3(target), tolerance: tol,
       start: start.map(round3), end: end.map(round3),
+      vector: [round3(end[0] - start[0]), round3(end[1] - start[1]), round3(end[2] - start[2])],
       travelled: round3(travelled),
       error: round3(travelled - target),
       pass: Math.abs(travelled - target) <= tol,
@@ -196,10 +205,10 @@ async function moveForwardClosed(targetM) {
     };
     try {
       fs.mkdirSync('logs', { recursive: true });
-      out.file = 'logs/pose-move-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.json';
+      out.file = 'logs/pose-' + axis.toLowerCase() + '-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.json';
       fs.writeFileSync(out.file, JSON.stringify(out, null, 1), 'utf8');
     } catch (e) { out.file = null; }
-    console.log('结果: 起点 [' + start.map((x) => x.toFixed(2)).join(', ') + '] -> 终点 [' + end.map((x) => x.toFixed(2)).join(', ') + ']');
+    console.log('结果(' + label + '): 起点 [' + start.map((x) => x.toFixed(2)).join(', ') + '] -> 终点 [' + end.map((x) => x.toFixed(2)).join(', ') + ']  位移向量 [' + (end[0] - start[0]).toFixed(2) + ', ' + (end[1] - start[1]).toFixed(2) + ', ' + (end[2] - start[2]).toFixed(2) + ']');
     console.log('      实际位移 ' + travelled.toFixed(3) + ' m / 误差 ' + ((travelled - target) >= 0 ? '+' : '') + ((travelled - target) * 100).toFixed(1) + ' cm / 脉冲 ' + pulses + ' 次 / Pose 采样 ' + poseSamples.length + ' 条');
     if (out.file) console.log('      明细已存 ' + out.file);
     return out;
@@ -287,10 +296,11 @@ async function selftestMove() {
     } finally { if (poseSock) { try { poseSock.close(); } catch (e) {} poseSock = null; } }
     sock.close(); return;
   }
-  if (cmd === 'move-forward') {
-    const r = await moveForwardClosed(Number(a1) || 1);
+  if (cmd === 'move-forward' || cmd === 'move-left') {
+    const axis = cmd === 'move-left' ? 'MoveLeft' : 'MoveForward';
+    const r = await moveClosed(axis, Number(a1) || 1);
     console.log('');
-    console.log('⭐ ' + (r.pass ? 'PASS' : 'FAIL') + ': 目标 ' + r.target.toFixed(3) + ' m / 实际 ' + r.travelled.toFixed(3) + ' m / 误差 ' + (r.error * 100).toFixed(1) + ' cm(判线 ±' + (r.tolerance * 100).toFixed(0) + ' cm)');
+    console.log('⭐ ' + (r.pass ? 'PASS' : 'FAIL') + ': ' + r.label + ' 目标 ' + r.target.toFixed(3) + ' m / 实际 ' + r.travelled.toFixed(3) + ' m / 误差 ' + (r.error * 100).toFixed(1) + ' cm(判线 ±' + (r.tolerance * 100).toFixed(0) + ' cm)');
     sock.close(); return;
   }
   if (cmd === 'selftest-move') {
