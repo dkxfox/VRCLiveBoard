@@ -17,6 +17,8 @@
 //   pose-listen [秒]          只监听 Pose 并打印(诊断 9001 是否空闲、游戏是否在发)
 //   move-forward <米>          闭环: 相机向前自动走 N 米后停住并报误差(默认 1.000)
 //   move-left <米>             闭环: 相机向左平移 N 米后停住并报误差(默认 1.000)
+//   move-vertical <米>         闭环竖直移动(正=上/负=下; 实测 /input/LookVertical 就是上下平移轴)
+//   axis <轴名> <值> <毫秒>    通用 float 轴探针(保持-读数-归零; 例: axis LookVertical 1 200)
 //   selftest-move              离线自测(不连 VRChat): 模拟不同真实速度, 校验控制律
 //   zero                       所有输入轴归零
 const dgram = require('dgram'); const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
@@ -256,8 +258,88 @@ async function selftestMove() {
   return allPass;
 }
 
+// ===== 垂直移动闭环(2026-10-22): /input/LookVertical(浮点 -1~1) =====
+// ⭐ 2026-10-22 实测意外发现: 这个轴**不是**抬头/低头, 而是让飞行相机**直接上下平移**:
+//    LookVertical=+1 保持 200ms -> posY +0.625 m(约 3.1 m/s, 与前进同速), 姿态不变.
+//    相机俯仰没有 OSC 入口(见 DEV-NOTES 355), 但垂直平移有了 -> 轨迹重放的第三个平移轴齐了.
+async function holdFloat(axis, value, ms) {
+  const dur = Math.max(30, Math.min(2000, Math.round(ms) || 80));
+  try { await sendF('/input/' + axis, value); await sleep(dur); }
+  finally { await sendF('/input/' + axis, 0); }
+  await sleep(450);
+}
+async function moveVertical(targetM) {
+  const target = Math.max(-20, Math.min(20, Number(targetM) || 1));
+  const tol = 0.15;
+  const axis = 'LookVertical';
+  const dir = target >= 0 ? 1 : -1;          // +1 = 上(实测); 向下视为对称(本轮回头会验证)
+  const label = dir > 0 ? '向上' : '向下';
+  lastPose = null; lastPoseAt = 0; poseT0 = 0; poseSamples.length = 0;
+  const one = (v) => (Array.isArray(v) ? v[0] : v);
+  const pre = { flying: one(await getVal('/usercamera/Flying')), smoothing: one(await getVal('/usercamera/SmoothingStrength')) };
+  console.log('前置状态: Flying=' + JSON.stringify(pre.flying) + ' Smoothing=' + JSON.stringify(pre.smoothing) + ' | 目标 ΔY = ' + target.toFixed(3) + ' m(' + label + ')');
+  poseSock = await bindPose();
+  const s0 = Number(pre.smoothing);
+  try {
+    if (pre.flying !== true) { await send('/usercamera/Flying', [true]); await sleep(500); console.log('飞行模式已打开 -> ' + JSON.stringify(await getVal('/usercamera/Flying'))); }
+    if (isFinite(s0) && s0 !== 0) { await sendF('/usercamera/SmoothingStrength', 0); await sleep(400); console.log('SmoothingStrength 写 0 -> 读回 ' + JSON.stringify(await getVal('/usercamera/SmoothingStrength')) + '(原值 ' + JSON.stringify(pre.smoothing) + ', 结束还原)'); }
+    if (!lastPose) { await pulseAxis('MoveForward', 40); if (!(await waitPose(0, 2500))) throw new Error('收不到 /usercamera/Pose'); }
+    await sleep(300);
+    const start = lastPose.pos.slice();
+    // 1) 120ms 标定: 实测竖直速度, 同时确认方向
+    const calBefore = lastPose.pos.slice();
+    await holdFloat(axis, dir, 120);
+    const calDy = lastPose.pos[1] - calBefore[1];
+    if (calDy * dir <= 0.01) throw new Error(axis + ' 保持 ' + dir + ' 后没有按预期竖直移动(ΔY=' + calDy.toFixed(3) + ' m) —— 方向/可用性变了, 已停止(不盲目重试)');
+    let speed = Math.abs(calDy) / 0.12;
+    console.log('标定: ' + axis + '=' + dir + ' 保持 120ms -> ΔY ' + calDy.toFixed(3) + ' m -> 估竖直速度 ' + speed.toFixed(2) + ' m/s');
+    // 2) 闭环逼近(过冲就停, 不反向 —— 反方向未验证)
+    let pulses = 1;
+    for (let i = 0; i < 24; i++) {
+      const dy = lastPose.pos[1] - start[1];
+      const err = target - dy;
+      if (Math.sign(err) !== dir || Math.abs(err) <= 0.05) break;
+      const ms = Math.max(30, Math.min(400, Math.round(Math.abs(err) / speed * 1000 * 0.6)));
+      const before = lastPose.pos.slice();
+      await holdFloat(axis, dir, ms);
+      const d = lastPose.pos[1] - before[1];
+      pulses++;
+      if (Math.abs(d) > 0.005) speed = Math.abs(d) / (ms / 1000);
+    }
+    const end = lastPose.pos.slice();
+    const dy = end[1] - start[1];
+    const horiz = Math.hypot(end[0] - start[0], end[2] - start[2]);
+    const out = {
+      at: new Date().toISOString(), axis: axis, label: label,
+      target: round3(target), tolerance: tol, direction: dir,
+      start: start.map(round3), end: end.map(round3),
+      vector: [round3(end[0] - start[0]), round3(end[1] - start[1]), round3(end[2] - start[2])],
+      dy: round3(dy), error: round3(dy - target), horiz: round3(horiz),
+      pass: Math.abs(dy - target) <= tol && horiz <= 0.3,
+      pulses: pulses, speed: +speed.toFixed(2),
+      poseSamples: poseSamples.length, samples: poseSamples,
+      pre: pre, calibration: { ms: 120, dy: round3(calDy) },
+    };
+    try {
+      fs.mkdirSync('logs', { recursive: true });
+      out.file = 'logs/pose-vertical-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.json';
+      fs.writeFileSync(out.file, JSON.stringify(out, null, 1), 'utf8');
+    } catch (e) { out.file = null; }
+    console.log('结果(' + label + '): 起点 [' + start.map((x) => x.toFixed(2)).join(', ') + '] -> 终点 [' + end.map((x) => x.toFixed(2)).join(', ') + ']  位移向量 [' + (end[0] - start[0]).toFixed(2) + ', ' + (end[1] - start[1]).toFixed(2) + ', ' + (end[2] - start[2]).toFixed(2) + ']');
+    console.log('      实际 ΔY ' + dy.toFixed(3) + ' m / 误差 ' + ((dy - target) >= 0 ? '+' : '') + ((dy - target) * 100).toFixed(1) + ' cm / 水平漂移 ' + (horiz * 100).toFixed(1) + ' cm / 脉冲 ' + pulses + ' 次 / Pose 采样 ' + poseSamples.length + ' 条');
+    if (out.file) console.log('      明细已存 ' + out.file);
+    return out;
+  } finally {
+    try { await sendF('/input/' + axis, 0); } catch (e) {}
+    try { await zeroAll(); } catch (e) {}
+    if (isFinite(s0) && s0 !== 0) { try { await sendF('/usercamera/SmoothingStrength', s0); await sleep(250); console.log('SmoothingStrength 已还原 -> ' + JSON.stringify(await getVal('/usercamera/SmoothingStrength'))); } catch (e) {} }
+    if (pre.flying === false) { try { await send('/usercamera/Flying', [false]); await sleep(250); } catch (e) {} }
+    if (poseSock) { try { poseSock.close(); } catch (e) {} poseSock = null; }
+  }
+}
+
 (async () => {
-  const [cmd, a1, a2] = process.argv.slice(2);
+  const [cmd, a1, a2, a3] = process.argv.slice(2);
   const parse = v => v === 'true' ? true : (v === 'false' ? false : (isFinite(Number(v)) ? (String(v).indexOf('.') >= 0 ? Number(v) : Number(v)) : v));
   if (!cmd || cmd === 'probe') {
     console.log('OSCQuery 端口 = ' + PORT + (await getVal('/usercamera/Flying') === undefined ? '  ⚠️ 取不到(VRChat 没开?)' : ''));
@@ -277,6 +359,35 @@ async function selftestMove() {
   if (cmd === 'dolly-play') { const d = Number(a1) || 1; await sendNum('/dolly/PlayDelayed', d); await sleep(600); console.log('已发 PlayDelayed ' + d + ' -> Play=' + JSON.stringify(await getVal('/dolly/Play'))); sock.close(); return; }
   if (cmd === 'dolly-stop') { await send('/dolly/Play', [false]); await sleep(600); console.log('已停 -> Play=' + JSON.stringify(await getVal('/dolly/Play'))); sock.close(); return; }
   if (cmd === 'dolly-import') { await send('/dolly/Import', [String(a1)]); await sleep(900); console.log('已发 Import "' + a1 + '" -> Play=' + JSON.stringify(await getVal('/dolly/Play'))); sock.close(); return; }
+  if (cmd === 'axis') {
+    const name = String(a1 || ''); const value = Number(a2);
+    const ms = Math.max(30, Math.min(2000, Number(a3) || 150));
+    if (!name || !isFinite(value)) { console.log('用法: node scripts/dev/camera-calib.js axis <轴名> <值> <毫秒>  例: axis LookHorizontal 1 200'); sock.close(); return; }
+    lastPose = null; lastPoseAt = 0; poseT0 = 0; poseSamples.length = 0;
+    poseSock = await bindPose();
+    try {
+      if (!lastPose) { await pulseAxis('MoveForward', 40); if (!(await waitPose(0, 2500))) throw new Error('收不到 /usercamera/Pose'); }
+      await sleep(250);
+      const before = { pos: lastPose.pos.slice(), rot: lastPose.rot.slice() };
+      console.log('轴 ' + name + ' = ' + value + ' 保持 ' + ms + 'ms; 之前 pos=[' + before.pos.map((x) => x.toFixed(3)).join(', ') + '] rot=[' + before.rot.map((x) => x.toFixed(2)).join(', ') + ']');
+      await holdFloat(name, value, ms);
+      await sleep(200);
+      const after = { pos: lastPose.pos.slice(), rot: lastPose.rot.slice() };
+      console.log('之后 pos=[' + after.pos.map((x) => x.toFixed(3)).join(', ') + '] rot=[' + after.rot.map((x) => x.toFixed(2)).join(', ') + ']');
+      console.log('变化: Δpos=[' + [0,1,2].map((i) => (after.pos[i] - before.pos[i]).toFixed(3)).join(', ') + '] Δrot=[' + [0,1,2].map((i) => (after.rot[i] - before.rot[i]).toFixed(2)).join(', ') + ']');
+    } finally {
+      try { await sendF('/input/' + name, 0); } catch (e) {}
+      try { await zeroAll(); } catch (e) {}
+      if (poseSock) { try { poseSock.close(); } catch (e) {} poseSock = null; }
+    }
+    sock.close(); return;
+  }
+  if (cmd === 'move-vertical') {
+    const r = await moveVertical(Number(a1) || 1);
+    console.log('');
+    console.log('⭐ ' + (r.pass ? 'PASS' : 'FAIL') + ': ' + r.label + ' 目标 ΔY ' + r.target.toFixed(3) + ' m / 实际 ΔY ' + r.dy.toFixed(3) + ' m / 误差 ' + (r.error * 100).toFixed(1) + ' cm(判线 ±' + (r.tolerance * 100).toFixed(0) + ' cm, 水平漂移 ' + (r.horiz * 100).toFixed(1) + ' cm)');
+    sock.close(); return;
+  }
   if (cmd === 'pose-listen') {
     const secs = Math.max(1, Math.min(120, Number(a1) || 10));
     lastPose = null; lastPoseAt = 0; poseT0 = 0; poseSamples.length = 0;
