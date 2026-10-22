@@ -5,7 +5,8 @@
 //   probe                      列出 /usercamera 与 /dolly 的当前值
 //   shot <标签>                拍一张(并打印最新照片名)
 //   pulse <轴> <毫秒>          输入脉冲(MoveForward/LookRight/...), 结束一律归零
-//   set <地址> <值>            给 /usercamera 或 /dolly 下的地址写值(true/false/数字)
+//   set <地址> <值>            给 /usercamera 或 /dolly 下的地址写值(true/false/数字; 整数会被打成 type i)
+//   setf <地址> <数值>         同上但强制 float32(端点 TYPE=f 时用这个, 例如 SmoothingStrength)
 //   fly <on|off>               飞行模式开关
 //   speed <值>                 FlySpeed
 //   turn <值>                  TurnSpeed
@@ -13,6 +14,9 @@
 //   dolly-play [延迟秒]        触发运镜播放(默认 1 秒)
 //   dolly-stop                 停止运镜
 //   dolly-import <字符串>      试导入(语义未证实)
+//   pose-listen [秒]          只监听 Pose 并打印(诊断 9001 是否空闲、游戏是否在发)
+//   move-forward <米>          闭环: 相机向前自动走 N 米后停住并报误差(默认 1.000)
+//   selftest-move              离线自测(不连 VRChat): 模拟不同真实速度, 校验控制律
 //   zero                       所有输入轴归零
 const dgram = require('dgram'); const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
 function oscqPort() {
@@ -35,13 +39,214 @@ function oscMsg(addr, args) {
 }
 const sock = dgram.createSocket('udp4');
 const send = (addr, args) => new Promise(r => sock.send(oscMsg(addr, args), OSC_PORT, '127.0.0.1', () => r(true)));
+// ⚠️ 2026-10-22 实发: oscMsg 把"整数值"打成 OSC type 'i', 而 /usercamera 的数值端点 TYPE=f;
+//    往 SmoothingStrength 写 0 之后 OSCQuery 读回变成 7.96e8(脏值) -> 这类端点必须用 float32。
+function oscMsgF(addr, value) { const b = Buffer.alloc(4); b.writeFloatBE(Number(value) || 0); return Buffer.concat([oscString(addr), oscString(',f'), b]); }
+const sendF = (addr, value) => new Promise(r => sock.send(oscMsgF(addr, value), OSC_PORT, '127.0.0.1', () => r(true)));
+// 数字写入口: 先查端点 TYPE, i 用整数编码, 其余(f/未知)一律 float32 —— 避免再写出 7.96e8 那种脏值
+async function sendNum(addr, value) { const t = await getType(addr); if (t === 'i') return send(addr, [Math.round(Number(value))]); return sendF(addr, value); }
 const getVal = p => new Promise(res => { const rq = http.get('http://127.0.0.1:' + PORT + p, { timeout: 4000 }, x => { let d = ''; x.on('data', c => d += c); x.on('end', () => { try { res(JSON.parse(d).VALUE); } catch (e) { res(null); } }); }); rq.on('error', () => res(undefined)); rq.on('timeout', () => { rq.destroy(); res(undefined); }); });
+// 读端点 OSCQuery 的 TYPE(f=浮点 / i=整数), 用于按端点类型选编码(见 sendF 的教训)
+const getType = p => new Promise(res => { const rq = http.get('http://127.0.0.1:' + PORT + p, { timeout: 4000 }, x => { let d = ''; x.on('data', c => d += c); x.on('end', () => { try { res(JSON.parse(d).TYPE); } catch (e) { res(null); } }); }); rq.on('error', () => res(null)); rq.on('timeout', () => { rq.destroy(); res(null); }); });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const AXES = ['MoveForward', 'MoveBackward', 'MoveLeft', 'MoveRight', 'LookLeft', 'LookRight'];
 async function zeroAll() { for (const a of AXES) { await send('/input/' + a, [false]); await sleep(40); } }
 const picRoot = path.join(os.homedir(), 'Pictures', 'VRChat');
 function photos() { const out = []; (function w(d) { try { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) w(p); else if (/\.png$/i.test(e.name)) out.push({ p, t: fs.statSync(p).mtimeMs, n: e.name }); } } catch (x) {} })(picRoot); return out.sort((a, b) => b.t - a.t); }
 const USECAM = ['ShowUIInCamera','Flying','Lock','LocalPlayer','RemotePlayer','Environment','GreenScreen','SmoothMovement','LookAtMe','AutoLevelRoll','AutoLevelPitch','ShowFocus','Streaming','TriggerTakesPhotos','DollyPathsStayVisible','FlingToClose','AudioFromCamera','RollWhileFlying','OrientationIsLandscape','Zoom','Exposure','FocalDistance','Aperture','Hue','Saturation','Lightness','LookAtMeXOffset','LookAtMeYOffset','FlySpeed','TurnSpeed','SmoothingStrength','PhotoRate'];
+// ===== 2026-10-22 新增: Pose 监听 + 闭环点位移动 + 离线自测 =====
+// 依据: docs/CAMERA-OSC-CAPABILITY.md 第 7.10 节(用户配合实测)。
+//   /usercamera/Pose  ,ffffff  [posX, posY(高度 m), posZ, pitch(°), yaw(°), roll(°)]
+//   世界坐标、角度 0~360; **事件驱动** —— 相机静止时不发, 运动时约 61Hz => "当前姿态" = 最后一次收到的值。
+// ⚠️ 9001 是"游戏 -> 客户端"回传口, 同一时刻只能一个程序收; 被占用时这里会明确报错(不静默)。
+const POSE_PORT = 9001;
+const POSE_ADDR = '/usercamera/Pose';
+let poseSock = null;
+let lastPose = null;       // { pos:[x,y,z], rot:[pitch,yaw,roll] }
+let lastPoseAt = 0;
+let poseT0 = 0;
+const poseSamples = [];
+const round3 = (v) => Math.round(Number(v) * 1000) / 1000;
+function parseOsc(buf) {
+  if (!Buffer.isBuffer(buf) || buf.length < 8) return null;
+  const aEnd = buf.indexOf(0);
+  if (aEnd < 0) return null;
+  const addr = buf.slice(0, aEnd).toString('utf8');
+  let p = aEnd + 1; while (p % 4) p++;
+  const tEnd = buf.indexOf(0, p);
+  if (tEnd < 0) return null;
+  const tags = buf.slice(p, tEnd).toString('utf8');
+  p = tEnd + 1; while (p % 4) p++;
+  const args = [];
+  for (let i = 1; i < tags.length; i++) {
+    const t = tags[i];
+    if (t === 'f') { args.push(buf.readFloatBE(p)); p += 4; }
+    else if (t === 'i') { args.push(buf.readInt32BE(p)); p += 4; }
+    else return null;   // Pose 只有 float; 其它消息(字符串等)不解析, 直接忽略
+  }
+  return { addr, tags, args };
+}
+function bindPose() {
+  return new Promise((resolve, reject) => {
+    const s = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+    s.on('message', (m) => {
+      const o = parseOsc(m);
+      if (!o || o.addr !== POSE_ADDR || o.args.length < 6) return;
+      const v = o.args.slice(0, 6).map(Number);
+      if (v.some((x) => !isFinite(x))) return;
+      lastPose = { pos: [v[0], v[1], v[2]], rot: [v[3], v[4], v[5]] };
+      lastPoseAt = Date.now();
+      if (!poseT0) poseT0 = lastPoseAt;
+      poseSamples.push({ ms: lastPoseAt - poseT0, pos: lastPose.pos.map(round3), rot: lastPose.rot.map((x) => +x.toFixed(2)) });
+      if (poseSamples.length > 20000) poseSamples.shift();
+    });
+    s.on('error', (e) => reject(new Error('UDP ' + POSE_PORT + ' 监听失败(可能被别的程序占用): ' + String((e && e.message) || e))));
+    s.bind(POSE_PORT, '127.0.0.1', () => resolve(s));
+  });
+}
+function waitPose(afterAt, timeoutMs) {
+  const t0w = Date.now();
+  return new Promise((resolve) => {
+    (function poll() {
+      if (lastPoseAt > afterAt) return resolve(true);
+      if (Date.now() - t0w > timeoutMs) return resolve(false);
+      setTimeout(poll, 30);
+    })();
+  });
+}
+function dist3(a, b) { return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]); }
+// 控制律(实机闭环与离线自测共用): 误差越大脉冲越长; 0.6 步进防过冲; 最短 30ms
+function nextPulseMs(err, speed) {
+  if (err <= 0.04) return 0;
+  const raw = (err / Math.max(0.2, speed)) * 1000 * 0.6;
+  return Math.max(30, Math.min(400, Math.round(raw)));
+}
+async function pulseAxis(axis, ms) {
+  const dur = Math.max(30, Math.min(20000, Math.round(ms) || 40));
+  try { await send('/input/' + axis, [true]); await sleep(dur); }
+  finally { await send('/input/' + axis, [false]); }
+  await sleep(600);   // 等相机停稳; Pose 事件驱动, 最后一帧就是终点
+}
+async function moveForwardClosed(targetM) {
+  const target = Math.max(0.05, Math.min(20, Number(targetM) || 1));
+  const tol = 0.15;         // 判 PASS 的误差线(米)
+  const stopAt = 0.05;      // 控制器提前量(比判线更紧)
+  lastPose = null; lastPoseAt = 0; poseT0 = 0; poseSamples.length = 0;
+  // OSCQuery 的 VALUE 是数组(如 [true]/[5]); 先归一化, 否则 [true] !== true 会把恢复逻辑带偏
+  const one = (v) => (Array.isArray(v) ? v[0] : v);
+  const pre = {
+    flying: one(await getVal('/usercamera/Flying')),
+    flySpeed: one(await getVal('/usercamera/FlySpeed')),
+    turnSpeed: one(await getVal('/usercamera/TurnSpeed')),
+    smoothing: one(await getVal('/usercamera/SmoothingStrength')),
+  };
+  console.log('前置状态: Flying=' + JSON.stringify(pre.flying) + ' FlySpeed=' + JSON.stringify(pre.flySpeed) +
+    ' TurnSpeed=' + JSON.stringify(pre.turnSpeed) + ' Smoothing=' + JSON.stringify(pre.smoothing));
+  poseSock = await bindPose();
+  const s0 = Number(pre.smoothing);
+  try {
+    if (pre.flying !== true) {
+      await send('/usercamera/Flying', [true]); await sleep(500);
+      console.log('飞行模式已打开 -> 读回 ' + JSON.stringify(await getVal('/usercamera/Flying')));
+    }
+    if (isFinite(s0) && s0 !== 0) {
+      await sendF('/usercamera/SmoothingStrength', 0); await sleep(400);
+      console.log('SmoothingStrength 写 0 -> 读回 ' + JSON.stringify(await getVal('/usercamera/SmoothingStrength')) + '(原值 ' + JSON.stringify(pre.smoothing) + ', 结束还原)');
+    }
+    // 1) 取初始姿态: 相机静止时 Pose 不发 -> 先轻推 100ms(位置以推完后的姿态为起点)
+    if (!lastPose) {
+      await pulseAxis('MoveForward', 100);
+      if (!(await waitPose(0, 2500))) throw new Error('收不到 /usercamera/Pose(检查: 9001 是否被占用 / 是否已在世界里 / 相机是否可动)');
+    }
+    await sleep(300);
+    const start = lastPose.pos.slice();
+    // 2) 标定脉冲 120ms -> 实测速度(不依赖 OSC 读回; 教训: 读回值≠真实速度)
+    const calBefore = lastPose.pos.slice();
+    await pulseAxis('MoveForward', 120);
+    const calDist = dist3(lastPose.pos, calBefore);
+    let speed = calDist > 0.01 ? calDist / 0.12 : 2.86;
+    console.log('标定: 120ms 位移 ' + calDist.toFixed(3) + ' m -> 估速度 ' + speed.toFixed(2) + ' m/s');
+    // 3) 闭环逐步逼近(短脉冲, 每次读 Pose 算误差)
+    let pulses = 1;
+    for (let i = 0; i < 24; i++) {
+      const travelled = dist3(lastPose.pos, start);
+      const err = target - travelled;
+      if (err <= stopAt) break;
+      const ms = nextPulseMs(err, speed);
+      if (!ms) break;
+      const before = lastPose.pos.slice();
+      await pulseAxis('MoveForward', ms);
+      const d = dist3(lastPose.pos, before);
+      pulses++;
+      if (d > 0.005) speed = d / (ms / 1000);   // 用实测更新速度估计
+    }
+    const end = lastPose.pos.slice();
+    const travelled = dist3(end, start);
+    const out = {
+      at: new Date().toISOString(),
+      target: round3(target), tolerance: tol,
+      start: start.map(round3), end: end.map(round3),
+      travelled: round3(travelled),
+      error: round3(travelled - target),
+      pass: Math.abs(travelled - target) <= tol,
+      pulses: pulses, speed: +speed.toFixed(2),
+      pre: pre, calibration: { ms: 120, moved: round3(calDist) },
+      poseSamples: poseSamples.length,
+      samples: poseSamples,
+    };
+    try {
+      fs.mkdirSync('logs', { recursive: true });
+      out.file = 'logs/pose-move-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.json';
+      fs.writeFileSync(out.file, JSON.stringify(out, null, 1), 'utf8');
+    } catch (e) { out.file = null; }
+    console.log('结果: 起点 [' + start.map((x) => x.toFixed(2)).join(', ') + '] -> 终点 [' + end.map((x) => x.toFixed(2)).join(', ') + ']');
+    console.log('      实际位移 ' + travelled.toFixed(3) + ' m / 误差 ' + ((travelled - target) >= 0 ? '+' : '') + ((travelled - target) * 100).toFixed(1) + ' cm / 脉冲 ' + pulses + ' 次 / Pose 采样 ' + poseSamples.length + ' 条');
+    if (out.file) console.log('      明细已存 ' + out.file);
+    return out;
+  } finally {
+    try { await zeroAll(); } catch (e) {}
+    if (isFinite(s0) && s0 !== 0) { try { await sendF('/usercamera/SmoothingStrength', s0); await sleep(250); console.log('SmoothingStrength 已还原 -> ' + JSON.stringify(await getVal('/usercamera/SmoothingStrength'))); } catch (e) {} }
+    if (pre.flying === false) { try { await send('/usercamera/Flying', [false]); await sleep(250); } catch (e) {} }
+    if (poseSock) { try { poseSock.close(); } catch (e) {} poseSock = null; }
+  }
+}
+async function selftestMove() {
+  // 纯离线(不建 socket / 不发 OSC): 模拟"真实速度未知"的相机, 对照
+  //   开环: 按文档常数 2.86 m/s 一次脉冲走 1 米;
+  //   闭环: 先 120ms 标定, 再按误差分步逼近(与实机同一控制律)。
+  const CONST = 2.86;   // 能力总表 7.10.5 的实测量级
+  const cases = [1.4, 2.86, 4.0];
+  const rows = [];
+  let allPass = true;
+  for (const actual of cases) {
+    const openMs = Math.round(1 / CONST * 1000);
+    const openErr = actual * openMs / 1000 - 1;
+    let pos = actual * 0.12;           // 标定脉冲 120ms
+    let pulses = 1;
+    let est = pos / 0.12;              // 标定得到的估计速度
+    for (let i = 0; i < 24; i++) {
+      const err = 1 - pos;
+      if (err <= 0.05) break;
+      const ms = nextPulseMs(err, est);
+      if (!ms) break;
+      pos += actual * ms / 1000; pulses++;
+      est = actual;                    // 实机每步都用"实测位移/时长"更新估计
+    }
+    const closedErr = pos - 1;
+    const pass = Math.abs(closedErr) <= 0.15;
+    allPass = allPass && pass;
+    rows.push({ actual, openErr, closedErr, pulses, pass });
+  }
+  console.log('离线自测(不连 VRChat) —— 目标 1.000 m, 判线 ±15 cm');
+  console.log('  真实速度   开环(按常数一次走完)   闭环(标定+分步)   脉冲数   结论');
+  for (const r of rows) {
+    console.log('  ' + r.actual.toFixed(2).padStart(5) + ' m/s   ' + (r.openErr * 100).toFixed(1).padStart(8) + ' cm            ' +
+      (r.closedErr * 100).toFixed(1).padStart(8) + ' cm     ' + String(r.pulses).padStart(3) + '     ' + (r.pass ? 'PASS' : 'FAIL'));
+  }
+  console.log('  => ' + (allPass ? 'PASS: 三种真实速度下闭环都 <= 15 cm; 开环误差随速度漂移明显(所以必须闭环)' : 'FAIL: 控制律需要调整'));
+  return allPass;
+}
+
 (async () => {
   const [cmd, a1, a2] = process.argv.slice(2);
   const parse = v => v === 'true' ? true : (v === 'false' ? false : (isFinite(Number(v)) ? (String(v).indexOf('.') >= 0 ? Number(v) : Number(v)) : v));
@@ -57,10 +262,42 @@ const USECAM = ['ShowUIInCamera','Flying','Lock','LocalPlayer','RemotePlayer','E
     console.log('已脉冲 ' + axis + ' ' + ms + 'ms(已归零)'); sock.close(); return; }
   if (cmd === 'zero') { await zeroAll(); console.log('所有输入轴已归零'); sock.close(); return; }
   const map = { fly: '/usercamera/Flying', speed: '/usercamera/FlySpeed', turn: '/usercamera/TurnSpeed', streaming: '/usercamera/Streaming' };
-  if (map[cmd]) { await send(map[cmd], [parse(a1)]); await sleep(700); console.log(cmd + ' -> ' + JSON.stringify(await getVal(map[cmd]))); sock.close(); return; }
-  if (cmd === 'set') { await send(a1, [parse(a2)]); await sleep(700); console.log(a1 + ' -> ' + JSON.stringify(await getVal(a1))); sock.close(); return; }
-  if (cmd === 'dolly-play') { const d = Number(a1) || 1; await send('/dolly/PlayDelayed', [d]); await sleep(600); console.log('已发 PlayDelayed ' + d + ' -> Play=' + JSON.stringify(await getVal('/dolly/Play'))); sock.close(); return; }
+  if (map[cmd]) { const v = parse(a1); if (typeof v === 'number') await sendNum(map[cmd], v); else await send(map[cmd], [v]); await sleep(700); console.log(cmd + ' -> ' + JSON.stringify(await getVal(map[cmd]))); sock.close(); return; }
+  if (cmd === 'set') { const v = parse(a2); if (typeof v === 'number') await sendNum(a1, v); else await send(a1, [v]); await sleep(700); console.log(a1 + ' -> ' + JSON.stringify(await getVal(a1))); sock.close(); return; }
+  if (cmd === 'setf') { await sendF(a1, parse(a2)); await sleep(700); console.log(a1 + ' (float) -> ' + JSON.stringify(await getVal(a1))); sock.close(); return; }
+  if (cmd === 'dolly-play') { const d = Number(a1) || 1; await sendNum('/dolly/PlayDelayed', d); await sleep(600); console.log('已发 PlayDelayed ' + d + ' -> Play=' + JSON.stringify(await getVal('/dolly/Play'))); sock.close(); return; }
   if (cmd === 'dolly-stop') { await send('/dolly/Play', [false]); await sleep(600); console.log('已停 -> Play=' + JSON.stringify(await getVal('/dolly/Play'))); sock.close(); return; }
   if (cmd === 'dolly-import') { await send('/dolly/Import', [String(a1)]); await sleep(900); console.log('已发 Import "' + a1 + '" -> Play=' + JSON.stringify(await getVal('/dolly/Play'))); sock.close(); return; }
+  if (cmd === 'pose-listen') {
+    const secs = Math.max(1, Math.min(120, Number(a1) || 10));
+    lastPose = null; lastPoseAt = 0; poseT0 = 0; poseSamples.length = 0;
+    console.log('监听 /usercamera/Pose 最多 ' + secs + ' 秒(127.0.0.1:' + POSE_PORT + '); 请在 VR 里动一下相机…');
+    try {
+      poseSock = await bindPose();
+      const tEnd = Date.now() + secs * 1000;
+      let lastPrint = 0;
+      while (Date.now() < tEnd) {
+        await sleep(200);
+        if (lastPose && Date.now() - lastPrint > 500) {
+          lastPrint = Date.now();
+          console.log('  Pose pos=[' + lastPose.pos.map((x) => x.toFixed(2)).join(', ') + '] rot=[' + lastPose.rot.map((x) => x.toFixed(1)).join(', ') + '] 采样=' + poseSamples.length);
+        }
+      }
+      console.log(lastPose ? ('结束: 共 ' + poseSamples.length + ' 条 Pose 采样') : '⚠️ 一条 Pose 都没收到(相机没动 / 不在世界里 / 端口不对)');
+    } finally { if (poseSock) { try { poseSock.close(); } catch (e) {} poseSock = null; } }
+    sock.close(); return;
+  }
+  if (cmd === 'move-forward') {
+    const r = await moveForwardClosed(Number(a1) || 1);
+    console.log('');
+    console.log('⭐ ' + (r.pass ? 'PASS' : 'FAIL') + ': 目标 ' + r.target.toFixed(3) + ' m / 实际 ' + r.travelled.toFixed(3) + ' m / 误差 ' + (r.error * 100).toFixed(1) + ' cm(判线 ±' + (r.tolerance * 100).toFixed(0) + ' cm)');
+    sock.close(); return;
+  }
+  if (cmd === 'selftest-move') {
+    const ok = await selftestMove();
+    sock.close();
+    process.exitCode = ok ? 0 : 1;
+    return;
+  }
   console.log('未知命令: ' + cmd); sock.close();
-})().catch(async e => { console.log('出错: ' + e.message); try { await zeroAll(); } catch (x) {} sock.close(); });
+})().catch(async e => { console.log('出错: ' + e.message); try { await zeroAll(); } catch (x) {} try { if (poseSock) poseSock.close(); } catch (x) {} sock.close(); });
