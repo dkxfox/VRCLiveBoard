@@ -3003,5 +3003,6 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 | 361 | 2026-10-22 | 世界模式确认: 飞行边界同样是 15.00 m 球(与跟随方式无关) |
 | 362 | 2026-10-22 | 轨迹重放准备: record / traj-info / replay 三命令 + VRC+ 运镜坐标语义入档 |
 | 363 | 2026-10-22 | 轨迹重放首战成功: 录 14.9 s / 9.17 m 水平轨迹 -> 9 路点重放, 终点误差 5.4 cm, 偏航 <2° |
+| 364 | 2026-10-22 | 头像反向 OSC 联动实测: /input 移动与 VRCEmote 在真实头像上 PASS; /avatar/parameters 的 Bool(int 0/1) 写入 FAIL; 92 参数表/证据路径/「改装程序」方向入档 -> F-20261022-01 |
 
 <!-- DEV-NOTES-INDEX:END -->
