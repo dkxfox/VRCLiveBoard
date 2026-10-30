@@ -26,6 +26,7 @@
 //   replay <文件> [步长秒]    重放轨迹(相对起点: 位置+偏航; 路点串行, 比原速慢; 俯仰无法重放)
 //   replay2 <文件> [倍速]     连续重放 v2(约10Hz闭环, 无长停稳, 目标接近原速; 俯仰无法重放)
 //   replay3 <文件> [倍速] [最长秒]  平滑重放 v3(前馈速度+死区修正+降速提精度; 治"运动中抖动")
+//   replay2s <文件> [倍速]     v2.2 + 平滑偏航(偏航改 bool 脉冲, 治 LookHorizontal 模拟量只有±1导致的甩头)
 //   axis <轴名> <值> <毫秒>    通用 float 轴探针(保持-读数-归零; 例: axis LookVertical 1 200)
 //   selftest-move              离线自测(不连 VRChat): 模拟不同真实速度, 校验控制律
 //   zero                       所有输入轴归零
@@ -736,7 +737,16 @@ async function replayTraj(file, stepSec, dry) {
     const yaw0 = wrap180(lastPose.rot[1]);
     let pNow = ((Number(lastPose.rot[0]) % 360) + 360) % 360; if (pNow > 180) pNow -= 360;
     if (Math.abs(pNow) > 5) throw new Error('相机俯仰 ' + pNow.toFixed(1) + '°, 请先把相机放平再重放');
-    let turnRate = null, turnSign = 1;
+    let turnRate = null, turnSign = 1, tsEdited = false;
+    if (smoothYaw) {
+      if (!isFinite(ts0) || Math.abs(ts0 - 0.2) > 0.001) { await sendF('/usercamera/TurnSpeed', 0.2); tsEdited = true; await sleep(350); }
+      const yb = wrap180(lastPose.rot[1]);
+      await pulseAxis('LookRight', 200); await sleep(300);
+      const db = wrap180(wrap180(lastPose.rot[1]) - yb);
+      if (Math.abs(db) < 0.3) throw new Error('LookRight 无效');
+      turnSign = db > 0 ? 1 : -1; turnRate = Math.abs(db) / 0.2;
+      console.log('偏航探针(平滑模式, TurnSpeed=0.2): ' + turnRate.toFixed(1) + ' °/s');
+    }
     const turnTo = async function (targetYaw) {
       if (turnRate === null) {
         const y0 = wrap180(lastPose.rot[1]);
@@ -833,7 +843,7 @@ async function replayTraj(file, stepSec, dry) {
 // ===== 连续重放 v2(2026-10-30, A 轮速度/精度) =====
 // 针对 v1 的"卡顿/慢 4.4x": v1 每个脉冲后等 600ms 停稳; v2 约 90ms 一个 tick, 闭环连续修正, 不停稳.
 // 输入只用已证实的: MoveForward/Backward/Left/Right(bool), LookLeft/Right(偏航, 临时 TurnSpeed=0.3), LookVertical(上下, float).
-async function replayContinuous(file, speedFactor, dry) {
+async function replayContinuous(file, speedFactor, dry, smoothYaw) {
   const speed = Math.max(0.3, Math.min(3, Number(speedFactor) || 1.0));
   const j = JSON.parse(fs.readFileSync(file, 'utf8'));
   const raw = Array.isArray(j.samples) ? j.samples : [];
@@ -917,14 +927,23 @@ async function replayContinuous(file, speedFactor, dry) {
       const yawErr = wrap180(targetYaw - curYaw);
       const posErr = dist3(lastPose.pos, targetWorld);
       ticks++; sumPos += posErr; maxPos = Math.max(maxPos, posErr); maxYaw = Math.max(maxYaw, Math.abs(yawErr));
-      let yawV = 0;
-      if (Math.abs(yawErr) > 1.2) yawV = Math.max(-1, Math.min(1, (turnSign * yawErr) / 12));
-      try { await sendF('/input/LookHorizontal', yawV); } catch (e) {}
+      if (smoothYaw) {
+        if (Math.abs(yawErr) > 1.5) {
+          const deg = Math.min(8, Math.abs(yawErr));
+          const axisY = (yawErr > 0 ? turnSign : -turnSign) > 0 ? 'LookRight' : 'LookLeft';
+          await pulseAxisNT(axisY, Math.min(90, deg / (turnRate || 36) * 1000));
+        }
+      } else {
+        let yawV = 0;
+        if (Math.abs(yawErr) > 1.2) yawV = Math.max(-1, Math.min(1, (turnSign * yawErr) / 12));
+        try { await sendF('/input/LookHorizontal', yawV); } catch (e) {}
+      }
       const absF = Math.abs(front), absL = Math.abs(left), absU = Math.abs(dy);
+      const db = smoothYaw ? 0.08 : 0.035;
       const remain = Math.max(30, TICK - 25);
-      if (absU > Math.max(absF, absL) && absU > 0.035) await pulseVertNT(dy >= 0 ? 1 : -1, remain);
-      else if (absF >= absL && absF > 0.035) await pulseAxisNT(front >= 0 ? 'MoveForward' : 'MoveBackward', remain);
-      else if (absL > 0.035) await pulseAxisNT(left >= 0 ? 'MoveLeft' : 'MoveRight', remain);
+      if (absU > Math.max(absF, absL) && absU > db) await pulseVertNT(dy >= 0 ? 1 : -1, remain);
+      else if (absF >= absL && absF > db) await pulseAxisNT(front >= 0 ? 'MoveForward' : 'MoveBackward', remain);
+      else if (absL > db) await pulseAxisNT(left >= 0 ? 'MoveLeft' : 'MoveRight', remain);
       else await sleep(25);
       if (elapsed * speed >= dur + 0.10) break;
     }
@@ -975,6 +994,7 @@ async function replayContinuous(file, speedFactor, dry) {
     try { await sendF('/input/LookVertical', 0); } catch (e) {}
     try { await sendF('/input/LookHorizontal', 0); } catch (e) {}
     try { await zeroAll(); } catch (e) {}
+    if (tsEdited) { try { await sendF('/usercamera/TurnSpeed', ts0); await sleep(180); } catch (e) {} }
     if (isFinite(s0) && s0 !== 0) { try { await sendF('/usercamera/SmoothingStrength', s0); await sleep(180); } catch (e) {} }
     if (pre.flying === false) { try { await send('/usercamera/Flying', [false]); await sleep(180); } catch (e) {} }
     if (poseSock) { try { poseSock.close(); } catch (e) {} poseSock = null; }
@@ -1035,9 +1055,16 @@ async function replaySmooth(file, speedFactor, maxSec, dry) {
   poseSock = await bindPose();
   const s0 = Number(pre.smoothing), ts0 = Number(pre.turnSpeed), fs0 = Number(pre.flySpeed);
   const TICK = 110;
-  let fsUsed = null, vReal = 3.1, vVert = 3.1, yawRate = 175;
+  let vReal = 0.55, vVert = 3.1, yawRate = 175, reqSpeed = 0.1, speedEff = speed, turnEdited = false;
   const pulseAxisNT = async function (axis, ms) { const d = Math.max(20, Math.min(260, Math.round(ms))); try { await send('/input/' + axis, [true]); await sleep(d); } finally { await send('/input/' + axis, [false]); } await sleep(12); };
   const holdVertNT = async function (dir, ms) { const d = Math.max(20, Math.min(260, Math.round(ms))); try { await sendF('/input/LookVertical', dir); await sleep(d); } finally { await sendF('/input/LookVertical', 0); } await sleep(12); };
+  // 测速: 脉冲后必须等 Pose 稳定再读终点(Pose 事件驱动, 停稳帧可能晚到 100~200ms)
+  const measureDist = async function (kind, ms) {
+    const before = lastPose.pos.slice();
+    if (kind === 'V') await holdVertNT(1, ms); else await pulseAxisNT(kind, ms);
+    await sleep(350);
+    return dist3(lastPose.pos, before) / (ms / 1000);
+  };
   try {
     if (pre.flying !== true) { await send('/usercamera/Flying', [true]); await sleep(400); }
     if (isFinite(s0) && s0 !== 0) { await sendF('/usercamera/SmoothingStrength', 0); await sleep(250); }
@@ -1047,26 +1074,30 @@ async function replaySmooth(file, speedFactor, maxSec, dry) {
     const yaw0 = wrap180(lastPose.rot[1]);
     let pNow = ((Number(lastPose.rot[0]) % 360) + 360) % 360; if (pNow > 180) pNow -= 360;
     if (Math.abs(pNow) > 5) throw new Error('相机俯仰 ' + pNow.toFixed(1) + '°, 请先把相机放平再重放');
-    // 临时降速: 目标 ~1.5 m/s, 实测真实速度后按比例校正一次
-    if (isFinite(fs0) && fs0 > 0) {
-      fsUsed = Math.max(0.03, Math.min(0.2, fs0 * 0.5));
-      await sendF('/usercamera/FlySpeed', fsUsed); await sleep(300);
-      const ca = lastPose.pos.slice(); await pulseAxisNT('MoveForward', 150); const dv = dist3(lastPose.pos, ca) / 0.15;
-      if (dv > 0.2) { vReal = dv; if (dv > 2.0 || dv < 0.8) { fsUsed = Math.max(0.03, Math.min(0.2, fsUsed * (1.5 / dv))); await sendF('/usercamera/FlySpeed', fsUsed); await sleep(300); const ca2 = lastPose.pos.slice(); await pulseAxisNT('MoveForward', 150); const dv2 = dist3(lastPose.pos, ca2) / 0.15; if (dv2 > 0.2) vReal = dv2; } }
-      console.log('降速提精度: FlySpeed ' + fs0 + ' -> ' + fsUsed.toFixed(3) + ' | 实测水平速度 ' + vReal.toFixed(2) + ' m/s');
-    }
-    const va = lastPose.pos.slice(); await holdVertNT(1, 150); vVert = dist3(lastPose.pos, va) / 0.15; if (!(vVert > 0.2 && vVert < 8)) vVert = 3.1;
-    const ya = wrap180(lastPose.rot[1]); try { await sendF('/input/LookHorizontal', 1); await sleep(150); } finally { await sendF('/input/LookHorizontal', 0); } await sleep(100); const dyw = wrap180(wrap180(lastPose.rot[1]) - ya); yawRate = Math.abs(dyw) / 0.15; if (!(yawRate > 20 && yawRate < 400)) yawRate = 175; const turnSign = dyw >= 0 ? 1 : -1;
-    console.log('实测: 垂直 ' + vVert.toFixed(2) + ' m/s | 偏航 ' + yawRate.toFixed(1) + ' °/s');
+    // 校验 SmoothingStrength 真的是 0(OSCQuery 读回可能滞后, 等 1 秒再读)
+    let sRead = Number(one(await getVal('/usercamera/SmoothingStrength')));
+    if (sRead !== 0) { await sleep(1000); sRead = Number(one(await getVal('/usercamera/SmoothingStrength'))); }
+    if (sRead !== 0) { await sendF('/usercamera/SmoothingStrength', 0); await sleep(700); sRead = Number(one(await getVal('/usercamera/SmoothingStrength'))); }
+    if (sRead !== 0) throw new Error('SmoothingStrength 写 0 失败(读回 ' + sRead + '), 测速会失真, 已中止');
+    // 实测真实速度(不改 FlySpeed —— 用户设置不能动); 录制速度若超过实际速度, 自动降倍速播放
+    if (!isFinite(ts0) || Math.abs(ts0 - 0.2) > 0.001) { await sendF('/usercamera/TurnSpeed', 0.2); turnEdited = true; await sleep(350); }
+    vReal = await measureDist('MoveForward', 200); if (!(vReal > 0.1 && vReal < 8)) vReal = 0.55;
+    vVert = await measureDist('V', 200); if (!(vVert > 0.2 && vVert < 8)) vVert = 3.1;
+    const ya = wrap180(lastPose.rot[1]); await pulseAxisNT('LookRight', 200); await sleep(300); const dyw = wrap180(wrap180(lastPose.rot[1]) - ya); yawRate = Math.abs(dyw) / 0.2; if (!(yawRate > 8 && yawRate < 400)) yawRate = 36; const turnSign = dyw >= 0 ? 1 : -1;
+    for (let t0 = 0; t0 <= timeLimit; t0 += 0.2) { const vv0 = velAt(t0); reqSpeed = Math.max(reqSpeed, Math.hypot(vv0.v[0], vv0.v[2])); }
+    speedEff = Math.min(speed, Math.max(0.25, 0.85 * vReal / Math.max(0.1, reqSpeed)));
+    console.log('实测: 水平 ' + vReal.toFixed(2) + ' m/s / 垂直 ' + vVert.toFixed(2) + ' m/s / 偏航 ' + yawRate.toFixed(1) + ' °/s');
+    console.log('轨迹需求速度 ' + reqSpeed.toFixed(2) + ' m/s -> 自动倍速 ' + speedEff.toFixed(2) + 'x(不改 FlySpeed, 不破坏用户设置)');
     // 重新记录起点(降速/标定脉冲之后)
     const o2 = lastPose.pos.slice();
     const y2 = wrap180(lastPose.rot[1]);
     const tStart = Date.now();
     let ticks = 0, sumPos = 0, maxPos = 0, maxYaw = 0, iter = 0;
+    const tickLog = [];
     while (true) {
       iter++; if (iter > 4000) break;
       const elapsed = (Date.now() - tStart) / 1000;
-      const tp = Math.min(elapsed * speed, timeLimit);
+      const tp = Math.min(elapsed * speedEff, timeLimit);
       const wp = sampleAt(tp);
       const targetWorld = [o2[0] + wp.pos[0], o2[1] + wp.pos[1], o2[2] + wp.pos[2]];
       const targetYaw = wrap180(y2 + wp.yawRel);
@@ -1076,40 +1107,55 @@ async function replaySmooth(file, speedFactor, maxSec, dry) {
       const posErr = dist3(lastPose.pos, targetWorld);
       const yawErr = wrap180(targetYaw - curYaw);
       ticks++; sumPos += posErr; maxPos = Math.max(maxPos, posErr); maxYaw = Math.max(maxYaw, Math.abs(yawErr));
-      // 偏航: 前馈角速度 + 死区比例修正
+      // 偏航前馈 + 死区修正(bool 脉冲; 实测 /input/LookHorizontal 只有 ±1 有效)
       const vv = velAt(tp);
-      let yawCmd = vv.w;
-      if (Math.abs(yawErr) > 1.5) yawCmd += Math.sign(yawErr) * Math.min(90, Math.abs(yawErr) * 5);
-      let yawV = Math.max(-0.9, Math.min(0.9, turnSign * yawCmd / yawRate));
-      try { await sendF('/input/LookHorizontal', yawV); } catch (e) {}
-      // 平移前馈: 录制速度 -> 相机系 -> 脉冲时长
+      let yawCmd = vv.w * speedEff;
+      if (Math.abs(yawErr) > 1.2) yawCmd += Math.sign(yawErr) * Math.min(30, Math.abs(yawErr) * 4);
+      const yawDeg = yawCmd * (TICK / 1000);
+      const actions = [];
+      const addAction = function (axis, ms, dir) {
+        const a = actions.find(function (x) { return x.axis === axis; });
+        if (a) { a.ms = Math.max(a.ms, ms); return; }
+        actions.push({ axis: axis, ms: ms, dir: dir || 0 });
+      };
+      if (Math.abs(yawDeg) > 0.45) {
+        const yawAxis = (yawDeg > 0 ? turnSign : -turnSign) > 0 ? 'LookRight' : 'LookLeft';
+        addAction(yawAxis, Math.abs(yawDeg) / yawRate * 1000, 0);
+      }
+      // 平移前馈: 录制速度 -> 相机系 -> 保持时长
       const ff = vReal > 0.3 ? vReal : 1.5;
       const fwd = vv.v[0] * Math.sin(th) + vv.v[2] * Math.cos(th);
       const lft = -vv.v[0] * Math.cos(th) + vv.v[2] * Math.sin(th);
       const upl = vv.v[1];
-      const tickS = TICK / 1000;
-      let dF = Math.abs(fwd) / ff * tickS * 1000, dL = Math.abs(lft) / ff * tickS * 1000, dU = Math.abs(upl) / vVert * tickS * 1000;
-      const budget = Math.max(40, TICK - 15);
-      const total = dF + dL + dU;
-      if (total > budget) { const k = budget / total; dF *= k; dL *= k; dU *= k; }
-      const moveAxes = [];
-      if (dF >= 22) moveAxes.push({ axis: fwd >= 0 ? 'MoveForward' : 'MoveBackward', ms: Math.max(22, dF) });
-      if (dL >= 22) moveAxes.push({ axis: lft >= 0 ? 'MoveLeft' : 'MoveRight', ms: Math.max(22, dL) });
-      if (dU >= 22) moveAxes.push({ axis: 'V', dir: upl >= 0 ? 1 : -1, ms: Math.max(22, dU) });
-      // 位置修正: 只在误差超死区时补, 避免稳态抖
+      const dF = Math.abs(fwd) * speedEff / ff * TICK, dL = Math.abs(lft) * speedEff / ff * TICK, dU = Math.abs(upl) * speedEff / vVert * TICK;
+      if (dF >= 20) addAction(fwd >= 0 ? 'MoveForward' : 'MoveBackward', dF, 0);
+      if (dL >= 20) addAction(lft >= 0 ? 'MoveLeft' : 'MoveRight', dL, 0);
+      if (dU >= 20) addAction('V', dU, upl >= 0 ? 1 : -1);
+      // 位置修正: 误差超死区才补(合并到同轴, 取较长时长)
       if (posErr > 0.12) {
         const absF = Math.abs(dx * Math.sin(th) + dz * Math.cos(th)), absL = Math.abs(-dx * Math.cos(th) + dz * Math.sin(th)), absU = Math.abs(dy);
-        const corr = Math.min(80, 30 + posErr * 120);
-        if (absU > Math.max(absF, absL) && absU > 0.06) moveAxes.push({ axis: 'V', dir: dy >= 0 ? 1 : -1, ms: corr });
-        else if (absF >= absL && absF > 0.06) moveAxes.push({ axis: (dx * Math.sin(th) + dz * Math.cos(th)) >= 0 ? 'MoveForward' : 'MoveBackward', ms: corr });
-        else if (absL > 0.06) moveAxes.push({ axis: (-dx * Math.cos(th) + dz * Math.sin(th)) >= 0 ? 'MoveLeft' : 'MoveRight', ms: corr });
+        const corr = Math.min(70, 25 + posErr * 100);
+        if (absU > Math.max(absF, absL) && absU > 0.06) addAction('V', corr, dy >= 0 ? 1 : -1);
+        else if (absF >= absL && absF > 0.06) addAction((dx * Math.sin(th) + dz * Math.cos(th)) >= 0 ? 'MoveForward' : 'MoveBackward', corr, 0);
+        else if (absL > 0.06) addAction((-dx * Math.cos(th) + dz * Math.sin(th)) >= 0 ? 'MoveLeft' : 'MoveRight', corr, 0);
       }
-      if (moveAxes.length === 0) await sleep(35);
+      tickLog.push({ tp: +tp.toFixed(2), posErr: +posErr.toFixed(3), yawErr: +yawErr.toFixed(1), acts: actions.map(function (a) { return a.axis + ':' + Math.round(a.ms); }).join(' ') });
+      if (actions.length === 0) await sleep(35);
       else {
-        for (const mv of moveAxes) { if (mv.axis === 'V') await holdVertNT(mv.dir, Math.min(mv.ms, TICK)); else await pulseAxisNT(mv.axis, Math.min(mv.ms, TICK)); }
+        // 并发启动, 按各自时长独立释放(避免串行把 tick 拉长 -> 追不上目标)
+        try {
+          for (const a of actions) { if (a.axis === 'V') await sendF('/input/LookVertical', a.dir); else await send('/input/' + a.axis, [true]); }
+        } catch (e) {}
+        const tA = Date.now();
+        const sortedA = actions.slice().sort(function (x, y) { return x.ms - y.ms; });
+        for (const a of sortedA) {
+          const wait = a.ms - (Date.now() - tA);
+          if (wait > 0) await sleep(wait);
+          try { if (a.axis === 'V') await sendF('/input/LookVertical', 0); else await send('/input/' + a.axis, [false]); } catch (e) {}
+        }
+        await sleep(15);
       }
-      try { await sendF('/input/LookHorizontal', 0); } catch (e) {}
-      if (elapsed * speed >= timeLimit + 0.05) break;
+      if (elapsed * speedEff >= timeLimit + 0.05) break;
     }
     // 收尾: 最多 3 秒把"偏航 + 位置"收敛到终点(避免播放结束还在追)
     const fin0 = sampleAt(timeLimit);
@@ -1122,7 +1168,7 @@ async function replaySmooth(file, speedFactor, maxSec, dry) {
       const dx2 = finWorld[0] - lastPose.pos[0], dy2 = finWorld[1] - lastPose.pos[1], dz2 = finWorld[2] - lastPose.pos[2];
       const pe = dist3(lastPose.pos, finWorld);
       if (Math.abs(ye) <= 1.2 && pe <= 0.05) break;
-      try { await sendF('/input/LookHorizontal', Math.abs(ye) > 1.2 ? Math.max(-0.9, Math.min(0.9, turnSign * ye / yawRate)) : 0); } catch (e) {}
+      if (Math.abs(ye) > 1) { const yAxis = (ye > 0 ? turnSign : -turnSign) > 0 ? 'LookRight' : 'LookLeft'; await pulseAxisNT(yAxis, Math.min(120, Math.abs(ye) / yawRate * 1000)); await sleep(120); }
       const absF = Math.abs(dx2 * Math.sin(th2) + dz2 * Math.cos(th2));
       const absL = Math.abs(-dx2 * Math.cos(th2) + dz2 * Math.sin(th2));
       const absU = Math.abs(dy2);
@@ -1149,11 +1195,11 @@ async function replaySmooth(file, speedFactor, maxSec, dry) {
     const p95Acc = accs.length ? accs[Math.min(accs.length - 1, Math.floor(accs.length * 0.95))] : 0;
     const out = { at: new Date().toISOString(), mode: 'smooth-v3', file: file, speed: speed, timeLimit: round3(timeLimit),
       recordedDurationSec: round3(dur), elapsedSec: +elapsed.toFixed(1), ratio: +(elapsed / timeLimit).toFixed(2),
-      flySpeedTemp: fsUsed, vReal: round3(vReal), vVert: round3(vVert), yawRate: round3(yawRate),
+      speedEff: round3(speedEff), reqSpeed: round3(reqSpeed), vReal: round3(vReal), vVert: round3(vVert), yawRate: round3(yawRate),
       ticks: ticks, meanPosErr: round3(sumPos / Math.max(1, ticks)), maxPosErr: round3(maxPos), maxYawErr: round3(maxYaw),
       finalPosErr: round3(finalPosErr), finalYawErr: round3(finalYawErr),
       jitterMeanAccel: round3(meanAcc), jitterP95Accel: round3(p95Acc), poseSamples: poseSamples.length,
-      origin: o2.map(round3), yaw0: round3(y2), samples: poseSamples };
+      origin: o2.map(round3), yaw0: round3(y2), tickLog: tickLog, samples: poseSamples };
     fs.mkdirSync('logs', { recursive: true });
     out.fileOut = 'logs/replay-smooth-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.json';
     fs.writeFileSync(out.fileOut, JSON.stringify(out, null, 1), 'utf8');
@@ -1168,7 +1214,7 @@ async function replaySmooth(file, speedFactor, maxSec, dry) {
     try { await sendF('/input/LookHorizontal', 0); } catch (e) {}
     try { await sendF('/input/LookVertical', 0); } catch (e) {}
     try { await zeroAll(); } catch (e) {}
-    if (fsUsed !== null && isFinite(fs0) && Math.abs(fsUsed - fs0) > 0.001) { try { await sendF('/usercamera/FlySpeed', fs0); await sleep(200); } catch (e) {} }
+    if (turnEdited) { try { await sendF('/usercamera/TurnSpeed', ts0); await sleep(200); } catch (e) {} }
     if (isFinite(s0) && s0 !== 0) { try { await sendF('/usercamera/SmoothingStrength', s0); await sleep(200); } catch (e) {} }
     if (pre.flying === false) { try { await send('/usercamera/Flying', [false]); await sleep(150); } catch (e) {} }
     if (poseSock) { try { poseSock.close(); } catch (e) {} poseSock = null; }
@@ -1261,6 +1307,11 @@ async function replaySmooth(file, speedFactor, maxSec, dry) {
   if (cmd === 'replay2') {
     if (!a1) { console.log('用法: node scripts/dev/camera-calib.js replay2 <轨迹文件> [倍速=1] [dry]'); sock.close(); return; }
     await replayContinuous(String(a1), Number(a2) || 1.0, String(a3) === 'dry');
+    sock.close(); return;
+  }
+  if (cmd === 'replay2s') {
+    if (!a1) { console.log('用法: node scripts/dev/camera-calib.js replay2s <轨迹文件> [倍速=1] [dry]'); sock.close(); return; }
+    await replayContinuous(String(a1), Number(a2) || 1.0, String(a3) === 'dry', true);
     sock.close(); return;
   }
   if (cmd === 'replay3') {
