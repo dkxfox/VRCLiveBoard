@@ -302,24 +302,32 @@ async function req(p, opt) { const t = Date.now(); const r = await fetch(BASE + 
   else if (!isPack) note('当前是工作树(无 BUILD-INFO.json): 包级口径不适用(本地事件表在 assets/videos/events.json, 由 ⑧ 段覆盖)');
   else {
     try {
-      const evs = (ROOT_CFG0 && Array.isArray(ROOT_CFG0.specialEvents)) ? ROOT_CFG0.specialEvents : [];
+      const allEvs = (ROOT_CFG0 && Array.isArray(ROOT_CFG0.specialEvents)) ? ROOT_CFG0.specialEvents : [];
+      // 品牌专属事件(如 0428-anniv)可以随自包含包出厂, 但只在 branding 匹配时触发;
+      // 默认品牌包不应因为它而误判为"事件表坏了". 这里按包内 branding 过滤后再断言.
+      const brand = String((ROOT_CFG0 && ROOT_CFG0.branding) || '');
+      const evs = allEvs.filter(function (e) { return !e || !e.brand || String(e.brand) === brand; });
+      if (allEvs.length && !evs.length) note('包内有品牌专属彩蛋事件, 但当前 branding 不匹配(默认品牌包不触发)');
       const vids = evs.map(function (e) { return String((e && e.video) || ''); }).filter(Boolean);
       const present = vids.filter(function (v) { return fs.existsSync(path.join(ROOT, v)); });
-      if (evs.length && present.length) {
-        const start = String(evs[0].start || evs[0].date || '');
-        const dec = JSON.parse((await req('/api/efx/boot?date=' + encodeURIComponent(start) + '&dry=1')).body.toString('utf8'));
-        ok(dec.action === 'special' && dec.event && dec.event.video === present[0], '包内事件表可触发(按包内自带日期 dry 判定 → special)' + (dec.action === 'special' ? '' : (' [实得 ' + dec.action + ' / ' + dec.reason + ']')));
-        const vr = await req('/api/special/video?file=' + encodeURIComponent(present[0]));
-        ok(vr.status === 200 && vr.body.length > 1024, '包内彩蛋素材可服务(' + present[0] + ', ' + Math.round(vr.body.length / 1024) + 'KB)');
-      } else if (evs.length && !present.length) {
-        ok(false, '配置里有 ' + evs.length + ' 条彩蛋事件但包内没有对应素材(打包漏了?)');
-      } else {
+      if (!allEvs.length) {
         const vr = await req('/api/special/video?file=' + encodeURIComponent('assets/videos/__absent__.mp4'));
         ok(vr.status === 404, '不带彩蛋的包: 请求未打包的素材回 404(不静默)');
         const vd = path.join(ROOT, 'assets', 'videos');
         let others = [];
         try { others = fs.readdirSync(vd).filter(function (x) { return /\.(mp4|webm)$/i.test(x) && x !== 'flowtest.mp4'; }); } catch (e) {}
         ok(others.length === 0, '不带彩蛋的包: 包内确实没有视频文件(与 Lite 口径一致)' + (others.length ? (' [实得 ' + others.join(',') + ']') : ''));
+      } else if (evs.length) {
+        if (!present.length) ok(false, '配置里有 ' + evs.length + ' 条彩蛋事件但包内没有对应素材(打包漏了?)');
+        else {
+          const start = String(evs[0].start || evs[0].date || '');
+          const dec = JSON.parse((await req('/api/efx/boot?date=' + encodeURIComponent(start) + '&dry=1')).body.toString('utf8'));
+          ok(dec.action === 'special' && dec.event && dec.event.video === present[0], '包内事件表可触发(按包内自带日期 dry 判定 → special)' + (dec.action === 'special' ? '' : (' [实得 ' + dec.action + ' / ' + dec.reason + ']')));
+          const vr = await req('/api/special/video?file=' + encodeURIComponent(present[0]));
+          ok(vr.status === 200 && vr.body.length > 1024, '包内彩蛋素材可服务(' + present[0] + ', ' + Math.round(vr.body.length / 1024) + 'KB)');
+        }
+      } else {
+        note('包内只有品牌专属彩蛋素材, 当前 branding 不触发(不在这里强求无视频)');
       }
     } catch (e) { ok(false, '包/树一致性用例异常: ' + e.message); }
   }

@@ -9,7 +9,7 @@ const BASELINE = path.join(ROOT, 'docs', 'SECURITY-BASELINE.json');
 // 只扫"会随包出厂"的代码; dev-dongle / checks / vendor 第三方库不算出厂攻击面
 const SCAN_DIRS = ['src', 'plugins', 'electron'];
 const SCAN_ROOT_FILES = ['启动.bat', '启动桌面版.bat', 'config.default.json'];
-const SKIP_DIR = new Set(['node_modules', 'vendor', '.git']);
+const SKIP_DIR = new Set(['node_modules', 'vendor', '.git', 'data']);   // src/data 是纯数据(词库/词频), 不是可执行攻击面
 // 2026-09-25 审计修正(**扫描器自身的盲区**): 上面写着"只扫会随包出厂的代码", 但实际只跳过了 node_modules/vendor/.git,
 // 于是 plugins/<id>/test 这类**永不进包**的开发文件也被算进攻击面 —— 结果是最新的 B站插件一上来就报
 // "新增域名 i0.hdslb.com / x"(测试夹具里的假 URL)和"新增 child_process"(测试汇总脚本), 全是噪音。
