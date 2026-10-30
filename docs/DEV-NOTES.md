@@ -2997,6 +2997,24 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 - 未做(后续): WebSocket 推送与多端实时同步、全部相机参数推子(见 CAMERA-CONSOLE-DESIGN 的 R01 完整版)、录制/重放搬进插件。
 - 提交: 05517fe(插件+核心+UI+单测) + 本记录提交。
 
+
+## 385. camera-path v0.4.0: 局域网控制台“相机控制”页(9 推子/14 开关/4 模式) + 写后读回(2026-10-30)
+- 用户: “把推子这些都加进来吧。” → 按 CAMERA-CONSOLE-DESIGN 第一期落地到局域网控制台。
+- 实现(插件 v0.4.0):
+  - 相机页: **9 个推子**(飞行速度/转向速度/平滑强度/光圈/焦距/变焦/曝光/对准我 X/Y)、**14 个开关**(飞行/锁定/UI/绿幕/环境/自己/其他玩家/对准我/滚转水平/俯仰水平/平滑移动/显示对焦点/相机收音/横构图)、**4 种模式**(本地单张/直播/本地多图层/拍立得); 推子数值显示在**推子上面**.
+  - 数据通路: 数值一律 OSC **float32**(整数也写 `f`, 防脏值) + OSCQuery `/usercamera` **全树 1s 轮询**做状态缓存; 写后 200~300ms 强制刷新读回, 不一致如实标注(不假装成功).
+  - LAN API: `GET /api/camera`、`POST /api/camera/set`、`POST /api/action`(capture/zero/stop); 页面与插件共用同一套限权(token 照旧).
+  - 面板: 预设列表 + 刷新列表 + 打开控制台窗口(不变); 完整推子在局域网控制台.
+- 实测中抓到并修复一个真 bug: 后台 1s 轮询占着 `camBusy` 时, 写后读回会直接返回**写前旧缓存** → 误报“读回不一致”; 修复为强制等待后台读结束 + 最多 3 次重读确认.
+- 真机验证:
+  - cameraState: online=true, mode=1(本地单张), 9 推子值正确(飞行速度 14.08/转向 1/平滑 5/光圈 15/焦距 2/变焦 45/曝光 0/对准我 X,Y=0); 14 开关状态正确.
+  - 同值写入全部 matched: aperture 15 / focalDistance 2 / exposure 0 / smoothing 5 / turnSpeed 1 / lookX 0 / lookY 0 / mode 1 / lock false.
+  - 实际变更+还原: exposure 0→1 读回 1 matched; →0 读回 0 matched; 结束后 cameraState 曝光=0, 用户 FlySpeed 未被改动(14.081296).
+  - LAN 端点: `/api/camera` 200(online, 9 params), `/api/camera/set` 200(mode 1 matched), 未知参数 400.
+  - 手机页面(Edge 无头 390×844): 相机页渲染 9 推子/14 开关/4 模式; 模拟拖动曝光推子→2, 读回 2; 页面恢复 0 后 matched=true; 截图 logs/ 下.
+- 已知限制: 推子范围是 UI 合理范围(VRChat 实际仍可能夹取, **以读回为准**); FlySpeed 历史上有“写值读回怪值”现象(本次只做同值写, 未验证大范围写入); Mode 3(动画)/6(无人机)不支持; 记录/重放、WebSocket 多端同步、每通道允许/锁定/复位仍待做.
+- 提交: 6a32d81(推子/开关/模式+单测) + 本次读回修复/文档提交.
+
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -3281,5 +3299,6 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 | 382 | 2026-10-30 | 相机运镜录制/重放插件化准备: 缺口清单 + 里程碑 + 需要拍板的点 |
 | 383 | 2026-10-30 | VRC+ 运镜 dolly OSC 语义实测 + camera-path v0.2.0 落地(导入/播放/多预设/自动拆分) |
 | 384 | 2026-10-30 | camera-path v0.3.0: 插件局域网控制台 + 面板“刷新列表/打开控制台窗口” |
+| 385 | 2026-10-30 | camera-path v0.4.0: 局域网控制台“相机控制”页(9 推子/14 开关/4 模式) + 写后读回 |
 
 <!-- DEV-NOTES-INDEX:END -->

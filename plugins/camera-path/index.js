@@ -309,7 +309,9 @@ module.exports = function (ctx) {
   }
 
   // ---------- 相机状态: /usercamera 全树轮询 + 写后读回 ----------
-  async function refreshCameraState() {
+  async function refreshCameraState(force) {
+    // force=true 时等后台轮询结束再读, 避免写后读回拿到写前旧值
+    if (camBusy && force) { for (let i = 0; i < 12 && camBusy; i++) await sleep(100); }
     if (camBusy) return camState;
     camBusy = true;
     try {
@@ -362,9 +364,14 @@ module.exports = function (ctx) {
         const sent = await sendFloat(pDef.addr, v);
         if (!sent) return { ok: false, error: '发送失败: ' + lastError };
         await sleep(250);
-        await refreshCameraState();
-        const read = camState.values[pDef.addr];
-        const matched = read != null && isFinite(Number(read)) && Math.abs(Number(read) - v) <= Math.max(0.06, pDef.step / 2 + 0.01);
+        let read = null, matched = false;
+        for (let i = 0; i < 3; i++) {
+          await refreshCameraState(true);
+          read = camState.values[pDef.addr];
+          matched = read != null && isFinite(Number(read)) && Math.abs(Number(read) - v) <= Math.max(0.06, pDef.step / 2 + 0.01);
+          if (matched) break;
+          await sleep(200);
+        }
         return { ok: true, key: key, type: 'float', sent: v, read: read == null ? null : Number(read), matched: !!matched, online: !!camState.online };
       }
       if (tDef) {
@@ -372,8 +379,13 @@ module.exports = function (ctx) {
         const sent = await send(tDef.addr, [v]);
         if (!sent) return { ok: false, error: '发送失败: ' + lastError };
         await sleep(200);
-        await refreshCameraState();
-        const read = camState.values[tDef.addr];
+        let read = null;
+        for (let i = 0; i < 3; i++) {
+          await refreshCameraState(true);
+          read = camState.values[tDef.addr];
+          if (read != null && !!read === v) break;
+          await sleep(180);
+        }
         return { ok: true, key: key, type: 'bool', sent: v, read: read == null ? null : !!read, matched: read != null && !!read === v, online: !!camState.online };
       }
       if (key === 'mode') {
@@ -382,8 +394,13 @@ module.exports = function (ctx) {
         const sent = await sendInt('/usercamera/Mode', v);
         if (!sent) return { ok: false, error: '发送失败: ' + lastError };
         await sleep(300);
-        await refreshCameraState();
-        const read = Number(camState.values['/usercamera/Mode']);
+        let read = null;
+        for (let i = 0; i < 3; i++) {
+          await refreshCameraState(true);
+          read = Number(camState.values['/usercamera/Mode']);
+          if (isFinite(read) && read === v) break;
+          await sleep(200);
+        }
         return { ok: true, key: 'mode', type: 'int', sent: v, read: isFinite(read) ? read : null, matched: isFinite(read) && read === v, online: !!camState.online };
       }
       return { ok: false, error: '未知参数: ' + key };
