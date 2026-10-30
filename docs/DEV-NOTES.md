@@ -3083,7 +3083,8 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 - 本版内容: M-20261030-01/02(好友欢迎) + M-20261030-03(AI 结构安全) + M-20261030-04(依赖漏洞) + 九键 0 回归确认; 键盘 P1 开发工具随本次提交但**不随产品包**(scripts/vrkeyboard).
 - 质量/安全证据(实跑): 全量门禁 **15 PASS / 1 FAIL**(唯一 FAIL=GSYNC 未提交); 提交推送后 GSYNC PASS; G4 **SMOKE RESULT pass=15 fail=0**; backend-flow **195 PASS / 0 FAIL**; plugin-behavior **67 PASS / 0 FAIL**; dep-audit **0 FAIL + npm audit 0 高危**; secret-scan **386 文件/1908 blob PASS**.
 - 环境: Electron 43.8.4 已安装; UNC 共享目录启动受新 ACL 检查限制, 桌面壳用本地 staging 副本验收(19190 正常); 产品包解压本地不受影响.
-- 后续: make-dist → release-audit → 上传 GitHub Release(用户桌面令牌) → 测试组材料.
+- 打包复核: 首次 1.4.7 包把用户个人文件「VR chat相机入门手册原始文件.docx」(24.5MB)与 assets/motions 测试 VMD 误打进 Lite/Desktop; 已在 pack-exclude 增加排除并重打 —— Lite 8.99MB/209 条目, Desktop 281.43MB/1586 条目, 两份 pack-audit 均 PASS; zipVolumes 基线已人工复核更新.
+- 后续: release-audit → 上传 GitHub Release(用户桌面令牌) → 测试组材料.
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
