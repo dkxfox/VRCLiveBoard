@@ -737,16 +737,7 @@ async function replayTraj(file, stepSec, dry) {
     const yaw0 = wrap180(lastPose.rot[1]);
     let pNow = ((Number(lastPose.rot[0]) % 360) + 360) % 360; if (pNow > 180) pNow -= 360;
     if (Math.abs(pNow) > 5) throw new Error('相机俯仰 ' + pNow.toFixed(1) + '°, 请先把相机放平再重放');
-    let turnRate = null, turnSign = 1, tsEdited = false;
-    if (smoothYaw) {
-      if (!isFinite(ts0) || Math.abs(ts0 - 0.2) > 0.001) { await sendF('/usercamera/TurnSpeed', 0.2); tsEdited = true; await sleep(350); }
-      const yb = wrap180(lastPose.rot[1]);
-      await pulseAxis('LookRight', 200); await sleep(300);
-      const db = wrap180(wrap180(lastPose.rot[1]) - yb);
-      if (Math.abs(db) < 0.3) throw new Error('LookRight 无效');
-      turnSign = db > 0 ? 1 : -1; turnRate = Math.abs(db) / 0.2;
-      console.log('偏航探针(平滑模式, TurnSpeed=0.2): ' + turnRate.toFixed(1) + ' °/s');
-    }
+    let turnRate = null, turnSign = 1;
     const turnTo = async function (targetYaw) {
       if (turnRate === null) {
         const y0 = wrap180(lastPose.rot[1]);
@@ -881,7 +872,8 @@ async function replayContinuous(file, speedFactor, dry, smoothYaw) {
   const one = (v) => (Array.isArray(v) ? v[0] : v);
   const pre = { flying: one(await getVal('/usercamera/Flying')), smoothing: one(await getVal('/usercamera/SmoothingStrength')), turnSpeed: one(await getVal('/usercamera/TurnSpeed')) };
   poseSock = await bindPose();
-  const s0 = Number(pre.smoothing);
+  const s0 = Number(pre.smoothing), ts0 = Number(pre.turnSpeed);
+  let tsEdited = false;
   const TICK = 70;
   try {
     if (pre.flying !== true) { await send('/usercamera/Flying', [true]); await sleep(400); }
@@ -892,14 +884,26 @@ async function replayContinuous(file, speedFactor, dry, smoothYaw) {
     const yaw0 = wrap180(lastPose.rot[1]);
     let pNow = ((Number(lastPose.rot[0]) % 360) + 360) % 360; if (pNow > 180) pNow -= 360;
     if (Math.abs(pNow) > 5) throw new Error('相机俯仰 ' + pNow.toFixed(1) + '°, 请先把相机放平再重放');
-    const yProbe = wrap180(lastPose.rot[1]);
-    try { await sendF('/input/LookHorizontal', 1); await sleep(120); } finally { await sendF('/input/LookHorizontal', 0); }
-    await sleep(120);
-    const dProbe = wrap180(wrap180(lastPose.rot[1]) - yProbe);
-    if (Math.abs(dProbe) < 0.2) throw new Error('LookHorizontal 无效, 无法重放转向');
-    const turnSign = dProbe > 0 ? 1 : -1;
-    const yawRate = Math.abs(dProbe) / 0.12;
-    console.log('偏航探针(LookHorizontal=1): ' + yawRate.toFixed(1) + ' °/s');
+    let turnSign = 1, yawRate = 175;
+    if (smoothYaw) {
+      if (!isFinite(ts0) || Math.abs(ts0 - 0.5) > 0.001) { await sendF('/usercamera/TurnSpeed', 0.5); tsEdited = true; await sleep(350); }
+      const yProbe2 = wrap180(lastPose.rot[1]);
+      await pulseAxis('LookRight', 200); await sleep(300);
+      const dProbe2 = wrap180(wrap180(lastPose.rot[1]) - yProbe2);
+      if (Math.abs(dProbe2) < 0.3) throw new Error('LookRight 无效, 无法重放转向');
+      turnSign = dProbe2 > 0 ? 1 : -1;
+      yawRate = Math.abs(dProbe2) / 0.2;
+      console.log('偏航探针(平滑偏航, TurnSpeed=0.5): ' + yawRate.toFixed(1) + ' °/s');
+    } else {
+      const yProbe = wrap180(lastPose.rot[1]);
+      try { await sendF('/input/LookHorizontal', 1); await sleep(120); } finally { await sendF('/input/LookHorizontal', 0); }
+      await sleep(120);
+      const dProbe = wrap180(wrap180(lastPose.rot[1]) - yProbe);
+      if (Math.abs(dProbe) < 0.2) throw new Error('LookHorizontal 无效, 无法重放转向');
+      turnSign = dProbe > 0 ? 1 : -1;
+      yawRate = Math.abs(dProbe) / 0.12;
+      console.log('偏航探针(LookHorizontal=1): ' + yawRate.toFixed(1) + ' °/s');
+    }
     const pulseAxisNT = async function (axis, ms) {
       const d = Math.max(20, Math.min(300, Math.round(ms)));
       try { await send('/input/' + axis, [true]); await sleep(d); } finally { await send('/input/' + axis, [false]); }
@@ -931,7 +935,7 @@ async function replayContinuous(file, speedFactor, dry, smoothYaw) {
         if (Math.abs(yawErr) > 1.5) {
           const deg = Math.min(8, Math.abs(yawErr));
           const axisY = (yawErr > 0 ? turnSign : -turnSign) > 0 ? 'LookRight' : 'LookLeft';
-          await pulseAxisNT(axisY, Math.min(90, deg / (turnRate || 36) * 1000));
+          await pulseAxisNT(axisY, Math.min(90, deg / (yawRate || 36) * 1000));
         }
       } else {
         let yawV = 0;
@@ -960,9 +964,16 @@ async function replayContinuous(file, speedFactor, dry, smoothYaw) {
       const l2 = -dx2 * Math.cos(th2) + dz2 * Math.sin(th2);
       const perr = dist3(lastPose.pos, finalWorld);
       if (Math.abs(yerr2) <= 1 && perr <= 0.05) break;
-      let yv = 0;
-      if (Math.abs(yerr2) > 1) yv = Math.max(-1, Math.min(1, (turnSign * yerr2) / 10));
-      try { await sendF('/input/LookHorizontal', yv); } catch (e) {}
+      if (smoothYaw) {
+        if (Math.abs(yerr2) > 1) {
+          const axisY2 = (yerr2 > 0 ? turnSign : -turnSign) > 0 ? 'LookRight' : 'LookLeft';
+          await pulseAxisNT(axisY2, Math.min(120, Math.abs(yerr2) / (yawRate || 36) * 1000));
+        }
+      } else {
+        let yv = 0;
+        if (Math.abs(yerr2) > 1) yv = Math.max(-1, Math.min(1, (turnSign * yerr2) / 10));
+        try { await sendF('/input/LookHorizontal', yv); } catch (e) {}
+      }
       if (Math.abs(dy2) > 0.04 && Math.abs(dy2) >= Math.max(Math.abs(f2), Math.abs(l2))) await pulseVertNT(dy2 >= 0 ? 1 : -1, 55);
       else if (Math.abs(f2) >= Math.abs(l2) && Math.abs(f2) > 0.035) await pulseAxisNT(f2 >= 0 ? 'MoveForward' : 'MoveBackward', 55);
       else if (Math.abs(l2) > 0.035) await pulseAxisNT(l2 >= 0 ? 'MoveLeft' : 'MoveRight', 55);
