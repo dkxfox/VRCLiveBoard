@@ -745,6 +745,12 @@ backward = ( -sin θ,     0, -cos θ )
 - 已加防护(未再测试): **idle 死区**(目标速度<0.01 且偏航<0.3 时写 0 并停手, 清空偏航债务) / `panic` 命令 / SIGINT·SIGTERM 归零处理器。
 - **教训**: 控制器必须有"明确静止"状态, 不能无限制微修正; 测试必须能一键 panic; 终止后必须验证"静止 3 秒 0 Pose"。
 
+### 7.10.21 ⚠️ zeroAll 必须包含模拟轴 + 斜向用多轴同时脉冲(2026-10-30)
+
+- **事故根因**: 工具只归零 bool 轴, 漏了 `/input/Vertical`、`/input/Horizontal`、`/input/LookVertical`、`/input/LookHorizontal`。用模拟量驱动之后, 一旦脚本结束/被终止, 模拟轴保持非零 -> **相机持续漂移/抖动**。修复后 idle 2 s 0 条 Pose。
+- **斜向卡顿根因**: 原实现每 tick 只发一个轴 -> 方向逐 tick 跳变。改为**多轴同时起停**后, 6 s 段平均误差 3.6 cm / 最大 12.3 cm / 终点 4.4 cm。
+- 教训: 任何"连续量"驱动都必须有等价的"归零"路径, 且要覆盖全部写过的轴。
+
 ## 八、待办清单
 
 **待测变量(10 个)**:Duration · PhotoRate · TriggerTakesPhotos · ShowFocus ·

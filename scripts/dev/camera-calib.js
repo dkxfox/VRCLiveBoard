@@ -63,7 +63,11 @@ const getVal = p => new Promise(res => { const rq = http.get('http://127.0.0.1:'
 const getType = p => new Promise(res => { const rq = http.get('http://127.0.0.1:' + PORT + p, { timeout: 4000 }, x => { let d = ''; x.on('data', c => d += c); x.on('end', () => { try { res(JSON.parse(d).TYPE); } catch (e) { res(null); } }); }); rq.on('error', () => res(null)); rq.on('timeout', () => { rq.destroy(); res(null); }); });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const AXES = ['MoveForward', 'MoveBackward', 'MoveLeft', 'MoveRight', 'LookLeft', 'LookRight'];
-async function zeroAll() { for (const a of AXES) { await send('/input/' + a, [false]); await sleep(40); } }
+async function zeroAll() {
+  for (const a of AXES) { await send('/input/' + a, [false]); await sleep(40); }
+  // 2026-10-30 修复: 之前漏掉模拟轴 -> 用模拟量驱动后相机停不下来(静止漂移/抖动的真正原因)
+  try { await sendF('/input/Vertical', 0); await sendF('/input/Horizontal', 0); await sendF('/input/LookVertical', 0); await sendF('/input/LookHorizontal', 0); } catch (e) {}
+}
 const picRoot = path.join(os.homedir(), 'Pictures', 'VRChat');
 function photos() { const out = []; (function w(d) { try { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) w(p); else if (/\.png$/i.test(e.name)) out.push({ p, t: fs.statSync(p).mtimeMs, n: e.name }); } } catch (x) {} })(picRoot); return out.sort((a, b) => b.t - a.t); }
 const USECAM = ['ShowUIInCamera','Flying','Lock','LocalPlayer','RemotePlayer','Environment','GreenScreen','SmoothMovement','LookAtMe','AutoLevelRoll','AutoLevelPitch','ShowFocus','Streaming','TriggerTakesPhotos','DollyPathsStayVisible','FlingToClose','AudioFromCamera','RollWhileFlying','OrientationIsLandscape','Zoom','Exposure','FocalDistance','Aperture','Hue','Saturation','Lightness','LookAtMeXOffset','LookAtMeYOffset','FlySpeed','TurnSpeed','SmoothingStrength','PhotoRate'];
@@ -835,13 +839,14 @@ async function replayTraj(file, stepSec, dry) {
 // ===== 连续重放 v2(2026-10-30, A 轮速度/精度) =====
 // 针对 v1 的"卡顿/慢 4.4x": v1 每个脉冲后等 600ms 停稳; v2 约 90ms 一个 tick, 闭环连续修正, 不停稳.
 // 输入只用已证实的: MoveForward/Backward/Left/Right(bool), LookLeft/Right(偏航, 临时 TurnSpeed=0.3), LookVertical(上下, float).
-async function replayContinuous(file, speedFactor, dry, smoothYaw) {
+async function replayContinuous(file, speedFactor, dry, smoothYaw, maxSec) {
   const speed = Math.max(0.3, Math.min(3, Number(speedFactor) || 1.0));
   const j = JSON.parse(fs.readFileSync(file, 'utf8'));
   const raw = Array.isArray(j.samples) ? j.samples : [];
   if (raw.length < 5) throw new Error('轨迹样本太少: ' + raw.length);
   const b = raw[0];
   const dur = raw[raw.length - 1].t;
+  const tLimit = Math.max(0.5, Math.min(dur, Number(maxSec) || dur));
   const relPos = raw.map(function (s) { return [s.pos[0] - b.pos[0], s.pos[1] - b.pos[1], s.pos[2] - b.pos[2]]; });
   const relYaw = []; let prevRaw = Number(b.rot[1]) || 0, accYaw = 0;
   for (const s of raw) { accYaw += wrap180((Number(s.rot[1]) || 0) - prevRaw); prevRaw = Number(s.rot[1]) || 0; relYaw.push(accYaw); }
@@ -862,7 +867,7 @@ async function replayContinuous(file, speedFactor, dry, smoothYaw) {
     };
   }
   if (dry) {
-    for (let t = 0; t <= dur + 0.001; t += Math.max(0.5, dur / 10)) {
+    for (let t = 0; t <= tLimit + 0.001; t += Math.max(0.5, tLimit / 10)) {
       const s = sampleAt(t);
       console.log('  t=' + t.toFixed(1) + 's rel=[' + s.pos.map(function (x) { return x.toFixed(2); }).join(', ') + '] yawRel=' + s.yawRel.toFixed(1) + '°');
     }
@@ -944,10 +949,11 @@ async function replayContinuous(file, speedFactor, dry, smoothYaw) {
     console.log('实测速度 ' + measuredV.toFixed(2) + ' m/s / 轨迹需求(p95) ' + reqV.toFixed(2) + ' m/s -> 自动倍速 ' + speedEff.toFixed(2) + 'x');
     const tStart = Date.now();
     let ticks = 0, sumPos = 0, maxPos = 0, maxYaw = 0, iter = 0;
+    let cmdF = 0, cmdL = 0, cmdU = 0;
     while (true) {
       iter++; if (iter > 3000) break;
       const elapsed = (Date.now() - tStart) / 1000;
-      const tp = Math.min(elapsed * speedEff, dur);
+      const tp = Math.min(elapsed * speedEff, tLimit);
       const wp = sampleAt(tp);
       const targetWorld = [origin[0] + wp.pos[0], origin[1] + wp.pos[1], origin[2] + wp.pos[2]];
       const targetYaw = wrap180(yaw0 + wp.yawRel);
@@ -972,17 +978,35 @@ async function replayContinuous(file, speedFactor, dry, smoothYaw) {
       }
       const absF = Math.abs(front), absL = Math.abs(left), absU = Math.abs(dy);
       const db = smoothYaw ? 0.08 : 0.07;
-      // 路径末端 1 秒内逐渐减小修正力度(ease-out), 避免末端急停/急修
-      const ease = tp > dur - 1.0 ? Math.max(0.25, (dur - tp) / 1.0) : 1.0;
-      const msM = Math.max(20, Math.min(50, ease * Math.max(absF, absL, absU) / Math.max(0.15, measuredV) * 1000 * 0.6));
-      if (absU > Math.max(absF, absL) && absU > db) await pulseVertNT(dy >= 0 ? 1 : -1, msM);
-      else if (absF >= absL && absF > db) await pulseAxisNT(front >= 0 ? 'MoveForward' : 'MoveBackward', msM);
-      else if (absL > db) await pulseAxisNT(left >= 0 ? 'MoveLeft' : 'MoveRight', msM);
-      else await sleep(25);
-      if (elapsed * speedEff >= dur + 0.10) break;
+      // 用户反馈: 抖动主要来自"两个方向同时矢量平移" -> 平移改用三路模拟量同时写(连续矢量), 不再用 bool 轴交替
+      const ease = tp > tLimit - 1.0 ? Math.max(0.25, (tLimit - tp) / 1.0) : 1.0;
+      if (posErr < db) {
+        try { await sendF('/input/Vertical', 0); await sendF('/input/Horizontal', 0); await sendF('/input/LookVertical', 0); } catch (e) {}
+        await sleep(25);
+      } else {
+        // 用户反馈: 抖动主要来自"两个方向同时矢量平移" -> 各轴脉冲**同时启动/同时结束**(真正斜向矢量), 不再逐 tick 选单轴
+        const vRef = Math.max(0.15, measuredV);
+        const msOf = function (d) { return Math.max(20, Math.min(60, ease * d / vRef * 1000 * 0.6)); };
+        const acts = [];
+        if (absF > db) acts.push({ axis: front >= 0 ? 'MoveForward' : 'MoveBackward', ms: msOf(absF) });
+        if (absL > db) acts.push({ axis: left >= 0 ? 'MoveLeft' : 'MoveRight', ms: msOf(absL) });
+        if (absU > db) acts.push({ vert: dy >= 0 ? 1 : -1, ms: msOf(absU) });
+        if (acts.length === 0) { await sleep(25); }
+        else {
+          try {
+            for (const a of acts) { if (a.vert !== undefined) await sendF('/input/LookVertical', a.vert); else await send('/input/' + a.axis, [true]); }
+            const msMax = Math.max.apply(null, acts.map(function (a) { return a.ms; }));
+            await sleep(msMax);
+          } finally {
+            for (const a of acts) { try { if (a.vert !== undefined) await sendF('/input/LookVertical', 0); else await send('/input/' + a.axis, [false]); } catch (e) {} }
+          }
+          await sleep(18);
+        }
+      }
+      if (elapsed * speedEff >= tLimit + 0.10) break;
     }
     // 收尾: 最多 3 秒把"偏航 + 位置"收敛到终点(v1 的终点精度靠停稳, v2 用专门收尾段补回)
-    const fin = sampleAt(dur);
+    const fin = sampleAt(tLimit);
     const finalWorld = [origin[0] + fin.pos[0], origin[1] + fin.pos[1], origin[2] + fin.pos[2]];
     const finalYawTarget = wrap180(yaw0 + fin.yawRel);
     for (let i = 0; i < 90; i++) {
@@ -1533,12 +1557,14 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
   }
   if (cmd === 'replay2') {
     if (!a1) { console.log('用法: node scripts/dev/camera-calib.js replay2 <轨迹文件> [倍速=1] [dry]'); sock.close(); return; }
-    await replayContinuous(String(a1), Number(a2) || 1.0, String(a3) === 'dry');
+    const dry2 = String(a3) === 'dry';
+    await replayContinuous(String(a1), Number(a2) || 1.0, dry2, false, dry2 ? null : (Number(a3) || null));
     sock.close(); return;
   }
   if (cmd === 'replay2s') {
     if (!a1) { console.log('用法: node scripts/dev/camera-calib.js replay2s <轨迹文件> [倍速=1] [dry]'); sock.close(); return; }
-    await replayContinuous(String(a1), Number(a2) || 1.0, String(a3) === 'dry', true);
+    const dry2s = String(a3) === 'dry';
+    await replayContinuous(String(a1), Number(a2) || 1.0, dry2s, true, dry2s ? null : (Number(a3) || null));
     sock.close(); return;
   }
   if (cmd === 'replay-seg') {
