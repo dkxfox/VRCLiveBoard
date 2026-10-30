@@ -3093,6 +3093,7 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 - 验证: 在用户同一 `Z:\新建文件夹\...` 路径运行修好的 bat -> 自动复制缓存 -> 进程命令行为本地缓存 electron + 网络盘 main.js -> `:19190/api/health` 返回 `version=1.4.7`, 正常; 本地解压包直接启动也正常.
 - 版本: 1.4.7 -> 1.4.8(补漏), 已重新打包/审计/发布(覆盖 1.4.7 的启动缺陷).
 - 备注: 网络盘首次启动复制约 350MB, 之后复用; 用户也可以直接把整个包解压到本地盘避免这次复制.
+- 关联: 开发者的母狗桌面程序(dev-dongle/master/启动母狗.bat)同样从网络盘启动 Electron, 已用同一套本地缓存逻辑修复; 母狗 selftest(list ok + passfile exists)通过. dev-dongle 为本地开发资产, 不随包/不入库.
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
