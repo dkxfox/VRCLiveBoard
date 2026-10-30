@@ -3086,6 +3086,13 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 - 打包复核: 首次 1.4.7 包把用户个人文件「VR chat相机入门手册原始文件.docx」(24.5MB)与 assets/motions 测试 VMD 误打进 Lite/Desktop; 已在 pack-exclude 增加排除并重打 —— Lite 8.99MB/209 条目, Desktop 281.43MB/1586 条目, 两份 pack-audit 均 PASS; zipVolumes 基线已人工复核更新.
 - release-audit 第二次: **AUDIT PASS**(门禁 15 PASS / 0 FAIL, 隔离冒烟 12/12, 产物级验收 backend-flow 195/0 + plugin 67/0 + smoke 15/15; 打包含 BUILD-INFO 绑定); 已上传 GitHub Release **v1.4.7**(prerelease/EA): Desktop 281.43MB / Lite 8.99MB / SHA256SUMS, 资产 digest 与本地一致; docs/RELEASE-ASSETS.json 已追记. 发布说明在 Release 页.
 - 测试组材料: 待整理(快速上手/已知问题/日志位置/相机复位步骤/防火墙提示).
+## 391. 1.4.8「补漏」: 网络共享目录桌面版启动崩溃修复(2026-10-30)
+- 用户报告: 1.4.7 桌面版无法启动. 定位到用户实际解压路径 `Z:\新建文件夹\VRCLiveBoard-Desktop-SelfContained-v1.4.7`(网络映射盘); Windows 事件日志显示 `electron.exe 43.8.4.0` 异常 `0x80000003`, 模块路径为网络盘上的 `node_modules\electron\dist\electron.exe`.
+- 根因: Electron 43.8.4 新增 install_dir_access 检查, 沙箱进程要求安装目录 ACL 含 ALL APPLICATION PACKAGES; 网络共享目录不满足(本地盘解压正常). 43.4.0 无此强制检查, 所以 1.4.7 升级后暴露.
+- 修复: `启动桌面版.bat` 检测 UNC/映射盘; 网络路径时把 `node_modules\electron\dist` 复制到 `%LOCALAPPDATA%\VRCLiveBoard\electron-cache\<version>` 并从本地缓存启动(应用本体仍从网络包目录加载). 批处理开启 EnableDelayedExpansion, 避免块内变量未展开. 本地盘路径仍走原逻辑.
+- 验证: 在用户同一 `Z:\新建文件夹\...` 路径运行修好的 bat -> 自动复制缓存 -> 进程命令行为本地缓存 electron + 网络盘 main.js -> `:19190/api/health` 返回 `version=1.4.7`, 正常; 本地解压包直接启动也正常.
+- 版本: 1.4.7 -> 1.4.8(补漏), 已重新打包/审计/发布(覆盖 1.4.7 的启动缺陷).
+- 备注: 网络盘首次启动复制约 350MB, 之后复用; 用户也可以直接把整个包解压到本地盘避免这次复制.
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -3376,5 +3383,6 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 | 388 | 2026-10-30 | 事故: 键盘实验输入配置干扰 VRChat 移动输入(向右绕圈) + 输入最小化修复 |
 | 389 | 2026-10-30 | 1.4.x EA 前修 bug: 好友欢迎导入/快照 + AI 结构安全 + 依赖漏洞 |
 | 390 | 2026-10-30 | 1.4.7「出鞘」EA 前收尾: 版本锁定 + 质量/安全证据 |
+| 391 | 2026-10-30 | 1.4.8「补漏」: 网络共享目录桌面版启动崩溃修复 |
 
 <!-- DEV-NOTES-INDEX:END -->

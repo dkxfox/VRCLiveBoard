@@ -1,10 +1,20 @@
 {
-  "version": "1.4.7",
-  "codename": "出鞘",
+  "version": "1.4.8",
+  "codename": "补漏",
   "published": "2026-10-30",
-  "note": "1.4.7 出鞘 · 抢先体验(EA): 好友欢迎导入/进房快照修复、AI 调用结构安全加固(端点/密钥/响应/严格 schema)、Electron 与依赖安全更新; 键盘九键数字模式回归确认",
+  "note": "1.4.8 补漏: 修复 1.4.7 桌面版从网络共享目录启动崩溃(Electron 43.8.4 安装目录 ACL); 网络盘自动改用本地 Electron 缓存启动",
   "releaseUrl": "https://github.com/dkxfox/VRCLiveBoard/releases/latest",
   "history": [
+    {
+      "version": "1.4.8",
+      "date": "2026-10-30",
+      "notes": [
+        "修复: 1.4.7 桌面版从网络共享目录启动直接崩溃(Windows 事件日志 electron.exe 43.8.4 异常 0x80000003) —— Electron 43.8.4 要求安装目录 ACL 含 ALL APPLICATION PACKAGES 读取权限，网络盘解压包不满足；现在检测 UNC/映射盘后把 Electron 运行时复制到本机缓存再从本地启动。",
+        "1.4.7 的全部修复(好友欢迎导入/快照、AI 结构安全、依赖安全、九键回归)仍包含在本版。",
+        "如果你从本地盘解压，启动方式不变；若从 NAS/共享盘运行，首次启动会复制一次 Electron 运行时(约 350MB)，之后直接复用。",
+        "好友欢迎插件 v1.3.4 更新后需重新红窗授权一次；本次为抢先体验补丁版。"
+      ]
+    },
     {
       "version": "1.4.7",
       "date": "2026-10-30",
