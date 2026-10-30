@@ -96,6 +96,31 @@ t('scanPresets: 忽略 _vrcliveboard_tmp_ 临时文件', function () {
   assert.strictEqual(r.presets[0].file, 'real.json');
   fs.rmSync(dir, { recursive: true, force: true });
 });
+t('相机定义: 推子/开关/模式齐全且键唯一', function () {
+  const defs = api._camDefs;
+  assert.strictEqual(defs.params.length, 9);
+  assert.strictEqual(defs.toggles.length, 14);
+  assert.strictEqual(defs.modes.length, 4);
+  const keys = defs.params.map(function (p) { return p.key; }).concat(defs.toggles.map(function (t) { return t.key; }));
+  assert.strictEqual(new Set(keys).size, keys.length);
+  defs.params.forEach(function (p) {
+    assert.ok(p.addr.indexOf('/usercamera/') === 0);
+    assert.ok(p.max > p.min);
+    assert.ok(p.step > 0);
+  });
+  defs.toggles.forEach(function (t) { assert.ok(t.addr.indexOf('/usercamera/') === 0); });
+  assert.deepStrictEqual(defs.modes.map(function (m) { return m.value; }), [1, 2, 4, 5]);
+});
+t('cameraSet: 未知参数直接拒绝(不发 OSC)', async function () {
+  const r = await api.cameraSet({ key: 'nope', value: 1 });
+  assert.strictEqual(r.ok, false);
+  assert.ok(String(r.error).indexOf('未知参数') >= 0);
+});
+t('cameraSet: 非法模式值被拒绝', async function () {
+  const r = await api.cameraSet({ key: 'mode', value: 3 });
+  assert.strictEqual(r.ok, false);
+  assert.ok(String(r.error).indexOf('模式') >= 0);
+});
 t('scanPresets: 临时目录读取/排序/错误容忍', function () {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cp-test-'));
   fs.writeFileSync(path.join(dir, 'a-good.json'), JSON.stringify(makeFrames(3, 0, 1)));
@@ -127,12 +152,14 @@ async function ta(name, fn) {
     const html = await (await fetch('http://127.0.0.1:' + st2.port + '/')).text();
     assert.ok(html.indexOf('局域网控制台') >= 0);
     assert.ok(html.indexOf('刷新列表') >= 0);
+    assert.ok(html.indexOf('相机控制') >= 0);
+    assert.ok(html.indexOf('推子') >= 0);
   });
   await ta('LAN 控制台: /api/state 与 /api/presets 正常', async function () {
     const base = 'http://127.0.0.1:' + st2.port;
     const state = await (await fetch(base + '/api/state')).json();
     assert.strictEqual(state.ok, true);
-    assert.strictEqual(state.version, '0.3.0');
+    assert.strictEqual(state.version, '0.4.0');
     assert.ok(state.lan && state.lan.listening);
     const pres = await (await fetch(base + '/api/presets')).json();
     assert.strictEqual(pres.ok, true);

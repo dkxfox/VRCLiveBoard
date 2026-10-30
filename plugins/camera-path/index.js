@@ -1,5 +1,7 @@
 'use strict';
-// 相机运镜控制(plugin id: camera-path) v0.3.0 —— 2026-10-30
+// 相机运镜控制(plugin id: camera-path) v0.4.0 —— 2026-10-30
+// v0.4.0 新增: 相机推子/开关/模式(局域网控制台“相机”页): 9 个数值推子(飞行速度/转向速度/平滑/光圈/焦距/变焦/曝光/对准我X,Y)、14 个开关、4 种相机模式;
+//   读写走 OSC + OSCQuery 读回确认(写后读回, 不一致如实报告), 每 1s 轮询 /usercamera 树.
 // v0.3.0 新增: 局域网控制台(手机/平板浏览器直连, 预设列表/播放/仅导入/停止/拍照; 默认关闭, 端口+可选口令)
 //
 // v0.2.0 核心新增(已实测, 见 DEV-NOTES 383):
@@ -23,7 +25,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const VERSION = '0.3.0';
+const VERSION = '0.4.0';
 const DOLLY = {
   play: '/dolly/Play',
   playDelayed: '/dolly/PlayDelayed',
@@ -35,6 +37,46 @@ const DOLLY = {
 const MAX_KEYFRAMES_DEFAULT = 6;
 const AXES = ['MoveForward', 'MoveBackward', 'MoveLeft', 'MoveRight', 'LookLeft', 'LookRight'];
 const FLOAT_AXES = ['Vertical', 'Horizontal', 'LookVertical', 'LookHorizontal'];
+
+// ---------- 相机推子/开关/模式(CAMERA-CONSOLE-DESIGN 第一期) ----------
+// 数值端点必须写 float32(整数也要 'f'), 否则 VRChat 会读出脏值(2026-10-22 实测)
+const CAM_PARAMS = [
+  { key: 'flySpeed', label: '飞行速度', addr: '/usercamera/FlySpeed', min: 0.1, max: 14.2, step: 0.1, unit: 'm/s' },
+  { key: 'turnSpeed', label: '转向速度', addr: '/usercamera/TurnSpeed', min: 0.1, max: 5, step: 0.1, unit: '' },
+  { key: 'smoothing', label: '平滑强度', addr: '/usercamera/SmoothingStrength', min: 0, max: 10, step: 1, unit: '' },
+  { key: 'aperture', label: '光圈', addr: '/usercamera/Aperture', min: 1.4, max: 15, step: 0.1, unit: '' },
+  { key: 'focalDistance', label: '焦距', addr: '/usercamera/FocalDistance', min: 0.1, max: 50, step: 0.1, unit: 'm' },
+  { key: 'zoom', label: '变焦', addr: '/usercamera/Zoom', min: 20, max: 120, step: 0.5, unit: '' },
+  { key: 'exposure', label: '曝光', addr: '/usercamera/Exposure', min: -8, max: 8, step: 0.5, unit: '' },
+  { key: 'lookX', label: '对准我 X 偏移', addr: '/usercamera/LookAtMeXOffset', min: -25, max: 25, step: 0.5, unit: '' },
+  { key: 'lookY', label: '对准我 Y 偏移', addr: '/usercamera/LookAtMeYOffset', min: -25, max: 25, step: 0.5, unit: '' },
+];
+const CAM_TOGGLES = [
+  { key: 'flying', label: '飞行', addr: '/usercamera/Flying' },
+  { key: 'lock', label: '锁定', addr: '/usercamera/Lock' },
+  { key: 'ui', label: '显示 UI', addr: '/usercamera/ShowUIInCamera' },
+  { key: 'greenScreen', label: '绿幕', addr: '/usercamera/GreenScreen' },
+  { key: 'environment', label: '环境图层', addr: '/usercamera/Environment' },
+  { key: 'localPlayer', label: '自己', addr: '/usercamera/LocalPlayer' },
+  { key: 'remotePlayer', label: '其他玩家', addr: '/usercamera/RemotePlayer' },
+  { key: 'lookAtMe', label: '对准我', addr: '/usercamera/LookAtMe' },
+  { key: 'autoLevelRoll', label: '滚转水平', addr: '/usercamera/AutoLevelRoll' },
+  { key: 'autoLevelPitch', label: '俯仰水平', addr: '/usercamera/AutoLevelPitch' },
+  { key: 'smoothMovement', label: '平滑移动', addr: '/usercamera/SmoothMovement' },
+  { key: 'showFocus', label: '显示对焦点', addr: '/usercamera/ShowFocus' },
+  { key: 'audioFromCamera', label: '相机收音', addr: '/usercamera/AudioFromCamera' },
+  { key: 'landscape', label: '横构图', addr: '/usercamera/OrientationIsLandscape' },
+];
+const CAM_MODES = [
+  { value: 1, label: '本地单张' },
+  { value: 2, label: '直播' },
+  { value: 4, label: '本地多图层' },
+  { value: 5, label: '拍立得' },
+];
+function camParamByKey(k) { return CAM_PARAMS.find(function (x) { return x.key === k; }) || null; }
+function camToggleByKey(k) { return CAM_TOGGLES.find(function (x) { return x.key === k; }) || null; }
+function clampNum(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
 
 // ---------- OSC 编码/自检(与 v0.1.0 相同; 被单测约束) ----------
 function oscString(s) {
@@ -193,13 +235,16 @@ module.exports = function (ctx) {
   // ---------- 局域网控制台(LAN console): 0.0.0.0 监听, 默认关闭, 可选口令 ----------
   let lanServer = null;
   const lanState = { listening: false, port: 0, ip: '', error: '' };
+  // ---------- 相机状态缓存(OSCQuery /usercamera 树, 唯一真相) ----------
+  let camState = { online: false, at: 0, values: {}, error: '' };
+  let camTimer = null;
+  let camBusy = false;
 
   function port() { const p = Number(cfg.oscPort); return p > 0 ? p : 9000; }
   function pathsDir() { const d = String(cfg.pathsDir || '').trim(); return d || path.join(os.homedir(), 'Documents', 'VRChat', 'CameraPaths'); }
   function maxKF() { return Math.max(2, Math.min(20, Number(cfg.maxKeyframesPerSegment) || MAX_KEYFRAMES_DEFAULT)); }
 
-  function send(address, args) {
-    const packet = oscMessage(address, args);
+  function sendPacket(packet, address) {
     const bad = auditPacket(packet);
     if (bad.length) { failed++; lastError = '包体自检失败(' + address + '): ' + bad.join('; '); log('warn', lastError); return Promise.resolve(false); }
     return new Promise(function (resolve) {
@@ -208,6 +253,16 @@ module.exports = function (ctx) {
         else { sent++; resolve(true); }
       });
     });
+  }
+  function send(address, args) { return sendPacket(oscMessage(address, args), address); }
+  // 数值端点强制 float(整数也写 'f'), 否则 /usercamera 数值会脏
+  function sendFloat(address, value) {
+    const b = Buffer.alloc(4); b.writeFloatBE(Number(value));
+    return sendPacket(Buffer.concat([oscString(address), oscString(',f'), b]), address);
+  }
+  function sendInt(address, value) {
+    const b = Buffer.alloc(4); b.writeInt32BE(Math.round(Number(value)));
+    return sendPacket(Buffer.concat([oscString(address), oscString(',i'), b]), address);
   }
   const sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
 
@@ -252,6 +307,89 @@ module.exports = function (ctx) {
     state.camera = false; state.checked = true; state.note = '未找到 OSCQuery(相机控制可能不可用)';
     return 0;
   }
+
+  // ---------- 相机状态: /usercamera 全树轮询 + 写后读回 ----------
+  async function refreshCameraState() {
+    if (camBusy) return camState;
+    camBusy = true;
+    try {
+      const p = state.oscQueryPort || await discoverOscQuery();
+      if (!p) { camState = { online: false, at: Date.now(), values: {}, error: 'OSCQuery 不可用' }; return camState; }
+      const j = await httpGetJson(p, '/usercamera');
+      if (!j) { camState = { online: false, at: Date.now(), values: camState.values || {}, error: '读取 /usercamera 失败' }; return camState; }
+      const values = {};
+      (function walk(node, prefix) {
+        const c = (node && node.CONTENTS) || {};
+        Object.keys(c).forEach(function (k) {
+          const n = c[k]; const full = prefix + '/' + k;
+          if (n && n.CONTENTS && Object.keys(n.CONTENTS).length) walk(n, full);
+          else if (n) values[full] = (n.VALUE && n.VALUE.length) ? n.VALUE[0] : null;
+        });
+      })(j, '/usercamera');
+      camState = { online: true, at: Date.now(), values: values, error: '' };
+    } finally { camBusy = false; }
+    return camState;
+  }
+  function cameraPayload() {
+    const vals = camState.values || {};
+    const params = CAM_PARAMS.map(function (d) {
+      const raw = vals[d.addr];
+      return { key: d.key, label: d.label, addr: d.addr, min: d.min, max: d.max, step: d.step, unit: d.unit, value: (raw === undefined || raw === null || !isFinite(Number(raw))) ? null : Number(raw) };
+    });
+    const toggles = CAM_TOGGLES.map(function (d) {
+      const raw = vals[d.addr];
+      return { key: d.key, label: d.label, addr: d.addr, value: raw === undefined || raw === null ? null : !!raw };
+    });
+    const modeRaw = Number(vals['/usercamera/Mode']);
+    return {
+      ok: true, online: !!camState.online, at: camState.at, error: camState.error || '',
+      mode: isFinite(modeRaw) ? modeRaw : null,
+      modes: CAM_MODES.map(function (m) { return { value: m.value, label: m.label, active: isFinite(modeRaw) && modeRaw === m.value }; }),
+      params: params, toggles: toggles,
+      oscQueryPort: state.oscQueryPort || 0,
+    };
+  }
+  async function setCameraParam(args) {
+    const a = args || {};
+    const key = String(a.key || '');
+    const pDef = camParamByKey(key);
+    const tDef = camToggleByKey(key);
+    try {
+      if (pDef) {
+        let v = Number(a.value);
+        if (!isFinite(v)) return { ok: false, error: '数值无效' };
+        v = clampNum(v, pDef.min, pDef.max);
+        const sent = await sendFloat(pDef.addr, v);
+        if (!sent) return { ok: false, error: '发送失败: ' + lastError };
+        await sleep(250);
+        await refreshCameraState();
+        const read = camState.values[pDef.addr];
+        const matched = read != null && isFinite(Number(read)) && Math.abs(Number(read) - v) <= Math.max(0.06, pDef.step / 2 + 0.01);
+        return { ok: true, key: key, type: 'float', sent: v, read: read == null ? null : Number(read), matched: !!matched, online: !!camState.online };
+      }
+      if (tDef) {
+        const v = !!a.value;
+        const sent = await send(tDef.addr, [v]);
+        if (!sent) return { ok: false, error: '发送失败: ' + lastError };
+        await sleep(200);
+        await refreshCameraState();
+        const read = camState.values[tDef.addr];
+        return { ok: true, key: key, type: 'bool', sent: v, read: read == null ? null : !!read, matched: read != null && !!read === v, online: !!camState.online };
+      }
+      if (key === 'mode') {
+        const v = Math.round(Number(a.value));
+        if ([1, 2, 4, 5].indexOf(v) < 0) return { ok: false, error: '相机模式只支持 1/2/4/5' };
+        const sent = await sendInt('/usercamera/Mode', v);
+        if (!sent) return { ok: false, error: '发送失败: ' + lastError };
+        await sleep(300);
+        await refreshCameraState();
+        const read = Number(camState.values['/usercamera/Mode']);
+        return { ok: true, key: 'mode', type: 'int', sent: v, read: isFinite(read) ? read : null, matched: isFinite(read) && read === v, online: !!camState.online };
+      }
+      return { ok: false, error: '未知参数: ' + key };
+    } catch (e) { return { ok: false, error: String(e.message || e) }; }
+  }
+
   async function readDollyState(portNum) {
     const p = portNum || state.oscQueryPort || await discoverOscQuery();
     if (!p) return null;
@@ -414,7 +552,8 @@ module.exports = function (ctx) {
     try { const d = await readDollyState(0); dollyPlay = d ? d.play : null; } catch (e) {}
     return {
       ok: true, version: VERSION, playing: playing, current: current, dollyPlay: dollyPlay,
-      camera: state.camera, note: state.note, oscQueryPort: state.oscQueryPort,
+      camera: state.camera, camOnline: !!camState.online, camMode: isFinite(Number(camState.values['/usercamera/Mode'])) ? Number(camState.values['/usercamera/Mode']) : null,
+      note: state.note, oscQueryPort: state.oscQueryPort,
       presetsDir: pathsDir(), presetCount: list.ok ? list.presets.length : 0,
       lan: lanStatusInfo(),
       settings: { delaySec: Number(cfg.delaySec) || 1, autoStopSec: Number(cfg.autoStopSec) || 0, maxKeyframesPerSegment: maxKF(), stopRestoresLock: cfg.stopRestoresLock !== false },
@@ -440,6 +579,29 @@ module.exports = function (ctx) {
       return lanJson(res, r && r.ok ? 200 : 400, r);
     }
     if (p === '/api/stop' && req.method === 'POST') return lanJson(res, 200, await stopPlayback('lan'));
+    if (p === '/api/camera' && req.method === 'GET') {
+      if (!camState.at || Date.now() - camState.at > 2000) { try { await refreshCameraState(); } catch (e) {} }
+      return lanJson(res, 200, cameraPayload());
+    }
+    if (p === '/api/camera/set' && req.method === 'POST') {
+      const body = await lanReadBody(req);
+      const r = await setCameraParam(body);
+      return lanJson(res, r && r.ok ? 200 : 400, r);
+    }
+    if (p === '/api/action' && req.method === 'POST') {
+      const body = await lanReadBody(req);
+      const name = String(body.name || '');
+      if (name === 'capture') {
+        const hideUi = !!cfg.hideUiInPhoto;
+        if (hideUi) await send('/usercamera/ShowUIInCamera', [false]);
+        const ok = await send('/usercamera/Capture', []);
+        if (hideUi) { await sleep(1200); await send('/usercamera/ShowUIInCamera', [true]); }
+        return lanJson(res, 200, { ok: ok, hidUi: hideUi });
+      }
+      if (name === 'zero') { await zeroAll(); return lanJson(res, 200, { ok: true }); }
+      if (name === 'stop') { return lanJson(res, 200, await stopPlayback('lan-action')); }
+      return lanJson(res, 400, { ok: false, error: '未知动作: ' + name });
+    }
     if (p === '/api/capture' && req.method === 'POST') {
       const hideUi = !!cfg.hideUiInPhoto;
       if (hideUi) await send('/usercamera/ShowUIInCamera', [false]);
@@ -484,12 +646,16 @@ module.exports = function (ctx) {
     apply: async function () {
       cleanupTemps(pathsDir(), null);
       await discoverOscQuery();
+      try { await refreshCameraState(); } catch (e) {}
+      if (camTimer) { clearInterval(camTimer); camTimer = null; }
+      camTimer = setInterval(function () { refreshCameraState().catch(function () {}); }, 1000);
       try { await lanEnsure(); } catch (e) { log('warn', '[camera-path] LAN 控制台启动异常: ' + (e && e.message)); }
       const list = scanPresets(pathsDir());
-      log('info', '[camera-path] v' + VERSION + ' 已启用; ' + (list.ok ? list.presets.length : 0) + ' 个预设; ' + state.note + '; LAN=' + (lanState.listening ? lanStatusInfo().url : 'off'));
+      log('info', '[camera-path] v' + VERSION + ' 已启用; ' + (list.ok ? list.presets.length : 0) + ' 个预设; 相机状态=' + (camState.online ? '在线' : '离线') + '; LAN=' + (lanState.listening ? lanStatusInfo().url : 'off'));
       return { ok: true, note: state.note, presets: list.ok ? list.presets.length : 0, lan: lanStatusInfo() };
     },
     dispose: async function () {
+      try { if (camTimer) { clearInterval(camTimer); camTimer = null; } } catch (e) {}
       try { lanStopSafe(); } catch (e) {}
       try { await stopPlayback('dispose'); } catch (e) {}
       try { cleanupTemps(pathsDir(), null); } catch (e) {}
@@ -510,6 +676,7 @@ module.exports = function (ctx) {
           osc: { host: '127.0.0.1', port: port(), sent: sent, failed: failed, lastError: lastError },
           presetsDir: pathsDir(), presetCount: list.ok ? list.presets.length : 0,
           playing: playing, current: current, dollyPlay: dollyPlay,
+          camOnline: !!camState.online, camMode: isFinite(Number(camState.values['/usercamera/Mode'])) ? Number(camState.values['/usercamera/Mode']) : null, camAt: camState.at,
           lan: lanStatusInfo(),
           settings: { delaySec: Number(cfg.delaySec) || 1, autoStopSec: Number(cfg.autoStopSec) || 0, maxKeyframesPerSegment: maxKF(), stopRestoresLock: cfg.stopRestoresLock !== false },
         };
@@ -534,6 +701,9 @@ module.exports = function (ctx) {
         const dolly = await readDollyState(p);
         return { ok: !!p, oscQueryPort: p, dollyEndpoints: !!(dolly && dolly.play !== null), note: state.note };
       },
+      cameraState: async function () { if (!camState.at || Date.now() - camState.at > 2000) { try { await refreshCameraState(); } catch (e) {} } return cameraPayload(); },
+      cameraSet: async function (args) { return await setCameraParam(args || {}); },
+      _camDefs: { params: CAM_PARAMS, toggles: CAM_TOGGLES, modes: CAM_MODES },
       lanStatus: async function () { return lanStatusInfo(); },
       lanEnsure: async function (args) { try { return await lanEnsure(args); } catch (e) { return { ok: false, error: String(e.message || e), ...lanStatusInfo() }; } },
       capture: async function (opts) {

@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1220">
-<title>相机运镜 · 局域网控制台</title>
+<title>相机控制台 · 局域网</title>
 <style>
-:root{--bg:#0b1220;--card:#111c2e;--card2:#16233a;--line:#24344f;--text:#e8eef8;--sub:#8ea3bf;--accent:#00e5c0;--blue:#4da3ff;--warn:#ffb020;--danger:#ff5d6c;--ok:#35d07f}
+:root{--bg:#0b1220;--card:#111c2e;--card2:#16233a;--line:#24344f;--text:#e8eef8;--sub:#8ea3bf;--accent:#00e5c0;--blue:#4da3ff;--warn:#ffb020;--danger:#ff5d6c;--ok:#35d07f;--purple:#b07cff}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif;max-width:100%;overflow-x:hidden}
 body{min-height:100vh;display:flex;flex-direction:column;gap:10px;padding:10px 10px calc(14px + env(safe-area-inset-bottom))}
 header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 2px;flex-wrap:wrap}
 .brand{font-size:17px;font-weight:700;letter-spacing:.5px}
@@ -24,8 +24,11 @@ button.play{background:linear-gradient(180deg,#00b49a,#008f7d);border-color:#00c
 button.import{background:#1d3a5c;border-color:#2d5d8f}
 button.danger{background:#4a1b24;border-color:#7a2b3a;color:#ffd7dd;font-weight:700}
 button.big{padding:12px 16px;flex:1;min-height:52px;font-size:16px}
-.now{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
-.file{font-size:16px;font-weight:700;word-break:break-all}
+.tabs{display:flex;gap:8px;padding:2px}
+.tabbtn{flex:1;background:var(--card);border:1px solid var(--line);border-radius:12px;min-height:46px;font-weight:600;color:var(--sub)}
+.tabbtn.on{background:linear-gradient(180deg,#123a3a,#0f2b2b);border-color:var(--accent);color:var(--text);box-shadow:0 0 0 1px var(--accent) inset}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.now .file{font-size:16px;font-weight:700;word-break:break-all}
 .meta{font-size:12px;color:var(--sub);word-break:break-all}
 .now-actions{display:flex;gap:8px;flex-wrap:wrap}
 .toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
@@ -41,14 +44,34 @@ input[type=number]{width:66px;background:#0e1828;color:var(--text);border:1px so
 .item .acts{display:flex;gap:8px}
 .item .acts button{flex:1;min-height:44px}
 .empty{color:var(--sub);font-size:13px;padding:14px;text-align:center;border:1px dashed var(--line);border-radius:12px}
-footer{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;color:var(--sub);padding:4px 2px}
+footer{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;color:var(--sub);padding:4px 2px;flex-wrap:wrap}
+.rowflex{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pads{display:flex;gap:8px;flex-wrap:wrap}
+.modebtn{flex:1 1 calc(50% - 8px);min-height:48px;background:#13233a;border:1px solid var(--line);border-radius:10px;font-weight:600;color:var(--sub)}
+.modebtn.on{background:linear-gradient(180deg,#134b46,#0f3a36);border-color:var(--accent);color:var(--text);box-shadow:0 0 0 1px var(--accent) inset}
+.toggle-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:8px}
+.togglebtn{min-height:46px;background:#13233a;border:1px solid var(--line);border-radius:10px;color:var(--sub);font-weight:600;font-size:13px;padding:8px}
+.togglebtn.on{background:linear-gradient(180deg,#134b46,#0f3a36);border-color:var(--accent);color:var(--text);box-shadow:0 0 0 1px var(--accent) inset}
+.actions-row{display:flex;gap:8px;flex-wrap:wrap}
+.actions-row button{flex:1;min-width:110px}
+.slider{display:flex;flex-direction:column;gap:4px;padding:8px 4px;border-bottom:1px solid rgba(36,52,79,.55)}
+.slider:last-child{border-bottom:0}
+.slider .top{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.slider .nm{font-size:13px;color:var(--text);font-weight:600}
+.slider .val{font-size:16px;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
+.slider input[type=range]{width:100%;height:38px;background:transparent;-webkit-appearance:none;appearance:none}
+.slider input[type=range]::-webkit-slider-runnable-track{height:8px;border-radius:4px;background:#223451}
+.slider input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;background:var(--accent);margin-top:-9px;border:2px solid #063a34;box-shadow:0 0 8px rgba(0,229,192,.35)}
+.slider input[type=range]::-moz-range-track{height:8px;border-radius:4px;background:#223451}
+.slider input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;background:var(--accent);border:2px solid #063a34}
+.slider .hint{font-size:11px;color:var(--sub)}
 @media (max-width:560px){header{flex-direction:column;align-items:flex-start}.head-right{width:100%;justify-content:space-between}.brand{width:100%}}
-@media (min-width:720px){body{max-width:860px;margin:0 auto;width:100%}.item{flex-direction:row;align-items:center}.item .top{flex:1;flex-direction:column}.item .badges{text-align:right}.item .acts{width:220px}.item .acts button{flex:1}}
+@media (min-width:720px){body{max-width:900px;margin:0 auto;width:100%}.item{flex-direction:row;align-items:center}.item .top{flex:1;flex-direction:column}.item .badges{text-align:right}.item .acts{width:220px}.item .acts button{flex:1}.modebtn{flex:1 1 calc(25% - 8px)}}
 </style>
 </head>
 <body>
 <header>
-  <div class="brand">相机运镜<span class="sub">局域网控制台</span></div>
+  <div class="brand">相机控制台<span class="sub">局域网控制台 · VRC+ 运镜 / 相机</span></div>
   <div class="head-right">
     <span id="dot" class="dot"></span>
     <span id="statusText">连接中…</span>
@@ -56,22 +79,50 @@ footer{display:flex;justify-content:space-between;align-items:center;gap:8px;fon
   </div>
 </header>
 
-<section class="now">
-  <div class="file" id="nowFile">未选择预设</div>
-  <div class="meta" id="nowInfo">在下面列表里点一条预设，再按“播放”</div>
-  <div class="now-actions">
-    <button id="playSel" class="big play">播放</button>
-    <button id="importSel" class="big import">仅导入</button>
-    <button id="stopSel" class="big danger">停止</button>
-  </div>
-</section>
+<nav class="tabs">
+  <button class="tabbtn on" data-tab="presets">预设运镜</button>
+  <button class="tabbtn" data-tab="camera">相机控制</button>
+</nav>
 
-<section class="toolbar">
-  <label>播放前延迟 <input id="delay" type="number" min="0" max="60" step="1" value="1"> 秒</label>
-  <span id="msg" class="msg"></span>
-</section>
+<main id="tabPresets" style="display:flex;flex-direction:column;gap:10px">
+  <section class="now card">
+    <div class="file" id="nowFile">未选择预设</div>
+    <div class="meta" id="nowInfo">在下面列表里点一条预设，再按“播放”</div>
+    <div class="now-actions">
+      <button id="playSel" class="big play">播放</button>
+      <button id="importSel" class="big import">仅导入</button>
+      <button id="stopSel" class="big danger">停止</button>
+    </div>
+  </section>
+  <section class="toolbar">
+    <label>播放前延迟 <input id="delay" type="number" min="0" max="60" step="1" value="1"> 秒</label>
+    <span id="msg" class="msg"></span>
+  </section>
+  <section id="list" class="list"><div class="empty">加载中…</div></section>
+</main>
 
-<section id="list" class="list"><div class="empty">加载中…</div></section>
+<main id="tabCamera" style="display:none;flex-direction:column;gap:10px">
+  <section class="card">
+    <div class="rowflex"><span class="sub">OSCQuery</span><span id="camOnline" class="sub">—</span><span class="sub" style="margin-left:auto">当前模式</span><span id="camModeName" class="sub">—</span></div>
+    <div id="modeBtns" class="pads"></div>
+  </section>
+  <section class="card">
+    <div class="sub">开关(点一下切换)</div>
+    <div id="toggleGrid" class="toggle-grid"></div>
+  </section>
+  <section class="card">
+    <div class="sub">推子(数值在推子上方)</div>
+    <div id="sliders"><div class="empty">读取相机参数中…</div></div>
+  </section>
+  <section class="card">
+    <div class="actions-row">
+      <button id="capBtn" class="play">拍照</button>
+      <button id="zeroBtn" class="gray">输入归零</button>
+      <button id="stopBtn2" class="danger">停止运镜</button>
+    </div>
+    <span id="camMsg" class="msg"></span>
+  </section>
+</main>
 
 <footer>
   <span id="lanAddr"></span>
@@ -83,10 +134,12 @@ footer{display:flex;justify-content:space-between;align-items:center;gap:8px;fon
   'use strict';
   var token = new URLSearchParams(location.search).get('token') || '';
   try { if (token) localStorage.setItem('cpLanToken', token); else token = localStorage.getItem('cpLanToken') || ''; } catch (e) {}
-  var state = { presets: [], selected: null, playing: false };
+  var state = { presets: [], selected: null, playing: false, camera: null };
+  var camBuilt = false, camDefs = null, hold = {}, camTimer = null;
   var $ = function (id) { return document.getElementById(id); };
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-  function msg(t, warn) { var el = $('msg'); el.textContent = t || ''; el.style.color = warn ? 'var(--warn)' : 'var(--sub)'; }
+  function msg(t, warn) { var el = $('msg'); if (!el) return; el.textContent = t || ''; el.style.color = warn ? 'var(--warn)' : 'var(--sub)'; }
+  function camMsg(t, warn) { var el = $('camMsg'); if (!el) return; el.textContent = t || ''; el.style.color = warn ? 'var(--warn)' : 'var(--sub)'; }
   function api(path, opts) {
     opts = opts || {};
     var headers = opts.headers || {};
@@ -98,10 +151,11 @@ footer{display:flex;justify-content:space-between;align-items:center;gap:8px;fon
   function badge(p) {
     return (p.isLocal ? '玩家' : '世界') + ' · ' + p.points + ' 关键帧 · ' + p.segments + ' 段' + (p.needsSplit ? ' · 需拆分' : '') + (p.ok ? '' : ' · 文件错误');
   }
+
+  // ===== 预设 =====
   function selectPreset(file) {
     state.selected = state.presets.filter(function (p) { return p.file === file; })[0] || null;
-    renderList();
-    renderNow();
+    renderList(); renderNow();
   }
   function renderNow() {
     var p = state.selected;
@@ -120,9 +174,8 @@ footer{display:flex;justify-content:space-between;align-items:center;gap:8px;fon
       d.innerHTML = '<div class="top"><div class="nm">' + esc(p.file) + '</div><div class="badges">' + esc(badge(p)) + '</div></div>' +
         '<div class="acts"><button class="play">播放</button><button class="import">仅导入</button></div>';
       d.querySelector('.top').onclick = function () { selectPreset(p.file); };
-      d.querySelector('.nm').onclick = function (e) { e.stopPropagation(); selectPreset(p.file); };
-      d.querySelector('.play').onclick = function (e) { e.stopPropagation(); if (!p.ok) return; play(p.file); };
-      d.querySelector('.import').onclick = function (e) { e.stopPropagation(); if (!p.ok) return; onlyImport(p.file); };
+      d.querySelector('.play').onclick = function (e) { e.stopPropagation(); if (p.ok) play(p.file); };
+      d.querySelector('.import').onclick = function (e) { e.stopPropagation(); if (p.ok) onlyImport(p.file); };
       box.appendChild(d);
     });
   }
@@ -132,7 +185,7 @@ footer{display:flex;justify-content:space-between;align-items:center;gap:8px;fon
       state.presets = j.presets || [];
       if (state.selected && !state.presets.some(function (p) { return p.file === state.selected.file; })) state.selected = null;
       if (!state.selected && state.presets.length) state.selected = state.presets[0];
-      $('lanAddr').textContent = j.lan && j.lan.url ? j.lan.url.replace(/\?token=.*$/, '') : '';
+      if (j.lan && j.lan.url) $('lanAddr').textContent = j.lan.url.replace(/\?token=.*$/, '');
       renderList(); renderNow();
       if (!keepMsg) msg('列表已刷新 · ' + state.presets.length + ' 条');
     }).catch(function (e) { msg('预设加载失败: ' + e.message, true); });
@@ -140,8 +193,7 @@ footer{display:flex;justify-content:space-between;align-items:center;gap:8px;fon
   function refreshState() {
     return api('/api/state').then(function (j) {
       if (!j || !j.ok) { $('dot').className = 'dot'; $('statusText').textContent = '未连接'; return; }
-      state.playing = !!j.playing;
-      state.current = j.current || null;
+      state.playing = !!j.playing; state.current = j.current || null;
       $('dot').className = 'dot' + (j.playing ? ' playing' : '');
       $('statusText').textContent = j.playing ? '播放中' : '空闲';
       $('ver').textContent = 'v' + (j.version || '');
@@ -163,15 +215,118 @@ footer{display:flex;justify-content:space-between;align-items:center;gap:8px;fon
       else msg('导入失败: ' + ((j && j.error) || '未知错误'), true);
     }).catch(function (e) { msg('导入失败: ' + e.message, true); });
   }
-  $('refreshBtn').onclick = function () { loadPresets(false); refreshState(); };
+  $('refreshBtn').onclick = function () { loadPresets(false); refreshState(); loadCamera(true); };
   $('playSel').onclick = function () { if (state.selected) play(state.selected.file); };
   $('importSel').onclick = function () { if (state.selected) onlyImport(state.selected.file); };
-  $('stopSel').onclick = function () {
-    msg('正在停止…');
-    api('/api/stop', { method: 'POST', body: {} }).then(function (j) {
-      if (j && j.ok) { msg('已停止'); refreshState(); } else msg('停止失败: ' + ((j && j.error) || '未知错误'), true);
-    }).catch(function (e) { msg('停止失败: ' + e.message, true); });
-  };
+  $('stopSel').onclick = function () { api('/api/stop', { method: 'POST', body: {} }).then(function (j) { msg(j && j.ok ? '已停止' : '停止失败: ' + ((j && j.error) || ''), !(j && j.ok)); refreshState(); }); };
+
+  // ===== 相机控制(推子/开关/模式) =====
+  function fmtVal(def, v) {
+    if (v == null || isNaN(v)) return '—';
+    var n = Number(v);
+    var txt = (def.step >= 1) ? String(Math.round(n)) : n.toFixed(1);
+    return txt + (def.unit ? ' ' + def.unit : '');
+  }
+  function loadCamera(force) {
+    return api('/api/camera').then(function (j) {
+      if (!j || !j.ok) { camMsg('相机状态读取失败: ' + ((j && j.error) || '未知错误'), true); return; }
+      state.camera = j;
+      $('camOnline').textContent = j.online ? ('在线 · ' + (j.at ? '已刷新' : '')) : ('离线' + (j.error ? ' · ' + j.error : ''));
+      $('camOnline').style.color = j.online ? 'var(--ok)' : 'var(--warn)';
+      var modeLabel = '—';
+      (j.modes || []).forEach(function (m) { if (m.active) modeLabel = m.label; });
+      $('camModeName').textContent = modeLabel;
+      camDefs = j;
+      if (!camBuilt) buildCameraUi(j); else updateCameraUi(j);
+    }).catch(function (e) { camMsg('相机状态读取失败: ' + e.message, true); });
+  }
+  function buildCameraUi(j) {
+    camBuilt = true;
+    var modeBox = $('modeBtns'); modeBox.innerHTML = '';
+    (j.modes || []).forEach(function (m) {
+      var b = document.createElement('button'); b.className = 'modebtn' + (m.active ? ' on' : ''); b.textContent = m.label; b.dataset.mode = m.value;
+      b.onclick = function () { setMode(m.value); };
+      modeBox.appendChild(b);
+    });
+    var tg = $('toggleGrid'); tg.innerHTML = '';
+    (j.toggles || []).forEach(function (t) {
+      var b = document.createElement('button'); b.className = 'togglebtn' + (t.value ? ' on' : ''); b.textContent = t.label; b.dataset.key = t.key;
+      b.onclick = function () { toggleKey(t.key); };
+      tg.appendChild(b);
+    });
+    var sl = $('sliders'); sl.innerHTML = '';
+    (j.params || []).forEach(function (d) {
+      var row = document.createElement('div'); row.className = 'slider';
+      row.innerHTML = '<div class="top"><span class="nm">' + esc(d.label) + '</span><span class="val" id="v_' + esc(d.key) + '">' + esc(fmtVal(d, d.value)) + '</span></div>' +
+        '<input type="range" id="s_' + esc(d.key) + '" min="' + d.min + '" max="' + d.max + '" step="' + d.step + '" value="' + (d.value == null ? d.min : d.value) + '">';
+      sl.appendChild(row);
+      var inp = row.querySelector('input');
+      inp.oninput = function () { $('v_' + d.key).textContent = fmtVal(d, Number(this.value)); scheduleSet(d.key, Number(this.value)); };
+      inp.onchange = function () { scheduleSet(d.key, Number(this.value), true); };
+    });
+    updateCameraUi(j);
+  }
+  function updateCameraUi(j) {
+    (j.modes || []).forEach(function (m) {
+      var b = document.querySelector('.modebtn[data-mode="' + m.value + '"]');
+      if (b) b.classList.toggle('on', !!m.active);
+    });
+    (j.toggles || []).forEach(function (t) {
+      var b = document.querySelector('.togglebtn[data-key="' + t.key + '"]');
+      if (b) b.classList.toggle('on', t.value === true);
+    });
+    (j.params || []).forEach(function (d) {
+      var inp = $('s_' + d.key); if (!inp) return;
+      if (hold[d.key] && Date.now() < hold[d.key]) return;
+      if (d.value != null && isFinite(Number(d.value))) inp.value = d.value;
+      if ($('v_' + d.key)) $('v_' + d.key).textContent = fmtVal(d, d.value);
+    });
+  }
+  var timers = {};
+  function scheduleSet(key, value, immediate) {
+    hold[key] = Date.now() + 900;
+    if (timers[key]) { clearTimeout(timers[key]); }
+    if (immediate) { timers[key] = null; sendParam(key, value); return; }
+    timers[key] = setTimeout(function () { timers[key] = null; sendParam(key, value); }, 140);
+  }
+  function sendParam(key, value) {
+    return api('/api/camera/set', { method: 'POST', body: { key: key, value: value } }).then(function (j) {
+      if (j && j.ok) {
+        var note = '';
+        if (j.matched === false) note = ' · 读回不一致(以读回为准: ' + j.read + ')';
+        camMsg(key + ' → ' + (j.sent != null ? j.sent : value) + note, !j.matched);
+      } else camMsg('设置失败: ' + ((j && j.error) || '未知错误'), true);
+      setTimeout(function () { loadCamera(); }, 260);
+    }).catch(function (e) { camMsg('设置失败: ' + e.message, true); });
+  }
+  function setMode(v) {
+    api('/api/camera/set', { method: 'POST', body: { key: 'mode', value: v } }).then(function (j) {
+      camMsg(j && j.ok ? ('模式 → ' + (j.read != null ? j.read : v) + (j.matched === false ? ' (读回不一致)' : '')) : ('切换失败: ' + ((j && j.error) || '')), !(j && j.ok));
+      setTimeout(function () { loadCamera(); }, 400);
+    });
+  }
+  function toggleKey(key) {
+    var cur = null;
+    if (state.camera) (state.camera.toggles || []).forEach(function (t) { if (t.key === key) cur = t.value; });
+    api('/api/camera/set', { method: 'POST', body: { key: key, value: !cur } }).then(function (j) {
+      camMsg(j && j.ok ? (key + ' → ' + (j.read === true ? '开' : '关') + (j.matched === false ? ' (读回不一致)' : '')) : ('切换失败: ' + ((j && j.error) || '')), !(j && j.ok));
+      setTimeout(function () { loadCamera(); }, 300);
+    });
+  }
+  $('capBtn').onclick = function () { camMsg('拍照中…'); api('/api/action', { method: 'POST', body: { name: 'capture' } }).then(function (j) { camMsg(j && j.ok ? '已拍照' : '拍照失败: ' + ((j && j.error) || ''), !(j && j.ok)); }); };
+  $('zeroBtn').onclick = function () { api('/api/action', { method: 'POST', body: { name: 'zero' } }).then(function (j) { camMsg(j && j.ok ? '输入已归零' : '归零失败', !(j && j.ok)); }); };
+  $('stopBtn2').onclick = function () { api('/api/action', { method: 'POST', body: { name: 'stop' } }).then(function (j) { camMsg(j && j.ok ? '已停止运镜' : '停止失败', !(j && j.ok)); refreshState(); }); };
+
+  // ===== 标签页 =====
+  function switchTab(name) {
+    document.querySelectorAll('.tabbtn').forEach(function (b) { b.classList.toggle('on', b.dataset.tab === name); });
+    $('tabPresets').style.display = name === 'presets' ? 'flex' : 'none';
+    $('tabCamera').style.display = name === 'camera' ? 'flex' : 'none';
+    if (name === 'camera') { loadCamera(true); if (!camTimer) camTimer = setInterval(function () { loadCamera(); }, 1500); }
+    else if (camTimer) { clearInterval(camTimer); camTimer = null; }
+  }
+  document.querySelectorAll('.tabbtn').forEach(function (b) { b.onclick = function () { switchTab(b.dataset.tab); }; });
+
   loadPresets(true).then(refreshState);
   setInterval(refreshState, 2000);
 })();
