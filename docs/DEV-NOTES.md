@@ -3077,6 +3077,13 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 - 环境坑: Electron 43.8.4 新增 install_dir_access 检查 —— 在 UNC 共享目录运行时要求 dist 的 ACL 含 ALL APPLICATION PACKAGES; 本工作区共享 ACL 不满足, 直接启动会 FATAL. **产品包解压到本地盘不受影响**; 本机开发/验收改用本地 staging 副本(%LOCALAPPDATA%\VRCLiveBoard\e2e-repo)启动桌面壳, 已实测 19190 正常.
 - 未完成: 全量门禁复跑(依赖升级后) + release-audit + EA 包.
 
+## 390. 1.4.7「出鞘」EA 前收尾: 版本锁定 + 质量/安全证据(2026-10-30)
+- 用户拍板: EA 用 **1.4.7(出鞘)**; 发布前按标准流程做全功能测试.
+- 版本同步(七处)完成: package.json / version.json / 使用说明标题+页脚 / 版本说明标题+首节 / README 当前版本+下载文件名; version.json history 新增 1.4.7 六条(好友欢迎导入/快照、AI 结构安全、依赖安全、九键回归、EA 说明), version-sync 全 OK.
+- 本版内容: M-20261030-01/02(好友欢迎) + M-20261030-03(AI 结构安全) + M-20261030-04(依赖漏洞) + 九键 0 回归确认; 键盘 P1 开发工具随本次提交但**不随产品包**(scripts/vrkeyboard).
+- 质量/安全证据(实跑): 全量门禁 **15 PASS / 1 FAIL**(唯一 FAIL=GSYNC 未提交); 提交推送后 GSYNC PASS; G4 **SMOKE RESULT pass=15 fail=0**; backend-flow **195 PASS / 0 FAIL**; plugin-behavior **67 PASS / 0 FAIL**; dep-audit **0 FAIL + npm audit 0 高危**; secret-scan **386 文件/1908 blob PASS**.
+- 环境: Electron 43.8.4 已安装; UNC 共享目录启动受新 ACL 检查限制, 桌面壳用本地 staging 副本验收(19190 正常); 产品包解压本地不受影响.
+- 后续: make-dist → release-audit → 上传 GitHub Release(用户桌面令牌) → 测试组材料.
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -3366,5 +3373,6 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 | 387 | 2026-10-30 | VR 覆盖层键盘 P1 打通: action 输入/中文候选/音震/性能收尾 |
 | 388 | 2026-10-30 | 事故: 键盘实验输入配置干扰 VRChat 移动输入(向右绕圈) + 输入最小化修复 |
 | 389 | 2026-10-30 | 1.4.x EA 前修 bug: 好友欢迎导入/快照 + AI 结构安全 + 依赖漏洞 |
+| 390 | 2026-10-30 | 1.4.7「出鞘」EA 前收尾: 版本锁定 + 质量/安全证据 |
 
 <!-- DEV-NOTES-INDEX:END -->
