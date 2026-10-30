@@ -986,7 +986,8 @@ async function replayContinuous(file, speedFactor, dry, smoothYaw, maxSec) {
       } else {
         // 用户反馈: 抖动主要来自"两个方向同时矢量平移" -> 各轴脉冲**同时启动/同时结束**(真正斜向矢量), 不再逐 tick 选单轴
         const vRef = Math.max(0.15, measuredV);
-        const msOf = function (d) { return Math.max(20, Math.min(60, ease * d / vRef * 1000 * 0.6)); };
+        // 用户反馈: 斜向仍抖 -> 提高脉冲频率(更短脉冲 + 更短间隔), 让速度调制更细
+        const msOf = function (d) { return Math.max(20, Math.min(40, ease * d / vRef * 1000 * 0.6)); };
         const acts = [];
         if (absF > db) acts.push({ axis: front >= 0 ? 'MoveForward' : 'MoveBackward', ms: msOf(absF) });
         if (absL > db) acts.push({ axis: left >= 0 ? 'MoveLeft' : 'MoveRight', ms: msOf(absL) });
@@ -1000,7 +1001,7 @@ async function replayContinuous(file, speedFactor, dry, smoothYaw, maxSec) {
           } finally {
             for (const a of acts) { try { if (a.vert !== undefined) await sendF('/input/LookVertical', 0); else await send('/input/' + a.axis, [false]); } catch (e) {} }
           }
-          await sleep(18);
+          await sleep(8);
         }
       }
       if (elapsed * speedEff >= tLimit + 0.10) break;
