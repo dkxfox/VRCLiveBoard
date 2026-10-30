@@ -22,6 +22,16 @@
 ---
 
 ## 进行中
+### M-20261030-05 1.4.7 桌面版从网络共享目录启动崩溃(Electron 43.8.4 install dir ACL)
+- 状态: FIXED
+- 严重度: S2(桌面版无法启动)
+- 来源: 用户 2026-10-30 “1.4.7 的桌面板似乎无法正常启动”
+- 现象: 从 `Z:\新建文件夹\VRCLiveBoard-Desktop-SelfContained-v1.4.7` 双击“启动桌面版.bat”, 进程崩溃, 无窗口; Windows 事件日志 `electron.exe 43.8.4.0` 异常 `0x80000003`, 路径指向 `...\node_modules\electron\dist\electron.exe`。
+- 根因: Electron 43.8.4 新增 install_dir_access 检查: 沙箱进程要求安装目录 ACL 含 **ALL APPLICATION PACKAGES** 读取权限; 网络共享目录不满足该 ACL(本地盘解压正常)。1.4.6 的 Electron 43.4.0 没有这项强制检查, 所以升级后暴露。
+- 改动: `启动桌面版.bat` 检测 UNC/映射网络盘; 若为网络路径, 将 `node_modules\electron\dist` 复制到 `%LOCALAPPDATA%\VRCLiveBoard\electron-cache\<electron版本>` 并从本地缓存启动, 应用本体仍从包目录加载。开始使用延迟变量展开, 避免批处理块内变量为空。
+- 验证: 在用户同一网络路径 `Z:\新建文件夹\VRCLiveBoard-Desktop-SelfContained-v1.4.7` 运行修好的 bat -> 自动复制 electron 缓存 -> 进程从本地缓存启动 -> `:19190/api/health` 返回 `version=1.4.7`, 正常; 本地盘路径仍走原启动方式。
+- 关联: DEV-NOTES 391; 1.4.8 热修
+
 ### M-20261030-04 依赖安全: npm audit 3 个 high(Electron/systeminformation/undici)
 - 状态: FIXED
 - 严重度: S2(供应链/桌面壳安全)
