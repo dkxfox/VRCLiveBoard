@@ -850,6 +850,28 @@ async function replayContinuous(file, speedFactor, dry, smoothYaw, maxSec) {
   const relPos = raw.map(function (s) { return [s.pos[0] - b.pos[0], s.pos[1] - b.pos[1], s.pos[2] - b.pos[2]]; });
   const relYaw = []; let prevRaw = Number(b.rot[1]) || 0, accYaw = 0;
   for (const s of raw) { accYaw += wrap180((Number(s.rot[1]) || 0) - prevRaw); prevRaw = Number(s.rot[1]) || 0; relYaw.push(accYaw); }
+  // 无状态插值 + 平滑速度表(模拟量连续矢量需要前馈速度)
+  function relAt(t) {
+    let lo = 0, hi = raw.length - 1;
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (raw[mid].t <= t) lo = mid; else hi = mid - 1; }
+    const ai = lo, ni = Math.min(lo + 1, raw.length - 1);
+    const span = Math.max(1e-6, raw[ni].t - raw[ai].t);
+    const u = Math.max(0, Math.min(1, (t - raw[ai].t) / span));
+    return { pos: [relPos[ai][0] + (relPos[ni][0] - relPos[ai][0]) * u, relPos[ai][1] + (relPos[ni][1] - relPos[ai][1]) * u, relPos[ai][2] + (relPos[ni][2] - relPos[ai][2]) * u], yawRel: relYaw[ai] + (relYaw[ni] - relYaw[ai]) * u };
+  }
+  const VDT = 0.05;
+  const vtab = [];
+  for (let tt = 0; tt <= dur + 1e-9; tt += VDT) { const rr = relAt(tt); vtab.push({ t: tt, p: rr.pos, y: rr.yawRel }); }
+  const vS = vtab.map(function (row, i) {
+    const i1 = Math.max(0, i - Math.round(0.15 / VDT)), i2 = Math.min(vtab.length - 1, i + Math.round(0.15 / VDT));
+    const dtv = Math.max(0.02, vtab[i2].t - vtab[i1].t);
+    let vx = (vtab[i2].p[0] - vtab[i1].p[0]) / dtv, vy = (vtab[i2].p[1] - vtab[i1].p[1]) / dtv, vz = (vtab[i2].p[2] - vtab[i1].p[2]) / dtv;
+    let w = (vtab[i2].y - vtab[i1].y) / dtv;
+    const mag = Math.hypot(vx, vy, vz); if (mag > 2.0) { const k = 2.0 / mag; vx *= k; vy *= k; vz *= k; }
+    if (Math.abs(w) > 120) w = Math.sign(w) * 120;
+    return { v: [vx, vy, vz], w: w };
+  });
+  function velAt2(t) { const fidx = Math.max(0, Math.min(vS.length - 1, t / VDT)); const i = Math.floor(fidx), j = Math.min(vS.length - 1, i + 1), u = fidx - i; const a = vS[i], b2 = vS[j]; return { v: [a.v[0] + (b2.v[0] - a.v[0]) * u, a.v[1] + (b2.v[1] - a.v[1]) * u, a.v[2] + (b2.v[2] - a.v[2]) * u], w: a.w + (b2.w - a.w) * u }; }
   let pMin = 999, pMax = -999, path = 0, maxOff = 0;
   for (let i = 1; i < raw.length; i++) path += dist3(raw[i].pos, raw[i - 1].pos);
   for (const s of raw) { pMin = Math.min(pMin, s.rot[0]); pMax = Math.max(pMax, s.rot[0]); maxOff = Math.max(maxOff, dist3(s.pos, b.pos)); }
@@ -934,11 +956,11 @@ async function replayContinuous(file, speedFactor, dry, smoothYaw, maxSec) {
       try { await sendF('/input/LookVertical', dir); await sleep(d); } finally { await sendF('/input/LookVertical', 0); }
       await sleep(18);
     };
-    // 用户提示: 修正误差用小速度多脉冲 / 路径末端平滑 -> 先实测当前速度并自动降倍速
+    // 实测模拟量满量程速度(用于把"米/秒"换算成 -1~1 的轴值) + 自动降倍速
     const caV = lastPose.pos.slice();
-    await pulseAxisNT('MoveForward', 150);
+    try { await sendF('/input/Vertical', 1); await sleep(200); } finally { await sendF('/input/Vertical', 0); }
     await sleep(300);
-    const measuredV = dist3(lastPose.pos, caV) / 0.15;
+    const measuredV = dist3(lastPose.pos, caV) / 0.2;
     const vlist = [];
     for (let vi = 1; vi < raw.length; vi++) { const dtv = raw[vi].t - raw[vi - 1].t; if (dtv <= 0.001) continue; vlist.push(dist3(raw[vi].pos, raw[vi - 1].pos) / dtv); }
     vlist.sort(function (a, b) { return a - b; });
@@ -980,37 +1002,39 @@ async function replayContinuous(file, speedFactor, dry, smoothYaw, maxSec) {
       const db = smoothYaw ? 0.08 : 0.07;
       // 用户反馈: 抖动主要来自"两个方向同时矢量平移" -> 平移改用三路模拟量同时写(连续矢量), 不再用 bool 轴交替
       const ease = tp > tLimit - 1.0 ? Math.max(0.25, (tLimit - tp) / 1.0) : 1.0;
-      if (posErr < db) {
-        try { await sendF('/input/Vertical', 0); await sendF('/input/Horizontal', 0); await sendF('/input/LookVertical', 0); } catch (e) {}
-        await sleep(25);
-      } else {
-        // 用户反馈: 抖动主要来自"两个方向同时矢量平移" -> 各轴脉冲**同时启动/同时结束**(真正斜向矢量), 不再逐 tick 选单轴
-        const vRef = Math.max(0.15, measuredV);
-        // 用户反馈: 斜向仍抖 -> 提高脉冲频率(更短脉冲 + 更短间隔), 让速度调制更细
-        const msOf = function (d) { return Math.max(20, Math.min(40, ease * d / vRef * 1000 * 0.6)); };
-        const acts = [];
-        if (absF > db) acts.push({ axis: front >= 0 ? 'MoveForward' : 'MoveBackward', ms: msOf(absF) });
-        if (absL > db) acts.push({ axis: left >= 0 ? 'MoveLeft' : 'MoveRight', ms: msOf(absL) });
-        if (absU > db) acts.push({ vert: dy >= 0 ? 1 : -1, ms: msOf(absU) });
-        if (acts.length === 0) { await sleep(25); }
-        else {
-          try {
-            for (const a of acts) { if (a.vert !== undefined) await sendF('/input/LookVertical', a.vert); else await send('/input/' + a.axis, [true]); }
-            const msMax = Math.max.apply(null, acts.map(function (a) { return a.ms; }));
-            await sleep(msMax);
-          } finally {
-            for (const a of acts) { try { if (a.vert !== undefined) await sendF('/input/LookVertical', 0); else await send('/input/' + a.axis, [false]); } catch (e) {} }
-          }
-          await sleep(8);
-        }
-      }
+      // 模拟量连续矢量: 前馈(录制速度) + 比例修正, 三轴连续写(无开关脉冲)
+      const ffv = velAt2(tp);
+      const ffF = ffv.v[0] * Math.sin(th) + ffv.v[2] * Math.cos(th);
+      const ffL = -ffv.v[0] * Math.cos(th) + ffv.v[2] * Math.sin(th);
+      const ffU = ffv.v[1];
+      const vRef = Math.max(0.15, measuredV);
+      const kp2 = 9.0;
+      let vF = ffF * speedEff * ease + front * kp2 * ease;
+      let vR = -(ffL * speedEff * ease + left * kp2 * ease);
+      let vU = ffU * speedEff * ease + dy * kp2 * ease;
+      const vmag = Math.sqrt(vF * vF + vR * vR + vU * vU);
+      const maxV = vRef * 0.9;
+      if (vmag > maxV) { const kk = maxV / vmag; vF *= kk; vR *= kk; vU *= kk; }
+      const clamp1 = function (x) { return Math.max(-1, Math.min(1, x)); };
+      try {
+        await sendF('/input/Vertical', clamp1(vF / vRef));
+        await sendF('/input/Horizontal', clamp1(vR / vRef));
+        await sendF('/input/LookVertical', clamp1(vU / vRef));
+      } catch (e) {}
+      await sleep(25);
       if (elapsed * speedEff >= tLimit + 0.10) break;
     }
+    // 立即停掉模拟量(否则残留速度与收敛脉冲冲突, 终点收敛不了)
+    try { await sendF('/input/Vertical', 0); await sendF('/input/Horizontal', 0); await sendF('/input/LookVertical', 0); } catch (e) {}
+    await sleep(150);
+    // 收尾用低 TurnSpeed + bool 小脉冲转偏航(模拟量中间值在 VR 可能无效, 会卡残差)
+    const tsConv = isFinite(ts0) ? ts0 : 1;
+    try { await sendF('/usercamera/TurnSpeed', 0.1); await sleep(600); } catch (e) {}
     // 收尾: 最多 3 秒把"偏航 + 位置"收敛到终点(v1 的终点精度靠停稳, v2 用专门收尾段补回)
     const fin = sampleAt(tLimit);
     const finalWorld = [origin[0] + fin.pos[0], origin[1] + fin.pos[1], origin[2] + fin.pos[2]];
     const finalYawTarget = wrap180(yaw0 + fin.yawRel);
-    for (let i = 0; i < 90; i++) {
+    for (let i = 0; i < 150; i++) {
       const curYaw2 = wrap180(lastPose.rot[1]);
       const yerr2 = wrap180(finalYawTarget - curYaw2);
       const th2 = curYaw2 * Math.PI / 180;
@@ -1018,23 +1042,18 @@ async function replayContinuous(file, speedFactor, dry, smoothYaw, maxSec) {
       const f2 = dx2 * Math.sin(th2) + dz2 * Math.cos(th2);
       const l2 = -dx2 * Math.cos(th2) + dz2 * Math.sin(th2);
       const perr = dist3(lastPose.pos, finalWorld);
-      if (Math.abs(yerr2) <= 1 && perr <= 0.05) break;
-      if (smoothYaw) {
-        if (Math.abs(yerr2) > 1) {
-          const axisY2 = (yerr2 > 0 ? turnSign : -turnSign) > 0 ? 'LookRight' : 'LookLeft';
-          await pulseAxisNT(axisY2, Math.min(120, Math.abs(yerr2) / (yawRate || 36) * 1000));
-        }
-      } else {
-        let yv = 0;
-        if (Math.abs(yerr2) > 1) yv = Math.max(-0.7, Math.min(0.7, (turnSign * yerr2) / 25));
-        try { await sendF('/input/LookHorizontal', yv); } catch (e) {}
+      if (Math.abs(yerr2) <= 0.8 && perr <= 0.04) break;
+      if (Math.abs(yerr2) > 0.8) {
+        const axisY2 = (yerr2 > 0 ? turnSign : -turnSign) > 0 ? 'LookRight' : 'LookLeft';
+        await pulseAxisNT(axisY2, Math.max(20, Math.min(240, Math.abs(yerr2) / 18 * 1000 * 0.7)));
       }
-      const msC = perr > 0.5 ? 60 : (perr > 0.15 ? 45 : 25);
+      const msC = perr > 0.5 ? 40 : (perr > 0.2 ? 30 : 20);
       if (Math.abs(dy2) > 0.04 && Math.abs(dy2) >= Math.max(Math.abs(f2), Math.abs(l2))) await pulseVertNT(dy2 >= 0 ? 1 : -1, msC);
       else if (Math.abs(f2) >= Math.abs(l2) && Math.abs(f2) > 0.035) await pulseAxisNT(f2 >= 0 ? 'MoveForward' : 'MoveBackward', msC);
       else if (Math.abs(l2) > 0.035) await pulseAxisNT(l2 >= 0 ? 'MoveLeft' : 'MoveRight', msC);
       else await sleep(30);
     }
+    try { await sendF('/usercamera/TurnSpeed', tsConv); await sleep(400); } catch (e) {}
     try { await sendF('/input/LookHorizontal', 0); } catch (e) {}
     await sleep(200);
     const elapsed = (Date.now() - tStart) / 1000;
@@ -1061,7 +1080,7 @@ async function replayContinuous(file, speedFactor, dry, smoothYaw, maxSec) {
     try { await sendF('/input/LookVertical', 0); } catch (e) {}
     try { await sendF('/input/LookHorizontal', 0); } catch (e) {}
     try { await zeroAll(); } catch (e) {}
-    if (tsEdited) { try { await sendF('/usercamera/TurnSpeed', ts0); await sleep(180); } catch (e) {} }
+    try { await sendF('/usercamera/TurnSpeed', isFinite(ts0) ? ts0 : 1); await sleep(250); } catch (e) {}
     if (isFinite(s0) && s0 !== 0) { try { await sendF('/usercamera/SmoothingStrength', s0); await sleep(180); } catch (e) {} }
     if (pre.flying === false) { try { await send('/usercamera/Flying', [false]); await sleep(180); } catch (e) {} }
     if (poseSock) { try { poseSock.close(); } catch (e) {} poseSock = null; }
