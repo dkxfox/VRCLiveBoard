@@ -1337,20 +1337,27 @@ async function replaySegments(file, segCount, speedFactor, maxSeg, dry) {
         const upl = vv.v[1];
         // 平移: 直接用模拟量(/input/Vertical + /input/Horizontal + /input/LookVertical) —— 两方向同时走也用连续量, 没有 bool 脉冲顿挫
         const clamp1 = function (x) { return Math.max(-1, Math.min(1, x)); };
-        try {
-          await sendF('/input/Vertical', clamp1(fwd * speedEff / vReal));
-          await sendF('/input/Horizontal', clamp1(-lft * speedEff / vReal));
-          await sendF('/input/LookVertical', clamp1(upl * speedEff / vVert));
-        } catch (e) {}
-        // 偏航: 债务累加 + bool 脉冲(TurnSpeed 0.1 -> 最小步约 0.36°)
-        debtYaw += vv.w * speedEff * (TICK / 1000);
-        if (Math.abs(debtYaw) >= 0.25) {
-          const ms = Math.max(20, Math.abs(debtYaw) / yawRate * 1000);
-          await pulseAxisNT((debtYaw > 0 ? turnSign : -turnSign) > 0 ? 'LookRight' : 'LookLeft', ms);
-          debtYaw -= Math.sign(debtYaw) * (ms / 1000) * yawRate;
+        const vF = fwd * speedEff, vR = -lft * speedEff, vU = upl * speedEff, wS = vv.w * speedEff;
+        // 静止/近静止: 硬归零并完全不动(避免"模拟量微修正"导致静止时持续抖动)
+        if (Math.abs(vF) < 0.01 && Math.abs(vR) < 0.01 && Math.abs(vU) < 0.01 && Math.abs(wS) < 0.3) {
+          try { await sendF('/input/Vertical', 0); await sendF('/input/Horizontal', 0); await sendF('/input/LookVertical', 0); } catch (e) {}
+          debtYaw = 0;
+          await sleep(40);
+        } else {
+          try {
+            await sendF('/input/Vertical', clamp1(vF / vReal));
+            await sendF('/input/Horizontal', clamp1(vR / vReal));
+            await sendF('/input/LookVertical', clamp1(vU / vVert));
+          } catch (e) {}
+          debtYaw += wS * (TICK / 1000);
+          if (Math.abs(debtYaw) >= 0.25) {
+            const ms = Math.max(20, Math.abs(debtYaw) / yawRate * 1000);
+            await pulseAxisNT((debtYaw > 0 ? turnSign : -turnSign) > 0 ? 'LookRight' : 'LookLeft', ms);
+            debtYaw -= Math.sign(debtYaw) * (ms / 1000) * yawRate;
+          }
+          debtYaw = Math.max(-4, Math.min(4, debtYaw));
+          await sleep(20);
         }
-        debtYaw = Math.max(-4, Math.min(4, debtYaw));
-        await sleep(20);
         if (el >= segPlay) break;
       }
       try { await sendF('/input/Vertical', 0); await sendF('/input/Horizontal', 0); await sendF('/input/LookVertical', 0); } catch (e) {}
@@ -1398,6 +1405,14 @@ async function replaySegments(file, segCount, speedFactor, maxSeg, dry) {
   }
 }
 
+// 进程被杀时尽量把输入归零(硬杀 SIGKILL 无法拦截, 但 Ctrl+C / 任务终止可以)
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, function () {
+    try { zeroAll(); } catch (e) {}
+    setTimeout(function () { process.exit(0); }, 120);
+  });
+}
+
 (async () => {
   const [cmd, a1, a2, a3, a4] = process.argv.slice(2);
   const parse = v => v === 'true' ? true : (v === 'false' ? false : (isFinite(Number(v)) ? (String(v).indexOf('.') >= 0 ? Number(v) : Number(v)) : v));
@@ -1411,7 +1426,12 @@ async function replaySegments(file, segCount, speedFactor, maxSeg, dry) {
   if (cmd === 'pulse') { const axis = a1, ms = Math.max(50, Math.min(20000, Number(a2) || 300));
     try { await send('/input/' + axis, [true]); await sleep(ms); } finally { await send('/input/' + axis, [false]); }
     console.log('已脉冲 ' + axis + ' ' + ms + 'ms(已归零)'); sock.close(); return; }
-  if (cmd === 'zero') { await zeroAll(); console.log('所有输入轴已归零'); sock.close(); return; }
+  if (cmd === 'zero' || cmd === 'panic') {
+    await zeroAll();
+    try { await sendF('/input/LookHorizontal', 0); await sendF('/input/LookVertical', 0); } catch (e) {}
+    console.log('所有输入轴已归零' + (cmd === 'panic' ? '(panic)' : ''));
+    sock.close(); return;
+  }
   const map = { fly: '/usercamera/Flying', speed: '/usercamera/FlySpeed', turn: '/usercamera/TurnSpeed', streaming: '/usercamera/Streaming' };
   if (map[cmd]) { const v = parse(a1); if (typeof v === 'number') await sendNum(map[cmd], v); else await send(map[cmd], [v]); await sleep(700); console.log(cmd + ' -> ' + JSON.stringify(await getVal(map[cmd]))); sock.close(); return; }
   if (cmd === 'set') { const v = parse(a2); if (typeof v === 'number') await sendNum(a1, v); else await send(a1, [v]); await sleep(700); console.log(a1 + ' -> ' + JSON.stringify(await getVal(a1))); sock.close(); return; }
