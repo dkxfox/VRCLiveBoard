@@ -2764,6 +2764,19 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
   - 门禁: 接续时发现 HEAD 上 364 只有索引行没有正文(GNOTES 红) -> 已按功能卡补录 364, 门禁恢复全绿。
 - 遗留/教训: ① **速度目标已达成(1.03x)**; ② 终点精度待 v2.2 复位后复测(目标 ≤15 cm); ③ **测试纪律**: 每次 replay 前先复位相机(相对重放会累积外移), 或后续加"重放后自动返回起点"; ④ 偏航模拟量 `LookHorizontal` 可用于平滑转向(新发现, 176~182 °/s); ⑤ 平移仍是 bool 短脉冲, 若仍卡顿可试 `/input/Vertical`/`Horizontal` 模拟量(未验证)。
 
+
+## 366. VRChat 原生面捕 OSC 接口调研入档: /tracking/face/v1(102 字节 blob, 输入) + 3 个只读状态输出(2026-10-30)
+- 解读与边界: 用户新消息"VRC 已经把自带的面部参数映射到 OSC 上了, 需要更新资料" -> 只读调研 + 文档更新; **不发 OSC/UDP、不碰运行实例**。
+- 目标/现象: 核实该说法; 判断对「动作输出/表情/跳舞驱动」的影响。
+- 方法: 官方发行说明 + 官方 beta Creation 文档 + 本机 OSCQuery 只读核对(61007) + 316 份头像 OSC 配置 JSON 统计; 由子代理 face-osc-researcher 产出草稿, Lead 复核关键结论(官方页原文 + 本机 E1)后收口。
+- 产物: 新增 `docs/RESEARCH-FACE-OSC.md`(351 行; 按 E3官方 / E3′二手 / E2 / E1 分级, 含 14 条未证实项); 更新 `F-20261022-01` §8; 修正 `F-20261006-01` §32.1 的 ACCESS 方向错误。
+- 证据:
+  - 官方原文(2026.4.1 发行说明): "The new Face Tracking system has its own OSC support as well! We now network all 102 Unified Expressions values…"; 官方 beta 文档(OSC Face Tracking, Last updated 2026-10-26): `/tracking/face/v1` 单个 blob、恰好 102 字节、每字节 /255、3 个只读输出、头像需 FT + Use All Tracking Keys。
+  - 本机 E1(2026-10-30 12:2x, Build 2026.4.1p1-1937, OSCQuery 61007): `/tracking/face/v1` TYPE=b **ACCESS=2**(输入); `UserEyeTracking`/`UserFaceTracking`/`avatarfullfacetracking` TYPE=T **ACCESS=1**(只读输出); `/avatar/name` 可见; `/tracking/vrsystem/head/pose` ACCESS=1, `/tracking/eye/*`、`/tracking/trackers/*` ACCESS=2(修正旧记录方向)。
+  - GATES: 15 PASS / 0 FAIL(退出码 0)。
+- 遗留/教训: ① **未发 blob 实测**(驱动效果要等头像启用 FT 后再验, 本机当前头像 `avatarfullfacetracking=false`); ② 制作侧 SDK 仍是 beta 3.10.6-beta.4(正式 SDK 未支持 FT); ③ "把 102 个值输出给外部"无任何证据(用户消息若指此则不成立); ④ 调研文按任务口径标注 E3官方/E3′二手, 与 PROCESS-04 §3 的 E3 定义略有差异(已在文中说明); ⑤ 后续做表情/面捕功能前先确认目标头像的 FT 状态。
+- 关联: `docs/RESEARCH-FACE-OSC.md`、F-20261022-01 §8、F-20260928-01、F-20260929-01、DEV-NOTES 364。
+
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -3029,5 +3042,6 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 | 363 | 2026-10-22 | 轨迹重放首战成功: 录 14.9 s / 9.17 m 水平轨迹 -> 9 路点重放, 终点误差 5.4 cm, 偏航 <2° |
 | 364 | 2026-10-22 | 头像反向 OSC 联动实测: /input 与 VRCEmote PASS, 头像 Bool(int 0/1) 未生效; 92 参数表入档 |
 | 365 | 2026-10-30 | 连续重放 v2(A 轮速度/精度): 15.4 s vs 原 14.9 s; 平均 6 cm/最大 27.6 cm; 发现"反复重放会累积外移" |
+| 366 | 2026-10-30 | VRChat 原生面捕 OSC 接口调研入档: /tracking/face/v1(102 字节 blob, 输入) + 3 个只读状态输出 |
 
 <!-- DEV-NOTES-INDEX:END -->
