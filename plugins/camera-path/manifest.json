@@ -3,7 +3,7 @@
   "name": "相机运镜控制",
   "version": "0.2.0",
   "author": "VRCLiveBoard 官方",
-  "description": "实验功能: VRC+ 运镜预设管理(扫描 CameraPaths、绝对路径导入 /dolly/Import、一键播放/停止、长运镜自动拆分以规避 VRChat >7 关键帧播放崩溃) + 相机 OSC 控制(拍照/飞行/镜头参数/图层/UI 图层)。不依赖 VRChat 运镜即可完成拍摄类动作; 相机位姿仍无法用 OSC 指定(已实测)。",
+  "description": "实验功能: VRC+ 运镜预设管理(扫描 CameraPaths、绝对路径导入 /dolly/Import、一键播放/停止、长运镜自动拆分以规避 VRChat >6 关键帧播放崩溃) + 相机 OSC 控制(拍照/飞行/镜头参数/图层/UI 图层)。不依赖 VRChat 运镜即可完成拍摄类动作; 相机位姿仍无法用 OSC 指定(已实测)。",
   "api": "2.0.0",
   "experimental": true,
   "permissions": {

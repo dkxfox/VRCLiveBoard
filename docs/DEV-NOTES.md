@@ -2975,6 +2975,8 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
   - 真机夹具 `plugins/camera-path/test/live-harness.js`: 2 帧世界预设播放正常; 12 帧世界(自动 6+6) 80 条 Pose / 7.35m; 10 帧玩家(6+4) 75 条 Pose; 仅导入不动相机; 播放中 stop 后 Pose 归零; 无新的 routine-is-null 报错。
   - 清理: 测试写入 CameraPaths 的 `TEST_*`/临时文件/导出测试文件已删除, 目录恢复原 9 个文件。
 - 待办: 记录-重放(模拟量连续矢量)搬进插件(Pose 输入需核心 OSC hub 或插件独占 9001); 导出按钮; 时长估计优化。
+- **控制台 E2E(2026-10-30)**: 重启程序加载 v0.2.0 后, 插件需重新授权(内容哈希变了) → API 授权+启用; 用 CDP 实测插件卡: 9 条预设列表(世界/玩家/关键帧/段/需拆分)、仅导入/播放/停止/刷新/延迟/自动停止/高级设置均渲染正常; 点“播放”后 Pose 有运动、播放中 stop 后 Pose 归零; 截图 logs/ui-camera-path.png(gitignore)。
+- 收尾修正: 文案里“超过 7 关键帧”统一改为 6; 测试临时文件/导出测试文件已清理, CameraPaths 恢复原 9 个文件。
 
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
