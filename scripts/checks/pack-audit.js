@@ -83,7 +83,7 @@ function audit(zp) {
   const fails = [], warns = [];
   const z = readZip(zp);
   const names = z.entries.map((e) => e.name).filter((n) => n !== 'conflict-test');   // 开发自测夹具不进包, 也不要求它在包里(2026-09-11 审计 H2)
-  sourceMirrorCheck(z, fails);   // 2026-10-05: 包内前端文件必须与当前源码一致
+  if (!PLUGIN_PACK) sourceMirrorCheck(z, fails);   // 2026-10-05: 包内前端文件必须与当前源码一致; 插件更新包没有前端文件, 跳过
 
   // 1. 文件名层
   let nonAscii = 0, noFlag = 0, badUtf8 = 0, backslash = 0;
@@ -185,7 +185,7 @@ function audit(zp) {
   console.log('  体积 ' + fileBytes + ' bytes(' + (fileBytes / 1048576).toFixed(2) + ' MB)');
   let baseline = null;
   try { baseline = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs', 'SECURITY-BASELINE.json'), 'utf8')).zipVolumes || null; } catch (e) {}
-  if (baseline) {
+  if (baseline && !PLUGIN_PACK) {
     const key = Object.keys(baseline).find((k) => k !== 'asOf' && label.includes(k));
     if (!key) warns.push('zipVolumes 基线没有与 ' + label + ' 匹配的键(应为 Lite-RequiresNode / Desktop-SelfContained)');
     else {

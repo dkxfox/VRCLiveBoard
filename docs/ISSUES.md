@@ -22,6 +22,49 @@
 ---
 
 ## 进行中
+### M-20261030-04 依赖安全: npm audit 3 个 high(Electron/systeminformation/undici)
+- 状态: FIXED
+- 严重度: S2(供应链/桌面壳安全)
+- 来源: 用户 2026-10-30 “定期的安全漏洞检查”
+- 现象: `npm audit` 报 3 high: Electron 43.4.0 的多个沙箱/协议漏洞、systeminformation 5.33.5 的 Windows 命令注入、undici 7.30.0 的多个 DoS/证书校验问题。
+- 改动: electron 43.4.0→43.8.4; systeminformation ^5.33.5→^5.33.19; lock 内 undici 7.30.0→7.30.1; `docs/SECURITY-BASELINE.json` 的 supplyChain 依赖同步更新。
+- 验证: `node scripts/checks/dep-audit.js` → 依赖/产物基线一致 + npm audit 0 严重/0 高危/0 中/0 低; `secret-scan` → 386 工作区文件/1908 历史 blob PASS.
+- 环境坑: Electron 43.8.4 在 UNC 共享目录启动时要求 dist ACL 含 ALL APPLICATION PACKAGES; 产品包解压本地不受影响, 本机验收用本地 staging 副本。
+- 关联: DEV-NOTES 389; PROCESS-03 §2
+
+### M-20261030-01 好友欢迎: 导出的名单直接导入显示失败(且表头可能被当好友)
+- 状态: FIXED
+- 严重度: S2(插件主功能不可用)
+- 来源: 用户 2026-10-30 反馈“用导出的名单直接导入会失败”
+- 现象: 用“下载当前名单”导出的 xlsx 再点“从 Excel 导入”, 界面提示“导入失败”; 繁中/英文界面导出的表头也可能被当成一位好友。
+- 复现: 1. 好友欢迎插件添加若干好友 2. 导出名单 3. 直接导入刚导出的文件 4. 期望成功并回显人数, 实际提示失败; zh-TW/en 下还会多出一条以“顯示名/Display name”为名字的假好友。
+- 影响面: friend-welcome 1.3.3 及之前; 所有语言界面(zh-TW/en 更明显)
+- 根因: ① importRows() 只返回 {count,deduped} 没有 ok:true, 而前端按 j.ok 判定成功 -> 实际导入成功也永远显示失败; ② 表头识别只认“显示名”, 导出文件用当前界面语言表头, zh-TW “顯示名”/en “Display name” 不会被跳过。
+- 改动: plugins/friend-welcome/index.js: importRows 返回 {ok:true,...}; 表头识别改为多语言关键字(显示名/顯示名/display name/欢迎语/greeting/轮巡/loops/启用)。
+- 验证: plugin-behavior.js 新增 6 条回归(zh-CN/zh-TW/en 三种表头各 2 条, 断言 ok/count=1 且表头被跳过、启用=否 保留)全 PASS。
+- 关联: DEV-NOTES 389; F-20260925-02 / F-20260903-01
+
+### M-20261030-02 好友欢迎: VRChat 更新后已在场玩家重复欢迎(快照窗口失效)
+- 状态: FIXED
+- 严重度: S2(打扰他人/刷屏)
+- 来源: 用户 2026-10-30 反馈“VRC 更新后又有进了房间后已经在房间内的人会重复欢迎”
+- 现象: 进入人数较多的房间后, 房间里原本就存在的好友被当成“新进房”触发欢迎。
+- 复现: 1. 进入一个已有多人的世界 2. 等 VRChat 把已在场玩家补写成 OnPlayerJoined 3. 旧逻辑只在“进房后 15 秒”内算快照, 但新版本实测可到 +25 秒(如 15:10:32 进房, 15:10:57 才出现已在场玩家+自己) 4. 期望不欢迎已在场者, 实际重复欢迎。
+- 影响面: friend-welcome 全版本 + 所有 VRChat 更新后快照延迟较大的世界
+- 根因: 用固定时间窗口猜“快照批次”; VRChat 更新后批次延迟变长 -> 猜错。
+- 改动: src/pluginsys/vrclog.js: 解析 Joining ...~hidden(usr_xxx) 得到本地 UID; 进房后先缓冲 join, 等“自己”的 OnPlayerJoined 出现; 自己之前的 join 全部标记 alreadyInWorld=true, 之后的才是真实进房; 60 秒兜底; seen 按去 UID 的显示名去重; 新增测试钩子。
+- 验证: plugin-behavior.js 新增 5 条回归(缓冲不先播报 / 25s 延迟仍识别 / 自己之后正常播报 / 重复去重 / 原有纯函数窗口断言保留)全 PASS; 实机日志时间线已核对。
+- 关联: DEV-NOTES 389; DEV-NOTES 216/条目 387
+
+### M-20261030-03 AI 调用结构性安全: 端点/密钥/响应/输出 schema
+- 状态: FIXED
+- 严重度: S2(安全加固, 用户拍板纳入 1.4.x EA)
+- 来源: 用户 2026-10-30 “担心本地部署 AI 被我们的程序调用给干穿; 料敌从宽”
+- 现象: 旧实现可配置任意 apiBase; 会把云端 key 发给该地址; 响应 r.text() 无上限; JSON 解析失败会回退自由文本 —— 恶意/被劫持端点可打爆内存或把任意文本送进聊天框。
+- 改动: 新增 src/aiPolicy.js; ocrtranslate.js / pluginsys/aigateway.js 接入: ① 官方 https / 本机回环端点白名单(拒绝私网/元数据/仿冒域名/带账号密码 URL, 不跟随重定向); ② 云端 key 只发官方域名, 本地/第三方不发送; ③ 响应硬上限 1MB + 超时; ④ 默认只接受 {translation:string} 严格 schema, 不回退自由文本, 输出长度上限; ⑤ sanitizeTranslation 词库加强 + Unicode NFKC/零宽归一化。
+- 验证: backend-flow.js 新增 AI 安全断言(端点/密钥作用域/严格 schema/超限响应/重定向/零宽注入/正常长文本不误杀); plugin-behavior.js 好友欢迎回归全过。
+- 关联: DEV-NOTES 389; F-20260903-02; PROCESS-03 §2 提示词注入
+
 
 ### M-20260902-05 快捷导航 ☰ 按钮不显眼, 改为文字
 - 状态: FIXED

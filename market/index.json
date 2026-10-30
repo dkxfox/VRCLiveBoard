@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated": "2026-09-27",
+  "updated": "2026-10-30",
   "note": "插件目录: 由 scripts/make-market.js 生成, 请勿手改(改插件的 manifest 后重新生成)。tier: official=官方 / reviewed=已审核第三方 / experimental=实验区(默认最严策略)。",
   "items": [
     {
@@ -49,14 +49,14 @@
         "name": "VRCLiveBoard 官方",
         "contact": "https://github.com/dkxfox/VRCLiveBoard"
       },
-      "version": "1.3.3",
+      "version": "1.3.4",
       "api": "2.0.0",
       "tier": "official",
       "summary": "指定好友进入房间时显示专属欢迎语并轮巡(仅显示显示名,不发送 UID),结束后自动恢复原状",
       "tags": [],
-      "url": "https://cdn.jsdelivr.net/gh/dkxfox/VRCLiveBoard@main/market/packages/friend-welcome-1.3.3.zip",
-      "sha256": "0bfe1f7350f5d8f7e01ea9474939550215af1f241217285244d993e6478ad47c",
-      "size": 757417,
+      "url": "https://cdn.jsdelivr.net/gh/dkxfox/VRCLiveBoard@main/market/packages/friend-welcome-1.3.4.zip",
+      "sha256": "abf88322a6853251798b7a0826002a981dfa16a6f7f00a9553c3299f075774ce",
+      "size": 757922,
       "permissions": {
         "network": [],
         "filesystem": {
@@ -66,8 +66,8 @@
         "process": false,
         "ports": []
       },
-      "changelog": "1.3.3 补齐 vendor 里 SheetJS 的 Apache-2.0 许可文本与第三方声明(合规; 因授权哈希覆盖插件目录, 更新后需重新授权一次)",
-      "publishedAt": "2026-09-27",
+      "changelog": "1.3.4 修复导入导出闭环: 导出的名单可直接导入(不再误报失败), zh-CN/zh-TW/en 表头都能识别; VRChat 更新后进房快照延迟到 +25s 时也不再重复欢迎已在场好友(改为等自己出现再判定快照)。需重新红窗授权一次,1.3.3 补齐 vendor 里 SheetJS 的 Apache-2.0 许可文本与第三方声明(合规; 因授权哈希覆盖插件目录, 更新后需重新授权一次)",
+      "publishedAt": "2026-10-30",
       "minApp": "1.4.0"
     },
     {

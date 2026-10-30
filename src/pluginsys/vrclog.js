@@ -23,6 +23,40 @@ function isSnapshotJoin(roomEntryAt, joinTs, windowMs) {
   return joinTs >= roomEntryAt && (joinTs - roomEntryAt) < w;
 }
 
+// 本地用户 UID: 从 Entering Room 后紧跟的 "Joining wrld_...~hidden(usr_xxx)~region" 行解析。
+// 2026-10-30 修(VRChat 更新后回归): 旧逻辑用"进房后 15 秒"判断快照, 但新版本在人数多的世界可能到 +25 秒
+// 才把已在场玩家(含自己)补写为 OnPlayerJoined -> 15 秒窗口失效, 已在场好友被重复欢迎。
+// 新逻辑: 进房后先缓冲 join, 等"自己"的 OnPlayerJoined 到达; 自己之前的 join 全部算快照, 之后的才是真实进房。
+let ownUserId = null;
+let pendingJoins = [];
+let awaitingSelf = false;
+const SELF_BUFFER_FALLBACK_MS = 60000;
+function displayKey(raw) {
+  return String(raw || '')
+    .replace(/\(\s*usr_[a-z0-9-]+\s*\)|\busr_[a-z0-9-]+\b/gi, '')
+    .replace(/\(\s*\)/g, '').trim().toLowerCase();
+}
+function lineUid(line) {
+  const m = String(line || '').match(/~hidden\((usr_[a-z0-9-]+)\)/i);
+  return m ? m[1].toLowerCase() : null;
+}
+function joinedUid(name) {
+  const m = String(name || '').match(/\((usr_[a-z0-9-]+)\)/i);
+  return m ? m[1].toLowerCase() : null;
+}
+function flushPendingSnapshot() {
+  const list = pendingJoins;
+  pendingJoins = [];
+  for (const p of list) {
+    if (!p || !p.name) continue;
+    const key = displayKey(p.name);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    bus.emit('player.joined', p.name, { alreadyInWorld: true, sinceRoomSec: p.sinceRoomSec, snapshot: 'self-buffer' });
+  }
+  awaitingSelf = false;
+}
+
 function lineTs(line) {
   const m = String(line || '').match(/^(\d{4})\.(\d{2})\.(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
   if (!m) return null;
@@ -61,8 +95,53 @@ function parseLine(line) {
   if (m2) return { type: 'left', name: String(m2[1]).trim() };
   return null;
 }
+function handleLine(line, emit) {
+  const uid = lineUid(line);
+  if (uid) { ownUserId = uid; if (emit && roomEntryAt > 0) awaitingSelf = true; }
+  const ev = parseLine(line);
+  if (!ev) return;
+  if (ev.type === 'room') {
+    const t = lineTs(line);
+    if (t) roomEntryAt = t;
+    pendingJoins = [];
+    awaitingSelf = !!ownUserId && emit;
+    return;
+  }
+  if (ev.type === 'joined') {
+    const key = displayKey(ev.name);
+    if (!key) return;
+    const juid = joinedUid(ev.name);
+    const ts = lineTs(line) || Date.now();
+    if (juid && ownUserId && juid === ownUserId) {
+      // 自己出现: 说明已在场玩家批次结束; 自己之前缓冲的 join 一律标记为快照
+      if (emit) flushPendingSnapshot();
+      else { pendingJoins = []; awaitingSelf = false; }
+      seen.add(key);
+      return;
+    }
+    if (emit && awaitingSelf) {
+      pendingJoins.push({ name: ev.name, ts: ts, sinceRoomSec: roomEntryAt > 0 ? Math.round((ts - roomEntryAt) / 1000) : null });
+      return;
+    }
+    if (!emit) { seen.add(key); return; }
+    if (seen.has(key)) return;
+    seen.add(key);
+    const already = ownUserId ? false : isSnapshotJoin(roomEntryAt, ts, SNAPSHOT_MS);
+    bus.emit('player.joined', ev.name, { alreadyInWorld: already, sinceRoomSec: roomEntryAt > 0 ? Math.round((ts - roomEntryAt) / 1000) : null });
+    return;
+  }
+  if (ev.type === 'left') {
+    const key = displayKey(ev.name);
+    if (!key) return;
+    seen.delete(key);
+    pendingJoins = pendingJoins.filter(function (p) { return displayKey(p.name) !== key; });
+    if (emit) bus.emit('player.left', ev.name);
+  }
+}
+
 function poll() {
   try {
+    if (awaitingSelf && roomEntryAt > 0 && Date.now() - roomEntryAt > SELF_BUFFER_FALLBACK_MS) flushPendingSnapshot();
     const log = newestLog();
     if (!log) return;
     const isNew = !lastLog || log.path !== lastLog.path;
@@ -75,10 +154,10 @@ function poll() {
         lastLog.size = st.size;
         const raw = fs.readFileSync(log.path, 'utf8');
         for (const line of raw.split(/\r?\n/)) {
-          const ev = parseLine(line);
-          if (ev && ev.type === 'joined') seen.add(ev.name);
-          else if (ev && ev.type === 'room') { const t = lineTs(line); if (t) roomEntryAt = t; }
+          handleLine(line, false);
         }
+        awaitingSelf = false;
+        pendingJoins = [];
       } catch (e) {}
       return;
     }
@@ -91,19 +170,7 @@ function poll() {
     fs.closeSync(fd);
     lastLog.size = st.size;
     const chunk = buf.toString('utf8');
-    for (const line of chunk.split(/\r?\n/)) {
-      const ev = parseLine(line);
-      if (!ev) continue;
-      if (ev.type === 'room') { const t = lineTs(line); if (t) roomEntryAt = t; continue; }
-      if (ev.type === 'joined' && !seen.has(ev.name)) {
-        seen.add(ev.name);
-        const t = lineTs(line) || Date.now();
-        const alreadyInWorld = isSnapshotJoin(roomEntryAt, t, SNAPSHOT_MS);
-        const sinceRoomSec = roomEntryAt > 0 ? Math.round((t - roomEntryAt) / 1000) : null;
-        bus.emit('player.joined', ev.name, { alreadyInWorld: alreadyInWorld, sinceRoomSec: sinceRoomSec });
-      }
-      else if (ev.type === 'left' && seen.has(ev.name)) { seen.delete(ev.name); bus.emit('player.left', ev.name); }
-    }
+    for (const line of chunk.split(/\r?\n/)) handleLine(line, true);
   } catch (e) { /* 忽略单轮错误 */ }
 }
 function start() {
@@ -114,4 +181,13 @@ function start() {
 function stop() {
   if (watcher) { clearInterval(watcher); watcher = null; }
 }
-module.exports = { start, stop, on: function (e, fn) { bus.on(e, fn); }, off: function (e, fn) { bus.off(e, fn); }, isSnapshotJoin: isSnapshotJoin, SNAPSHOT_MS: SNAPSHOT_MS, __parseLineForTest: parseLine };
+module.exports = {
+  start, stop,
+  on: function (e, fn) { bus.on(e, fn); },
+  off: function (e, fn) { bus.off(e, fn); },
+  isSnapshotJoin: isSnapshotJoin, SNAPSHOT_MS: SNAPSHOT_MS,
+  __parseLineForTest: parseLine,
+  __resetSnapshotForTest: function () { ownUserId = null; pendingJoins = []; awaitingSelf = false; seen = new Set(); roomEntryAt = 0; },
+  __feedLineForTest: function (line) { handleLine(line, true); },
+  __pendingCountForTest: function () { return pendingJoins.length; }
+};

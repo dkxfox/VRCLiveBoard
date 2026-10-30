@@ -23,6 +23,24 @@ try {
   ok(vrclog.isSnapshotJoin(base, at(60), null) === false, '进房 +60s 判为真实进房');
   ok(vrclog.isSnapshotJoin(0, at(5), null) === false, '没有进房锚点时不算快照(不误吞)');
   ok(vrclog.SNAPSHOT_MS > 10000 && vrclog.SNAPSHOT_MS < 22000, '快照窗口落在实测区间内(10s < 窗口 < 22s): ' + vrclog.SNAPSHOT_MS + 'ms');
+  // 2026-10-30 回归: VRChat 更新后快照批次可能到 +25s 才来, 固定 15s 窗口失效 -> 改为"自己出现前的 join 都算快照"
+  if (typeof vrclog.__resetSnapshotForTest === 'function' && typeof vrclog.__feedLineForTest === 'function') {
+    vrclog.__resetSnapshotForTest();
+    const evs = [];
+    const onEv = function (n, m) { evs.push({ n: n, m: m }); };
+    vrclog.on('player.joined', onEv);
+    vrclog.__feedLineForTest('2026.10.30 15:10:32 Debug      -  [Behaviour] Entering Room: X');
+    vrclog.__feedLineForTest('2026.10.30 15:10:32 Debug      -  [Behaviour] Joining wrld_x:1~hidden(usr_self-1111)~region(jp)');
+    vrclog.__feedLineForTest('2026.10.30 15:10:57 Debug      -  [Behaviour] OnPlayerJoined Alice (usr_alice-2222)');
+    ok(evs.length === 0 && vrclog.__pendingCountForTest() === 1, '快照缓冲: 自己出现前的 join 不先播报');
+    vrclog.__feedLineForTest('2026.10.30 15:10:57 Debug      -  [Behaviour] OnPlayerJoined Self (usr_self-1111)');
+    ok(evs.length === 1 && evs[0].n.indexOf('Alice') === 0 && evs[0].m.alreadyInWorld === true, '自己出现后缓冲 join 标为已在场(25s 延迟也能识别)');
+    vrclog.__feedLineForTest('2026.10.30 15:11:10 Debug      -  [Behaviour] OnPlayerJoined Bob (usr_bob-3333)');
+    ok(evs.length === 2 && evs[1].n.indexOf('Bob') === 0 && evs[1].m.alreadyInWorld === false, '自己之后的新 join 正常播报');
+    vrclog.__feedLineForTest('2026.10.30 15:11:12 Debug      -  [Behaviour] OnPlayerJoined Alice (usr_alice-2222)');
+    ok(evs.length === 2, '同一玩家重复 join 去重');
+    vrclog.off('player.joined', onEv);
+  } else note('vrclog 未导出快照测试钩子, 跳过');
   const parseLine = vrclog.__parseLineForTest;
   if (typeof parseLine === 'function') {
     ok(parseLine('2026.09.12 15:54:55 Debug      -  [Behaviour] OnPlayerJoined 名字 (usr_11111111-2222-3333-4444-555555555555)') !== null, '解析 Behaviour 的真实进房行');
@@ -89,6 +107,24 @@ function loadPlugin(id) {
       ok(p.calls.length === 4, '非数组那次之后 busy 仍已解锁(插件没卡死)');
     }
   } catch (e) { ok(false, 'friend-welcome 行为用例异常: ' + e.message); }
+
+  // 2026-10-30 回归: 导出的名单直接导入必须成功, 且表头不能当成好友(zh-CN/zh-TW/en 三种表头)
+  try {
+    const mkFw = loadPlugin('friend-welcome');
+    const cases = [
+      { head: '显示名', lines: '欢迎语(多条用 | 分隔)', loops: '轮巡', sec: '秒/片', en: '启用' },
+      { head: '顯示名', lines: '歡迎語(多條用 | 分隔)', loops: '輪巡', sec: '秒/片', en: '啟用' },
+      { head: 'Display name', lines: 'Greeting (separate with |)', loops: 'Loops', sec: 's/piece', en: 'Enabled' }
+    ];
+    for (const c of cases) {
+      const p = mkFw({});
+      const rows = [[c.head, c.lines, c.loops, c.sec, c.en], ['Alice', 'hi|yo', 2, 6, '否']];
+      const r = p.api.importRows ? p.api.importRows(rows) : null;
+      ok(r && r.ok === true && r.count === 1, '导出名单直接导入: ' + c.head + ' 返回 ok/count=1');
+      const f = (p.ctx.config.friends || [])[0] || {};
+      ok(f.name === 'Alice' && f.enabled === false, '导出名单直接导入: ' + c.head + ' 表头被跳过且启用=否保留');
+    }
+  } catch (e) { ok(false, 'friend-welcome 导入回归异常: ' + e.message); }
 
   // ② scheduled-board: "立即测试播报"(前端传 regular)必须成功; 入参不是数组时不得清空用户名单
   try {
@@ -249,5 +285,5 @@ function loadPlugin(id) {
   })();
 
   console.log('[plugin-behavior] pass=' + pass + ' fail=' + fail + (skip ? (' skip=' + skip) : ''));
-  process.exitCode = fail ? 1 : 0;
-})().catch(function (e) { console.log('  FAIL 行为门禁自身异常: ' + ((e && e.stack) || e)); process.exitCode = 1; });
+  process.exit(fail ? 1 : 0);
+})().catch(function (e) { console.log('  FAIL 行为门禁自身异常: ' + ((e && e.stack) || e)); process.exit(1); });

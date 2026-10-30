@@ -1,46 +1,20 @@
 {
+  "action_manifest_version": 0,
   "controller_type": "vive_controller",
-  "binding_url": "",
+  "name": "VRCLiveBoard VR Keyboard - vive_controller",
   "bindings": {
     "/actions/main": {
-      "sources": [
+      "poses": [
         {
-          "path": "/user/hand/left/input/aim/pose",
-          "mode": "pose",
-          "inputs": {
-            "pose": {
-              "output": "/actions/main/in/pose_left"
-            }
-          }
-        },
-        {
-          "path": "/user/hand/right/input/aim/pose",
-          "mode": "pose",
-          "inputs": {
-            "pose": {
-              "output": "/actions/main/in/pose_right"
-            }
-          }
-        },
-        {
-          "path": "/user/hand/left/input/trigger",
-          "mode": "trigger",
-          "inputs": {
-            "click": {
-              "output": "/actions/main/in/trigger_left"
-            }
-          }
-        },
-        {
-          "path": "/user/hand/right/input/trigger",
-          "mode": "trigger",
-          "inputs": {
-            "click": {
-              "output": "/actions/main/in/trigger_right"
-            }
-          }
+          "output": "/actions/main/in/PointerPose",
+          "path": "/user/hand/right/pose/tip"
         }
-      ]
+      ],
+      "sources": []
     }
-  }
+  },
+  "app_key": "vrcliveboard.vrkeyboard",
+  "description": "VRCLiveBoard VR keyboard bindings",
+  "options": {},
+  "simulated_actions": []
 }

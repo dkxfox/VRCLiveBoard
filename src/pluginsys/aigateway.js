@@ -2,6 +2,7 @@
 // 插件 AI 网关(F-20260903-02): 插件不持有密钥 —— 经主体复用用户的 AI 配置(config.ocrtl.vision)与三层防线(config.ocrtl.security)
 // 防线复用 ocrtranslate 已导出的 sanitizeTranslation / DEFAULT_BLOCK_WORDS(与视觉翻译同一套, 一级/开发者可维护)
 const { DEFAULT_BLOCK_WORDS, sanitizeTranslation } = require('../ocrtranslate');
+const aiPolicy = require('../aiPolicy');
 
 const AI_MIN_INTERVAL_MS = 5000; // 每插件节流, 防烧 token
 
@@ -39,9 +40,10 @@ async function chat(opts) {
     { role: 'system', content: sys },
     { role: 'user', content: String(opts.text || '').slice(0, 4000) }
   ];
+  const endpoint = aiPolicy.validateApiBase(vision.apiBase);
+  if (!endpoint.ok) throw new Error('AI 接口被安全策略拒绝: ' + endpoint.reason);
   const base = String(vision.apiBase).replace(/\/+$/, '') + '/chat/completions';
-  const headers = { 'Content-Type': 'application/json' };
-  if (vision.apiKey) headers['Authorization'] = 'Bearer ' + vision.apiKey;
+  const headers = Object.assign({ 'Content-Type': 'application/json' }, aiPolicy.authHeaderFor(endpoint, vision.apiKey));
   // 两次尝试: 1) json_object 严格 JSON; 2) 去掉约束重试(接口不支持时兜底) —— 与视觉翻译同款
   const payloads = [
     { model: vision.model, messages: messages, max_tokens: 2048, stream: false, response_format: { type: 'json_object' } },
@@ -50,25 +52,24 @@ async function chat(opts) {
   if (sec.jsonMode === false) payloads.splice(0, 1);
   let out = '';
   for (const body of payloads) {
-    let r;
-    try { r = await fetch(base, { method: 'POST', headers: headers, body: JSON.stringify(body), signal: AbortSignal.timeout(60000) }); }
+    let resp;
+    try { resp = await aiPolicy.fetchTextLimited(base, { method: 'POST', headers: headers, body: JSON.stringify(body), signal: AbortSignal.timeout(60000) }, aiPolicy.DEFAULT_MAX_RESPONSE_BYTES); }
     catch (e) { throw new Error('AI 接口请求失败: ' + String(e && e.message || e).slice(0, 100)); }
-    const t = await r.text();
-    if (!r.ok) {
-      if (r.status === 400 || r.status === 422) continue; // 换下一个 payload
-      throw new Error('AI 接口 HTTP ' + r.status + ' ' + t.slice(0, 100));
+    const t = resp.text;
+    if (!resp.ok) {
+      if (resp.status === 400 || resp.status === 422) continue; // 换下一个 payload
+      throw new Error('AI 接口 HTTP ' + resp.status + ' ' + t.slice(0, 100));
     }
     try { const j = JSON.parse(t); out = String((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || ''); } catch (e) { throw new Error('AI 接口返回格式异常'); }
     if (out) break;
   }
   if (!out) throw new Error('AI 接口返回为空');
   let result = '';
-  const m = String(out).match(/\{[\s\S]*\}/);
   if (sec.jsonMode === false) result = String(out).trim();
-  if (m) {
-    try { const o = JSON.parse(m[0]); if (o && typeof o.translation === 'string' && o.translation) result = o.translation.trim(); } catch (e) {}
+  else {
+    result = aiPolicy.parseTranslationJson(out);
   }
-  if (!result) result = String(out).trim();
+  if (Array.from(result).length > 2000) result = Array.from(result).slice(0, 2000).join('');
   if (sec.outputSanitize !== false) result = sanitizeTranslation(result, sec.blockWords);
   if (!result) throw new Error('AI 接口返回为空结果');
   return { ok: true, text: result };

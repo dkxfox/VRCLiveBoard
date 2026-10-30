@@ -3024,6 +3024,59 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 - EA 待拍板: ①版本形态(直接 1.5.0「月光」 vs 1.4.x EA 补丁版); ②插件分发(随包 / 市场实验区 / 手动 zip); ③测试组范围与反馈渠道。
 - 下一步: 等用户指定“下一项”; 建议先准备 EA 打包/说明材料, 再动其他功能。
 
+## 387. VR 覆盖层键盘 P1 打通: action 输入/中文候选/音震/性能收尾(2026-10-30)
+- 用户验收: “非常好，和其他虚拟键盘打字体验差不多”“完善了吧”。P1 目标(手柄 aim 射线 + 扳机点击 + 拼音候选 + 发送 + 反馈)已可用。
+- 关键真因(全部实机复现并修复):
+  1. **action 输入需要场景应用**: SteamVR 重启后 VRChat 没启动 → `UpdateActionState` 返回 0 但 pose `bActive=0`; 打开 VRChat 进世界后立即 `active=1`。这是之前多轮“action 不可用”的最大误导。
+  2. **不能开系统交互/鼠标模式**: `VROverlayFlags_MakeOverlaysInteractiveIfVisible` 或 Overlay 鼠标输入法会让系统激光接管控制器, action 输入拿不到数据; 去掉后自定义 aim 射线正常。
+  3. **`HmdMatrix34_t` 是 3x4 行主序, 轴向量在行里**: 最初按列写, 激光能显示但和手柄位置/方向对不上; 改成 `m0=x[0],m1=y[0],m2=z[0]...` 后对准。
+  4. **高频 `SetOverlayRaw` 会整屏闪**: 主面板改 **D3D11 动态纹理 + `SetOverlayTexture`**(Valve C# 包装), 失败才回退 raw; D3D11DeviceContext 的 Map/Unmap 绝对 vtable 下标是 14/15(IUnknown 3 + DeviceChild 4 + …), 之前猜 12/13 调错函数。
+  5. **`dirtyGlobal` 转移写在旧输入分支里**: action 模式永远不重绘 → 键盘像一张静态图; 移到循环顶部统一转移。
+  6. **主循环被 `PollNextOverlayEvent` 拖慢**: action 模式不需要 Overlay 鼠标事件; 跳过后循环从约 40~70 次/秒升到 **约 350 次/秒**, 激光/高亮明显跟手。
+  7. **按键高亮/输入行拆成独立小 overlay**: 高亮块每帧只改变换/颜色, 输入行 988x52 每次只重传这一小块; 主面板不再因悬停/打字重推整张 1024x640 纹理。
+  8. **高亮上下颠倒**: 面板命中用的是 `py=(1-v)*H`, 高亮定位要用同一个 V(`v=1-y/H`); 修正后上下对应。
+- 功能现状: 右手柄 aim 射线(自绘 ray + 光标)/扳机点击/顶部条抓取; 拼音输入、8 个候选、点选上屏、退格/清空/发送; 按键黄色高亮 + 短促“哒”声 + 手柄震动; 控制口 19192。
+- 证据: `--selftest` 全 PASS(30 键/命中/打字/退格/发送/空输入); `--sim` 6/6 PASS(命中/边沿/抓取/放置/不抢输入/校准); 实机日志 `active=1`、候选/发送、循环 ~350/s; 用户两次确认“跟手/体验差不多”。
+- 文件: `scripts/vrkeyboard/vrkeyboard.cs`(主程序)、`actions.json`、`bindings_{oculus_touch,vd_hand_controller,rift,knuckles,vive_controller}.json`、`manifest.vrmanifest`、`build.bat`、`README.md`、`openvr_api.cs`(Valve BSD-3, 仅开发工具)。
+- 未完成(P2, 不阻塞“能用”): 候选翻页(目前只取前 8)、短语表/历史、主程序里一键启动/管理、打包分发、仪表盘模式回归; 首次使用必须让 VRChat 先进世界。
+- 教训: 平台行为问题先用“最小 A/B + 日志/API 返回码”定位; “覆盖层拿不到输入”曾被写成平台边界, 真正原因是**场景应用上下文 + 系统交互标志**两个可修条件。
+
+## 388. 事故: 键盘实验输入配置干扰 VRChat 移动输入(向右绕圈) + 输入最小化修复(2026-10-30)
+- 用户: “你在搞什么？我怎么一个劲的向右绕圈跑了”。当时键盘实验进程还在跑, 用户 VRChat 角色持续向右移动/转圈。
+- 立即处置: 杀掉全部 `vrkeyboard` 进程(0 残留); 把 SteamVR `steamvr/allowGlobalActionSetPriority` 恢复 **false**; 停掉后台 `npm run gates`; 用户重启 VRChat 后恢复正常(“重启后好了”)。
+- 原因(高置信, 已消除): 键盘工具当时有两处**多余**输入声明/设置:
+  1. action manifest 里 `Scroll` 动作绑定了右手柄 **joystick/thumbstick**(从未使用);
+  2. `InitActions` 会写 SteamVR 全局设置 `allowGlobalActionSetPriority=true`(只读 pose/扳机不需要)。
+  这两项都会进入 SteamVR 输入层, 可能让 VRChat 的移动输入卡在“右摇杆持续输入”状态。重启后清掉卡住状态, 也反向印证是输入层状态问题。
+- 修复(最小输入面):
+  - `actions.json` 只保留 `/actions/main/in/PointerPose` 一个 action;
+  - 所有绑定文件删除 trigger/grip/joystick/trackpad 的 `sources`, 只留 pose;
+  - 扳机改回 **legacy `IVRSystem::GetControllerState`** 读取(不再经过我们的 action set);
+  - 删除 `EnableGlobalPriority()` 调用, 工具**不再写任何 SteamVR 设置**;
+  - 已把安全版 exe/actions/bindings 复制到本地注册目录, **但没有启动**; 等用户明确说“开始测试”再运行。
+- 证据: csc 零错误; `--selftest` 全 PASS; `--sim` 6/6 PASS; 本地安装后 `Get-Process vrkeyboard` = 0; SteamVR 设置 false 已核对。主程序/相机/插件未动。
+- 教训(写进流程口径): ①实验性输入工具**禁止**修改 SteamVR 全局设置; ②action manifest 只声明当前功能必需的 action, 不要“顺手”绑摇杆/按键; ③覆盖层工具必须有“立即停止 + 还原设置”的 kill switch, 出问题先停进程/还原设置, 再查原因; ④实机测试前先确认用户当前不在关键 VR 会话中。
+- 下一步计划(用户 2026-10-30 指定): **主程序做成可以用手拖拽、跟随的窗口(手表形态)**; 工作区内有逆向工具, 必要时可逆推同类软件研究底层原理。本轮只收尾记录, 未开始该功能。
+
+## 389. 1.4.x EA 前修 bug: 好友欢迎导入/快照 + AI 结构安全 + 依赖漏洞(2026-10-30)
+- 用户要求: 修累积已知 bug 后发 1.4.X 抢先体验包; 发布前按标准流程做全功能测试; 顺带做定期安全漏洞检查与 AI 提示词防护加强.
+- 好友欢迎(M-20261030-01/02):
+  ① 导出的名单直接导入显示失败: importRows 缺 ok:true + 表头只认“显示名”; 已修(ok + 三语表头识别), 回归 6 条 PASS.
+  ② VRChat 更新后已在场好友重复欢迎: 固定 15s 快照窗口失效(实测快照批可到 +25s); 改为解析本地 UID, 进房后缓冲 join, 等自己出现再判定; 回归 5 条 PASS.
+  ③ 插件版本 1.3.3→1.3.4, 重建 market package 与 dist/插件更新包/friend-welcome-1.3.4.zip(pack-audit --plugin-pack PASS); 更新说明需写“重新红窗授权一次”.
+- 九键数字模式 0: 检查确认 `app.js` 数字态先 `kbdInsert(d)`, 0 不会变空格(2026-10-05 已修, 本轮回归确认).
+- AI 结构安全(M-20261030-03, 用户“料敌从宽”):
+  · 新增 `src/aiPolicy.js`: 官方 https / 本机回环白名单; 拒绝私网/元数据/仿冒域名/带账号密码 URL; 不跟随重定向; 云端 key 只发官方域名; 响应硬上限 1MB.
+  · `ocrtranslate.js` / `pluginsys/aigateway.js` 接入; 默认只接受 `{translation:string}` 严格 schema, **不再回退自由文本**; 输出长度上限.
+  · `sanitizeTranslation` 词库加强(中英日注入/越狱话术) + Unicode NFKC/零宽归一化.
+- 依赖漏洞: npm audit 原 3 high(Electron 43.4.0/systeminformation 5.33.5/undici 7.30.0) → 升 electron 43.8.4 + systeminformation 5.33.19, lock 内 undici 7.30.1; **lock 级 npm audit 已 0 high**. 注意: 主程序运行中锁住 node_modules, 实际 npm install 需先关闭主程序; 安装后再跑 dep-audit --update-baseline.
+- 门禁修复: pack-audit 的 `--plugin-pack` 模式此前仍跑“前端文件全量比对”和 zipVolumes 基线, 插件包必假 FAIL; 已按模式跳过(2026-10-30).
+- 安全扫描工具修复: secret-scan 原来每个 git blob 一次 `git cat-file -p`, UNC 工作区十几分钟跑不完; 改成一次 `git cat-file --batch`, 现 **386 个工作区文件 / 1908 个历史 blob, PASS, 0 命中**.
+- 证据: plugin-behavior 快照/导入回归全 PASS(67 PASS / 0 FAIL); AI 结构自测 17 PASS(端点/密钥/schema/超限/重定向/零宽/正常长文本); backend-flow **195 PASS / 0 FAIL**(含新增 AI 安全断言与恶意插件 AI 端点拒绝); isolated smoke **SMOKE RESULT: pass=15 fail=0**; npm audit lock 0 high; friend-welcome 包 pack-audit PASS.
+- 实际安装: 已关闭桌面壳, npm install 完成 electron 43.8.4 / systeminformation 5.33.19 / undici 7.30.1; SECURITY-BASELINE 已更新(--update-baseline 后 dep-audit 0 FAIL; npm audit 0 漏洞).
+- 环境坑: Electron 43.8.4 新增 install_dir_access 检查 —— 在 UNC 共享目录运行时要求 dist 的 ACL 含 ALL APPLICATION PACKAGES; 本工作区共享 ACL 不满足, 直接启动会 FATAL. **产品包解压到本地盘不受影响**; 本机开发/验收改用本地 staging 副本(%LOCALAPPDATA%\VRCLiveBoard\e2e-repo)启动桌面壳, 已实测 19190 正常.
+- 未完成: 全量门禁复跑(依赖升级后) + release-audit + EA 包.
+
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -3310,5 +3363,8 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 | 384 | 2026-10-30 | camera-path v0.3.0: 插件局域网控制台 + 面板“刷新列表/打开控制台窗口” |
 | 385 | 2026-10-30 | camera-path v0.4.0: 局域网控制台“相机控制”页(9 推子/14 开关/4 模式) + 写后读回 |
 | 386 | 2026-10-30 | 阶段收口: camera-path v0.4.0 冻结 + 项目进度总结 + 抢先体验准备 |
+| 387 | 2026-10-30 | VR 覆盖层键盘 P1 打通: action 输入/中文候选/音震/性能收尾 |
+| 388 | 2026-10-30 | 事故: 键盘实验输入配置干扰 VRChat 移动输入(向右绕圈) + 输入最小化修复 |
+| 389 | 2026-10-30 | 1.4.x EA 前修 bug: 好友欢迎导入/快照 + AI 结构安全 + 依赖漏洞 |
 
 <!-- DEV-NOTES-INDEX:END -->

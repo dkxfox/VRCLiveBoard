@@ -1,0 +1,22 @@
+{
+  "source": "builtin",
+  "applications": [
+    {
+      "app_key": "vrcliveboard.vrkeyboard",
+      "launch_type": "binary",
+      "is_dashboard_overlay": true,
+      "binary_path_windows": "vrkeyboard.exe",
+      "action_manifest_path": "actions.json",
+      "strings": {
+        "en_us": {
+          "name": "VRCLiveBoard VR Keyboard",
+          "description": "VR overlay keyboard for VRChat chatbox"
+        },
+        "zh_cn": {
+          "name": "VRCLiveBoard 虚拟键盘",
+          "description": "VRChat 聊天框用的 VR 覆盖层键盘"
+        }
+      }
+    }
+  ]
+}

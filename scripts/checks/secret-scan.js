@@ -45,22 +45,49 @@ const hits = [];
 })(ROOT);
 
 // git 历史: 所有 blob(仓库小, 全量可行)
+// 2026-10-30: 原来每个 blob 一次 git cat-file -p, 在 UNC 工作区要跑十几分钟; 改成一次 git cat-file --batch.
 let histScanned = 0;
 try {
   const GIT_OPTS = { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 };
   const objs = execFileSync('git', ['rev-list', '--objects', '--all'], GIT_OPTS).split('\n');
+  const map = new Map();
+  const skipRe = /node_modules|\.(png|jpg|ico|zip|exe|woff2?|gz|map)$/i;
   for (const line of objs) {
     const sp = line.indexOf(' ');
     if (sp < 0) continue;
     const sha = line.slice(0, sp), name = line.slice(sp + 1);
-    if (!name || /node_modules|\.(png|jpg|ico|zip|exe|woff2?|gz|map)$/i.test(name)) continue;
-    let type;
-    try { type = execFileSync('git', ['cat-file', '-t', sha], GIT_OPTS).trim(); } catch (e) { continue; }
+    if (!name || skipRe.test(name)) continue;
+    if (!map.has(sha)) map.set(sha, []);
+    map.get(sha).push(name);
+  }
+  const shas = Array.from(map.keys());
+  let out = Buffer.alloc(0);
+  if (shas.length) {
+    out = execFileSync('git', ['cat-file', '--batch'], {
+      cwd: ROOT, input: shas.join('\n') + '\n', maxBuffer: 512 * 1024 * 1024,
+      stdio: ['pipe', 'pipe', 'ignore']
+    });
+  }
+  let off = 0;
+  while (off < out.length) {
+    const nl = out.indexOf(10, off);
+    if (nl < 0) break;
+    const header = out.slice(off, nl).toString('utf8');
+    off = nl + 1;
+    const parts = header.split(' ');
+    const sha = parts[0], type = parts[1], size = Number(parts[2]);
+    if (!sha || !parts[1] || !isFinite(size)) continue;
+    const content = out.slice(off, off + size);
+    off += size;
+    if (out[off] === 10) off++;
     if (type !== 'blob') continue;
-    let content;
-    try { content = execFileSync('git', ['cat-file', '-p', sha], { ...GIT_OPTS, maxBuffer: 16 * 1024 * 1024 }); } catch (e) { continue; }
     histScanned++;
-    for (const [nm, re] of RULES) if (re.test(content) && !allowed(name)) hits.push(['git历史', name + '@' + sha.slice(0, 7), nm]);
+    const names = map.get(sha) || [];
+    const txt = content.toString('utf8');
+    for (const [nm, re] of RULES) {
+      if (!re.test(txt)) continue;
+      for (const name of names) if (!allowed(name)) hits.push(['git历史', name + '@' + sha.slice(0, 7), nm]);
+    }
   }
 } catch (e) { console.log('  WARN git 历史扫描跳过: ' + String(e.message).split('\n')[0]); }
 

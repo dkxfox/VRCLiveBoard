@@ -8,9 +8,9 @@
 
 | 组件 | 版本 | 许可证 | 用途 | 位置 / 许可文本 |
 | --- | --- | --- | --- | --- |
-| electron | 43.4.0 | MIT(内嵌 Chromium / Node 各自许可) | 桌面外壳; 内嵌 Node **24.18.1** | `node_modules/electron/dist/` — 自带 `LICENSE` 与 `LICENSES.chromium.html` ✓ |
+| electron | 43.8.4 | MIT(内嵌 Chromium / Node 各自许可) | 桌面外壳; 内嵌 Node **24.22.1**(`electron --version` 实测) | `node_modules/electron/dist/` — 自带 `LICENSE` 与 `LICENSES.chromium.html` ✓ |
 | osc | 2.4.5 | MIT OR GPL-2.0(我们按 **MIT** 使用) | OSC UDP 发送 | `node_modules/osc` — 包内无 LICENSE 文件, 依 package.json 声明 |
-| systeminformation | 5.33.5 | MIT | CPU / GPU / 内存 / 网速采集 | `node_modules/systeminformation` — 自带 `LICENSE` ✓ |
+| systeminformation | 5.33.19 | MIT | CPU / GPU / 内存 / 网速采集 | `node_modules/systeminformation` — 自带 `LICENSE` ✓ |
 | tesseract.js | 7.0.0 | Apache-2.0 | 截图翻译的本地 OCR | `node_modules/tesseract.js` — 自带 `LICENSE.md` ✓ |
 | @tesseract.js-data/chi_sim | 1.0.0 | MIT | 中文识别模型 | 包内无 LICENSE 文件, 依 package.json 声明 |
 | @tesseract.js-data/jpn | 1.0.0 | MIT | 日文识别模型 | 同上 |
@@ -26,6 +26,12 @@ Lite 包不带 electron(需系统 Node 22+), 其余依赖由 npm 按需安装, �
 | SheetJS `xlsx`(浏览器构建 `vendor/xlsx.full.min.js`) | 与同目录 `xlsx.js` 同源 | Apache-2.0 | 三个插件的面板 / 前端 | 文件头里的 `cptable{version:"1.15.0"}` 是**代码页表**版本, **不是** SheetJS 版本(已实测) |
 
 **✅ 已补齐(2026-09-27)**: 三个插件各自在**插件目录根**放了 `LICENSE-Apache-2.0.txt`(Apache-2.0 全文, 取自本仓库 `node_modules/tesseract.js/LICENSE.md` 的规范文本)与 `THIRD-PARTY-NOTICE.txt`(声明: 组件/版本/上游/许可/我们只做原样拷贝)。放在**插件根而不是 vendor/** 是有意的: ① surface-scan 不扫 `.txt`, 所以不会让攻击面基线漂移; ② dep-audit 只监控 `plugins/<id>/vendor/` 的聚合哈希, 根目录新增文件不影响它; ③ 市场 zip 会带上这两个文件(许可随分发一起走)。**代价(已接受并记录)**: 授权哈希覆盖整个插件目录 → 三个插件各升一个补丁位(`friend-welcome 1.3.3` / `scheduled-board 2.0.1` / `weather-board 1.0.1`), **已装用户更新后需要重新授权一次**; `market/packages` 与 `market/index.json` 已同步重建。
+
+## 2b. 开发工具 vendor(不随包)
+
+| 组件 | 版本 | 许可证 | 谁在用 | 备注 |
+| --- | --- | --- | --- | --- |
+| Valve OpenVR SDK C# 绑定 `openvr_api.cs` | 取自 ValveSoftware/openvr 官方 headers | BSD-3-Clause | `scripts/vrkeyboard` 覆盖层键盘(开发工具) | 原样 vendor(文件头保留 Valve 版权); 只用于本机开发/验证, **不随产品包分发**。上游: https://github.com/ValveSoftware/openvr |
 
 ## 3. 用户侧按需安装(不由我们的 zip 分发)
 

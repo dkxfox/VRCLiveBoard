@@ -47,7 +47,12 @@ module.exports = function (ctx) {
   // 统一入口: 标准化 + 按显示名去重(大小写不敏感, 保留第一条)
   function normalizeRows(rows) {
     let start = 0;
-    if (rows && rows[0] && String(rows[0][0] || '').indexOf('显示') >= 0) start = 1;
+    // 表头识别(2026-10-30 修): 导出文件用的是**当前界面语言**的表头(zh-CN "显示名" / zh-TW "顯示名" /
+    // en "Display name"), 旧逻辑只认 "显示" -> 繁中/英文导出再导入时表头会被当成一位好友, 并多出一条假数据。
+    if (rows && rows[0]) {
+      const head = rows[0].map(function (c) { return String(c == null ? '' : c).trim(); }).join('|');
+      if (/显示名|顯示名|display\s*name|好友|歡迎語|欢迎语|greeting|轮巡|輪巡|loops|启用|啟用/i.test(head)) start = 1;
+    }
     const out = [];
     const seen = new Set();
     let deduped = 0;
@@ -72,7 +77,8 @@ module.exports = function (ctx) {
   function importRows(rows) {
     const n = normalizeRows(rows);
     ctx.config.friends = n.out;
-    return { count: n.out.length, deduped: n.deduped };
+    // 2026-10-30 修: 前端按 j.ok 判断成功, 旧返回值没有 ok -> 导出的名单导入实际成功但界面永远显示"导入失败"。
+    return { ok: true, count: n.out.length, deduped: n.deduped };
   }
   function getRows() {
     return (ctx.config.friends || []).map(function (f) {

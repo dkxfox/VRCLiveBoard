@@ -1,0 +1,20 @@
+{
+  "action_manifest_version": 0,
+  "controller_type": "vd_hand_controller",
+  "name": "VRCLiveBoard VR Keyboard - vd_hand_controller",
+  "bindings": {
+    "/actions/main": {
+      "poses": [
+        {
+          "output": "/actions/main/in/PointerPose",
+          "path": "/user/hand/right/pose/tip"
+        }
+      ],
+      "sources": []
+    }
+  },
+  "app_key": "vrcliveboard.vrkeyboard",
+  "description": "VRCLiveBoard VR keyboard bindings",
+  "options": {},
+  "simulated_actions": []
+}

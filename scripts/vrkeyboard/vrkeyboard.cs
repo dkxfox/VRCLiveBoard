@@ -38,6 +38,11 @@ static class VRKeyboard
     static string LogPath = null;
     static readonly object LogLock = new object();
 
+    static void ShutdownOpenVr()
+    {
+        try { Valve.VR.OpenVR.Shutdown(); } catch (Exception) { }
+    }
+
     static void Log(string msg)
     {
         string line = DateTime.Now.ToString("HH:mm:ss.fff") + "  " + msg;
@@ -80,7 +85,11 @@ static class VRKeyboard
     }
 
     static List<Key> Keys = new List<Key>();
-    static string Line = "";
+    static string Line = "";                 // 当前拼音输入串(未上屏)
+    static string Committed = "";            // 已上屏的中文
+    static string[] CandidateWords = new string[0];
+    static int CandidateVersion = 0;
+    const float CandY = 552f, CandH = 38f;
     static string Status = "点字母打字, 回车发送";
     static string LastSent = null;
     static bool DryRun = false;
@@ -145,59 +154,94 @@ static class VRKeyboard
         }
     }
 
-    // ---------- 渲染 ----------
-    static Bitmap Render()
+    // ---------- 渲染(静态底图 + 动态层, 避免每帧重建 30 个字体/画全部键) ----------
+    static Bitmap BaseBmp = null;
+    static Bitmap FrameBmp = null;
+    static Graphics FrameG = null;
+    static Font FTitle, FKey, FSpecial, FInput, FStatus;
+    static SolidBrush BgBrush, TitleBrush, LineBgBrush, KeyNormalBrush, KeySpecialBrush, KeyHoverBrush, KeyPressedBrush, KeyTextBrush, StatusBrush, CursorBrush;
+    static Pen KeyBorderPen, LineBorderPen, CursorRingPen;
+
+    static void EnsureRenderResources()
     {
-        Bitmap bmp = new Bitmap(W, H, PixelFormat.Format32bppArgb);
-        using (Graphics g = Graphics.FromImage(bmp))
+        if (FTitle != null) return;
+        FTitle = new Font("Microsoft YaHei UI", 30f, FontStyle.Bold);
+        FKey = new Font("Microsoft YaHei UI", 30f, FontStyle.Bold);
+        FSpecial = new Font("Microsoft YaHei UI", 20f, FontStyle.Bold);
+        FInput = new Font("Microsoft YaHei UI", 24f);
+        FStatus = new Font("Microsoft YaHei UI", 18f);
+        BgBrush = new SolidBrush(Color.FromArgb(255, 26, 30, 42));
+        TitleBrush = new SolidBrush(Color.FromArgb(255, 235, 238, 245));
+        LineBgBrush = new SolidBrush(Color.FromArgb(255, 12, 14, 20));
+        KeyNormalBrush = new SolidBrush(Color.FromArgb(255, 38, 44, 60));
+        KeySpecialBrush = new SolidBrush(Color.FromArgb(255, 44, 58, 88));
+        KeyHoverBrush = new SolidBrush(Color.FromArgb(255, 96, 132, 200));
+        KeyPressedBrush = new SolidBrush(Color.FromArgb(255, 255, 205, 90));
+        KeyTextBrush = new SolidBrush(Color.FromArgb(255, 232, 236, 246));
+        StatusBrush = new SolidBrush(Color.FromArgb(255, 150, 200, 160));
+        CursorBrush = new SolidBrush(Color.FromArgb(220, 255, 214, 92));
+        KeyBorderPen = new Pen(Color.FromArgb(255, 92, 104, 132), 2f);
+        LineBorderPen = new Pen(Color.FromArgb(255, 70, 120, 220), 2f);
+        CursorRingPen = new Pen(Color.FromArgb(230, 255, 255, 255), 2f);
+    }
+
+    static void EnsureBaseBitmap()
+    {
+        EnsureRenderResources();
+        if (BaseBmp != null && BaseBmp.Width == W && BaseBmp.Height == H) return;
+        BaseBmp = new Bitmap(W, H, PixelFormat.Format32bppArgb);
+        using (Graphics g = Graphics.FromImage(BaseBmp))
         {
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
-            using (SolidBrush b = new SolidBrush(Color.FromArgb(255, 26, 30, 42)))
-                g.FillRectangle(b, new Rectangle(0, 0, W, H));
-            using (Font f = new Font("Microsoft YaHei UI", 30f, FontStyle.Bold))
-            using (SolidBrush b = new SolidBrush(Color.FromArgb(255, 235, 238, 245)))
-                g.DrawString("VRCLiveBoard 键盘", f, b, 20f, 28f);
+            g.FillRectangle(BgBrush, new Rectangle(0, 0, W, H));
+            g.DrawString("VRCLiveBoard 键盘", FTitle, TitleBrush, 20f, 28f);
             RectangleF lineRect = new RectangleF(18f, 78f, W - 36f, 52f);
-            using (SolidBrush b = new SolidBrush(Color.FromArgb(255, 12, 14, 20)))
-                g.FillRectangle(b, lineRect);
-            using (Pen p = new Pen(Color.FromArgb(255, 70, 120, 220), 2f))
-                g.DrawRectangle(p, lineRect.X, lineRect.Y, lineRect.Width, lineRect.Height);
-            using (Font f = new Font("Microsoft YaHei UI", 24f))
-            using (SolidBrush b = new SolidBrush(Color.FromArgb(255, 240, 244, 252)))
-                g.DrawString(Line.Length == 0 ? "(点字母开始打字)" : Line, f, b, lineRect.X + 12f, lineRect.Y + 8f);
+            g.FillRectangle(LineBgBrush, lineRect);
+            g.DrawRectangle(LineBorderPen, lineRect.X, lineRect.Y, lineRect.Width, lineRect.Height);
             foreach (Key k in Keys)
             {
-                bool hovered = (HoverKey != null && HoverKey.Value == k.Value);
-                using (SolidBrush b = new SolidBrush(hovered ? Color.FromArgb(255, 96, 132, 200) : (k.Special ? Color.FromArgb(255, 44, 58, 88) : Color.FromArgb(255, 38, 44, 60))))
-                    g.FillRectangle(b, k.Rect);
-                using (Pen p = new Pen(Color.FromArgb(255, 92, 104, 132), 2f))
-                    g.DrawRectangle(p, k.Rect.X, k.Rect.Y, k.Rect.Width, k.Rect.Height);
-                using (Font f = new Font("Microsoft YaHei UI", k.Special ? 20f : 30f, FontStyle.Bold))
-                using (SolidBrush b = new SolidBrush(Color.FromArgb(255, 232, 236, 246)))
+                g.FillRectangle(k.Special ? KeySpecialBrush : KeyNormalBrush, k.Rect);
+                g.DrawRectangle(KeyBorderPen, k.Rect.X, k.Rect.Y, k.Rect.Width, k.Rect.Height);
+                Font fnt = k.Special ? FSpecial : FKey;
+                SizeF sz = g.MeasureString(k.Label, fnt);
+                g.DrawString(k.Label, fnt, KeyTextBrush, k.Rect.X + (k.Rect.Width - sz.Width) / 2f, k.Rect.Y + (k.Rect.Height - sz.Height) / 2f);
+            }
+        }
+    }
+
+    static Bitmap Render()
+    {
+        EnsureBaseBitmap();
+        if (FrameBmp == null)
+        {
+            FrameBmp = new Bitmap(W, H, PixelFormat.Format32bppArgb);
+            FrameG = Graphics.FromImage(FrameBmp);
+            FrameG.SmoothingMode = SmoothingMode.AntiAlias;
+            FrameG.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+        }
+        Graphics g = FrameG;
+        {
+            g.DrawImageUnscaled(BaseBmp, 0, 0);
+
+            if (CandidateWords.Length > 0)
+            {
+                float left = 18f, right = W - 18f, gap = 4f;
+                float cw = (right - left - 7f * gap) / 8f;
+                for (int i = 0; i < CandidateWords.Length && i < 8; i++)
                 {
-                    SizeF sz = g.MeasureString(k.Label, f);
-                    g.DrawString(k.Label, f, b, k.Rect.X + (k.Rect.Width - sz.Width) / 2f, k.Rect.Y + (k.Rect.Height - sz.Height) / 2f);
+                    float x = left + i * (cw + gap);
+                    RectangleF cr = new RectangleF(x, CandY, cw, CandH);
+                    bool ch = (HoverKey != null && HoverKey.Value == ("cand:" + i));
+                    g.FillRectangle(ch ? KeyHoverBrush : KeyNormalBrush, cr);
+                    g.DrawRectangle(KeyBorderPen, cr.X, cr.Y, cr.Width, cr.Height);
+                    SizeF sz = g.MeasureString(CandidateWords[i], FSpecial);
+                    g.DrawString(CandidateWords[i], FSpecial, KeyTextBrush, cr.X + (cr.Width - sz.Width) / 2f, cr.Y + (cr.Height - sz.Height) / 2f);
                 }
             }
-            // 靶点: SteamVR 只给仪表盘画光标, 世界里的覆盖层没有 -> 自己画一个(含坐标环)
-            // 护栏: 靶点坐标必须是有限值且在画面附近 —— 否则 GDI+ 会 OverflowException 直接把程序崩掉(实测踩过)
-            bool cursorOk = PointerValid && Shown &&
-                !float.IsNaN(PointerPx) && !float.IsNaN(PointerPy) &&
-                !float.IsInfinity(PointerPx) && !float.IsInfinity(PointerPy) &&
-                PointerPx > -64f && PointerPx < W + 64f && PointerPy > -64f && PointerPy < H + 64f;
-            if (cursorOk)
-            {
-                using (SolidBrush b = new SolidBrush(Color.FromArgb(220, 255, 214, 92)))
-                    g.FillEllipse(b, PointerPx - 9f, PointerPy - 9f, 18f, 18f);
-                using (Pen p = new Pen(Color.FromArgb(230, 255, 255, 255), 2f))
-                    g.DrawEllipse(p, PointerPx - 16f, PointerPy - 16f, 32f, 32f);
-            }
-            using (Font f = new Font("Microsoft YaHei UI", 18f))
-            using (SolidBrush b = new SolidBrush(Color.FromArgb(255, 150, 200, 160)))
-                g.DrawString(Status + "   [指针 " + HoverX.ToString("0.###") + "," + HoverY.ToString("0.###") + (HoverKey == null ? "" : (" -> " + HoverKey.Label)) + "]", f, b, 20f, H - 44f);
+            g.DrawString(Status + "   [指针 " + HoverX.ToString("0.###") + "," + HoverY.ToString("0.###") + (HoverKey == null ? "" : (" -> " + HoverKey.Label)) + "]", FStatus, StatusBrush, 20f, H - 44f);
         }
-        return bmp;
+        return FrameBmp;
     }
 
     // 命中测试: 先判断拿到的是 UV(0~1) 还是像素, 再翻 Y(GL 空间原点在左下角)
@@ -214,28 +258,166 @@ static class VRKeyboard
         float px = u * W;
         float py = (1f - v) * H;
         if (px < 0 || py < 0 || px > W || py > H) return null;
+        if (CandidateWords.Length > 0 && py >= CandY && py <= CandY + CandH)
+        {
+            float left = 18f, right = W - 18f, gap = 4f;
+            float cw = (right - left - 7f * gap) / 8f;
+            for (int i = 0; i < CandidateWords.Length && i < 8; i++)
+            {
+                float x = left + i * (cw + gap);
+                if (px >= x && px <= x + cw)
+                {
+                    Key ck = new Key();
+                    ck.Label = CandidateWords[i]; ck.Value = "cand:" + i; ck.Special = true;
+                    ck.Rect = new RectangleF(x, CandY, cw, CandH);
+                    return ck;
+                }
+            }
+        }
         foreach (Key k in Keys)
             if (px >= k.Rect.X && px <= k.Rect.Right && py >= k.Rect.Y && py <= k.Rect.Bottom) return k;
         return null;
     }
+    static bool ForceRender = false;
+    static ulong InpHandle = 0;
+    static bool InpShown = false;
+    static string LastInpText = null;
+    static readonly Font InpFont = new Font("Microsoft YaHei UI", 24f);
+    static IntPtr InpRawBuf = IntPtr.Zero;
+    static Key LastPressedKey = null;
+    static DateTime LastPressedAt = DateTime.MinValue;
+    static System.Media.SoundPlayer ClickSound = null;
+    static void InitClickSound()
+    {
+        if (ClickSound != null) return;
+        int rate = 44100, ms = 35, n = rate * ms / 1000;
+        using (System.IO.MemoryStream msStream = new System.IO.MemoryStream())
+        {
+            System.IO.BinaryWriter bw = new System.IO.BinaryWriter(msStream);
+            int dataSize = n * 2;
+            bw.Write(new char[] { 'R', 'I', 'F', 'F' }); bw.Write(36 + dataSize);
+            bw.Write(new char[] { 'W', 'A', 'V', 'E' }); bw.Write(new char[] { 'f', 'm', 't', ' ' });
+            bw.Write(16); bw.Write((short)1); bw.Write((short)1); bw.Write(rate); bw.Write(rate * 2);
+            bw.Write((short)2); bw.Write((short)16);
+            bw.Write(new char[] { 'd', 'a', 't', 'a' }); bw.Write(dataSize);
+            for (int i = 0; i < n; i++)
+            {
+                double t = (double)i / rate;
+                double env = Math.Exp(-t * 120.0);
+                double v = Math.Sin(2 * Math.PI * 1500 * t) * env * 0.22;
+                bw.Write((short)(v * 32767));
+            }
+            bw.Flush();
+            msStream.Position = 0;
+            ClickSound = new System.Media.SoundPlayer(msStream);
+            ClickSound.Load();
+        }
+    }
+    static void PlayClick()
+    {
+        try { InitClickSound(); ClickSound.Play(); } catch (Exception) { }
+    }
+    static bool HapticLogged = false;
+    static void HapticPulse(int role, ushort duration)
+    {
+        try
+        {
+            EnumerateControllers();
+            for (int k = 0; k < ControllerIdx.Length; k++)
+            {
+                if (ControllerRole[k] != role) continue;
+                if (!HapticLogged) { HapticLogged = true; Log("[震动] 尝试设备#" + ControllerIdx[k] + " 角色" + role + " wrapper=" + (Valve.VR.OpenVR.System != null)); }
+                try
+                {
+                    if (Valve.VR.OpenVR.System != null) { Valve.VR.OpenVR.System.TriggerHapticPulse(ControllerIdx[k], 0, duration); return; }
+                }
+                catch (Exception) { }
+                if (SysRef != IntPtr.Zero && HapticRef != null) { HapticRef(SysRef, ControllerIdx[k], 0, duration); return; }
+            }
+        }
+        catch (Exception) { }
+    }
+
+    static string DisplayText()
+    {
+        if (Committed.Length == 0 && Line.Length == 0) return "(点字母开始打字)";
+        return Committed + Line;
+    }
+
+    static void RequestCandidates()
+    {
+        int ver = ++CandidateVersion;
+        string keys = Line;
+        if (keys.Length == 0) { CandidateWords = new string[0]; dirtyGlobal = true; return; }
+        System.Threading.ThreadPool.QueueUserWorkItem(delegate(object state)
+        {
+            try
+            {
+                using (System.Net.WebClient wc = new System.Net.WebClient())
+                {
+                    wc.Encoding = Encoding.UTF8;
+                    string url = "http://127.0.0.1:19190/api/pinyin?keys=" + Uri.EscapeDataString(keys) + "&n=8";
+                    string body = wc.DownloadString(url);
+                    List<string> words = new List<string>();
+                    foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(body, "\"w\":\"((?:\\.|[^\"])*)\""))
+                    {
+                        string w = m.Groups[1].Value;
+                        words.Add(w);
+                        if (words.Count >= 8) break;
+                    }
+                    if (ver == CandidateVersion)
+                    {
+                        CandidateWords = words.ToArray();
+                        dirtyGlobal = true;
+                    }
+                }
+            }
+            catch (Exception) { }
+        });
+    }
+
     static void PressKey(Key k, string url)
     {
         if (k == null) return;
+        LastPressedKey = k; LastPressedAt = DateTime.Now; ForceRender = true;
+        HapticPulse(RoleRight, 3000);
+        PlayClick();
+        if (k.Value != null && k.Value.StartsWith("cand:"))
+        {
+            int idx;
+            if (int.TryParse(k.Value.Substring(5), out idx) && idx >= 0 && idx < CandidateWords.Length)
+            {
+                string w = CandidateWords[idx];
+                Committed += w;
+                Line = "";
+                CandidateWords = new string[0];
+                CandidateVersion++;
+                Status = "已上屏: " + w;
+                dirtyGlobal = true;
+            }
+            return;
+        }
         if (!k.Special)
         {
             if (Line.Length < 140) Line += k.Value;
-            Status = "输入中: " + Line.Length + " 字";
+            Status = "拼音: " + Line;
+            RequestCandidates();
             return;
         }
-        if (k.Value == "space") { if (Line.Length < 140) Line += " "; }
-        else if (k.Value == "back") { if (Line.Length > 0) Line = Line.Substring(0, Line.Length - 1); }
-        else if (k.Value == "clear") { Line = ""; Status = "已清空"; }
+        if (k.Value == "space") { if (Line.Length < 140) Line += " "; RequestCandidates(); }
+        else if (k.Value == "back")
+        {
+            if (Line.Length > 0) Line = Line.Substring(0, Line.Length - 1);
+            else if (Committed.Length > 0) Committed = Committed.Substring(0, Committed.Length - 1);
+            RequestCandidates();
+        }
+        else if (k.Value == "clear") { Line = ""; Committed = ""; CandidateWords = new string[0]; CandidateVersion++; Status = "已清空"; dirtyGlobal = true; }
         else if (k.Value == "enter")
         {
-            string text = Line.Trim();
-            if (text.Length == 0) { Status = "还没打字"; return; }
+            string text = DisplayText().Trim();
+            if (text.Length == 0 || text == "(点字母开始打字)") { Status = "还没打字"; return; }
             bool ok = SendChatbox(text, url);
-            if (ok) { Status = "已发送: " + text; Line = ""; }
+            if (ok) { Status = "已发送: " + text; Line = ""; Committed = ""; CandidateWords = new string[0]; CandidateVersion++; }
             else Status = "发送失败(主程序没在跑?)";
         }
     }
@@ -343,6 +525,83 @@ static class VRKeyboard
 
     // 把 Bitmap 的 BGRA 像素直接推给覆盖层(比走 PNG 文件更少环节)
     static IntPtr RawBuf = IntPtr.Zero;      // 常驻纹理缓冲: 指针固定不变, 免得运行时每帧重建纹理(用户反馈"高亮就闪")
+    // ---------- D3D11 纹理推送(替代 SetOverlayRaw, 解决高频重推整屏闪烁) ----------
+    [DllImport("d3d11.dll", CallingConvention = CallingConvention.StdCall)]
+    static extern int D3D11CreateDevice(IntPtr adapter, int driverType, IntPtr software, uint flags,
+        IntPtr featureLevels, uint featureLevelsCount, uint sdkVersion, out IntPtr device, out int featureLevel, out IntPtr context);
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct Texture2DDesc
+    {
+        public uint Width, Height, MipLevels, ArraySize, Format, SampleCount, SampleQuality;
+        public uint Usage, BindFlags, CPUAccessFlags, MiscFlags;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    struct MappedSubresource { public IntPtr pData; public uint RowPitch; public uint DepthPitch; }
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int CreateTexture2DFn(IntPtr self, ref Texture2DDesc desc, IntPtr initialData, out IntPtr texture);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int MapFn(IntPtr self, IntPtr resource, uint subresource, uint mapType, uint mapFlags, out MappedSubresource mapped);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void UnmapFn(IntPtr self, IntPtr resource, uint subresource);
+
+    static IntPtr D3DDevice = IntPtr.Zero, D3DContext = IntPtr.Zero, D3DTexture = IntPtr.Zero;
+    static int D3DTextW = 0, D3DTextH = 0;
+
+    static bool EnsureD3DTexture(int w, int h)
+    {
+        if (D3DTexture != IntPtr.Zero && D3DTextW == w && D3DTextH == h) return true;
+        try
+        {
+            if (D3DDevice == IntPtr.Zero)
+            {
+                int fr;
+                int hr = D3D11CreateDevice(IntPtr.Zero, 1 /*HARDWARE*/, IntPtr.Zero, 0u, IntPtr.Zero, 0u, 7u, out D3DDevice, out fr, out D3DContext);
+                if (hr != 0 || D3DDevice == IntPtr.Zero) { Log("[D3D] D3D11CreateDevice 失败: 0x" + hr.ToString("X8")); D3DDevice = IntPtr.Zero; return false; }
+            }
+            Texture2DDesc d = new Texture2DDesc();
+            d.Width = (uint)w; d.Height = (uint)h; d.MipLevels = 1; d.ArraySize = 1;
+            d.Format = 87;                 // DXGI_FORMAT_B8G8R8A8_UNORM
+            d.SampleCount = 1; d.SampleQuality = 0;
+            d.Usage = 2;                   // D3D11_USAGE_DYNAMIC
+            d.BindFlags = 8;               // D3D11_BIND_SHADER_RESOURCE
+            d.CPUAccessFlags = 0x10000;    // D3D11_CPU_ACCESS_WRITE
+            CreateTexture2DFn create = Vt<CreateTexture2DFn>(D3DDevice, 5);
+            int hr2 = create(D3DDevice, ref d, IntPtr.Zero, out D3DTexture);
+            if (hr2 != 0 || D3DTexture == IntPtr.Zero) { Log("[D3D] CreateTexture2D 失败: 0x" + hr2.ToString("X8")); D3DTexture = IntPtr.Zero; return false; }
+            D3DTextW = w; D3DTextH = h;
+            Log("[D3D] 纹理就绪 " + w + "x" + h);
+            return true;
+        }
+        catch (Exception ex) { Log("[D3D] 初始化异常: " + ex.Message); return false; }
+    }
+
+    static bool PushTextureD3D(ulong overlayHandle, Bitmap bmp)
+    {
+        try
+        {
+            if (!EnsureD3DTexture(bmp.Width, bmp.Height)) return false;
+            MapFn map = Vt<MapFn>(D3DContext, 14);   // IUnknown 3 + ID3D11DeviceChild 4 + (VSSetConstantBuffers..Draw = 7) -> Map
+            UnmapFn unmap = Vt<UnmapFn>(D3DContext, 15);
+            MappedSubresource m;
+            int hr = map(D3DContext, D3DTexture, 0u, 4u /*WRITE_DISCARD*/, 0u, out m);
+            if (hr != 0) { Log("[D3D] Map 失败: 0x" + hr.ToString("X8")); return false; }
+            BitmapData bd = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+            try
+            {
+                for (int y = 0; y < bmp.Height; y++)
+                    CopyMemory(IntPtr.Add(m.pData, y * (int)m.RowPitch), IntPtr.Add(bd.Scan0, y * bd.Stride), (uint)(bmp.Width * 4));
+            }
+            finally { bmp.UnlockBits(bd); }
+            unmap(D3DContext, D3DTexture, 0u);
+            Valve.VR.Texture_t tex = new Valve.VR.Texture_t();
+            tex.handle = D3DTexture;
+            tex.eType = Valve.VR.ETextureType.DirectX;
+            tex.eColorSpace = Valve.VR.EColorSpace.Auto;
+            Valve.VR.EVROverlayError e = Valve.VR.OpenVR.Overlay.SetOverlayTexture(overlayHandle, ref tex);
+            if (e != Valve.VR.EVROverlayError.None) { Log("[D3D] SetOverlayTexture -> " + e); return false; }
+            return true;
+        }
+        catch (Exception ex) { Log("[D3D] 推送异常: " + ex.Message); return false; }
+    }
+
     static int PushRaw(IntPtr ov, ulong handle, Bitmap bmp, SetOverlayRawFn fn)
     {
         if (RawBuf == IntPtr.Zero) RawBuf = Marshal.AllocHGlobal(W * H * 4);
@@ -431,8 +690,11 @@ static class VRKeyboard
         try
         {
         int err = 0;
-        Log("[步骤] VR_InitInternal(AppType=Overlay)…");
-        IntPtr ctx = VR_InitInternal(ref err, AppTypeOverlay);
+        Log("[步骤] OpenVR.Init(AppType=Overlay)…");
+        Valve.VR.EVRInitError werr = Valve.VR.EVRInitError.None;
+        Valve.VR.CVRSystem cvrSys = Valve.VR.OpenVR.Init(ref werr, Valve.VR.EVRApplicationType.VRApplication_Overlay);
+        err = (int)werr;
+        IntPtr ctx = err == 0 && cvrSys != null ? (IntPtr)1 : IntPtr.Zero;
         if (err != 0 || ctx == IntPtr.Zero)
         {
             Log("[错误] VR_Init 失败(" + err + "): " + Marshal.PtrToStringAnsi(VR_GetStringForHmdError(err)));
@@ -453,19 +715,21 @@ static class VRKeyboard
         }
         if (ov != IntPtr.Zero) Log("[信息] 接口版本 " + usedVer + "(vtable 下标按官方 master 头文件=028 排的, 版本不符就可能调错函数)");
         else Log("[警告] 只接受 028(其它版本的 vtable 布局不同, 用错下标会调错函数)");
-                if (ov == IntPtr.Zero) { Log("[错误] 拿不到 IVROverlay 接口指针(SteamVR 运行时没就绪?) —— 到此为止"); VR_ShutdownInternal(); return 2; }
+                if (ov == IntPtr.Zero) { Log("[错误] 拿不到 IVROverlay 接口指针(SteamVR 运行时没就绪?) —— 到此为止"); ShutdownOpenVr(); return 2; }
         CreateOverlayFn create = Vt<CreateOverlayFn>(ov, 1);
         Log("[步骤] 调用 CreateOverlay(" + OverlayKey + ")…");
         int e = create(ov, OverlayKey, OverlayName, out handle);
         Log("[信息] CreateOverlay -> " + e + (e == 0 ? "" : " (非 0 即失败)") + ", handle=" + handle);
-        if (e != 0) { VR_ShutdownInternal(); return 2; }
+        if (e != 0) { ShutdownOpenVr(); return 2; }
         {
-            Log("[信息] SetOverlayFlag(可交互) -> " + Vt<SetOverlayFlagFn>(ov, 11)(ov, handle, (int)FlagInteractive, true));
+            // 不再默认开 MakeOverlaysInteractiveIfVisible: 它会让系统激光鼠标接管控制器输入,
+            // action 输入因此拿不到 pose/扳机(2026-10-30 实测). 交互改由 action 输入自己算.
+            Log("[信息] 保持非交互(输入由 action 系统自算)");
             Log("[信息] SetOverlayAlpha -> " + Vt<SetOverlayAlphaFn>(ov, 16)(ov, handle, 1f));
             Log("[信息] SetOverlaySortOrder -> " + Vt<SetOverlaySortOrderFn>(ov, 20)(ov, handle, 1u));
             Log("[信息] SetOverlayWidthInMeters(" + meters + ") -> " + Vt<SetOverlayWidthInMetersFn>(ov, 22)(ov, handle, meters));
-            Log("[信息] SetOverlayInputMethod(Mouse) -> " + Vt<SetOverlayInputMethodFn>(ov, 50)(ov, handle, InputMethodMouse));
-            Log("[信息] SetOverlayMouseScale(" + W + "x" + H + " -> 按官方注释: 鼠标尺度是 UI 像素尺寸) -> " + Vt<SetOverlayMouseScaleFn>(ov, 52)(ov, handle, W, H));
+            // 输入由 action 系统自算: 不设置鼠标输入法(否则 SteamVR 可能把 overlay 当鼠标交互层)
+            Log("[信息] 输入: action 自算(不设置 Overlay 鼠标输入法)");
             HmdMatrix34_t m = new HmdMatrix34_t();
             m.m0 = 1f; m.m5 = 1f; m.m10 = 1f;
             if (!followHead)
@@ -496,10 +760,11 @@ static class VRKeyboard
                 Log("[仪表盘] 已就绪: 按系统键呼出 SteamVR 仪表盘, 里面应能看到键盘; 用仪表盘鼠标点键即可");
             }
             EnsureSystem();
-            // action 系统的 aim 姿态**对覆盖层应用不可用**(实测 UpdateActionState -> 8 = NoActiveActionSet: 覆盖层没有输入焦点),
-            // 所以这里不再尝试; 射线方向改用"校准过的 grip 朝向"或"目光指针"(见 DEV-NOTES 271)。
-            // 若将来改成有输入焦点的形态, 把下面这行恢复即可。
-            // InitActions();
+            // 2026-10-30: action 输入已实测可用(需要 VRChat 等 scene app 提供 SteamVR 输入上下文; 见功能卡/DEV-NOTES)
+            // 使用真正的 aim 姿态 + 扳机/握把, 不再依赖 grip 校准或目光兜底。
+            ActionsReady = InitActions();
+            UseActionInput = ActionsReady;
+            Log("[输入] action 输入=" + (ActionsReady ? "启用(aim 姿态+扳机)" : "不可用, 退回旧路径"));
             LoadCalib();                         // 一次性校准的偏移(没有就用原始握把朝向)
             SetPanelFromMatrix(CurPanelMatrix());
             // 先把事件字段原样打几条出来(排障: 鼠标事件的坐标/按钮到底在哪个偏移)
@@ -512,22 +777,28 @@ static class VRKeyboard
             byte[] evBytes = new byte[96];
             int dumped = 0;
             int frame = 0, rawErr = 0, evCount = 0, clickCount = 0;
+            long loopCount = 0;
             bool dirty = true;
             DateTime lastRender = DateTime.MinValue;
             DateTime lastBeat = DateTime.Now;
             DateTime start = DateTime.Now;
+            DateTime nextForcedRender = DateTime.Now;
+            DateTime forceRefreshUntil = DateTime.Now.AddSeconds(1.5);
             while (true)
             {
+                loopCount++;
+                if (dirtyGlobal) { dirty = true; dirtyGlobal = false; }   // 2026-10-30: 原来只在 legacy 分支里转移, action 模式永远不重绘 -> 键盘像一张静态图
                 // 节流: 之前是"只要 dirty 就重绘并推纹理", 指针每帧微动 -> 每秒上百次推送 -> 画面闪。
                 // 现在最多 ~15fps, 且只在真的需要时推。(2026-09-29 用户报"键盘在闪", 日志里帧数 22977/20 分钟)
-                if (dirty && (DateTime.Now - lastRender).TotalMilliseconds >= 66)
+                if (dirty && (ForceRender || (DateTime.Now - lastRender).TotalMilliseconds >= 30))
                 {
                     lastRender = DateTime.Now;
+                    ForceRender = false;
                     // 关键: 每帧的 Bitmap 必须释放 —— 之前泄漏了(每帧 1024x640x4 ≈ 2.6MB),
                     // 表现为"按得越多越不跟手", 并最终引发 GDI+ 报错与画面闪烁。
-                    using (Bitmap bmp = Render())
                     {
-                    int re = PushRaw(ov, handle, bmp, setRaw);
+                    Bitmap bmp = Render();
+                    int re = PushTextureD3D(handle, bmp) ? 0 : PushRaw(ov, handle, bmp, setRaw);
                     rawErr = re;
                     if (re != 0)
                     {
@@ -542,8 +813,11 @@ static class VRKeyboard
                     }
                 }
                 // 每帧: 枚举手柄 -> 读姿态与扳机 -> 交给指针状态机(自算射线/近距戳键)
+                if (DateTime.Now < forceRefreshUntil && DateTime.Now >= nextForcedRender) { dirtyGlobal = true; nextForcedRender = DateTime.Now.AddMilliseconds(250); }
+                UpdateHmdPose();
+                if (LastPressedKey != null && (DateTime.Now - LastPressedAt).TotalMilliseconds > 220) { LastPressedKey = null; dirtyGlobal = true; }
                 if (ActionsTick(url)) { /* action 输入已接管(用的是真 aim 姿态) */ }
-                else if (SysRef != IntPtr.Zero)
+                else if (!UseActionInput && SysRef != IntPtr.Zero)
                 {
                     try
                     {
@@ -564,13 +838,15 @@ static class VRKeyboard
                             // 目光指针(兜底, 零猜测): 头显的 -Z 就是它的正前方 —— 看着哪个键扣扳机就能打字。
                             // 手柄的 -Z 是"握把朝向"(实测朝上偏 ~40 度), 真正的 aim 姿态要走 action 输入系统, 那是下一步的事。
                             GazeStep(ps, anyTrig, url);
-                            if (dirtyGlobal) { dirty = true; dirtyGlobal = false; }
+                            // dirtyGlobal 统一在循环顶部转移(action/legacy 都生效)
                         }
                     }
                     catch (Exception ex) { if (MoveLogged < 3) Log("[输入] 读手柄出错: " + ex.Message); }
                 }
+                UpdateInputOverlay();
                 VREvent_t ev = new VREvent_t();
-                if (poll(ov, handle, ref ev, 64u) != 0)
+                // action 输入模式下不需要 Overlay 鼠标事件(激光/点击都由 action 自己算), 跳过轮询可大幅提高主循环频率
+                if (!UseActionInput && poll(ov, handle, ref ev, 64u) != 0)
                 {
                     evCount++;
                     if (dumped < 6 && ev.eventType != 300)
@@ -667,7 +943,7 @@ static class VRKeyboard
                 {
                     lastBeat = DateTime.Now;
                     Log("[指针范围] n=" + MoveSeen + " x=[" + (MoveSeen > 0 ? MinX.ToString("0.##") : "-") + "," + (MoveSeen > 0 ? MaxX.ToString("0.##") : "-") + "] y=[" + (MoveSeen > 0 ? MinY.ToString("0.##") : "-") + "," + (MoveSeen > 0 ? MaxY.ToString("0.##") : "-") + "]");
-                    Log("[心跳] 帧=" + frame + " 可见=" + isVisible(ov, handle) + " 原始推送返回=" + rawErr + " 事件=" + evCount + " 点击=" + clickCount + " 输入行='" + Line + "'");
+                    Log("[心跳] 帧=" + frame + " 循环=" + loopCount + " 可见=" + isVisible(ov, handle) + " 原始推送返回=" + rawErr + " 事件=" + evCount + " 点击=" + clickCount + " 输入行='" + Line + "'");
                 }
                 if (Shown && AutoHideSec > 0 && (DateTime.Now - LastClickAt).TotalSeconds >= AutoHideSec)
                 {
@@ -687,14 +963,15 @@ static class VRKeyboard
         {
             Log("[异常] " + ex.GetType().FullName + " :: " + ex.Message);
             Log("[异常] 堆栈: " + (ex.StackTrace == null ? "(无)" : ex.StackTrace.Replace(Environment.NewLine, " | ")));
-            try { VR_ShutdownInternal(); } catch (Exception) { }
+            try { ShutdownOpenVr(); } catch (Exception) { }
             Log("=== 异常退出 ===");
             return 3;
         }
         finally
         {
+            try { HidePointerVisuals(); } catch (Exception) { }
             try { if (handle != 0) Vt<DestroyOverlayFn>(ov, 3)(ov, handle); } catch (Exception) { }
-            try { VR_ShutdownInternal(); } catch (Exception) { }
+            try { ShutdownOpenVr(); } catch (Exception) { }
             Log("=== 已退出 ===");
         }
         return 0;
@@ -706,7 +983,7 @@ static class VRKeyboard
     {
         if (OvRef == IntPtr.Zero || HandleRef == 0) return;
         PlaceInFrontOfHead(CurMeters, CurDist, CurDrop);   // 每次都按"你此刻的朝向"摆一次(召唤语义)
-        if (FlagRef != null) FlagRef(OvRef, HandleRef, (int)FlagInteractive, true);
+        if (!UseActionInput && FlagRef != null) FlagRef(OvRef, HandleRef, (int)FlagInteractive, true);
         if (ShowRef != null) ShowRef(OvRef, HandleRef);
         Shown = true;
         LastClickAt = DateTime.Now;
@@ -727,8 +1004,39 @@ static class VRKeyboard
         if (FlagRef != null) FlagRef(OvRef, HandleRef, (int)FlagInteractive, false);
         if (HideRef != null) HideRef(OvRef, HandleRef);
         Shown = false;
+        HidePointerVisuals();
+        HideHighlight();
+        HideInputOverlay();
         Status = "键盘已隐藏";
         Log("[控制] 隐藏键盘(已关可交互, 控制器交还游戏)");
+    }
+
+    static void DoLaserTest()
+    {
+        try
+        {
+            if (!EnsurePointerOverlays()) { Log("[激光测试] 创建 overlay 失败"); return; }
+            UpdateHmdPose();
+            if (!HmdValid) { Log("[激光测试] HMD 姿态无效"); return; }
+            float[] fwd = new float[] { -0.0f, 0f, -1f }; // 世界坐标粗略向前, 仅为可见性测试
+            // 放在头显正前方 1m(用头显姿态)
+            Pose_t[] ps = new Pose_t[1];
+            GetPoseRef(SysRef, UniverseStanding, 0f, ps, 1);
+            HmdMatrix34_t m = ps[0].m;
+            float[] pos = new float[] { m.m3 + (-m.m2) * 1.0f, m.m7 + (-m.m6) * 1.0f, m.m11 + (-m.m10) * 1.0f };
+            float[] f = new float[] { -m.m2, -m.m6, -m.m10 };
+            float fl = (float)Math.Sqrt(f[0]*f[0]+f[1]*f[1]+f[2]*f[2]); f[0]/=fl; f[1]/=fl; f[2]/=fl;
+            float[] right = new float[] { 1, 0, 0 };
+            float[] up = new float[] { 0, 1, 0 };
+            HmdMatrix34_t mm = new HmdMatrix34_t();
+            SetMatrixAxes(ref mm, right, up, f, pos);
+            Vt<SetOverlayWidthInMetersFn>(OvRef, 22)(OvRef, PtrHandle, 0.20f);
+            int e = Vt<SetOverlayTransformAbsoluteFn>(OvRef, 33)(OvRef, PtrHandle, UniverseStanding, ref mm);
+            int s = Vt<ShowOverlayFn>(OvRef, 43)(OvRef, PtrHandle);
+            PtrShown = true;
+            Log("[激光测试] 白色方块 0.2m 放在头显前 1m, transform=" + e + " show=" + s);
+        }
+        catch (Exception ex) { Log("[激光测试] 异常: " + ex.Message); }
     }
 
     static void StartControl(int port)
@@ -748,6 +1056,7 @@ static class VRKeyboard
                         string path = ctx.Request.Url.AbsolutePath.ToLower();
                         string body;
                         if (path == "/show") { DoShow(); body = "{\"ok\":true,\"shown\":true}"; }
+                        else if (path == "/lasertest") { DoLaserTest(); body = "{\"ok\":true}"; }
                         else if (path == "/hide") { DoHide(); body = "{\"ok\":true,\"shown\":false}"; }
                         else if (path == "/toggle") { if (Shown) DoHide(); else DoShow(); body = "{\"ok\":true,\"shown\":" + (Shown ? "true" : "false") + "}"; }
                         else if (path == "/calibrate") { DoCalibrate(); body = "{\"ok\":true,\"note\":\"calibrating\"}"; }
@@ -839,6 +1148,7 @@ static class VRKeyboard
     // ================= 切片 2: 自算射线 + 抓取/放置(参考 wlx-overlay-s: 自己算 ray、边沿检测、松开回原目标) =================
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate uint GetRoleIndexFn(IntPtr self, int role);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate bool GetControllerStateFn(IntPtr self, uint index, ref VRControllerState_t state, uint size);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void TriggerHapticFn(IntPtr self, uint index, uint axis, ushort duration);
 
     // legacy 控制器状态: unPacketNum(4) + pad(4) + ulButtonPressed(8) + ulButtonTouched(8) + rAxis[5](40) = 64
     [StructLayout(LayoutKind.Explicit, Size = 64)]
@@ -858,6 +1168,7 @@ static class VRKeyboard
     static string SysVer = null;
     static GetPoseFn GetPoseRef = null;
     static GetControllerStateFn GetStateRef = null;
+    static TriggerHapticFn HapticRef = null;
     static GetRoleIndexFn RoleIndexRef = null;
 
     // 面板几何(我们自己维护: 位置 + 三个基向量), 由 SetPanelFromMatrix 更新
@@ -880,6 +1191,7 @@ static class VRKeyboard
                 GetPoseRef = Vt<GetPoseFn>(cand, 12);              // GetDeviceToAbsoluteTrackingPose
                 RoleIndexRef = Vt<GetRoleIndexFn>(cand, 18);        // GetTrackedDeviceIndexForControllerRole
                 GetStateRef = Vt<GetControllerStateFn>(cand, 37);   // GetControllerState
+            HapticRef = Vt<TriggerHapticFn>(cand, 39);          // TriggerHapticPulse
                 IsConnectedRef = Vt<IsConnectedFn>(cand, 21);        // IsTrackedDeviceConnected
                 GetClassRef = Vt<GetClassFn>(cand, 20);              // GetTrackedDeviceClass
                 GetRoleRef = Vt<GetRoleFn>(cand, 19);                // GetControllerRoleForTrackedDeviceIndex
@@ -957,7 +1269,7 @@ static class VRKeyboard
         {
             Key hk = Hit(u, v);
             PointerPx = u * W; PointerPy = (1f - v) * H; PointerValid = true;
-            if (hk != HoverKey) { HoverKey = hk; dirtyGlobal = true; }
+            HoverKey = hk; UpdateHighlight(hk);
         }
         else if (!Grabbing)
         {
@@ -968,6 +1280,12 @@ static class VRKeyboard
         bool rising = trigger && !TrigPrev;
         bool falling = !trigger && TrigPrev;
 
+        if (hitPanel)
+        {
+            float[] hp;
+            UpdateLaser(origin, dir, RayPointOnPanel(origin, dir, out hp) ? hp : null);
+        }
+        else UpdateLaser(origin, dir, null);
         if (rising)
         {
             if (hitPanel && v >= (1f - TitleBarV))            // 顶部抓取条 -> 拿起键盘
@@ -1060,23 +1378,342 @@ static class VRKeyboard
     }
 
     // 把 PointerStep 拆成"边沿版", 便于 --sim 直接驱动(不需要 VR)
+    // ================= 自绘激光：射线 + 光标(覆盖层) =================
+    // 参考成熟工具的做法：一个 512x4 的射线贴图 + 一个 32x32 的光标贴图，
+    // 各自是一个独立 overlay，按世界坐标/朝向摆放；只在射线有效时显示。
+    static byte[] CursorPixels()
+    {
+        byte[] px = new byte[32 * 32 * 4];
+        for (int y = 0; y < 32; y++)
+        {
+            for (int x = 0; x < 32; x++)
+            {
+                float dx = (x + 0.5f) / 32f * 2f - 1f;
+                float dy = (y + 0.5f) / 32f * 2f - 1f;
+                float r = (float)Math.Sqrt(dx * dx + dy * dy);
+                float a = 0f;
+                if (r <= 0.22f) a = 1f;
+                else if (r <= 0.42f) a = (0.42f - r) / 0.20f;
+                else if (r >= 0.72f && r <= 0.90f) a = 0.85f;
+                int i = (y * 32 + x) * 4;
+                px[i] = 255; px[i + 1] = 235; px[i + 2] = 200; px[i + 3] = (byte)(int)(a * 255);
+            }
+        }
+        return px;
+    }
+    static byte[] RayPixels()
+    {
+        // 512x4，横向渐变；两端淡出，中间白，便于看长度
+        byte[] px = new byte[512 * 4 * 4];
+        for (int y = 0; y < 4; y++)
+        {
+            float edge = (y == 0 || y == 3) ? 0.15f : 1f;
+            for (int x = 0; x < 512; x++)
+            {
+                float t = x / 511f;
+                float fade = Math.Min(1f, Math.Min(t * 12f, (1f - t) * 12f));
+                int i = (y * 512 + x) * 4;
+                px[i] = 255; px[i + 1] = 255; px[i + 2] = 255; px[i + 3] = (byte)(int)(edge * fade * 150f);
+            }
+        }
+        return px;
+    }
+    static void SetMatrixAxes(ref HmdMatrix34_t m, float[] x, float[] y, float[] z, float[] pos)
+    {
+        // OpenVR HmdMatrix34_t 是 3x4 行主序: 前三列是旋转(轴向量放在**行**里), 第 4 列是位置.
+        // 之前按"列=轴"写反了, 导致激光方向/朝向与手柄不对应(2026-10-30 实机发现).
+        m.m0 = x[0]; m.m1 = y[0]; m.m2 = z[0]; m.m3 = pos[0];
+        m.m4 = x[1]; m.m5 = y[1]; m.m6 = z[1]; m.m7 = pos[1];
+        m.m8 = x[2]; m.m9 = y[2]; m.m10 = z[2]; m.m11 = pos[2];
+    }
+    static bool EnsurePointerOverlays()
+    {
+        if (OvRef == IntPtr.Zero) return false;
+        CreateOverlayFn create = Vt<CreateOverlayFn>(OvRef, 1);
+        SetOverlayAlphaFn alpha = Vt<SetOverlayAlphaFn>(OvRef, 16);
+        SetOverlaySortOrderFn sort = Vt<SetOverlaySortOrderFn>(OvRef, 20);
+        SetOverlayWidthInMetersFn width = Vt<SetOverlayWidthInMetersFn>(OvRef, 22);
+        SetOverlayRawFn raw = Vt<SetOverlayRawFn>(OvRef, 62);
+        if (PtrHandle == 0)
+        {
+            int e = create(OvRef, "vrcliveboard.keyboard.pointer", "VRCLiveBoard Pointer", out PtrHandle);
+            Log("[激光] Ptr CreateOverlay -> " + e + " handle=" + PtrHandle);
+            if (e != 0 || PtrHandle == 0) { PtrHandle = 0; return false; }
+            alpha(OvRef, PtrHandle, 0.95f); sort(OvRef, PtrHandle, 100u); width(OvRef, PtrHandle, 0.016f);
+            byte[] p = CursorPixels();
+            GCHandle h = GCHandle.Alloc(p, GCHandleType.Pinned);
+            int rre = -1; try { rre = raw(OvRef, PtrHandle, h.AddrOfPinnedObject(), 32u, 32u, 4u); } finally { h.Free(); } Log("[激光] Ptr SetOverlayRaw -> " + rre);
+        }
+        if (RayHandle == 0)
+        {
+            int e = create(OvRef, "vrcliveboard.keyboard.ray", "VRCLiveBoard Ray", out RayHandle);
+            Log("[激光] Ray CreateOverlay -> " + e + " handle=" + RayHandle);
+            if (e != 0 || RayHandle == 0) { RayHandle = 0; return false; }
+            alpha(OvRef, RayHandle, 0.85f); sort(OvRef, RayHandle, 99u);
+            byte[] p = RayPixels();
+            GCHandle h = GCHandle.Alloc(p, GCHandleType.Pinned);
+            int rre2 = -1; try { rre2 = raw(OvRef, RayHandle, h.AddrOfPinnedObject(), 512u, 4u, 4u); } finally { h.Free(); } Log("[激光] Ray SetOverlayRaw -> " + rre2);
+        }
+        return PtrHandle != 0 && RayHandle != 0;
+    }
+    static void HidePointerVisuals()
+    {
+        if (PtrShown && PtrHandle != 0 && OvRef != IntPtr.Zero) { try { Vt<HideOverlayFn>(OvRef, 44)(OvRef, PtrHandle); } catch (Exception) { } }
+        if (RayShown && RayHandle != 0 && OvRef != IntPtr.Zero) { try { Vt<HideOverlayFn>(OvRef, 44)(OvRef, RayHandle); } catch (Exception) { } }
+        PtrShown = false; RayShown = false;
+    }
+    static void UpdateLaser(float[] origin, float[] dir, float[] hitPoint)
+    {
+        if (!UseActionInput || OvRef == IntPtr.Zero) return;
+        if (!EnsurePointerOverlays()) return;
+        ShowOverlayFn show = Vt<ShowOverlayFn>(OvRef, 43);
+        SetOverlayTransformAbsoluteFn setTransform = Vt<SetOverlayTransformAbsoluteFn>(OvRef, 33);
+        SetOverlayWidthInMetersFn setWidth = Vt<SetOverlayWidthInMetersFn>(OvRef, 22);
+        float[] end;
+        if (hitPoint != null) end = hitPoint;
+        else end = new float[] { origin[0] + dir[0] * 3f, origin[1] + dir[1] * 3f, origin[2] + dir[2] * 3f };
+        float rx = end[0] - origin[0], ry = end[1] - origin[1], rz = end[2] - origin[2];
+        float len = (float)Math.Sqrt(rx * rx + ry * ry + rz * rz);
+        if (len < 0.02f) { HidePointerVisuals(); return; }
+        rx /= len; ry /= len; rz /= len;
+        float[] viewer = HmdValid ? HmdPos : new float[] { origin[0], origin[1] + 1.2f, origin[2] };
+        float mx = (origin[0] + end[0]) * 0.5f, my = (origin[1] + end[1]) * 0.5f, mz = (origin[2] + end[2]) * 0.5f;
+        float nx = viewer[0] - mx, ny = viewer[1] - my, nz = viewer[2] - mz;
+        float along = nx * rx + ny * ry + nz * rz;
+        nx -= along * rx; ny -= along * ry; nz -= along * rz;
+        float nl = (float)Math.Sqrt(nx * nx + ny * ny + nz * nz);
+        if (nl < 1e-4f) { nx = -rx; ny = -ry; nz = -rz; nl = 1f; }
+        nx /= nl; ny /= nl; nz /= nl;
+        float ux = ny * rz - nz * ry, uy = nz * rx - nx * rz, uz = nx * ry - ny * rx;
+        HmdMatrix34_t rayM = new HmdMatrix34_t();
+        SetMatrixAxes(ref rayM, new float[] { rx, ry, rz }, new float[] { ux, uy, uz }, new float[] { nx, ny, nz }, new float[] { mx, my, mz });
+        int rte = setTransform(OvRef, RayHandle, UniverseStanding, ref rayM);
+        int rwe = setWidth(OvRef, RayHandle, len);
+        if (!RayShown) { int she = show(OvRef, RayHandle); RayShown = true; Log("[激光] Ray Show -> " + she + " transformErr=" + rte + " widthErr=" + rwe); }
+        if ((DateTime.Now - LastLaserLog).TotalSeconds > 2)
+        {
+            LastLaserLog = DateTime.Now;
+            Log("[激光] origin=(" + origin[0].ToString("0.00") + "," + origin[1].ToString("0.00") + "," + origin[2].ToString("0.00") + ") end=(" + end[0].ToString("0.00") + "," + end[1].ToString("0.00") + "," + end[2].ToString("0.00") + ") len=" + len.ToString("0.00") + " hmd=" + HmdValid + " panel=(" + PanelPos[0].ToString("0.00") + "," + PanelPos[1].ToString("0.00") + "," + PanelPos[2].ToString("0.00") + ")");
+        }
+        if (hitPoint != null)
+        {
+            float[] fwd = new float[] { viewer[0] - hitPoint[0], viewer[1] - hitPoint[1], viewer[2] - hitPoint[2] };
+            float fl = (float)Math.Sqrt(fwd[0] * fwd[0] + fwd[1] * fwd[1] + fwd[2] * fwd[2]);
+            if (fl < 1e-4f) { fwd = new float[] { 0, 0, 1 }; fl = 1f; }
+            fwd[0] /= fl; fwd[1] /= fl; fwd[2] /= fl;
+            float[] upW = new float[] { 0, 1, 0 };
+            float rxv = upW[1] * fwd[2] - upW[2] * fwd[1];
+            float ryv = upW[2] * fwd[0] - upW[0] * fwd[2];
+            float rzv = upW[0] * fwd[1] - upW[1] * fwd[0];
+            float rl = (float)Math.Sqrt(rxv * rxv + ryv * ryv + rzv * rzv);
+            if (rl < 1e-4f) { rxv = 1; ryv = 0; rzv = 0; rl = 1; }
+            rxv /= rl; ryv /= rl; rzv /= rl;
+            float ux2 = fwd[1] * rzv - fwd[2] * ryv;
+            float uy2 = fwd[2] * rxv - fwd[0] * rzv;
+            float uz2 = fwd[0] * ryv - fwd[1] * rxv;
+            HmdMatrix34_t ptrM = new HmdMatrix34_t();
+            SetMatrixAxes(ref ptrM, new float[] { rxv, ryv, rzv }, new float[] { ux2, uy2, uz2 }, fwd,
+                new float[] { hitPoint[0] + fwd[0] * 0.001f, hitPoint[1] + fwd[1] * 0.001f, hitPoint[2] + fwd[2] * 0.001f });
+            setTransform(OvRef, PtrHandle, UniverseStanding, ref ptrM);
+            if (!PtrShown) { show(OvRef, PtrHandle); PtrShown = true; }
+        }
+        else if (PtrShown)
+        {
+            try { Vt<HideOverlayFn>(OvRef, 44)(OvRef, PtrHandle); } catch (Exception) { }
+            PtrShown = false;
+        }
+    }
+
+    static void UpdateHmdPose()
+    {
+        HmdValid = false;
+        try
+        {
+            if (SysRef == IntPtr.Zero || GetPoseRef == null) return;
+            Pose_t[] ps = new Pose_t[1];
+            GetPoseRef(SysRef, UniverseStanding, 0f, ps, 1);
+            float x = ps[0].m.m3, y = ps[0].m.m7, z = ps[0].m.m11;
+            if (!float.IsNaN(x) && !float.IsNaN(y) && !float.IsNaN(z) && (x != 0f || y != 0f || z != 0f))
+            {
+                HmdPos[0] = x; HmdPos[1] = y; HmdPos[2] = z;
+                HmdValid = true;
+            }
+        }
+        catch (Exception) { }
+    }
+    static bool RayPointOnPanel(float[] origin, float[] dir, out float[] point)
+    {
+        point = null;
+        float den = dir[0] * PanelNormal[0] + dir[1] * PanelNormal[1] + dir[2] * PanelNormal[2];
+        if (Math.Abs(den) < 1e-6f) return false;
+        float dx = PanelPos[0] - origin[0], dy = PanelPos[1] - origin[1], dz = PanelPos[2] - origin[2];
+        float t = (dx * PanelNormal[0] + dy * PanelNormal[1] + dz * PanelNormal[2]) / den;
+        if (t <= 0.05f) return false;
+        point = new float[] { origin[0] + dir[0] * t, origin[1] + dir[1] * t, origin[2] + dir[2] * t };
+        return true;
+    }
+
+    // ================= 输入行: 独立小 overlay, 打字只更新这一小块纹理(主面板不必重推) =================
+    const int InpTexW = 988, InpTexH = 52;
+    static void EnsureInputOverlay()
+    {
+        if (InpHandle != 0 || OvRef == IntPtr.Zero) return;
+        CreateOverlayFn create = Vt<CreateOverlayFn>(OvRef, 1);
+        int e = create(OvRef, "vrcliveboard.keyboard.input", "VRCLiveBoard Input", out InpHandle);
+        if (e != 0) { InpHandle = 0; return; }
+        Log("[输入行] overlay 就绪 handle=" + InpHandle);
+        Vt<SetOverlaySortOrderFn>(OvRef, 20)(OvRef, InpHandle, 40u);
+        Vt<SetOverlayAlphaFn>(OvRef, 16)(OvRef, InpHandle, 1f);
+    }
+    static void UpdateInputOverlay()
+    {
+        if (!Shown) { HideInputOverlay(); return; }
+        if (OvRef == IntPtr.Zero || HandleRef == 0) return;
+        EnsureInputOverlay();
+        if (InpHandle == 0) return;
+        string text = DisplayText();
+        if (text != LastInpText)
+        {
+            LastInpText = text;
+            using (Bitmap bmp = new Bitmap(InpTexW, InpTexH, PixelFormat.Format32bppArgb))
+            {
+                using (Graphics g = Graphics.FromImage(bmp))
+                {
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                    g.DrawString(text, InpFont, TitleBrush, 12f, 8f);
+                }
+                if (InpRawBuf == IntPtr.Zero) InpRawBuf = Marshal.AllocHGlobal(InpTexW * InpTexH * 4);
+                BitmapData bd = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+                try
+                {
+                    for (int y = 0; y < InpTexH; y++)
+                        CopyMemory(IntPtr.Add(InpRawBuf, y * InpTexW * 4), IntPtr.Add(bd.Scan0, y * bd.Stride), (uint)(InpTexW * 4));
+                    Vt<SetOverlayRawFn>(OvRef, 62)(OvRef, InpHandle, InpRawBuf, (uint)InpTexW, (uint)InpTexH, 4u);
+                }
+                finally { bmp.UnlockBits(bd); }
+            }
+        }
+        float panelH = CurMeters * ((float)H / (float)W);
+        float u = (18f + (W - 36f) * 0.5f) / W;
+        float v = 1f - 104f / H;
+        float lx = (u - 0.5f) * CurMeters;
+        float ly = (v - 0.5f) * panelH;
+        float[] pos = new float[] {
+            PanelPos[0] + PanelRight[0]*lx + PanelUp[0]*ly + PanelNormal[0]*0.003f,
+            PanelPos[1] + PanelRight[1]*lx + PanelUp[1]*ly + PanelNormal[1]*0.003f,
+            PanelPos[2] + PanelRight[2]*lx + PanelUp[2]*ly + PanelNormal[2]*0.003f };
+        HmdMatrix34_t m = new HmdMatrix34_t();
+        SetMatrixAxes(ref m, PanelRight, PanelUp, PanelNormal, pos);
+        Vt<SetOverlayTransformAbsoluteFn>(OvRef, 33)(OvRef, InpHandle, UniverseStanding, ref m);
+        Vt<SetOverlayWidthInMetersFn>(OvRef, 22)(OvRef, InpHandle, (W - 36f) / W * CurMeters);
+        if (!InpShown) { Vt<ShowOverlayFn>(OvRef, 43)(OvRef, InpHandle); InpShown = true; }
+    }
+    static void HideInputOverlay()
+    {
+        if (InpShown && InpHandle != 0 && OvRef != IntPtr.Zero) { try { Vt<HideOverlayFn>(OvRef, 44)(OvRef, InpHandle); } catch (Exception) { } }
+        InpShown = false;
+    }
+
+    // ================= 按键高亮: 单独的小 overlay, 每帧只改变换/颜色, 不等主面板纹理上传 =================
+    static ulong HlHandle = 0;
+    static bool HlShown = false;
+    static int HlColor = 0, HlTexW = 0, HlTexH = 0;
+    static bool HlLogged = false;
+    static byte[] HlPixels = null;
+
+    static void EnsureHighlightOverlay()
+    {
+        if (HlHandle != 0 || OvRef == IntPtr.Zero) return;
+        CreateOverlayFn create = Vt<CreateOverlayFn>(OvRef, 1);
+        int e = create(OvRef, "vrcliveboard.keyboard.hl", "VRCLiveBoard Highlight", out HlHandle);
+        if (e != 0) { HlHandle = 0; return; }
+        Vt<SetOverlayAlphaFn>(OvRef, 16)(OvRef, HlHandle, 0.55f);
+        Vt<SetOverlaySortOrderFn>(OvRef, 20)(OvRef, HlHandle, 60u);
+        Log("[高亮] overlay 就绪 handle=" + HlHandle);
+    }
+
+    static void HideHighlight()
+    {
+        if (HlShown && HlHandle != 0 && OvRef != IntPtr.Zero) { try { Vt<HideOverlayFn>(OvRef, 44)(OvRef, HlHandle); } catch (Exception) { } }
+        HlShown = false;
+    }
+
+    static void UpdateHighlight(Key k)
+    {
+        if (k == null || OvRef == IntPtr.Zero) { HideHighlight(); return; }
+        EnsureHighlightOverlay();
+        if (HlHandle == 0) return;
+        bool pressed = (LastPressedKey != null && LastPressedKey.Value == k.Value && (DateTime.Now - LastPressedAt).TotalMilliseconds < 220);
+        int color = pressed ? 2 : 1;
+        int texW = 256;
+        int texH = (int)Math.Round(256.0 * Math.Max(8f, k.Rect.Height) / Math.Max(8f, k.Rect.Width));
+        if (texH < 8) texH = 8; if (texH > 512) texH = 512;
+        if (HlPixels == null || HlTexW != texW || HlTexH != texH || HlColor != color)
+        {
+            HlTexW = texW; HlTexH = texH; HlColor = color;
+            HlPixels = new byte[texW * texH * 4];
+            byte b = color == 2 ? (byte)80 : (byte)200, g = color == 2 ? (byte)170 : (byte)130, r = color == 2 ? (byte)255 : (byte)96;
+            byte a = color == 2 ? (byte)220 : (byte)200;
+            // 圆角矩形填充
+            for (int y = 0; y < texH; y++)
+                for (int x = 0; x < texW; x++)
+                {
+                    float nx = (x + 0.5f) / texW * 2f - 1f, ny = (y + 0.5f) / texH * 2f - 1f;
+                    float rad = 0.18f;
+                    float qx = Math.Max(0f, Math.Abs(nx) - (1f - rad));
+                    float qy = Math.Max(0f, Math.Abs(ny) - (1f - rad));
+                    bool inside = (qx * qx + qy * qy) <= rad * rad && Math.Abs(nx) <= 1f && Math.Abs(ny) <= 1f;
+                    int i = (y * texW + x) * 4;
+                    if (inside) { HlPixels[i] = b; HlPixels[i + 1] = g; HlPixels[i + 2] = r; HlPixels[i + 3] = a; }
+                }
+            GCHandle h = GCHandle.Alloc(HlPixels, GCHandleType.Pinned);
+            try { Vt<SetOverlayRawFn>(OvRef, 62)(OvRef, HlHandle, h.AddrOfPinnedObject(), (uint)texW, (uint)texH, 4u); } finally { h.Free(); }
+        }
+        float panelH = CurMeters * ((float)H / (float)W);
+        float u = (k.Rect.X + k.Rect.Width * 0.5f) / W;
+        float v = 1f - (k.Rect.Y + k.Rect.Height * 0.5f) / H;   // 面板 V 轴在 Hit 里是翻转的(py=(1-v)*H), 这里必须用同一个 V
+        float lx = (u - 0.5f) * CurMeters;
+        float ly = (v - 0.5f) * panelH;
+        float[] pos = new float[] {
+            PanelPos[0] + PanelRight[0]*lx + PanelUp[0]*ly + PanelNormal[0]*0.0015f,
+            PanelPos[1] + PanelRight[1]*lx + PanelUp[1]*ly + PanelNormal[1]*0.0015f,
+            PanelPos[2] + PanelRight[2]*lx + PanelUp[2]*ly + PanelNormal[2]*0.0015f };
+        HmdMatrix34_t m = new HmdMatrix34_t();
+        SetMatrixAxes(ref m, PanelRight, PanelUp, PanelNormal, pos);
+        Vt<SetOverlayTransformAbsoluteFn>(OvRef, 33)(OvRef, HlHandle, UniverseStanding, ref m);
+        float widthMeters = k.Rect.Width / W * CurMeters;
+        Vt<SetOverlayWidthInMetersFn>(OvRef, 22)(OvRef, HlHandle, widthMeters);
+        if (!HlLogged) { HlLogged = true; Log("[高亮] key=" + k.Label + " rect=" + k.Rect.X.ToString("0") + "," + k.Rect.Y.ToString("0") + " " + k.Rect.Width.ToString("0") + "x" + k.Rect.Height.ToString("0") + " width=" + widthMeters.ToString("0.000") + "m pos=(" + pos[0].ToString("0.00") + "," + pos[1].ToString("0.00") + "," + pos[2].ToString("0.00") + ")"); }
+        if (!HlShown) { Vt<ShowOverlayFn>(OvRef, 43)(OvRef, HlHandle); HlShown = true; }
+    }
+
     static void PointerStepEdge(int role, float[] origin, float[] dir, bool rising, bool falling, string url)
     {
         float u, v;
         bool hitPanel = RayToUv(origin, dir, out u, out v) && InPanelBox(u, v);
-        if (hitPanel && !InteractionEnabed) { SetInteractive(true); InteractionEnabed = true; }
-        else if (!hitPanel && InteractionEnabed && !Grabbing) { SetInteractive(false); InteractionEnabed = false; }
+        if (!UseActionInput)
+        {
+            if (hitPanel && !InteractionEnabed) { SetInteractive(true); InteractionEnabed = true; }
+            else if (!hitPanel && InteractionEnabed && !Grabbing) { SetInteractive(false); InteractionEnabed = false; }
+        }
         if (hitPanel)
         {
             Key hk = Hit(u, v);
             PointerPx = u * W; PointerPy = (1f - v) * H; PointerValid = true;
-            if (hk != HoverKey) { HoverKey = hk; dirtyGlobal = true; }
+            HoverKey = hk; UpdateHighlight(hk);
         }
         else if (!Grabbing)
         {
             PointerValid = false;
             if (HoverKey != null) { HoverKey = null; dirtyGlobal = true; }
         }
+        if (hitPanel)
+        {
+            float[] hp;
+            UpdateLaser(origin, dir, RayPointOnPanel(origin, dir, out hp) ? hp : null);
+        }
+        else UpdateLaser(origin, dir, null);
         if (rising)
         {
             if (hitPanel && v >= (1f - TitleBarV))
@@ -1463,9 +2100,15 @@ static class VRKeyboard
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int UpdateActionsFn(IntPtr self, [In] ActiveActionSet_t[] sets, uint sizeOfSet, uint count);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int GetDigitalFn(IntPtr self, ulong handle, ref InputDigitalActionData_t data, uint size, ulong restrict);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int GetPoseActionFn(IntPtr self, ulong handle, int origin, ref InputPoseActionData_t data, uint size, ulong restrict);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int GetInputSourceFn(IntPtr self, string path, ref ulong handle);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int GetActionOriginsFn(IntPtr self, ulong actionSet, ulong action, [Out] ulong[] origins, uint size);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int AddAppManifestFn(IntPtr self, string path, bool temporary);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int SetDominantHandFn(IntPtr self, int role);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void SetSettingsBoolFn(IntPtr self, string section, string key, bool value, ref int error);
 
+    // VRActiveActionSet_t(OpenVR 当前头文件): ulActionSet(8)+ulRestrictedToDevice(8)+ulSecondaryActionSet(8)+unPadding(4)+nPriority(4) = 32
     [StructLayout(LayoutKind.Sequential)]
-    struct ActiveActionSet_t { public ulong actionSet; public ulong restrictToDevice; }
+    struct ActiveActionSet_t { public ulong actionSet; public ulong restrictToDevice; public ulong secondaryActionSet; public uint unPadding; public int nPriority; }
 
     // InputPoseActionData_t: bActive(1)+pad(7)+activeOrigin(8)+TrackedDevicePose_t(80) = 96, 矩阵在偏移 16
     [StructLayout(LayoutKind.Explicit, Size = 96)]
@@ -1476,7 +2119,17 @@ static class VRKeyboard
     struct InputDigitalActionData_t { [FieldOffset(0)] public byte bActive; [FieldOffset(8)] public ulong activeOrigin; [FieldOffset(16)] public byte bState; [FieldOffset(17)] public byte bChanged; [FieldOffset(20)] public float fUpdateTime; }
 
     static IntPtr InputRef = IntPtr.Zero;
-    static ulong SetMain = 0, ActPoseL = 0, ActPoseR = 0, ActTrigL = 0, ActTrigR = 0;
+    static ulong SetMain = 0, ActPoseL = 0, ActPoseR = 0, ActTrigL = 0, ActTrigR = 0, ActGripL = 0, ActGripR = 0;
+    static ulong SrcLeft = 0, SrcRight = 0;
+    static bool ProbeGripL = false, ProbeGripR = false;
+    static bool UseActionInput = false;
+    static ulong PtrHandle = 0, RayHandle = 0;
+    static bool PtrShown = false, RayShown = false;
+    static bool HmdValid = false;
+    static float[] HmdPos = new float[3];
+    static CreateOverlayFn PtrCreate = null;
+    static DateTime LastLaserLog = DateTime.MinValue;
+    static DateTime LastUeLog = DateTime.MinValue;
     static UpdateActionsFn UpdateActionsRef = null;
     static GetPoseActionFn GetPoseActionRef = null;
     static GetDigitalFn GetDigitalRef = null;
@@ -1485,93 +2138,235 @@ static class VRKeyboard
     static bool[] AimTrigPrev = new bool[3];
     static DateTime LastAimLog = DateTime.MinValue;
 
-    static bool InitActions()
+    static bool RegisterAppManifest(string manifestDir = null)
     {
         try
         {
-            string dir = AppDomain.CurrentDomain.BaseDirectory;
+            string[] vers = new string[] { "IVRApplications_007", "IVRApplications_006", "IVRApplications_005" };
+            string used = null;
+            IntPtr apps = IntPtr.Zero;
+            foreach (string v in vers)
+            {
+                int e = 0;
+                IntPtr p = VR_GetGenericInterface(v, ref e);
+                if (p != IntPtr.Zero && e == 0) { apps = p; used = v; break; }
+            }
+            if (apps == IntPtr.Zero) { Log("[action] 拿不到 IVRApplications 接口 -> 跳过 app manifest 注册"); return false; }
+            AddAppManifestFn add = Vt<AddAppManifestFn>(apps, 0);
+            string mf = Path.Combine(manifestDir ?? AppDomain.CurrentDomain.BaseDirectory, "manifest.vrmanifest");
+            if (!File.Exists(mf)) { Log("[action] 缺少 manifest.vrmanifest(SteamVR 应用清单): " + mf); return false; }
+            int r = add(apps, mf, false);
+            Log("[action] AddApplicationManifest(" + used + ", temporary) -> " + r + (r == 0 ? " (OK)" : " (非 0; 可能已存在)"));
+            return r == 0;
+        }
+        catch (Exception ex) { Log("[action] 注册 app manifest 异常: " + ex.Message); return false; }
+    }
+
+    static void EnableGlobalPriority()
+    {
+        try
+        {
+            int err = 0;
+            IntPtr settings = VR_GetGenericInterface("IVRSettings_003", ref err);
+            if (settings == IntPtr.Zero || err != 0) { Log("[action] 拿不到 IVRSettings 接口: " + err); return; }
+            SetSettingsBoolFn setBool = Vt<SetSettingsBoolFn>(settings, 1);
+            int se = 0;
+            setBool(settings, "steamvr", "allowGlobalActionSetPriority", true, ref se);
+            Log("[action] SetBool(steamvr/allowGlobalActionSetPriority) -> " + se);
+        }
+        catch (Exception ex) { Log("[action] 设置全局优先级异常: " + ex.Message); }
+    }
+
+    static bool InitActions(string manifestDir = null)
+    {
+        try
+        {
+            string dir = manifestDir ?? AppDomain.CurrentDomain.BaseDirectory;
             string manifest = Path.Combine(dir, "actions.json");
             if (!File.Exists(manifest))
             {
-                Log("[aim] 找不到 " + manifest + " -> 退回 grip 姿态(射线会偏)");
+                Log("[action] 找不到 " + manifest);
                 return false;
             }
+            RegisterAppManifest(dir);
             int err = 0;
-            InputRef = VR_GetGenericInterface("IVRInput_011", ref err);
-            if (InputRef == IntPtr.Zero || err != 0)
+            InputRef = IntPtr.Zero;
+            string[] vers = new string[] { "IVRInput_010", "IVRInput_011", "IVRInput_009", "IVRInput_008", "IVRInput_007", "IVRInput_006" };
+            foreach (string v in vers)
             {
-                for (int v = 10; v >= 1 && InputRef == IntPtr.Zero; v--)
-                {
-                    err = 0;
-                    InputRef = VR_GetGenericInterface("IVRInput_0" + v.ToString("00"), ref err);
-                    if (err != 0) InputRef = IntPtr.Zero;
-                }
+                err = 0;
+                IntPtr p = VR_GetGenericInterface(v, ref err);
+                if (p != IntPtr.Zero && err == 0) { InputRef = p; break; }
             }
-            if (InputRef == IntPtr.Zero) { Log("[aim] 拿不到 IVRInput 接口 -> 退回 grip 姿态"); return false; }
+            if (InputRef == IntPtr.Zero) { Log("[action] 拿不到 IVRInput 接口"); return false; }
+            string usedInput = null;
+            foreach (string v in vers) { int ge = 0; IntPtr gp = VR_GetGenericInterface(v, ref ge); if (gp == InputRef) { usedInput = v; break; } }
+            Log("[action] IVRInput 版本 = " + usedInput);
             SetManifestFn setManifest = Vt<SetManifestFn>(InputRef, 0);
-            GetHandleFn getHandle = Vt<GetHandleFn>(InputRef, 2);
+            GetHandleFn getSet = Vt<GetHandleFn>(InputRef, 1);
+            GetHandleFn getAction = Vt<GetHandleFn>(InputRef, 2);
+            GetInputSourceFn getSource = Vt<GetInputSourceFn>(InputRef, 3);
             UpdateActionsRef = Vt<UpdateActionsFn>(InputRef, 4);
             GetDigitalRef = Vt<GetDigitalFn>(InputRef, 5);
             GetPoseActionRef = Vt<GetPoseActionFn>(InputRef, 8);
-            int e1 = setManifest(InputRef, manifest);
-            Log("[aim] SetActionManifestPath -> " + e1 + " (" + manifest + ")");
-            GetHandleFn setHandle = Vt<GetHandleFn>(InputRef, 1);
-            int e2 = setHandle(InputRef, "/actions/main", ref SetMain);
-            int e3 = getHandle(InputRef, "/actions/main/in/pose_left", ref ActPoseL);
-            int e4 = getHandle(InputRef, "/actions/main/in/pose_right", ref ActPoseR);
-            int e5 = getHandle(InputRef, "/actions/main/in/trigger_left", ref ActTrigL);
-            int e6 = getHandle(InputRef, "/actions/main/in/trigger_right", ref ActTrigR);
-            Log("[aim] 句柄: set=" + e2 + "(" + SetMain + ") 左aim=" + e3 + "(" + ActPoseL + ") 右aim=" + e4 + "(" + ActPoseR + ") 左扳机=" + e5 + " 右扳机=" + e6);
-            ActionsReady = (e2 == 0 && e3 == 0 && e4 == 0 && e5 == 0 && e6 == 0 && SetMain != 0);
-            Log(ActionsReady ? "[aim] action 输入就绪(用真正的 aim 姿态)" : "[aim] 有句柄没拿到 -> 退回 grip 姿态");
-            return ActionsReady;
+            int e0 = setManifest(InputRef, manifest);
+            Log("[action] SetActionManifestPath -> " + e0 + " (" + manifest + ")");
+            int eSet = getSet(InputRef, "/actions/main", ref SetMain);
+            int e1 = getAction(InputRef, "/actions/main/in/PointerPose", ref ActPoseL);
+            int e2 = 0; ActPoseR = ActPoseL;
+            int e3 = getAction(InputRef, "/actions/main/in/Trigger", ref ActTrigL);
+            int e4 = 0; ActTrigR = ActTrigL;
+            int e5 = getAction(InputRef, "/actions/main/in/Grip", ref ActGripL);
+            int e6 = 0; ActGripR = ActGripL;
+            int s1 = getSource(InputRef, "/user/hand/left", ref SrcLeft);
+            int s2 = getSource(InputRef, "/user/hand/right", ref SrcRight);
+            Log("[action] 句柄: set=" + eSet + "(" + SetMain + ") poseL=" + e1 + "(" + ActPoseL + ") poseR=" + e2 + "(" + ActPoseR + ") trigL=" + e3 + "(" + ActTrigL + ") trigR=" + e4 + "(" + ActTrigR + ") gripL=" + e5 + "(" + ActGripL + ") gripR=" + e6 + "(" + ActGripR + ")");
+            Log("[action] 输入源: left=" + s1 + "(" + SrcLeft + ") right=" + s2 + "(" + SrcRight + ")");
+            try { SetDominantHandFn setDom = Vt<SetDominantHandFn>(InputRef, 11); int de = setDom(InputRef, 2); Log("[action] SetDominantHand(right=2) -> " + de); } catch (Exception ex) { Log("[action] SetDominantHand 异常: " + ex.Message); }
+            // 不再修改 SteamVR 的 allowGlobalActionSetPriority(会留下全局状态; 键盘只用普通优先级)
+            // EnableGlobalPriority();
+            bool ready = SetMain != 0 && ActPoseL != 0 && ActPoseR != 0 && SrcLeft != 0 && SrcRight != 0;
+            ActionsReady = ready;
+            Log(ready ? "[action] action 输入就绪(aim 姿态 + trigger + grip)" : "[action] action 输入未就绪(见上)" );
+            return ready;
         }
-        catch (Exception ex) { Log("[aim] 初始化异常: " + ex.Message + " -> 退回 grip 姿态"); return false; }
+        catch (Exception ex) { Log("[action] 初始化异常: " + ex.Message); return false; }
     }
 
-    // 每帧: 更新 action 状态, 取左右 aim 姿态与扳机 -> 交给同一个指针状态机
-    static bool ActionsTick(string url)
+    static int ProbePriority = 1;
+    static ulong ProbeRestrict = 0;
+    static int ProbeCfg = -1;
+    static bool ProbeActions(float[] posL, float[] posR)
     {
         if (!ActionsReady || UpdateActionsRef == null || GetPoseActionRef == null) return false;
+        ActiveActionSet_t[] sets = new ActiveActionSet_t[1];
+        sets[0].actionSet = SetMain; sets[0].restrictToDevice = SrcRight; sets[0].nPriority = 1;
+        int ue = UpdateActionsRef(InputRef, sets, (uint)Marshal.SizeOf(typeof(ActiveActionSet_t)), 1u);
+        if (ue != 0 && (DateTime.Now - LastUeLog).TotalSeconds > 5) { LastUeLog = DateTime.Now; Log("[action] UpdateActionState -> " + ue); }
+        InputPoseActionData_t pd = new InputPoseActionData_t();
+        int pe = GetPoseActionRef(InputRef, ActPoseL, UniverseStanding, ref pd, 96u, SrcRight);
+        InputDigitalActionData_t td = new InputDigitalActionData_t();
+        int te = GetDigitalRef != null ? GetDigitalRef(InputRef, ActTrigL, ref td, 24u, SrcRight) : 1;
+        InputDigitalActionData_t gd = new InputDigitalActionData_t();
+        int ge = GetDigitalRef != null ? GetDigitalRef(InputRef, ActGripL, ref gd, 24u, SrcRight) : 1;
+        bool trig = td.bActive != 0 && td.bState != 0;
+        bool grip = gd.bActive != 0 && gd.bState != 0;
+        ProbeGripR = grip;
+        if (pe == 0 && pd.bActive != 0)
+        {
+            posR[0] = pd.pose.m3; posR[1] = pd.pose.m7; posR[2] = pd.pose.m11;
+        }
+        if ((DateTime.Now - LastAimLog).TotalSeconds > 2)
+        {
+            LastAimLog = DateTime.Now;
+            Log("[probe] 右 poseErr=" + pe + " active=" + pd.bActive + " trigErr=" + te + " trig=" + trig + " gripErr=" + ge + " grip=" + grip +
+                (pd.bActive != 0 ? (" pos=(" + pd.pose.m3.ToString("0.00") + "," + pd.pose.m7.ToString("0.00") + "," + pd.pose.m11.ToString("0.00") + ")") : ""));
+        }
+        return pd.bActive != 0;
+    }
+
+    static bool ActionsTick(string url)
+    {
+        float[] pl = new float[3], pr = new float[3];
+        if (!ProbeActions(pl, pr)) return false;
+        bool handled = false;
+        for (int k = 0; k < 2; k++)
+        {
+            ulong poseH = k == 0 ? ActPoseL : ActPoseR;
+            ulong src = k == 0 ? SrcLeft : SrcRight;
+            InputPoseActionData_t pd = new InputPoseActionData_t();
+            int pe = GetPoseActionRef(InputRef, poseH, UniverseStanding, ref pd, 96u, src);
+            if (pe != 0 || pd.bActive == 0) continue;
+            handled = true;
+            AimActive = true;
+            float[] o = new float[] { pd.pose.m3, pd.pose.m7, pd.pose.m11 };
+            float dx = -pd.pose.m2, dy = -pd.pose.m6, dz = -pd.pose.m10;
+            float len = (float)Math.Sqrt(dx * dx + dy * dy + dz * dz);
+            if (len <= 0.001f || float.IsNaN(o[0])) continue;
+            float[] d = new float[] { dx / len, dy / len, dz / len };
+            // 扳机改回 legacy IVRSystem 读取: action manifest 里只保留 pose 一个动作,
+            // 不再把 trigger/grip/joystick 绑进我们的 action set(避免干扰 VRChat 的移动/交互输入).
+            bool trig = false;
+            int role = k == 0 ? RoleLeft : RoleRight;
+            EnumerateControllers();
+            for (int ci = 0; ci < ControllerIdx.Length; ci++)
+            {
+                if (ControllerRole[ci] != role) continue;
+                VRControllerState_t st = new VRControllerState_t();
+                if (GetStateRef != null && GetStateRef(SysRef, ControllerIdx[ci], ref st, 64u))
+                    trig = ((st.ulButtonPressed & TriggerMask) != 0) || st.axis0x > 0.5f;
+                break;
+            }
+            bool prev = AimTrigPrev[role];
+            bool rising = trig && !prev;
+            bool falling = !trig && prev;
+            AimTrigPrev[role] = trig;
+            Key before = HoverKey;
+            PointerStepEdge(role, o, d, rising, falling, url);
+            if (HoverKey != before) Log("[aim] 悬停 -> " + (HoverKey == null ? "(无)" : HoverKey.Label));
+            if (rising) Log("[aim] 扳机按下: " + (HoverKey == null ? "面板外" : HoverKey.Label));
+            if (falling) Log("[aim] 扳机松开");
+        }
+        return handled;
+    }
+
+    static int RunActionProbe(string dll, int seconds)
+    {
         try
         {
-            ActiveActionSet_t[] sets = new ActiveActionSet_t[1];
-            sets[0].actionSet = SetMain; sets[0].restrictToDevice = 0;
-            int ue = UpdateActionsRef(InputRef, sets, 16u, 1u);   // 16 = sizeof(VRActiveActionSet_t)
-            if (ue != 0 && (DateTime.Now - LastAimLog).TotalSeconds > 5) Log("[aim] UpdateActionState -> " + ue + " (非 0 = action 没激活)");
-            bool handled = false;
-            for (int k = 0; k < 2; k++)
+            string dllPath = FindOpenVr(dll);
+            if (dllPath == null) { Log("[probe] 找不到 openvr_api.dll"); return 2; }
+            SetDllDirectory(Path.GetDirectoryName(dllPath));
+            if (!VR_IsRuntimeInstalled()) { Log("[probe] SteamVR runtime 未安装"); return 2; }
+            if (!VR_IsHmdPresent()) { Log("[probe] 没有检测到头显(SteamVR 未运行?)"); return 2; }
+            int err = 0;
+            IntPtr ctx = VR_InitInternal(ref err, AppTypeOverlay);
+            if (err != 0 || ctx == IntPtr.Zero) { Log("[probe] VR_Init 失败: " + err + " " + Marshal.PtrToStringAnsi(VR_GetStringForHmdError(err))); return 2; }
+            EnsureSystem();
+            EnumerateControllers();
+            string localDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VRCLiveBoard", "vrkeyboard");
+            try
             {
-                int role = (k == 0) ? RoleLeft : RoleRight;
-                ulong poseH = (k == 0) ? ActPoseL : ActPoseR;
-                ulong trigH = (k == 0) ? ActTrigL : ActTrigR;
-                InputPoseActionData_t pd = new InputPoseActionData_t();
-                int pe = GetPoseActionRef(InputRef, poseH, UniverseStanding, ref pd, 96u, 0ul);
-                InputDigitalActionData_t td = new InputDigitalActionData_t();
-                int te = GetDigitalRef != null ? GetDigitalRef(InputRef, trigH, ref td, 24u, 0ul) : 1;
-                if ((DateTime.Now - LastAimLog).TotalSeconds > 5)
+                Directory.CreateDirectory(localDir);
+                foreach (string name in new string[] { "actions.json", "bindings_oculus_touch.json", "bindings_knuckles.json", "bindings_vive_controller.json", "bindings_vd_hand_controller.json", "bindings_rift.json", "manifest.vrmanifest" })
                 {
-                    LastAimLog = DateTime.Now;
-                    Log("[aim] " + (k == 0 ? "左" : "右") + " poseErr=" + pe + " active=" + pd.bActive + " trigErr=" + te + " trigActive=" + td.bActive + " trig=" + td.bState);
+                    string from = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, name);
+                    if (File.Exists(from)) File.Copy(from, Path.Combine(localDir, name), true);
                 }
-                if (pe != 0 || pd.bActive == 0) continue;
-                handled = true;
-                AimActive = true;
-                float[] o = new float[] { pd.pose.m3, pd.pose.m7, pd.pose.m11 };
-                float dx = -pd.pose.m2, dy = -pd.pose.m6, dz = -pd.pose.m10;   // aim 姿态的 -Z 就是指向
-                float len = (float)Math.Sqrt(dx * dx + dy * dy + dz * dz);
-                if (len <= 0.001f || float.IsNaN(o[0])) continue;
-                float[] d = new float[] { dx / len, dy / len, dz / len };
-                bool trig = (td.bActive != 0) && (td.bState != 0);
-                bool prev = AimTrigPrev[role];
-                bool rising = trig && !prev;
-                bool falling = !trig && prev;
-                AimTrigPrev[role] = trig;
-                PointerStepEdge(role, o, d, rising, falling, url);
+                string selfExe = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "vrkeyboard.exe");
+                if (File.Exists(selfExe)) File.Copy(selfExe, Path.Combine(localDir, "vrkeyboard.exe"), true);
             }
-            return handled;
+            catch (Exception ex) { Log("[probe] 复制 manifest 到本地失败: " + ex.Message); }
+            Log("[probe] 使用本地 action manifest 目录: " + localDir);
+            if (!InitActions(localDir)) { VR_ShutdownInternal(); return 3; }
+            Log("[probe] 等待输入上下文 2500ms…"); Thread.Sleep(2500); Log("[probe] 开始轮询 " + seconds + " 秒; 请按左右扳机/握把观察日志");
+            DateTime start = DateTime.Now;
+            float[] pl = new float[3], pr = new float[3];
+            bool any = false;
+            var cfgs = new int[][]
+            {
+                new int[] { 1, 0, 0 }, new int[] { 1, 1, 0 }, new int[] { 1, 1, 1 },
+                new int[] { 16777218, 0, 0 }, new int[] { 16777218, 1, 0 }, new int[] { 16777218, 1, 1 }
+            };
+            int cfgIndex = 0;
+            while ((DateTime.Now - start).TotalSeconds < seconds)
+            {
+                int ci = Math.Min(cfgs.Length - 1, (int)((DateTime.Now - start).TotalSeconds / 2));
+                if (ci != ProbeCfg)
+                {
+                    ProbeCfg = ci;
+                    ProbePriority = cfgs[ci][0];
+                    ProbeRestrict = cfgs[ci][1] == 1 ? SrcRight : 0;
+                    Log("[probe] 配置#" + ci + ": pri=" + ProbePriority + " restrict=" + (cfgs[ci][1] == 1 ? "right" : "0"));
+                }
+                if (ProbeActions(pl, pr)) any = true;
+                Thread.Sleep(50);
+            }
+            Log("[probe] 结束: 收到有效 aim=" + any + " 左=(" + pl[0].ToString("0.00") + "," + pl[1].ToString("0.00") + "," + pl[2].ToString("0.00") + ") 右=(" + pr[0].ToString("0.00") + "," + pr[1].ToString("0.00") + "," + pr[2].ToString("0.00") + ") grips L/R=" + ProbeGripL + "/" + ProbeGripR);
+            VR_ShutdownInternal();
+            return any ? 0 : 4;
         }
-        catch (Exception ex) { if (MoveLogged < 3) Log("[aim] 每帧更新异常: " + ex.Message); return false; }
+        catch (Exception ex) { Log("[probe] 异常: " + ex.Message); try { VR_ShutdownInternal(); } catch (Exception) { } return 2; }
     }
 
     static int Main(string[] args)
@@ -1596,6 +2391,7 @@ static class VRKeyboard
         float meters = 1.35f, dist = 1.6f, height = 1.35f;
         bool followHead = false;
         bool showAtStart = false;
+        bool world = false;
         int ctl = 19192;
         int diag = 0;
         for (int i = 1; i < args.Length; i++)
@@ -1607,15 +2403,27 @@ static class VRKeyboard
             else if (args[i] == "--dist" && i + 1 < args.Length) dist = float.Parse(args[++i]);
             else if (args[i] == "--height" && i + 1 < args.Length) height = float.Parse(args[++i]);
             else if (args[i] == "--follow") followHead = true;
+            else if (args[i] == "--world") world = true;
             else if (args[i] == "--auto-hide" && i + 1 < args.Length) AutoHideSec = int.Parse(args[++i]);
             else if (args[i] == "--show-at-start") showAtStart = true;
             else if (args[i] == "--no-ctl") ctl = 0;
             else if (args[i] == "--ctl" && i + 1 < args.Length) ctl = int.Parse(args[++i]);
             else if (args[i] == "--seconds" && i + 1 < args.Length) diag = int.Parse(args[++i]);
         }
+        DashboardMode = !world;
         BuildLayout();
         CurMeters = meters; CurDist = dist; CurDrop = 0.28f;
         if (mode == "--selftest") return SelfTest();
+        if (mode == "--bench")
+        {
+            BuildLayout();
+            for (int i = 0; i < 10; i++) { Bitmap w = Render(); }
+            System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+            for (int i = 0; i < 100; i++) { Bitmap b = Render(); }
+            sw.Stop();
+            Log("[bench] 100 帧渲染 " + sw.ElapsedMilliseconds + "ms, 平均 " + (sw.ElapsedMilliseconds / 100.0).ToString("0.00") + "ms/帧");
+            return 0;
+        }
         if (mode == "--sim") return SimTest();
         if (mode == "--render")
         {
@@ -1632,7 +2440,8 @@ static class VRKeyboard
         if (mode == "--calibrate") return CtlClient("http://127.0.0.1:" + ctl + "/calibrate");
         if (mode == "--run") return RunOverlay(url, dll, meters, dist, height, followHead, 0, showAtStart, ctl, AutoHideSec);
         if (mode == "--diag") return RunOverlay(url, dll, meters, dist, height, followHead, diag > 0 ? diag : 15, true, 0, AutoHideSec);
-        Log("用法: vrkeyboard.exe --selftest | --render [--out x.png] | --run [--fixed] [--url ...] | --diag [--seconds N]");
+        if (mode == "--actionprobe") return RunActionProbe(dll, diag > 0 ? diag : 20);
+        Log("用法: vrkeyboard.exe --selftest | --render [--out x.png] | --run [--fixed] [--url ...] | --diag [--seconds N] | --actionprobe [--seconds N]");
         return 1;
     }
 }

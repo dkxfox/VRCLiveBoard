@@ -11,10 +11,17 @@ if not exist "%CSC%" (
   exit /b 1
 )
 if not exist out mkdir out
-"%CSC%" /nologo /target:exe /optimize+ /codepage:65001 /r:System.Drawing.dll /out:out\vrkeyboard.exe vrkeyboard.cs
+"%CSC%" /nologo /target:exe /optimize+ /codepage:65001 /r:System.Drawing.dll /out:out\vrkeyboard.exe vrkeyboard.cs openvr_api.cs
 if errorlevel 1 (
   echo [ERROR] build failed
   pause
   exit /b 1
 )
+copy /Y actions.json out\actions.json >nul
+copy /Y bindings_oculus_touch.json out\bindings_oculus_touch.json >nul
+copy /Y bindings_knuckles.json out\bindings_knuckles.json >nul
+copy /Y bindings_vive_controller.json out\bindings_vive_controller.json >nul
+copy /Y bindings_vd_hand_controller.json out\bindings_vd_hand_controller.json >nul
+copy /Y bindings_rift.json out\bindings_rift.json >nul
+copy /Y manifest.vrmanifest out\manifest.vrmanifest >nul
 echo [OK] out\vrkeyboard.exe
