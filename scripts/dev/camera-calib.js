@@ -905,6 +905,17 @@ async function replayContinuous(file, speedFactor, dry, smoothYaw) {
       yawRate = Math.abs(dProbe) / 0.12;
       console.log('偏航探针(LookHorizontal=1): ' + yawRate.toFixed(1) + ' °/s');
     }
+    // 探针会转动相机 -> 用反向短脉冲把朝向恢复到探针前(否则"静止"轨迹也会被转走, 这是静止持续微转的来源之一)
+    for (let i = 0; i < 14; i++) {
+      const curP = wrap180(lastPose.rot[1]);
+      const errP = wrap180(yaw0 - curP);
+      if (Math.abs(errP) < 0.8) break;
+      const msP = Math.max(20, Math.min(200, Math.abs(errP) / (yawRate || 175) * 1000));
+      const axP = (errP > 0 ? turnSign : -turnSign) > 0 ? 'LookRight' : 'LookLeft';
+      try { await send('/input/' + axP, [true]); await sleep(msP); } finally { await send('/input/' + axP, [false]); }
+      await sleep(80);
+    }
+    console.log('探针后偏航恢复: ' + wrap180(wrap180(lastPose.rot[1]) - yaw0).toFixed(2) + '°');
     const pulseAxisNT = async function (axis, ms) {
       const d = Math.max(20, Math.min(300, Math.round(ms)));
       try { await send('/input/' + axis, [true]); await sleep(d); } finally { await send('/input/' + axis, [false]); }
