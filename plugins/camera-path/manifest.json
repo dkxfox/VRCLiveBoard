@@ -1,9 +1,9 @@
 {
   "id": "camera-path",
   "name": "相机运镜控制",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "VRCLiveBoard 官方",
-  "description": "实验功能: VRC+ 运镜预设管理(扫描 CameraPaths、绝对路径导入 /dolly/Import、一键播放/停止、长运镜自动拆分以规避 VRChat >6 关键帧播放崩溃) + 相机 OSC 控制(拍照/飞行/镜头参数/图层/UI 图层)。不依赖 VRChat 运镜即可完成拍摄类动作; 相机位姿仍无法用 OSC 指定(已实测)。",
+  "description": "实验功能: VRC+ 运镜预设管理(扫描 CameraPaths、绝对路径导入 /dolly/Import、一键播放/停止、长运镜自动拆分以规避 VRChat >6 关键帧播放崩溃) + 局域网控制台(手机/平板浏览器控制预设与拍照, 默认关闭、端口/可选口令) + 相机 OSC 控制(拍照/飞行/镜头参数/图层/UI 图层)。不依赖 VRChat 运镜即可完成拍摄类动作; 相机位姿仍无法用 OSC 指定(已实测)。",
   "api": "2.0.0",
   "experimental": true,
   "permissions": {
@@ -18,7 +18,7 @@
       "write": []
     },
     "process": false,
-    "ports": []
+    "ports": [19191]
   },
   "dependencies": {},
   "conflicts": [],
@@ -87,9 +87,31 @@
       "type": "bool",
       "default": true,
       "hint": "拍照前关闭 ShowUIInCamera, 拍完还原"
+    },
+    {
+      "key": "lanConsoleEnabled",
+      "label": "局域网控制台",
+      "type": "bool",
+      "default": false,
+      "hint": "开启后点卡片上的『打开控制台窗口』启动并打开; 手机/平板需和电脑在同一局域网"
+    },
+    {
+      "key": "lanConsolePort",
+      "label": "局域网控制台端口",
+      "type": "number",
+      "default": 19191,
+      "hint": "默认 19191; 被占用时改这里"
+    },
+    {
+      "key": "lanConsoleToken",
+      "label": "控制台口令(可选)",
+      "type": "text",
+      "default": "",
+      "hint": "留空 = 局域网内免口令; 设置后地址需带 ?token=..., 建议设置"
     }
   ],
   "changelog": [
+    "0.3.0 2026-10-30: 局域网控制台(手机/平板浏览器: 预设列表/刷新/播放/仅导入/停止/拍照, 默认关闭, 端口+可选口令); 控制台卡片新增『刷新列表』与『打开控制台窗口』; 核心新增 /api/plugins/open-url(仅本机/私网 http(s))",
     "0.2.0 2026-10-30: VRC+ 运镜预设(扫描/一键导入播放/停止/长运镜自动拆分) + /dolly 语义实测入档; 修正 /dolly/Import 绝对路径用法; 全模拟轴归零; 状态/测试 API",
     "0.1.0 2026-10-14: OSC 发送(含包体自检) + 端点能力探测 + 自动隐藏 UI 拍照; 运镜文件与轨迹预览留待后续切片"
   ]

@@ -656,6 +656,30 @@ function effPluginSec() {
       return json(res, 200, { ok: true, dir: dir });
     } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
   });
+
+  // 打开插件提供的本机/局域网 http 页面(2026-10-30, camera-path 局域网控制台用):
+  // 只允许 http(s) + 本机/私网地址, 防止被当成"打开任意协议/任意站点"的跳板。
+  on('POST', '/api/plugins/open-url', function (req, res, url) {
+    return readBody(req, function (body) {
+      try {
+        const o = JSON.parse(body || '{}');
+        const raw = String(o.url || '').trim();
+        let u = null;
+        try { u = new URL(raw); } catch (e) { return json(res, 400, { ok: false, error: 'URL 无效' }); }
+        if (u.protocol !== 'http:' && u.protocol !== 'https:') return json(res, 403, { ok: false, error: '只允许 http/https 地址' });
+        const h = u.hostname;
+        const isPrivate = (h === 'localhost' || h === '127.0.0.1' || h === '::1' ||
+          /^10\.\d+\.\d+\.\d+$/.test(h) || /^192\.168\.\d+\.\d+$/.test(h) ||
+          /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(h) || /^169\.254\.\d+\.\d+$/.test(h));
+        if (!isPrivate) return json(res, 403, { ok: false, error: '只允许打开本机/局域网地址' });
+        if (process.env.VRCB_NO_SHELL === '1' || process.env.VRCB_HEADLESS_TEST === '1') return json(res, 200, { ok: true, url: u.href, skipped: true });
+        try { require('electron').shell.openExternal(u.href); } catch (e) { noteFail('/api/plugins/open-url', e); }
+        logger.info('[plugins] 打开页面: ' + u.href);
+        return json(res, 200, { ok: true, url: u.href });
+      } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
+    });
+  });
+
   // 插件市场(1.4.0 MVP, M-20260911-51): 目录与吊销来自 GitHub + jsDelivr(与 versioncheck 同源双源/白名单),
   // 安装永远走 manager.importZip(解包防线 + id 白名单)与既有的红窗审批 —— 市场不绕过任何一道门槛
   on('GET', '/api/market', function (req, res, url) {

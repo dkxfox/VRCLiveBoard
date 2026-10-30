@@ -111,6 +111,53 @@ t('scanPresets: 临时目录读取/排序/错误容忍', function () {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-try { inst.dispose(); } catch (e) {}
-console.log('\n[camera-path tests] PASS ' + pass + ' / FAIL ' + fail);
-process.exit(fail ? 1 : 0);
+async function ta(name, fn) {
+  try { await fn(); pass++; console.log('  PASS ' + name); }
+  catch (e) { fail++; console.log('  FAIL ' + name + ' -> ' + (e && e.message)); }
+}
+(async function () {
+  const lanDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cp-lan-'));
+  fs.writeFileSync(path.join(lanDir, 'a-good.json'), JSON.stringify(makeFrames(3, 0, 1)));
+  const p2 = pluginFactory({ config: { lanConsoleEnabled: true, lanConsolePort: 0, pathsDir: lanDir, maxKeyframesPerSegment: 6 }, log: function () {} });
+  let st2 = null;
+  await ta('LAN 控制台: 启动(随机端口) + 静态页含“局域网控制台”', async function () {
+    st2 = await p2.api.lanEnsure({});
+    assert.strictEqual(st2.listening, true);
+    assert.ok(st2.port > 0);
+    const html = await (await fetch('http://127.0.0.1:' + st2.port + '/')).text();
+    assert.ok(html.indexOf('局域网控制台') >= 0);
+    assert.ok(html.indexOf('刷新列表') >= 0);
+  });
+  await ta('LAN 控制台: /api/state 与 /api/presets 正常', async function () {
+    const base = 'http://127.0.0.1:' + st2.port;
+    const state = await (await fetch(base + '/api/state')).json();
+    assert.strictEqual(state.ok, true);
+    assert.strictEqual(state.version, '0.3.0');
+    assert.ok(state.lan && state.lan.listening);
+    const pres = await (await fetch(base + '/api/presets')).json();
+    assert.strictEqual(pres.ok, true);
+    assert.strictEqual(pres.presets.length, 1);
+    assert.ok(pres.lan && pres.lan.listening);
+  });
+  await ta('LAN 控制台: 口令校验(401/200)', async function () {
+    const p3 = pluginFactory({ config: { lanConsoleEnabled: true, lanConsolePort: 0, lanConsoleToken: 'abc123', pathsDir: lanDir }, log: function () {} });
+    const st3 = await p3.api.lanEnsure({});
+    try {
+      assert.strictEqual(st3.listening, true);
+      const bad = await fetch('http://127.0.0.1:' + st3.port + '/api/state');
+      assert.strictEqual(bad.status, 401);
+      const ok = await fetch('http://127.0.0.1:' + st3.port + '/api/state', { headers: { 'x-camera-token': 'abc123' } });
+      assert.strictEqual(ok.status, 200);
+    } finally { await p3.api.lanEnsure({ enable: false }); }
+  });
+  await ta('LAN 控制台: 关闭后不再监听', async function () {
+    const off = await p2.api.lanEnsure({ enable: false });
+    assert.strictEqual(off.listening, false);
+    let failed = false;
+    try { await fetch('http://127.0.0.1:' + st2.port + '/api/state', { signal: AbortSignal.timeout(800) }); } catch (e) { failed = true; }
+    assert.strictEqual(failed, true);
+  });
+  fs.rmSync(lanDir, { recursive: true, force: true });
+  console.log('\n[camera-path tests] PASS ' + pass + ' / FAIL ' + fail);
+  process.exit(fail ? 1 : 0);
+})();

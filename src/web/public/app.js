@@ -196,8 +196,9 @@ function plgCameraPath(p, body){
   var bSave=document.createElement('button');bSave.className='small';bSave.textContent=tr('cpSave');
   var bRefresh=document.createElement('button');bRefresh.className='small gray';bRefresh.textContent=tr('cpRefresh');
   var bStop=document.createElement('button');bStop.className='small danger';bStop.textContent=tr('cpStop');
+  var bLan=document.createElement('button');bLan.className='small gray';bLan.textContent=tr('cpOpenLan');
   var msg=document.createElement('span');msg.className='sub';
-  row.appendChild(labDelay);row.appendChild(labAuto);row.appendChild(bSave);row.appendChild(bRefresh);row.appendChild(bStop);row.appendChild(msg);
+  row.appendChild(labDelay);row.appendChild(labAuto);row.appendChild(bSave);row.appendChild(bRefresh);row.appendChild(bStop);row.appendChild(bLan);row.appendChild(msg);
   body.appendChild(row);
   var statusEl=document.createElement('div');statusEl.className='sub';statusEl.style.margin='4px 0';body.appendChild(statusEl);
   var listEl=document.createElement('div');body.appendChild(listEl);
@@ -224,12 +225,17 @@ function plgCameraPath(p, body){
   function refreshStatus(){
     plugCall('camera-path','status',{}).then(function(st){
       if(!st||!st.ok){statusEl.textContent='';return;}
-      statusEl.textContent=tr('cpStatus')+(st.playing?tr('cpPlaying'):tr('cpIdle'))+' | '+tr('cpPresetsDir')+(st.presetsDir||'')+(st.camera?' | OSCQuery '+(st.oscQueryPort||''):'');
+      var lanTxt=tr('cpLanLabel');
+      if(st.lan&&st.lan.listening)lanTxt+=String(st.lan.url||'').replace(/[?&]token=[^&]*/,'');
+      else if(st.lan&&st.lan.enabled)lanTxt+=tr('cpLanPending');
+      else lanTxt+=tr('cpLanOff');
+      statusEl.textContent=tr('cpStatus')+(st.playing?tr('cpPlaying'):tr('cpIdle'))+' | '+tr('cpPresetsDir')+(st.presetsDir||'')+(st.camera?' | OSCQuery '+(st.oscQueryPort||''):'')+' | '+lanTxt;
       if(st.settings){if(document.activeElement!==inDelay)inDelay.value=st.settings.delaySec;if(document.activeElement!==inAuto)inAuto.value=st.settings.autoStopSec;}
     }).catch(function(){});
   }
   function refreshList(){setMsg('');plugCall('camera-path','listPresets',{}).then(function(j){if(j&&j.ok){renderList(j.presets||[]);}else{setMsg(tr('cpLoadFail')+((j&&j.error)||''),true);}}).catch(function(e){setMsg(tr('cpLoadFail')+e.message,true);});}
   bRefresh.onclick=refreshList;
+  bLan.onclick=function(){setMsg('...');plugCall('camera-path','lanEnsure',{enable:true}).then(function(j){if(!j||!j.listening){setMsg(tr('cpLanOff')+((j&&j.error)?(' ('+j.error+')'):''),true);refreshStatus();return;}return fetch('/api/plugins/open-url',{method:'POST',body:JSON.stringify({url:j.url})}).then(function(r){return r.json();}).then(function(o){if(o&&o.ok){setMsg(tr('cpLanOpened')+j.url);}else{setMsg(tr('cpSaveFail')+((o&&o.error)||''),true);}refreshStatus();});}).catch(function(e){setMsg(tr('cpSaveFail')+e.message,true);});};
   bStop.onclick=function(){plugCall('camera-path','stop',{}).then(function(j){setMsg(j&&j.ok?tr('cpIdle'):(tr('cpSaveFail')+((j&&j.error)||'')),!(j&&j.ok));refreshStatus();}).catch(function(e){setMsg(tr('cpSaveFail')+e.message,true);});};
   bSave.onclick=function(){fetch('/api/plugins/config',{method:'POST',body:JSON.stringify({id:p.id,cfg:{delaySec:Number(inDelay.value)||0,autoStopSec:Number(inAuto.value)||0}})}).then(function(r){return r.json();}).then(function(j){setMsg(j&&j.ok!==false?tr('cpSaved'):(tr('cpSaveFail')+((j&&j.error)||'')),!(j&&j.ok!==false));}).catch(function(e){setMsg(tr('cpSaveFail')+e.message,true);});};
   var advBtn=document.createElement('button');advBtn.className='small gray';advBtn.style.margin='6px 0';advBtn.textContent=tr('cpAdv');

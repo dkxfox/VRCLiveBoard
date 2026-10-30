@@ -1,5 +1,6 @@
 'use strict';
-// 相机运镜控制(plugin id: camera-path) v0.2.0 —— 2026-10-30
+// 相机运镜控制(plugin id: camera-path) v0.3.0 —— 2026-10-30
+// v0.3.0 新增: 局域网控制台(手机/平板浏览器直连, 预设列表/播放/仅导入/停止/拍照; 默认关闭, 端口+可选口令)
 //
 // v0.2.0 核心新增(已实测, 见 DEV-NOTES 383):
 //   ① /dolly/Import 接受**绝对文件路径字符串**, 导入成功;
@@ -22,7 +23,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const VERSION = '0.2.0';
+const VERSION = '0.3.0';
 const DOLLY = {
   play: '/dolly/Play',
   playDelayed: '/dolly/PlayDelayed',
@@ -189,6 +190,9 @@ module.exports = function (ctx) {
   let sent = 0, failed = 0, lastError = '', playing = false, current = null, lastPlayedAt = 0;
   let timer = null;
   const state = { camera: null, note: '', oscQueryPort: 0, checked: false };
+  // ---------- 局域网控制台(LAN console): 0.0.0.0 监听, 默认关闭, 可选口令 ----------
+  let lanServer = null;
+  const lanState = { listening: false, port: 0, ip: '', error: '' };
 
   function port() { const p = Number(cfg.oscPort); return p > 0 ? p : 9000; }
   function pathsDir() { const d = String(cfg.pathsDir || '').trim(); return d || path.join(os.homedir(), 'Documents', 'VRChat', 'CameraPaths'); }
@@ -330,15 +334,163 @@ module.exports = function (ctx) {
     return { ok: true, file: item.file, sanitized: !!f.sanitized, keyframes: f.info.points, segments: f.info.segments, segmentSizes: f.info.segmentSizes, isLocal: item.isLocal, delaySec: delaySec, autoStopSec: autoStopSec, info: '已发送 Import + Play' };
   }
 
+
+  // ========== 局域网控制台 ==========
+  function lanCfg() {
+    const rawPort = Number(cfg.lanConsolePort);
+    const port = (rawPort === 0) ? 0 : (rawPort >= 1024 && rawPort <= 65535 ? rawPort : 19191);
+    return { enabled: cfg.lanConsoleEnabled === true, port: port, token: String(cfg.lanConsoleToken || '') };
+  }
+  function lanIps() {
+    const out = [];
+    try {
+      const ifs = os.networkInterfaces();
+      Object.keys(ifs).forEach(function (name) {
+        (ifs[name] || []).forEach(function (a) {
+          if (a && a.family === 'IPv4' && !a.internal && String(a.address).indexOf('169.254.') !== 0) out.push(a.address);
+        });
+      });
+    } catch (e) {}
+    return out;
+  }
+  function lanIp() { const ips = lanIps(); return ips.length ? ips[0] : '127.0.0.1'; }
+  function lanStatusInfo() {
+    const c = lanCfg();
+    let url = '';
+    if (lanState.listening) {
+      url = 'http://' + (lanState.ip || lanIp()) + ':' + lanState.port + '/';
+      if (c.token) url += '?token=' + encodeURIComponent(c.token);
+    }
+    return { enabled: c.enabled, listening: !!lanState.listening, port: lanState.port || c.port, ip: lanState.ip || lanIp(), ips: lanIps(), tokenRequired: !!c.token, url: url, error: lanState.error || '' };
+  }
+  function lanStop() {
+    if (lanServer) { try { lanServer.close(); } catch (e) {} lanServer = null; }
+    lanState.listening = false; lanState.port = 0; lanState.ip = ''; lanState.error = '';
+  }
+  function lanStopSafe() { try { lanStop(); } catch (e) {} }
+  function lanJson(res, code, obj) {
+    try {
+      res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify(obj));
+    } catch (e) {}
+  }
+  function lanPage(res) {
+    try {
+      const html = fs.readFileSync(path.join(__dirname, 'console.html'), 'utf8');
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(html);
+    } catch (e) { res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('console.html 缺失: ' + String(e.message || e)); }
+  }
+  function lanCheckToken(req, urlObj) {
+    const c = lanCfg();
+    if (!c.token) return true;
+    const fromQuery = urlObj ? urlObj.searchParams.get('token') : '';
+    const fromHeader = req.headers['x-camera-token'] || req.headers['x-token'] || '';
+    return String(fromQuery || fromHeader || '') === c.token;
+  }
+  function lanReadBody(req) {
+    return new Promise(function (resolve) {
+      let d = '', n = 0;
+      req.on('data', function (c) {
+        n += c.length;
+        if (n > 65536) { try { req.destroy(); } catch (e) {} resolve({}); return; }
+        d += c;
+      });
+      req.on('end', function () { try { resolve(JSON.parse(d || '{}')); } catch (e) { resolve({}); } });
+      req.on('error', function () { resolve({}); });
+    });
+  }
+  async function lanPresetsPayload() {
+    const list = scanPresets(pathsDir());
+    if (list.ok) {
+      const lim = maxKF();
+      list.presets.forEach(function (p) { p.needsSplit = p.ok && p.maxSegment > lim; p.playable = p.ok; });
+    }
+    return { ok: !!list.ok, error: list.error || '', dir: pathsDir(), maxKeyframesPerSegment: maxKF(), presets: list.presets || [], lan: lanStatusInfo() };
+  }
+  async function lanStatePayload() {
+    const list = scanPresets(pathsDir());
+    let dollyPlay = null;
+    try { const d = await readDollyState(0); dollyPlay = d ? d.play : null; } catch (e) {}
+    return {
+      ok: true, version: VERSION, playing: playing, current: current, dollyPlay: dollyPlay,
+      camera: state.camera, note: state.note, oscQueryPort: state.oscQueryPort,
+      presetsDir: pathsDir(), presetCount: list.ok ? list.presets.length : 0,
+      lan: lanStatusInfo(),
+      settings: { delaySec: Number(cfg.delaySec) || 1, autoStopSec: Number(cfg.autoStopSec) || 0, maxKeyframesPerSegment: maxKF(), stopRestoresLock: cfg.stopRestoresLock !== false },
+    };
+  }
+  async function lanHandleRequest(req, res) {
+    const u = new URL(req.url || '/', 'http://127.0.0.1');
+    const p = u.pathname;
+    if (req.method === 'GET' && (p === '/' || p === '/index.html' || p === '/console.html')) return lanPage(res);
+    if (p === '/favicon.ico') { res.writeHead(204); res.end(); return; }
+    if (p.indexOf('/api/') !== 0) return lanJson(res, 404, { ok: false, error: 'not found' });
+    if (!lanCheckToken(req, u)) return lanJson(res, 401, { ok: false, error: '口令错误: 请在地址里带 ?token=...' });
+    if (p === '/api/state' && req.method === 'GET') return lanJson(res, 200, await lanStatePayload());
+    if (p === '/api/presets' && req.method === 'GET') return lanJson(res, 200, await lanPresetsPayload());
+    if (p === '/api/play' && req.method === 'POST') {
+      const body = await lanReadBody(req);
+      const r = await playPreset({ file: body.file, index: body.index, delaySec: body.delaySec, name: body.name });
+      return lanJson(res, r && r.ok ? 200 : 400, r);
+    }
+    if (p === '/api/import' && req.method === 'POST') {
+      const body = await lanReadBody(req);
+      const r = await playPreset({ file: body.file, index: body.index, name: body.name, noPlay: true });
+      return lanJson(res, r && r.ok ? 200 : 400, r);
+    }
+    if (p === '/api/stop' && req.method === 'POST') return lanJson(res, 200, await stopPlayback('lan'));
+    if (p === '/api/capture' && req.method === 'POST') {
+      const hideUi = !!cfg.hideUiInPhoto;
+      if (hideUi) await send('/usercamera/ShowUIInCamera', [false]);
+      const ok = await send('/usercamera/Capture', []);
+      if (hideUi) { await sleep(1200); await send('/usercamera/ShowUIInCamera', [true]); }
+      return lanJson(res, 200, { ok: ok, hidUi: hideUi });
+    }
+    return lanJson(res, 404, { ok: false, error: 'unknown api' });
+  }
+  async function lanEnsure(args) {
+    const a = args || {};
+    if (a.enable === true) cfg.lanConsoleEnabled = true;
+    if (a.enable === false) cfg.lanConsoleEnabled = false;
+    const c = lanCfg();
+    if (!c.enabled) { lanStop(); return lanStatusInfo(); }
+    if (lanServer && lanState.listening && (c.port === 0 || lanState.port === c.port)) return lanStatusInfo();
+    lanStop();
+    return await new Promise(function (resolve) {
+      const srv = http.createServer(function (req, res) {
+        lanHandleRequest(req, res).catch(function (e) { lanJson(res, 500, { ok: false, error: String(e.message || e) }); });
+      });
+      srv.on('error', function (err) {
+        lanState.listening = false; lanState.error = String(err.message || err); lanServer = null;
+        log('warn', '[camera-path] LAN 控制台启动失败: ' + lanState.error);
+        resolve(lanStatusInfo());
+      });
+      try {
+        srv.listen(c.port, '0.0.0.0', function () {
+          lanServer = srv;
+          lanState.listening = true;
+          lanState.port = srv.address().port;
+          lanState.ip = lanIp();
+          lanState.error = '';
+          log('info', '[camera-path] LAN 控制台已启动: ' + lanStatusInfo().url);
+          resolve(lanStatusInfo());
+        });
+      } catch (e) { lanState.error = String(e.message || e); resolve(lanStatusInfo()); }
+    });
+  }
+
   return {
     apply: async function () {
       cleanupTemps(pathsDir(), null);
       await discoverOscQuery();
+      try { await lanEnsure(); } catch (e) { log('warn', '[camera-path] LAN 控制台启动异常: ' + (e && e.message)); }
       const list = scanPresets(pathsDir());
-      log('info', '[camera-path] v' + VERSION + ' 已启用; ' + (list.ok ? list.presets.length : 0) + ' 个预设; ' + state.note);
-      return { ok: true, note: state.note, presets: list.ok ? list.presets.length : 0 };
+      log('info', '[camera-path] v' + VERSION + ' 已启用; ' + (list.ok ? list.presets.length : 0) + ' 个预设; ' + state.note + '; LAN=' + (lanState.listening ? lanStatusInfo().url : 'off'));
+      return { ok: true, note: state.note, presets: list.ok ? list.presets.length : 0, lan: lanStatusInfo() };
     },
     dispose: async function () {
+      try { lanStopSafe(); } catch (e) {}
       try { await stopPlayback('dispose'); } catch (e) {}
       try { cleanupTemps(pathsDir(), null); } catch (e) {}
       try { await zeroAll(); } catch (e) {}
@@ -358,6 +510,7 @@ module.exports = function (ctx) {
           osc: { host: '127.0.0.1', port: port(), sent: sent, failed: failed, lastError: lastError },
           presetsDir: pathsDir(), presetCount: list.ok ? list.presets.length : 0,
           playing: playing, current: current, dollyPlay: dollyPlay,
+          lan: lanStatusInfo(),
           settings: { delaySec: Number(cfg.delaySec) || 1, autoStopSec: Number(cfg.autoStopSec) || 0, maxKeyframesPerSegment: maxKF(), stopRestoresLock: cfg.stopRestoresLock !== false },
         };
       },
@@ -367,7 +520,7 @@ module.exports = function (ctx) {
         if (!list.ok) return { ok: false, error: list.error };
         const lim = maxKF();
         list.presets.forEach(function (p) { p.needsSplit = p.ok && p.maxSegment > lim; p.playable = p.ok; });
-        return { ok: true, dir: pathsDir(), maxKeyframesPerSegment: lim, presets: list.presets };
+        return { ok: true, dir: pathsDir(), maxKeyframesPerSegment: lim, presets: list.presets, lan: lanStatusInfo() };
       },
       playPreset: async function (args) { try { return await playPreset(args); } catch (e) { return { ok: false, error: String(e.message || e) }; } },
       importPreset: async function (args) {
@@ -381,6 +534,8 @@ module.exports = function (ctx) {
         const dolly = await readDollyState(p);
         return { ok: !!p, oscQueryPort: p, dollyEndpoints: !!(dolly && dolly.play !== null), note: state.note };
       },
+      lanStatus: async function () { return lanStatusInfo(); },
+      lanEnsure: async function (args) { try { return await lanEnsure(args); } catch (e) { return { ok: false, error: String(e.message || e), ...lanStatusInfo() }; } },
       capture: async function (opts) {
         const hideUi = !opts || opts.hideUi !== false ? !!cfg.hideUiInPhoto : false;
         if (hideUi) await send('/usercamera/ShowUIInCamera', [false]);

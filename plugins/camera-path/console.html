@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<title>相机运镜 · 局域网控制台</title>
+<style>
+:root{--bg:#0b1220;--card:#111c2e;--card2:#16233a;--line:#24344f;--text:#e8eef8;--sub:#8ea3bf;--accent:#00e5c0;--blue:#4da3ff;--warn:#ffb020;--danger:#ff5d6c;--ok:#35d07f}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif}
+body{min-height:100vh;display:flex;flex-direction:column;gap:10px;padding:10px 10px calc(14px + env(safe-area-inset-bottom))}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 2px}
+.brand{font-size:17px;font-weight:700;letter-spacing:.5px}
+.brand .sub{font-size:12px;color:var(--sub);font-weight:400;margin-left:6px}
+.head-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--sub);display:inline-block}
+.dot.playing{background:var(--ok);box-shadow:0 0 10px var(--ok)}
+button{font:inherit;color:var(--text);background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:10px 14px;min-height:44px;cursor:pointer;touch-action:manipulation}
+button:active{transform:scale(.98)}
+button:disabled{opacity:.45}
+button.gray{background:#1b2a42}
+button.play{background:linear-gradient(180deg,#00b49a,#008f7d);border-color:#00c7a9;font-weight:700}
+button.import{background:#1d3a5c;border-color:#2d5d8f}
+button.danger{background:#4a1b24;border-color:#7a2b3a;color:#ffd7dd;font-weight:700}
+button.big{padding:12px 16px;flex:1;min-height:52px;font-size:16px}
+.now{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.file{font-size:16px;font-weight:700;word-break:break-all}
+.meta{font-size:12px;color:var(--sub);word-break:break-all}
+.now-actions{display:flex;gap:8px;flex-wrap:wrap}
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+.toolbar label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub)}
+input[type=number]{width:66px;background:#0e1828;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit;min-height:40px}
+.msg{font-size:12px;color:var(--sub);min-height:16px;flex:1}
+.list{display:flex;flex-direction:column;gap:8px}
+.item{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.item.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.item .top{display:flex;gap:10px;align-items:flex-start;justify-content:space-between}
+.item .nm{font-size:14px;font-weight:600;word-break:break-all;flex:1}
+.item .badges{font-size:11px;color:var(--sub);flex:2;text-align:right;word-break:break-all}
+.item .acts{display:flex;gap:8px}
+.item .acts button{flex:1;min-height:44px}
+.empty{color:var(--sub);font-size:13px;padding:14px;text-align:center;border:1px dashed var(--line);border-radius:12px}
+footer{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;color:var(--sub);padding:4px 2px}
+@media (min-width:720px){body{max-width:860px;margin:0 auto;width:100%}.item{flex-direction:row;align-items:center}.item .top{flex:1;flex-direction:column}.item .acts{width:220px}.item .acts button{flex:1}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">相机运镜<span class="sub">局域网控制台</span></div>
+  <div class="head-right">
+    <span id="dot" class="dot"></span>
+    <span id="statusText">连接中…</span>
+    <button id="refreshBtn" class="gray">刷新列表</button>
+  </div>
+</header>
+
+<section class="now">
+  <div class="file" id="nowFile">未选择预设</div>
+  <div class="meta" id="nowInfo">在下面列表里点一条预设，再按“播放”</div>
+  <div class="now-actions">
+    <button id="playSel" class="big play">播放</button>
+    <button id="importSel" class="big import">仅导入</button>
+    <button id="stopSel" class="big danger">停止</button>
+  </div>
+</section>
+
+<section class="toolbar">
+  <label>播放前延迟 <input id="delay" type="number" min="0" max="60" step="1" value="1"> 秒</label>
+  <span id="msg" class="msg"></span>
+</section>
+
+<section id="list" class="list"><div class="empty">加载中…</div></section>
+
+<footer>
+  <span id="lanAddr"></span>
+  <span id="ver"></span>
+</footer>
+
+<script>
+(function(){
+  'use strict';
+  var token = new URLSearchParams(location.search).get('token') || '';
+  try { if (token) localStorage.setItem('cpLanToken', token); else token = localStorage.getItem('cpLanToken') || ''; } catch (e) {}
+  var state = { presets: [], selected: null, playing: false };
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function msg(t, warn) { var el = $('msg'); el.textContent = t || ''; el.style.color = warn ? 'var(--warn)' : 'var(--sub)'; }
+  function api(path, opts) {
+    opts = opts || {};
+    var headers = opts.headers || {};
+    if (token) headers['x-camera-token'] = token;
+    if (opts.body != null) { headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(opts.body); }
+    opts.headers = headers;
+    return fetch(path, opts).then(function (r) { return r.json().catch(function () { return { ok: false, error: 'HTTP ' + r.status }; }); });
+  }
+  function badge(p) {
+    return (p.isLocal ? '玩家' : '世界') + ' · ' + p.points + ' 关键帧 · ' + p.segments + ' 段' + (p.needsSplit ? ' · 需拆分' : '') + (p.ok ? '' : ' · 文件错误');
+  }
+  function selectPreset(file) {
+    state.selected = state.presets.filter(function (p) { return p.file === file; })[0] || null;
+    renderList();
+    renderNow();
+  }
+  function renderNow() {
+    var p = state.selected;
+    $('nowFile').textContent = p ? p.file : '未选择预设';
+    $('nowInfo').textContent = p ? badge(p) + (state.playing && state.current && state.current.file === p.file ? ' · 正在播放' : '') : '在下面列表里点一条预设，再按“播放”';
+    $('playSel').disabled = !p || !p.ok;
+    $('importSel').disabled = !p || !p.ok;
+  }
+  function renderList() {
+    var box = $('list');
+    if (!state.presets.length) { box.innerHTML = '<div class="empty">目录里没有可用运镜文件</div>'; return; }
+    box.innerHTML = '';
+    state.presets.forEach(function (p) {
+      var d = document.createElement('div');
+      d.className = 'item' + (state.selected && state.selected.file === p.file ? ' sel' : '');
+      d.innerHTML = '<div class="top"><div class="nm">' + esc(p.file) + '</div><div class="badges">' + esc(badge(p)) + '</div></div>' +
+        '<div class="acts"><button class="play">播放</button><button class="import">仅导入</button></div>';
+      d.querySelector('.top').onclick = function () { selectPreset(p.file); };
+      d.querySelector('.nm').onclick = function (e) { e.stopPropagation(); selectPreset(p.file); };
+      d.querySelector('.play').onclick = function (e) { e.stopPropagation(); if (!p.ok) return; play(p.file); };
+      d.querySelector('.import').onclick = function (e) { e.stopPropagation(); if (!p.ok) return; onlyImport(p.file); };
+      box.appendChild(d);
+    });
+  }
+  function loadPresets(keepMsg) {
+    return api('/api/presets').then(function (j) {
+      if (!j || !j.ok) { msg('预设加载失败: ' + ((j && j.error) || '未知错误'), true); return; }
+      state.presets = j.presets || [];
+      if (state.selected && !state.presets.some(function (p) { return p.file === state.selected.file; })) state.selected = null;
+      if (!state.selected && state.presets.length) state.selected = state.presets[0];
+      $('lanAddr').textContent = j.lan && j.lan.url ? j.lan.url.replace(/\?token=.*$/, '') : '';
+      renderList(); renderNow();
+      if (!keepMsg) msg('列表已刷新 · ' + state.presets.length + ' 条');
+    }).catch(function (e) { msg('预设加载失败: ' + e.message, true); });
+  }
+  function refreshState() {
+    return api('/api/state').then(function (j) {
+      if (!j || !j.ok) { $('dot').className = 'dot'; $('statusText').textContent = '未连接'; return; }
+      state.playing = !!j.playing;
+      state.current = j.current || null;
+      $('dot').className = 'dot' + (j.playing ? ' playing' : '');
+      $('statusText').textContent = j.playing ? '播放中' : '空闲';
+      $('ver').textContent = 'v' + (j.version || '');
+      if (j.lan && j.lan.url) $('lanAddr').textContent = j.lan.url.replace(/\?token=.*$/, '');
+      renderNow();
+    }).catch(function () { $('dot').className = 'dot'; $('statusText').textContent = '未连接'; });
+  }
+  function play(file) {
+    msg('正在播放 ' + file + ' …');
+    api('/api/play', { method: 'POST', body: { file: file, delaySec: Number($('delay').value) || 0 } }).then(function (j) {
+      if (j && j.ok) { msg('已发送: ' + (j.sanitized ? '拆分后播放' : '播放') + ' · ' + file); setTimeout(refreshState, 300); }
+      else msg('播放失败: ' + ((j && j.error) || '未知错误'), true);
+    }).catch(function (e) { msg('播放失败: ' + e.message, true); });
+  }
+  function onlyImport(file) {
+    msg('正在导入 ' + file + ' …');
+    api('/api/import', { method: 'POST', body: { file: file } }).then(function (j) {
+      if (j && j.ok) msg('已导入(未播放): ' + file);
+      else msg('导入失败: ' + ((j && j.error) || '未知错误'), true);
+    }).catch(function (e) { msg('导入失败: ' + e.message, true); });
+  }
+  $('refreshBtn').onclick = function () { loadPresets(false); refreshState(); };
+  $('playSel').onclick = function () { if (state.selected) play(state.selected.file); };
+  $('importSel').onclick = function () { if (state.selected) onlyImport(state.selected.file); };
+  $('stopSel').onclick = function () {
+    msg('正在停止…');
+    api('/api/stop', { method: 'POST', body: {} }).then(function (j) {
+      if (j && j.ok) { msg('已停止'); refreshState(); } else msg('停止失败: ' + ((j && j.error) || '未知错误'), true);
+    }).catch(function (e) { msg('停止失败: ' + e.message, true); });
+  };
+  loadPresets(true).then(refreshState);
+  setInterval(refreshState, 2000);
+})();
+</script>
+</body>
+</html>
