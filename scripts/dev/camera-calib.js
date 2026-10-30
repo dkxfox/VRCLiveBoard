@@ -881,8 +881,8 @@ async function replayContinuous(file, speedFactor, dry, smoothYaw) {
     if (isFinite(s0) && s0 !== 0) { await sendF('/usercamera/SmoothingStrength', 0); await sleep(250); }
     if (!lastPose) { await pulseAxis('MoveForward', 40); if (!(await waitPose(0, 2500))) throw new Error('收不到 /usercamera/Pose'); }
     await sleep(250);
-    const origin = lastPose.pos.slice();
-    const yaw0 = wrap180(lastPose.rot[1]);
+    let origin = lastPose.pos.slice();
+    let yaw0 = wrap180(lastPose.rot[1]);
     let pNow = ((Number(lastPose.rot[0]) % 360) + 360) % 360; if (pNow > 180) pNow -= 360;
     if (Math.abs(pNow) > 5) throw new Error('相机俯仰 ' + pNow.toFixed(1) + '°, 请先把相机放平再重放');
     let turnSign = 1, yawRate = 175;
@@ -926,12 +926,25 @@ async function replayContinuous(file, speedFactor, dry, smoothYaw) {
       try { await sendF('/input/LookVertical', dir); await sleep(d); } finally { await sendF('/input/LookVertical', 0); }
       await sleep(18);
     };
+    // 用户提示: 修正误差用小速度多脉冲 / 路径末端平滑 -> 先实测当前速度并自动降倍速
+    const caV = lastPose.pos.slice();
+    await pulseAxisNT('MoveForward', 150);
+    await sleep(300);
+    const measuredV = dist3(lastPose.pos, caV) / 0.15;
+    const vlist = [];
+    for (let vi = 1; vi < raw.length; vi++) { const dtv = raw[vi].t - raw[vi - 1].t; if (dtv <= 0.001) continue; vlist.push(dist3(raw[vi].pos, raw[vi - 1].pos) / dtv); }
+    vlist.sort(function (a, b) { return a - b; });
+    const reqV = vlist[Math.min(vlist.length - 1, Math.floor(vlist.length * 0.95))] || 0.6;
+    const speedEff = Math.min(speed, Math.max(0.25, 0.85 * Math.max(0.15, measuredV) / Math.max(0.12, reqV)));
+    origin = lastPose.pos.slice();
+    yaw0 = wrap180(lastPose.rot[1]);
+    console.log('实测速度 ' + measuredV.toFixed(2) + ' m/s / 轨迹需求(p95) ' + reqV.toFixed(2) + ' m/s -> 自动倍速 ' + speedEff.toFixed(2) + 'x');
     const tStart = Date.now();
     let ticks = 0, sumPos = 0, maxPos = 0, maxYaw = 0, iter = 0;
     while (true) {
       iter++; if (iter > 3000) break;
       const elapsed = (Date.now() - tStart) / 1000;
-      const tp = Math.min(elapsed * speed, dur);
+      const tp = Math.min(elapsed * speedEff, dur);
       const wp = sampleAt(tp);
       const targetWorld = [origin[0] + wp.pos[0], origin[1] + wp.pos[1], origin[2] + wp.pos[2]];
       const targetYaw = wrap180(yaw0 + wp.yawRel);
@@ -955,19 +968,19 @@ async function replayContinuous(file, speedFactor, dry, smoothYaw) {
         try { await sendF('/input/LookHorizontal', yawV); } catch (e) {}
       }
       const absF = Math.abs(front), absL = Math.abs(left), absU = Math.abs(dy);
-      const db = smoothYaw ? 0.08 : 0.035;
-      const remain = Math.max(30, TICK - 25);
-      if (absU > Math.max(absF, absL) && absU > db) await pulseVertNT(dy >= 0 ? 1 : -1, remain);
-      else if (absF >= absL && absF > db) await pulseAxisNT(front >= 0 ? 'MoveForward' : 'MoveBackward', remain);
-      else if (absL > db) await pulseAxisNT(left >= 0 ? 'MoveLeft' : 'MoveRight', remain);
+      const db = smoothYaw ? 0.08 : 0.05;
+      const msM = Math.max(20, Math.min(80, Math.max(absF, absL, absU) / Math.max(0.15, measuredV) * 1000 * 0.6));
+      if (absU > Math.max(absF, absL) && absU > db) await pulseVertNT(dy >= 0 ? 1 : -1, msM);
+      else if (absF >= absL && absF > db) await pulseAxisNT(front >= 0 ? 'MoveForward' : 'MoveBackward', msM);
+      else if (absL > db) await pulseAxisNT(left >= 0 ? 'MoveLeft' : 'MoveRight', msM);
       else await sleep(25);
-      if (elapsed * speed >= dur + 0.10) break;
+      if (elapsed * speedEff >= dur + 0.10) break;
     }
     // 收尾: 最多 3 秒把"偏航 + 位置"收敛到终点(v1 的终点精度靠停稳, v2 用专门收尾段补回)
     const fin = sampleAt(dur);
     const finalWorld = [origin[0] + fin.pos[0], origin[1] + fin.pos[1], origin[2] + fin.pos[2]];
     const finalYawTarget = wrap180(yaw0 + fin.yawRel);
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 90; i++) {
       const curYaw2 = wrap180(lastPose.rot[1]);
       const yerr2 = wrap180(finalYawTarget - curYaw2);
       const th2 = curYaw2 * Math.PI / 180;
@@ -983,12 +996,13 @@ async function replayContinuous(file, speedFactor, dry, smoothYaw) {
         }
       } else {
         let yv = 0;
-        if (Math.abs(yerr2) > 1) yv = Math.max(-1, Math.min(1, (turnSign * yerr2) / 10));
+        if (Math.abs(yerr2) > 1) yv = Math.max(-0.7, Math.min(0.7, (turnSign * yerr2) / 25));
         try { await sendF('/input/LookHorizontal', yv); } catch (e) {}
       }
-      if (Math.abs(dy2) > 0.04 && Math.abs(dy2) >= Math.max(Math.abs(f2), Math.abs(l2))) await pulseVertNT(dy2 >= 0 ? 1 : -1, 55);
-      else if (Math.abs(f2) >= Math.abs(l2) && Math.abs(f2) > 0.035) await pulseAxisNT(f2 >= 0 ? 'MoveForward' : 'MoveBackward', 55);
-      else if (Math.abs(l2) > 0.035) await pulseAxisNT(l2 >= 0 ? 'MoveLeft' : 'MoveRight', 55);
+      const msC = perr > 0.5 ? 80 : (perr > 0.15 ? 50 : 25);
+      if (Math.abs(dy2) > 0.04 && Math.abs(dy2) >= Math.max(Math.abs(f2), Math.abs(l2))) await pulseVertNT(dy2 >= 0 ? 1 : -1, msC);
+      else if (Math.abs(f2) >= Math.abs(l2) && Math.abs(f2) > 0.035) await pulseAxisNT(f2 >= 0 ? 'MoveForward' : 'MoveBackward', msC);
+      else if (Math.abs(l2) > 0.035) await pulseAxisNT(l2 >= 0 ? 'MoveLeft' : 'MoveRight', msC);
       else await sleep(30);
     }
     try { await sendF('/input/LookHorizontal', 0); } catch (e) {}
