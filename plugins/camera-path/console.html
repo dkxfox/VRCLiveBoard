@@ -10,7 +10,7 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif}
 body{min-height:100vh;display:flex;flex-direction:column;gap:10px;padding:10px 10px calc(14px + env(safe-area-inset-bottom))}
-header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 2px}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 2px;flex-wrap:wrap}
 .brand{font-size:17px;font-weight:700;letter-spacing:.5px}
 .brand .sub{font-size:12px;color:var(--sub);font-weight:400;margin-left:6px}
 .head-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
@@ -35,14 +35,15 @@ input[type=number]{width:66px;background:#0e1828;color:var(--text);border:1px so
 .list{display:flex;flex-direction:column;gap:8px}
 .item{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px}
 .item.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
-.item .top{display:flex;gap:10px;align-items:flex-start;justify-content:space-between}
+.item .top{display:flex;flex-direction:column;gap:4px;align-items:flex-start;justify-content:space-between}
 .item .nm{font-size:14px;font-weight:600;word-break:break-all;flex:1}
-.item .badges{font-size:11px;color:var(--sub);flex:2;text-align:right;word-break:break-all}
+.item .badges{font-size:11px;color:var(--sub);text-align:left;word-break:break-all}
 .item .acts{display:flex;gap:8px}
 .item .acts button{flex:1;min-height:44px}
 .empty{color:var(--sub);font-size:13px;padding:14px;text-align:center;border:1px dashed var(--line);border-radius:12px}
 footer{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;color:var(--sub);padding:4px 2px}
-@media (min-width:720px){body{max-width:860px;margin:0 auto;width:100%}.item{flex-direction:row;align-items:center}.item .top{flex:1;flex-direction:column}.item .acts{width:220px}.item .acts button{flex:1}}
+@media (max-width:560px){header{flex-direction:column;align-items:flex-start}.head-right{width:100%;justify-content:space-between}.brand{width:100%}}
+@media (min-width:720px){body{max-width:860px;margin:0 auto;width:100%}.item{flex-direction:row;align-items:center}.item .top{flex:1;flex-direction:column}.item .badges{text-align:right}.item .acts{width:220px}.item .acts button{flex:1}}
 </style>
 </head>
 <body>

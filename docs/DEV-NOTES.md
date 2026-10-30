@@ -2978,6 +2978,25 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 - **控制台 E2E(2026-10-30)**: 重启程序加载 v0.2.0 后, 插件需重新授权(内容哈希变了) → API 授权+启用; 用 CDP 实测插件卡: 9 条预设列表(世界/玩家/关键帧/段/需拆分)、仅导入/播放/停止/刷新/延迟/自动停止/高级设置均渲染正常; 点“播放”后 Pose 有运动、播放中 stop 后 Pose 归零; 截图 logs/ui-camera-path.png(gitignore)。
 - 收尾修正: 文案里“超过 7 关键帧”统一改为 6; 测试临时文件/导出测试文件已清理, CameraPaths 恢复原 9 个文件。
 
+
+## 384. camera-path v0.3.0: 插件局域网控制台 + 面板“刷新列表/打开控制台窗口”(2026-10-30)
+- 用户: “把插件的局域网控制台也加上。在插件面板里增加刷新列表和打开这个控制台窗口的功能。”
+- 实现(插件 v0.3.0):
+  - 插件内置 HTTP 服务: 监听 0.0.0.0(默认端口 19191), **默认关闭**; 设置项 `lanConsoleEnabled / lanConsolePort / lanConsoleToken`(口令可选); 手机/平板同一局域网直接访问。
+  - 静态页 `plugins/camera-path/console.html`: 纯原生 HTML/CSS/JS、暗色移动优先; 预设列表(**刷新列表**)、播放/仅导入/停止、播放前延迟、状态灯与当前预设; 拍照 POST 接口; 每 2 秒轮询状态。
+  - HTTP API: `GET /`、`GET /api/state`、`GET /api/presets`、`POST /api/play|import|stop|capture`; 设置口令后无 token 返回 401(支持 ?token= 或 x-camera-token)。
+  - 面板按钮: `刷新列表`(原刷新) + **`打开控制台窗口`**(自动启用 LAN 并启动服务, 然后打开浏览器); 状态行显示控制台地址。
+  - ⚠️ 核心新增 `POST /api/plugins/open-url`: Electron 的 window.open 只放行 https(2026-09-11 安全审计), 局域网 http 打不开, 所以由主进程校验“仅本机/私网 http(s)”后 `shell.openExternal`; 已登记 docs/ROUTES-BASELINE.json。
+- 实测:
+  - 单测 **15 PASS**(新增 LAN: 启动随机端口/静态页含标题与刷新按钮/state+presets/口令 401/200/关闭后不再监听)。
+  - 真机: LAN 服务在 **192.168.3.97:19191** 监听; 127.0.0.1 与局域网 IP 均能取到页面/state/presets; 经 LAN API 播放 2 帧世界预设 → Pose 16 条移动, 停止后 0 条; 仅导入不动相机。
+  - 面板 E2E(CDP): 按钮出现“刷新列表/打开控制台窗口”, 状态行显示 `控制台: http://192.168.3.97:19191/`; 点击打开 → 核心 open-url 返回 200 并调起浏览器。
+  - 移动端: Edge 无头 390×844 模拟截图, 无横向溢出; 头部/状态/刷新、当前预设三键、预设列表均正常。
+- 安全: 默认关闭; 可选口令; 只开本机/私网 http(s); 页面只调插件 API(不直连 OSC); 插件停用/程序退出即关闭监听。
+- 注意: 若手机打不开, 多半是 Windows 防火墙未放行 Electron/Node 的专用网络入站(需手动允许一次)。
+- 未做(后续): WebSocket 推送与多端实时同步、全部相机参数推子(见 CAMERA-CONSOLE-DESIGN 的 R01 完整版)、录制/重放搬进插件。
+- 提交: 05517fe(插件+核心+UI+单测) + 本记录提交。
+
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -3261,5 +3280,6 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 | 381 | 2026-10-30 | 模拟量连续矢量完整验证通过: 17.0s, 平均3.3/终点3.4cm; 线加速度噪声 51.2→7.0(-86%), P95 296→22(… |
 | 382 | 2026-10-30 | 相机运镜录制/重放插件化准备: 缺口清单 + 里程碑 + 需要拍板的点 |
 | 383 | 2026-10-30 | VRC+ 运镜 dolly OSC 语义实测 + camera-path v0.2.0 落地(导入/播放/多预设/自动拆分) |
+| 384 | 2026-10-30 | camera-path v0.3.0: 插件局域网控制台 + 面板“刷新列表/打开控制台窗口” |
 
 <!-- DEV-NOTES-INDEX:END -->
