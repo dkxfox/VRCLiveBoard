@@ -1,9 +1,9 @@
 {
   "id": "camera-path",
   "name": "相机运镜控制",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "VRCLiveBoard 官方",
-  "description": "实验功能: 用 OSC 控制 VRChat 官方相机(拍照/定时拍照/飞行模式/镜头参数/图层开关/UI 图层), 并管理运镜文件(导入导出/轨迹预览)。不依赖 VRChat 的运镜功能即可完成拍摄类动作; 相机位姿无法用 OSC 指定(已实测)。",
+  "description": "实验功能: VRC+ 运镜预设管理(扫描 CameraPaths、绝对路径导入 /dolly/Import、一键播放/停止、长运镜自动拆分以规避 VRChat >7 关键帧播放崩溃) + 相机 OSC 控制(拍照/飞行/镜头参数/图层/UI 图层)。不依赖 VRChat 运镜即可完成拍摄类动作; 相机位姿仍无法用 OSC 指定(已实测)。",
   "api": "2.0.0",
   "experimental": true,
   "permissions": {
@@ -12,7 +12,8 @@
     ],
     "filesystem": {
       "read": [
-        "Documents/VRChat/CameraPaths"
+        "Documents/VRChat/CameraPaths",
+        "AppData/LocalLow/VRChat/VRChat"
       ],
       "write": []
     },
@@ -25,27 +26,6 @@
   "loadOrder": 60,
   "settings": [
     {
-      "key": "oscPort",
-      "label": "VRChat OSC 接收端口",
-      "type": "number",
-      "default": 9000,
-      "hint": "VRChat 默认 9000; 改了游戏侧设置才需要改这里"
-    },
-    {
-      "key": "autoCaptureOnEvent",
-      "label": "事件触发自动拍照",
-      "type": "bool",
-      "default": false,
-      "hint": "先留空: 等事件映射做好再启用"
-    },
-    {
-      "key": "hideUiInPhoto",
-      "label": "拍照时隐藏 UI 图层",
-      "type": "bool",
-      "default": true,
-      "hint": "打开后拍照前自动关闭 ShowUIInCamera, 拍完还原(聊天框不会被拍进照片)"
-    },
-    {
       "key": "pathsDir",
       "label": "运镜路径目录",
       "type": "string",
@@ -53,14 +33,64 @@
       "hint": "留空 = 用户文档/VRChat/CameraPaths"
     },
     {
-      "key": "probeOnApply",
-      "label": "启用时探测端点",
+      "key": "delaySec",
+      "label": "播放前延迟(秒)",
+      "type": "number",
+      "default": 1,
+      "hint": "Import 后等待 N 秒再 Play, 给自己一点准备时间"
+    },
+    {
+      "key": "importWaitMs",
+      "label": "Import 后等待(毫秒)",
+      "type": "number",
+      "default": 800,
+      "hint": "实测大/多段运镜导入后过快 Play 会崩溃; 默认 800 比较稳, 不要调太小"
+    },
+    {
+      "key": "autoStopSec",
+      "label": "自动停止(秒, 0=不自动)",
+      "type": "number",
+      "default": 0,
+      "hint": "到点发 /dolly/Play false; 0 = 只手动停止/等它自然结束"
+    },
+    {
+      "key": "maxKeyframesPerSegment",
+      "label": "每段最大关键帧",
+      "type": "number",
+      "default": 6,
+      "hint": "VRChat 经 OSC 导入时单段 >6 关键帧不稳定(7 有时崩, 8 必崩); 插件自动拆分, 默认 6 不要改大"
+    },
+    {
+      "key": "stopRestoresLock",
+      "label": "停止后解除相机锁定",
       "type": "bool",
       "default": true,
-      "hint": "启用时检查相机 OSC 端点是否可用, 不可用则在状态里标明"
+      "hint": "播放后相机可能被 Lock, 停止时自动解锁"
+    },
+    {
+      "key": "oscPort",
+      "label": "VRChat OSC 接收端口",
+      "type": "number",
+      "default": 9000,
+      "hint": "VRChat 默认 9000"
+    },
+    {
+      "key": "oscQueryPort",
+      "label": "OSCQuery 端口(0=自动)",
+      "type": "number",
+      "default": 0,
+      "hint": "自动从 VRChat 日志读取; 读不到可手填"
+    },
+    {
+      "key": "hideUiInPhoto",
+      "label": "拍照时隐藏 UI 图层",
+      "type": "bool",
+      "default": true,
+      "hint": "拍照前关闭 ShowUIInCamera, 拍完还原"
     }
   ],
   "changelog": [
-    "0.1.0 首次: OSC 发送(含包体自检)+ 端点能力探测 + 自动隐藏 UI 拍照; 运镜文件与轨迹预览留待后续切片"
+    "0.2.0 2026-10-30: VRC+ 运镜预设(扫描/一键导入播放/停止/长运镜自动拆分) + /dolly 语义实测入档; 修正 /dolly/Import 绝对路径用法; 全模拟轴归零; 状态/测试 API",
+    "0.1.0 2026-10-14: OSC 发送(含包体自检) + 端点能力探测 + 自动隐藏 UI 拍照; 运镜文件与轨迹预览留待后续切片"
   ]
 }

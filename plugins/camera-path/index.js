@@ -1,23 +1,44 @@
 'use strict';
-// 相机运镜控制(plugin id: camera-path)v0.1.0 —— 切片 1
+// 相机运镜控制(plugin id: camera-path) v0.2.0 —— 2026-10-30
 //
-// 本切片只做三件事(都是可测的):
-//   ① OSC 发送(VRChat 的 /usercamera/* 与 /chatbox/input)
-//   ② **包体自检** —— 2026-10-14 实测踩过: OSC 字符串漏了 NUL 结尾与 4 字节对齐, VRChat 直接忽略,
-//      当时被我误判成"VRChat 不支持相机端点"。所以编码正确性在这里是**一等公民**: 每个包都过 audit()。
-//   ③ 能力探测(端点是否可用)与降级: 不可用就如实报告, 不静默失败。
+// v0.2.0 核心新增(已实测, 见 DEV-NOTES 383):
+//   ① /dolly/Import 接受**绝对文件路径字符串**, 导入成功;
+//   ② /dolly/Play true|false 播放/停止; 播放期间 /usercamera/Pose 有事件(可外部监听);
+//   ③ ⚠️ VRChat 限制: 单段关键帧 > 6 时经 OSC 导入播放不稳定(7 帧有时崩溃, 8+ 必崩: NullReferenceException "routine is null");
+//      本插件自动把长段**拆成 ≤ maxKeyframesPerSegment(默认6)**的多段(sanitized 临时文件), 实测 12 帧拆 6+6、10 帧拆 6+4 均可正常播放.
+//   ④ 播放后相机可能被 Lock(锁定), 可选"停止后解锁";
+//   ⑤ 多个预设: 扫描 CameraPaths 目录, 一键导入+播放.
 //
-// 未做(后续切片): 运镜文件导入导出 / 三视图预览 / 预计时长 / 事件映射 / 第三方联动口。
+// 保留 v0.1.0 能力: OSC 编码自检 / 能力探测 / 拍照(可隐藏 UI) / 简单运动原语(开环).
+//
+// 安全不变量:
+//   - 任何脉冲都 try/finally 归零; dispose/stop 时停止播放 + 归零(+ 可选解锁);
+//   - 不写用户 FlySpeed/TurnSpeed(运动原语是显式 API, 由调用者决定);
+//   - 导入失败/文件非法时如实返回 error, 不静默.
 
 const dgram = require('dgram');
 const http = require('http');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
-// ---------- OSC 编码: 唯一正确实现, 被 audit() 与单测共同约束 ----------
+const VERSION = '0.2.0';
+const DOLLY = {
+  play: '/dolly/Play',
+  playDelayed: '/dolly/PlayDelayed',
+  importPath: '/dolly/Import',
+  exportPath: '/dolly/Export',
+  exportLocal: '/dolly/ExportLocal',
+};
+// ⚠️ 实测(2026-10-30): 单段 7 帧在"多段拼接"时不稳(有时 routine is null), 8 帧必崩; 取 6 稳定
+const MAX_KEYFRAMES_DEFAULT = 6;
+const AXES = ['MoveForward', 'MoveBackward', 'MoveLeft', 'MoveRight', 'LookLeft', 'LookRight'];
+const FLOAT_AXES = ['Vertical', 'Horizontal', 'LookVertical', 'LookHorizontal'];
+
+// ---------- OSC 编码/自检(与 v0.1.0 相同; 被单测约束) ----------
 function oscString(s) {
   const b = Buffer.from(String(s), 'utf8');
-  const out = Buffer.alloc(Math.ceil((b.length + 1) / 4) * 4); // +1 是 NUL, 再补齐到 4 的倍数
+  const out = Buffer.alloc(Math.ceil((b.length + 1) / 4) * 4);
   b.copy(out, 0);
   return out;
 }
@@ -26,17 +47,21 @@ function oscMessage(address, args) {
   const tags = ',' + list.map(function (a) {
     if (typeof a === 'string') return 's';
     if (typeof a === 'boolean') return a ? 'T' : 'F';
+    if (typeof a === 'number') return Number.isInteger(a) ? 'i' : 'f';
     return 'f';
   }).join('');
   const parts = [oscString(address), oscString(tags)];
   list.forEach(function (a) {
     if (typeof a === 'string') parts.push(oscString(a));
-    else if (typeof a === 'number') { const b = Buffer.alloc(4); b.writeFloatBE(a); parts.push(b); }
-    // 布尔不带参数(只用类型标签)
+    else if (typeof a === 'boolean') { /* 只有类型标签 */ }
+    else if (typeof a === 'number') {
+      const b = Buffer.alloc(4);
+      if (Number.isInteger(a)) b.writeInt32BE(a); else b.writeFloatBE(a);
+      parts.push(b);
+    }
   });
   return Buffer.concat(parts);
 }
-// 包体自检: 任何一个 OSC 包都必须满足这些不变量, 否则发送端有 bug
 function auditPacket(buf) {
   const problems = [];
   if (!Buffer.isBuffer(buf)) return ['不是 Buffer'];
@@ -48,193 +73,328 @@ function auditPacket(buf) {
   return problems;
 }
 
-
-// ================= 切片 4a: dolly 引擎(已实证部分) =================
-// 已实证(2026-10-14):
-//   /dolly/Play true|false      可播可停
-//   /dolly/PlayDelayed N        延迟 N 秒后开始播放(发完 Play 会变 true)
-//   播放的是**运镜面板里当前选中的那条路径**
-// 未证实(不要当结论):  /dolly/Import 的字符串语义(试过 4 种写法均无明显反应)
-const DOLLY = {
-  play: '/dolly/Play',
-  playDelayed: '/dolly/PlayDelayed',
-  importPath: '/dolly/Import',
-  exportPath: '/dolly/Export',
-  exportLocal: '/dolly/ExportLocal',
-};
-
-// 解析 VRChat 运镜导出 JSON —— 字段已实测(18 个)
+// ---------- 运镜 JSON 解析/清洗 ----------
+function num(v, d) { const n = Number(v); return isFinite(n) ? n : d; }
 function parseVrcPath(json) {
   const arr = Array.isArray(json) ? json : [];
-  if (!arr.length) return { ok: false, error: '不是关键帧数组' };
-  const segs = {};
+  if (!arr.length) return { ok: false, error: '不是关键帧数组(空)' };
+  const bad = [];
   arr.forEach(function (k, i) {
-    const p = Number(k.PathIndex) || 0;
-    (segs[p] = segs[p] || []).push(k);
+    const P = k && k.Position, R = k && k.Rotation;
+    if (!P || !isFinite(Number(P.X)) || !isFinite(Number(P.Y)) || !isFinite(Number(P.Z))) bad.push(i);
+    if (!R || !isFinite(Number(R.X)) || !isFinite(Number(R.Y)) || !isFinite(Number(R.Z))) bad.push(i);
   });
+  if (bad.length) return { ok: false, error: '关键帧字段缺失: ' + bad.slice(0, 5).join(',') };
+  const segs = {};
+  arr.forEach(function (k, i) { const p = Number(k.PathIndex) || 0; (segs[p] = segs[p] || []).push(i); });
   let dist = 0;
-  Object.keys(segs).forEach(function (p) {
-    const s = segs[p];
-    for (let i = 1; i < s.length; i++) {
-      const a = s[i - 1].Position || {}, b = s[i].Position || {};
-      dist += Math.hypot((b.X || 0) - (a.X || 0), (b.Y || 0) - (a.Y || 0), (b.Z || 0) - (a.Z || 0));
+  const sortedKeys = Object.keys(segs).map(Number).sort(function (a, b) { return a - b; });
+  sortedKeys.forEach(function (p) {
+    const idxs = segs[p];
+    for (let i = 1; i < idxs.length; i++) {
+      const a = arr[idxs[i - 1]].Position, b = arr[idxs[i]].Position;
+      dist += Math.hypot(num(b.X) - num(a.X), num(b.Y) - num(a.Y), num(b.Z) - num(a.Z));
     }
   });
-  // 时间模式判定(实测): Duration != 2(默认) 表示该段是"时间模式", 值 = A 到 B 的秒数
   const durs = [];
-  Object.keys(segs).forEach(function (p) {
-    const s = segs[p];
-    for (let i = 1; i < s.length; i++) {
-      const d = Number(s[i].Duration);
-      if (isFinite(d) && Math.abs(d - 2) > 0.001) durs.push(d);
-    }
+  sortedKeys.forEach(function (p) {
+    const idxs = segs[p];
+    for (let i = 1; i < idxs.length; i++) { const d = Number(arr[idxs[i]].Duration); if (isFinite(d) && Math.abs(d - 2) > 0.001) durs.push(d); }
   });
-  const speeds = [];
-  arr.forEach(function (k) { const v = Number(k.Speed); if (isFinite(v) && Math.abs(v - 0.4) > 0.001) speeds.push(v); });
-  const timeSec = durs.reduce(function (a, b) { return a + b; }, 0);
   return {
     ok: true,
+    file: null,
     points: arr.length,
-    segments: Object.keys(segs).length,
+    segments: sortedKeys.length,
+    segmentSizes: sortedKeys.map(function (p) { return segs[p].length; }),
+    maxSegment: sortedKeys.reduce(function (m, p) { return Math.max(m, segs[p].length); }, 0),
     local: !!arr[0].IsLocal,
     distance: Math.round(dist * 100) / 100,
-    // 时间模式: 精确; 速度模式: 文件里没有最终时长(实测 363 秒的运镜文件里写着 7.057), 只能标"未知"
-    durationSec: durs.length ? Math.round(timeSec * 1000) / 1000 : null,
-    mode: durs.length ? 'time' : (speeds.length ? 'speed' : 'unknown'),
-    tailHoldMs: 3000,     // 运镜默认在最后一点静止 3 秒(用户实测)
+    durationSec: durs.length ? Math.round(durs.reduce(function (a, b) { return a + b; }, 0) * 1000) / 1000 : null,
+    mode: durs.length ? 'time' : 'speed',
   };
 }
-function listPathFiles(dir) {
+
+// 把 > limit 的段拆成更小段(保留顺序; 相邻段重叠一帧以减少断裂感)
+function sanitizePath(json, limit) {
+  const lim = Math.max(2, Math.min(20, Number(limit) || MAX_KEYFRAMES_DEFAULT));
+  const arr = Array.isArray(json) ? json : null;
+  if (!arr || !arr.length) return { ok: false, error: '不是关键帧数组' };
+  const info = parseVrcPath(arr);
+  if (!info.ok) return { ok: false, error: info.error };
+  if (info.maxSegment <= lim) return { ok: true, changed: false, json: arr, info: info };
+  const segs = {};
+  arr.forEach(function (k, i) { const p = Number(k.PathIndex) || 0; (segs[p] = segs[p] || []).push(i); });
+  const sortedKeys = Object.keys(segs).map(Number).sort(function (a, b) { return a - b; });
+  const out = [];
+  let newPath = 0;
+  sortedKeys.forEach(function (p) {
+    const idxs = segs[p];
+    if (idxs.length <= lim) {
+      idxs.forEach(function (srcIdx, j) { out.push(Object.assign({}, arr[srcIdx], { Index: j, PathIndex: newPath })); });
+      newPath++;
+      return;
+    }
+    let start = 0;
+    while (start < idxs.length) {
+      const end = Math.min(idxs.length, start + lim);
+      const chunk = idxs.slice(start, end);
+      chunk.forEach(function (srcIdx, j) { out.push(Object.assign({}, arr[srcIdx], { Index: j, PathIndex: newPath })); });
+      newPath++;
+      start = end;
+    }
+  });
+  return { ok: true, changed: true, json: out, info: parseVrcPath(out) };
+}
+
+function scanPresets(dir) {
+  let files = [];
+  try { files = fs.readdirSync(dir).filter(function (f) { return /\.json$/i.test(f) && !/^_vrcliveboard_tmp_/i.test(f); }); } catch (e) { return { ok: false, error: '无法读取目录: ' + dir, presets: [] }; }
+  const presets = [];
+  files.forEach(function (f) {
+    const full = path.join(dir, f);
+    let st = null; try { st = fs.statSync(full); } catch (e) {}
+    let info = { ok: false, error: '读取失败' };
+    try { info = parseVrcPath(JSON.parse(fs.readFileSync(full, 'utf8'))); } catch (e) { info = { ok: false, error: String(e.message || e).slice(0, 100) }; }
+    presets.push({ file: f, fullPath: full, isLocal: !!info.local, ok: !!info.ok, error: info.error || null, points: info.points || 0, segments: info.segments || 0, segmentSizes: info.segmentSizes || [], maxSegment: info.maxSegment || 0, distance: info.distance || 0, durationSec: info.durationSec != null ? info.durationSec : null, mode: info.mode || 'unknown', mtime: st ? st.mtimeMs : 0 });
+  });
+  presets.sort(function (a, b) { return (b.mtime || 0) - (a.mtime || 0); });
+  return { ok: true, presets: presets };
+}
+
+// ⚠️ 实测(2026-10-30): 世界运镜的临时文件必须放在 CameraPaths 目录内, 放 %TEMP% 会 routine-is-null;
+//    用 `_vrcliveboard_tmp_` 前缀并在扫描列表里忽略, 下一轮播放/停用/启用时清理.
+const TMP_PREFIX = '_vrcliveboard_tmp_';
+function writeJsonTemp(json, dir) {
+  try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {}
+  const p = path.join(dir, TMP_PREFIX + Date.now() + '-' + Math.random().toString(16).slice(2, 8) + '.json');
+  fs.writeFileSync(p, JSON.stringify(json), 'utf8');
+  return p;
+}
+function cleanupTemps(dir, keep) {
   try {
-    return fs.readdirSync(dir).filter(function (f) { return /\.json$/i.test(f); })
-      .map(function (f) {
-        const full = path.join(dir, f);
-        let info = { file: f, ok: false };
-        try { info = Object.assign(info, parseVrcPath(JSON.parse(fs.readFileSync(full, 'utf8')))); }
-        catch (e) { info.error = String(e.message || e).slice(0, 80); }
-        try { info.mtime = fs.statSync(full).mtimeMs; } catch (e) {}
-        return info;
-      })
-      .sort(function (a, b) { return (b.mtime || 0) - (a.mtime || 0); });
-  } catch (e) { return []; }
+    fs.readdirSync(dir).forEach(function (f) {
+      if (!/^_vrcliveboard_tmp_/i.test(f)) return;
+      const full = path.join(dir, f);
+      if (keep && path.basename(keep) === f) return;
+      try { fs.unlinkSync(full); } catch (e) {}
+    });
+  } catch (e) {}
 }
 
 module.exports = function (ctx) {
   const cfg = (ctx && ctx.config) || {};
-  const port = Number(cfg.oscPort) > 0 ? Number(cfg.oscPort) : 9000;
-  const host = '127.0.0.1';
+  const log = function (level, msg) { try { if (ctx && typeof ctx.log === 'function') ctx.log(level, msg); } catch (e) {} };
   const sock = dgram.createSocket('udp4');
-  let sent = 0, failed = 0, lastError = '', playing = false;
-  function pathsDir() { return String(cfg.pathsDir || '').trim() || path.join(require('os').homedir(), 'Documents', 'VRChat', 'CameraPaths'); }
-  const caps = { checked: false, camera: null, note: '' };
+  let sent = 0, failed = 0, lastError = '', playing = false, current = null, lastPlayedAt = 0;
+  let timer = null;
+  const state = { camera: null, note: '', oscQueryPort: 0, checked: false };
+
+  function port() { const p = Number(cfg.oscPort); return p > 0 ? p : 9000; }
+  function pathsDir() { const d = String(cfg.pathsDir || '').trim(); return d || path.join(os.homedir(), 'Documents', 'VRChat', 'CameraPaths'); }
+  function maxKF() { return Math.max(2, Math.min(20, Number(cfg.maxKeyframesPerSegment) || MAX_KEYFRAMES_DEFAULT)); }
 
   function send(address, args) {
     const packet = oscMessage(address, args);
     const bad = auditPacket(packet);
-    if (bad.length) {                       // 自检不过: 绝不发出去, 直接记账(正是 2026-10-14 的教训)
-      failed++;
-      lastError = '包体自检失败(' + address + '): ' + bad.join('; ');
-      if (ctx && ctx.log) ctx.log('warn', lastError);
-      return Promise.resolve(false);
-    }
+    if (bad.length) { failed++; lastError = '包体自检失败(' + address + '): ' + bad.join('; '); log('warn', lastError); return Promise.resolve(false); }
     return new Promise(function (resolve) {
-      sock.send(packet, port, host, function (err) {
+      sock.send(packet, port(), '127.0.0.1', function (err) {
         if (err) { failed++; lastError = String(err.message || err); resolve(false); }
         else { sent++; resolve(true); }
       });
     });
   }
-
-  // ---------- 运动原语(切片 3) ----------
-  const AXES = ['MoveForward', 'MoveBackward', 'MoveLeft', 'MoveRight', 'LookLeft', 'LookRight'];
-  let lastPulse = null;
   const sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
-  function getCap(path) {                      // 读 OSCQuery(能力查询); 拿不到就返回 null, 不抛
+
+  // ---------- OSCQuery(只读) ----------
+  function httpGetJson(portNum, p) {
     return new Promise(function (resolve) {
-      const ports = caps.queryPort ? [caps.queryPort] : [54420, 9001, 55719];
-      let idx = 0;
-      const tryOne = function () {
-        if (idx >= ports.length) return resolve(null);
-        const p = ports[idx++];
-        const req = http.get('http://127.0.0.1:' + p + path, { timeout: 1500 }, function (res) {
-          let d = ''; res.on('data', function (c) { d += c; });
-          res.on('end', function () { try { caps.queryPort = p; resolve(JSON.parse(d).VALUE); } catch (e) { tryOne(); } });
-        });
-        req.on('error', function () { tryOne(); });
-        req.on('timeout', function () { req.destroy(); tryOne(); });
-      };
-      tryOne();
+      const req = http.get('http://127.0.0.1:' + portNum + p, { timeout: 1500 }, function (res) {
+        let d = ''; res.on('data', function (c) { d += c; });
+        res.on('end', function () { try { resolve(JSON.parse(d)); } catch (e) { resolve(null); } });
+      });
+      req.on('error', function () { resolve(null); });
+      req.on('timeout', function () { req.destroy(); resolve(null); });
     });
   }
-  // ⚠️ 安全不变量: 任何脉冲都必须**保证归零** —— 用 try/finally, 否则一次异常会把某个轴卡在"按住"状态
-  async function zeroAll() {
-    for (const a of AXES) { await send('/input/' + a, [false]); await sleep(40); }
-  }
-  async function pulse(axis, ms) {
-    const dur = Math.max(50, Math.min(20000, Number(ms) || 300));
-    lastPulse = { axis: axis, ms: dur, at: Date.now() };
-    let ok = false;
+  function latestOscQueryPortFromLog() {
     try {
-      ok = await send('/input/' + axis, [true]);
-      await sleep(dur);
-    } finally {
-      await send('/input/' + axis, [false]);   // 无论成功失败都要松开
+      const dir = path.join(os.homedir(), 'AppData', 'LocalLow', 'VRChat', 'VRChat');
+      const files = fs.readdirSync(dir).filter(function (f) { return /^output_log_.*\.txt$/.test(f); })
+        .map(function (f) { const full = path.join(dir, f); return { f: full, t: fs.statSync(full).mtimeMs }; })
+        .sort(function (a, b) { return b.t - a.t; }).slice(0, 3);
+      for (const x of files) {
+        const txt = fs.readFileSync(x.f, 'utf8');
+        const m = /type OSCQuery on (\d+)/.exec(txt);
+        if (m) return Number(m[1]);
+        const m2 = /OSCQuery on (\d+)/.exec(txt);
+        if (m2) return Number(m2[1]);
+      }
+    } catch (e) {}
+    return 0;
+  }
+  async function discoverOscQuery() {
+    const explicit = Number(cfg.oscQueryPort) || 0;
+    const candidates = [];
+    if (explicit) candidates.push(explicit);
+    const fromLog = latestOscQueryPortFromLog();
+    if (fromLog) candidates.push(fromLog);
+    [54420, 9001, 55719, 61007, 62483].forEach(function (p) { if (candidates.indexOf(p) < 0) candidates.push(p); });
+    for (const p of candidates) {
+      const j = await httpGetJson(p, '/usercamera/Capture');
+      if (j && j.FULL_PATH) { state.camera = true; state.oscQueryPort = p; state.checked = true; state.note = 'OSCQuery 在 ' + p; return p; }
     }
-    return ok;
+    state.camera = false; state.checked = true; state.note = '未找到 OSCQuery(相机控制可能不可用)';
+    return 0;
+  }
+  async function readDollyState(portNum) {
+    const p = portNum || state.oscQueryPort || await discoverOscQuery();
+    if (!p) return null;
+    const play = await httpGetJson(p, '/dolly/Play');
+    return { play: play && play.VALUE ? !!play.VALUE[0] : null, port: p };
   }
 
-  // 能力探测: 相机端点是否被 VRChat 暴露(用 OSCQuery; 端口每次启动都变, 先探测再回退)
-  function probe(queryPort) {
-    return new Promise(function (resolve) {
-      const req = http.get('http://127.0.0.1:' + queryPort + '/usercamera/Capture', { timeout: 2500 }, function (res) {
-        let d = ''; res.on('data', function (c) { d += c; });
-        res.on('end', function () {
-          try { const j = JSON.parse(d); resolve(!!(j && j.FULL_PATH)); } catch (e) { resolve(false); }
-        });
-      });
-      req.on('error', function () { resolve(false); });
-      req.on('timeout', function () { req.destroy(); resolve(false); });
-    });
+  // ---------- 安全: 全轴归零(含模拟轴) ----------
+  async function zeroAll() {
+    for (const a of AXES) { await send('/input/' + a, [false]); await sleep(30); }
+    for (const a of FLOAT_AXES) { await send('/input/' + a, [0]); await sleep(30); }
+  }
+  async function clearTimer() { if (timer) { clearTimeout(timer); timer = null; } }
+
+  async function stopPlayback(reason) {
+    // 无论本进程是否认为在播放, 都发一次 Play=false(状态可能在上一次进程/重载后已丢失)
+    await send(DOLLY.play, [false]);
+    const wasPlaying = playing || !!current;
+    playing = false; lastPlayedAt = Date.now();
+    const c = current; current = null;
+    await clearTimer();
+    let unlocked = false;
+    if (cfg.stopRestoresLock !== false) {
+      const j = await httpGetJson(state.oscQueryPort || 0, '/usercamera/Lock');
+      if (j && j.VALUE && j.VALUE[0] === true) { await send('/usercamera/Lock', [false]); unlocked = true; }
+    }
+    log('info', '[camera-path] 停止播放(' + (reason || 'manual') + ')' + (c ? ' file=' + c.file : '') + (unlocked ? ' [已解锁]' : ''));
+    return { ok: true, stopped: wasPlaying, playSent: true, unlocked: unlocked, file: c ? c.file : null };
+  }
+
+  async function ensurePresetFile(item) {
+    if (!item || !item.fullPath) throw new Error('预设不存在');
+    const json = JSON.parse(fs.readFileSync(item.fullPath, 'utf8'));
+    const san = sanitizePath(json, maxKF());
+    if (!san.ok) throw new Error('运镜文件非法: ' + san.error);
+    if (!san.changed) return { importPath: item.fullPath, sanitized: false, info: san.info };
+    cleanupTemps(pathsDir(), null);
+    const tmp = writeJsonTemp(san.json, pathsDir());
+    return { importPath: tmp, sanitized: true, info: san.info, sanitizedPath: tmp };
+  }
+
+  async function playPreset(args) {
+    const a = args || {};
+    const list = scanPresets(pathsDir());
+    if (!list.ok) return { ok: false, error: list.error };
+    const presets = list.presets.filter(function (p) { return p.ok; });
+    let item = null;
+    if (a.file) item = presets.find(function (p) { return p.file === a.file; }) || null;
+    if (!item && a.name) item = presets.find(function (p) { return p.file.toLowerCase().indexOf(String(a.name).toLowerCase()) >= 0; }) || null;
+    if (!item && a.index != null) item = presets[Number(a.index)] || null;
+    if (!item) return { ok: false, error: '找不到预设(共 ' + presets.length + ' 条可用)', count: presets.length };
+    await discoverOscQuery();
+    const f = await ensurePresetFile(item);
+    const importOk = await send(DOLLY.importPath, [String(f.importPath)]);
+    if (!importOk) return { ok: false, error: 'Import 发送失败: ' + lastError };
+    // ⚠️ 实测: 大/多段文件 Import 后需要更久才可 Play(300ms 会 routine-is-null, 1s 正常); 默认 800ms
+    const importWaitMs = Math.max(0, Math.min(5000, cfg.importWaitMs != null ? Number(cfg.importWaitMs) : 800));
+    await sleep(importWaitMs);
+    const delaySec = Math.max(0, Math.min(60, a.delaySec != null ? Number(a.delaySec) : (Number(cfg.delaySec) || 1)));
+    const startedAt = Date.now();
+    if (a.noPlay) {
+      playing = false; current = { file: item.file, sanitized: !!f.sanitized, importedPath: f.importPath, startedAt: startedAt, keypoints: f.info.points };
+      log('info', '[camera-path] 仅导入 ' + item.file + (f.sanitized ? '(已拆分)' : ''));
+      return { ok: true, file: item.file, sanitized: !!f.sanitized, noPlay: true, keyframes: f.info.points, segments: f.info.segments, info: '已 Import(未播放)' };
+    }
+    let playOk = false;
+    if (delaySec > 0) {
+      timer = setTimeout(function () {}, Math.min(delaySec * 1000, 5000)); // 仅占位, 实际下面 await
+      await sleep(delaySec * 1000);
+      await clearTimer();
+    }
+    playOk = await send(DOLLY.play, [true]);
+    if (!playOk) return { ok: false, error: 'Play 发送失败: ' + lastError };
+    playing = true; current = { file: item.file, sanitized: !!f.sanitized, importedPath: f.importPath, startedAt: startedAt, keyframes: f.info.points, segments: f.info.segments, isLocal: item.isLocal };
+    // 自动停止: autoStopSec>0 时到点停; 否则靠结束自动(false)/手动停止
+    await clearTimer();
+    const autoStopSec = Number(cfg.autoStopSec) || 0;
+    if (autoStopSec > 0) timer = setTimeout(function () { try { stopPlayback('autoStop'); } catch (e) {} }, Math.min(600, autoStopSec) * 1000);
+    log('info', '[camera-path] 播放 ' + item.file + (f.sanitized ? '(已拆分 ' + f.info.segments + ' 段)' : '') + ' delay=' + delaySec + 's');
+    return { ok: true, file: item.file, sanitized: !!f.sanitized, keyframes: f.info.points, segments: f.info.segments, segmentSizes: f.info.segmentSizes, isLocal: item.isLocal, delaySec: delaySec, autoStopSec: autoStopSec, info: '已发送 Import + Play' };
   }
 
   return {
     apply: async function () {
-      if (!cfg.probeOnApply) { caps.checked = false; caps.note = '已跳过探测(设置里关闭)'; return { ok: true, note: caps.note }; }
-      for (const p of [54420, 9001, 55719]) {              // 常见候选; 生产版将改为从 VRChat 日志读取
-        if (await probe(p)) { caps.checked = true; caps.camera = true; caps.note = 'OSCQuery 在 ' + p + ', 相机端点可用'; break; }
-      }
-      if (!caps.checked) { caps.camera = false; caps.note = '未发现可用的 OSCQuery(相机控制可能不可用); OSC 发送仍会尝试'; }
-      if (ctx && ctx.log) ctx.log('info', '[camera-path] ' + caps.note);
-      return { ok: true, note: caps.note };
+      cleanupTemps(pathsDir(), null);
+      await discoverOscQuery();
+      const list = scanPresets(pathsDir());
+      log('info', '[camera-path] v' + VERSION + ' 已启用; ' + (list.ok ? list.presets.length : 0) + ' 个预设; ' + state.note);
+      return { ok: true, note: state.note, presets: list.ok ? list.presets.length : 0 };
     },
-    dispose: function () { try { sock.close(); } catch (e) {} },
+    dispose: async function () {
+      try { await stopPlayback('dispose'); } catch (e) {}
+      try { cleanupTemps(pathsDir(), null); } catch (e) {}
+      try { await zeroAll(); } catch (e) {}
+      try { sock.close(); } catch (e) {}
+      await clearTimer();
+    },
 
+    // ===== 扁平 API(控制台通过 /api/plugins/call 调用; 嵌套对象不可调用) =====
     api: {
-      status: function () {
+      status: async function () {
+        const list = scanPresets(pathsDir());
+        let dollyPlay = null;
+        try { const d = await readDollyState(0); dollyPlay = d ? d.play : null; } catch (e) {}
         return {
-          ok: true,
-          camera: caps.camera, note: caps.note,
-          osc: { host: host, port: port, sent: sent, failed: failed, lastError: lastError },
-          capabilities: ['Capture', 'CaptureDelayed', 'ShowUIInCamera', 'GreenScreen', 'LocalPlayer', 'RemotePlayer', 'Environment', 'LookAtMe', 'Zoom', 'Exposure', 'FlySpeed', 'TurnSpeed', 'SmoothingStrength', 'OrientationIsLandscape'],
-          notSupported: ['相机位姿(Position/Rotation/Pose 无端点)', '驱动飞行相机移动(PC 模式需鼠标中键)'],
+          ok: true, version: VERSION,
+          camera: state.camera, note: state.note, oscQueryPort: state.oscQueryPort,
+          osc: { host: '127.0.0.1', port: port(), sent: sent, failed: failed, lastError: lastError },
+          presetsDir: pathsDir(), presetCount: list.ok ? list.presets.length : 0,
+          playing: playing, current: current, dollyPlay: dollyPlay,
+          settings: { delaySec: Number(cfg.delaySec) || 1, autoStopSec: Number(cfg.autoStopSec) || 0, maxKeyframesPerSegment: maxKF(), stopRestoresLock: cfg.stopRestoresLock !== false },
         };
       },
-      // 给控制台/别的插件用: 拍一张(可选先隐藏 UI 图层)
+      listPresets: async function () {
+        await discoverOscQuery();
+        const list = scanPresets(pathsDir());
+        if (!list.ok) return { ok: false, error: list.error };
+        const lim = maxKF();
+        list.presets.forEach(function (p) { p.needsSplit = p.ok && p.maxSegment > lim; p.playable = p.ok; });
+        return { ok: true, dir: pathsDir(), maxKeyframesPerSegment: lim, presets: list.presets };
+      },
+      playPreset: async function (args) { try { return await playPreset(args); } catch (e) { return { ok: false, error: String(e.message || e) }; } },
+      importPreset: async function (args) {
+        try { return await playPreset(Object.assign({}, args || {}, { noPlay: true })); } catch (e) { return { ok: false, error: String(e.message || e) }; }
+      },
+      stop: async function () { try { return await stopPlayback('manual'); } catch (e) { return { ok: false, error: String(e.message || e) }; } },
+      refresh: async function () { return await this.listPresets(); },
+      zeroAll: async function () { await zeroAll(); return { ok: true }; },
+      test: async function () {
+        const p = await discoverOscQuery();
+        const dolly = await readDollyState(p);
+        return { ok: !!p, oscQueryPort: p, dollyEndpoints: !!(dolly && dolly.play !== null), note: state.note };
+      },
       capture: async function (opts) {
         const hideUi = !opts || opts.hideUi !== false ? !!cfg.hideUiInPhoto : false;
         if (hideUi) await send('/usercamera/ShowUIInCamera', [false]);
         const ok = await send('/usercamera/Capture', []);
-        if (hideUi) { await new Promise(function (r) { setTimeout(r, 1200); }); await send('/usercamera/ShowUIInCamera', [true]); }
+        if (hideUi) { await sleep(1200); await send('/usercamera/ShowUIInCamera', [true]); }
         return { ok: ok, hidUi: hideUi };
       },
       send: send,
-      _audit: auditPacket,   // 供单测直接使用
+      _audit: auditPacket,
       _encode: oscMessage,
-
-      // ===== 运动原语(切片 3)=====
-      // ⚠️ 只在 **VR 模式** 下有效: 2026-10-14 实测 Flying=true 后
-      //    /input/MoveForward 脉冲 2.5 秒 -> 画面差异 50%(PC 模式下同一实验仅 0.19%, 因为 PC 飞行要按住鼠标中键)。
-      // ⚠️ 开环: 没有位姿反馈, 推多远/转到哪程序并不知道 —— 因此**只做短脉冲**, 并把每次动作都记进状态。
+      _parse: parseVrcPath,
+      _sanitize: sanitizePath,
+      _scan: scanPresets,
+      // 运动原语(开环; 保留 v0.1 兼容)
       motion: {
         moveForward: function (ms) { return pulse('MoveForward', ms); },
         moveBackward: function (ms) { return pulse('MoveBackward', ms); },
@@ -243,52 +403,16 @@ module.exports = function (ctx) {
         lookLeft: function (ms) { return pulse('LookLeft', ms); },
         lookRight: function (ms) { return pulse('LookRight', ms); },
         setFlying: function (on) { return send('/usercamera/Flying', [!!on]); },
-        setFlySpeed: function (v) { return send('/usercamera/FlySpeed', [Number(v) || 0.2]); },
-        setTurnSpeed: function (v) { return send('/usercamera/TurnSpeed', [Number(v) || 1]); },
         stopAll: zeroAll,
-        // 一个"推轨"组合: 开飞行 -> 设速度 -> 前进 -> 停 -> (可选)还原飞行
-        dolly: async function (opts) {
-          const o = opts || {};
-          const ms = Math.max(50, Math.min(20000, Number(o.ms) || 800));
-          const back = o.restoreFlying !== false;
-          const wasFlying = String(await getCap('/usercamera/Flying')) === 'true';
-          await send('/usercamera/Flying', [true]); await sleep(400);
-          if (o.flySpeed) { await send('/usercamera/FlySpeed', [o.flySpeed]); await sleep(400); }
-          const ok = await pulse('MoveForward', ms);
-          if (o.lookMs) await pulse(o.lookLeft ? 'LookLeft' : 'LookRight', o.lookMs);
-          if (back && !wasFlying) await send('/usercamera/Flying', [false]);
-          return { ok: ok, ms: ms, drift: '开环: 位移未知, 会累积' };
-        },
-      },
-      _lastPulse: function () { return lastPulse; },
-
-      // ===== 切片 4a: dolly 引擎(全部为已实证能力)=====
-      dolly: {
-        // 列出运镜面板可用的路径文件(只读; 目录可在设置里改)
-        list: function () { return listPathFiles(pathsDir()); },
-        // 触发播放: 默认延迟 1 秒(给自己一点准备时间); 返回"预计时长"(仅时间模式可信)
-        play: async function (opts) {
-          const o = opts || {};
-          const delay = Math.max(0, Math.min(60, Number(o.delaySec) || 1));
-          const ok = await send(DOLLY.playDelayed, [delay]);   // 已实证: 发完 /dolly/Play 会变 true
-          playing = true;
-          const notes = [];
-          if (o.expectedSec) notes.push('预计 ' + o.expectedSec + ' 秒(时间模式按 Duration 求和 + 末端静止)');
-          if (o.mode === 'speed') notes.push('⚠️ 速度模式的时长无法从文件得知(实测: 文件写着 7.057 秒, 实际跑了 363 秒), 只能靠计时或人工观察');
-          return { ok: ok, delaySec: delay, notes: notes };
-        },
-        stop: async function () { const r = await send(DOLLY.play, [false]); playing = false; return { ok: r }; },
-        // 播放进度**读不到**(/dolly 只有 Import/Export/Play/PlayDelayed), 只能靠计时
-        status: async function () { return { playing: playing, playValue: await getCap(DOLLY.play), playDelayed: await getCap(DOLLY.playDelayed) }; },
-        // ⚠️ /dolly/Import 的字符串语义**未证实**(试过绝对路径/文件名等 4 种写法均无明显反应) -> 不做承诺
-        importUnverified: async function (s) { return { ok: await send(DOLLY.importPath, [String(s)]), note: '语义未证实, 仅作实验入口' }; },
-        // 建议时长: 时间模式精确; 速度模式未知(如实返回 null)
-        guessDurationMs: function (info) {
-          if (!info || !info.ok) return null;
-          if (info.mode === 'time' && info.durationSec != null) return Math.round(info.durationSec * 1000 + (info.tailHoldMs || 3000));
-          return null;
-        },
       },
     },
   };
+
+  async function pulse(axis, ms) {
+    const dur = Math.max(50, Math.min(20000, Number(ms) || 300));
+    let ok = false;
+    try { ok = await send('/input/' + axis, [true]); await sleep(dur); }
+    finally { await send('/input/' + axis, [false]); }
+    return ok;
+  }
 };

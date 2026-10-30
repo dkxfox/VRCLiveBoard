@@ -298,7 +298,10 @@ class PluginManager {
       const conflicts = conflictMod.analyze(this.entries.map(function (e) { return e; }));
       const issues = (conflicts[id] || []).filter(function (i) { return i.with !== '运行时' && i.reason.indexOf('依赖') >= 0 || i.reason.indexOf('互斥') >= 0 || i.reason.indexOf('重复') >= 0; });
       if (issues.length) return { ok: false, error: '冲突: ' + issues[0].reason };
-      const mod = require(path.join(entry.dir, 'index.js'));
+      // 2026-10-30: 每次启用都清掉 require 缓存 —— 否则插件文件更新后必须重启整个程序才生效
+      const indexPath = path.join(entry.dir, 'index.js');
+      try { delete require.cache[require.resolve(indexPath)]; } catch (e) {}
+      const mod = require(indexPath);
       const create = typeof mod === 'function' ? mod : mod.create;
       if (!create) return { ok: false, error: 'index.js 缺少导出' };
       entry.plugin = create(this.buildCtx(entry));

@@ -2955,6 +2955,27 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 - 待拍板: ① v0.2.0 先实验(不进包)还是直接规划进包/市场? ② 入口先做动作桥按钮还是先用"调用插件接口"? ③ 录制 10s/重放上限 60s 是否合适? ④ 末端低速抖动是否阻塞 v0.2.0?
 - 未做: 未改任何产品代码/插件代码/配置; 只新增设计文档 + 本记录。
 
+
+## 383. VRC+ 运镜 dolly OSC 语义实测 + camera-path v0.2.0 落地(导入/播放/多预设/自动拆分)(2026-10-30)
+- 用户授权完全自动化落地"基于 VRC+ 的运镜控制 + 多个快速导入预设", 并自行测试。
+- **实测语义**(dev 工具新增 `dolly-test` / `dolly-delayed` / `dolly-export`):
+  - `/dolly/Import` 接受**绝对文件路径**(相对路径报错 `Invalid JSON or file path`); Import 本身不动相机, `/dolly/Play true` 开始播放、false 停止; 播放期间 `/usercamera/Pose` 有事件(可作验收); 播放后 `/usercamera/Lock` 可能变 true。
+  - `/dolly/PlayDelayed` 写入读回不可靠(实测 Play 已立即 true); 插件改用 "Import -> 等待 -> Play"。
+  - `/dolly/Export` 会往 CameraPaths 写 `VRChat_CameraPath_{World,Local}_<时间>.json`(实测生成 2 个), 本次只记录未做按钮。
+  - ⚠️ **崩溃门槛**: 单段关键帧 >6 经 OSC 导入播放不稳定(7 有时 `routine is null`, 8+ 必崩); 拆成 ≤6 可稳定; **拆分文件必须放在 CameraPaths 目录内**(%TEMP% 会崩); Import 后需等待 **≥约 800ms** 再 Play, 否则大/多段文件会崩。
+- **插件 camera-path v0.2.0(实装)**:
+  - 预设扫描(CameraPaths/*.json, 忽略 `_vrcliveboard_tmp_`), 元数据(世界/玩家、关键帧、段数、需拆分、距离、时间模式);
+  - 扁平 API: `listPresets / playPreset / importPreset / stop / status / test`(控制台 `/api/plugins/call` 可调);
+  - 自动拆分(`sanitizePath`, 默认 6 帧/段, 无重叠), 临时文件写入 CameraPaths 并清理; 停止无条件发 Play=false + 可选解锁;
+  - UI: 控制台插件卡自定义渲染(预设列表/播放/仅导入/停止/刷新/延迟/自动停止/状态 + 高级设置), 三语键;
+  - 核心: 插件管理器启用时**清理 require 缓存**(插件文件更新后无需重启整个程序);
+  - 安全: 全 10 轴归零(含 4 个模拟轴); dispose 停止播放+清理; 不写用户 FlySpeed。
+- **测试**:
+  - 离线单测 `plugins/camera-path/test/run-tests.js`: **11 PASS**(OSC 编码/包体自检/运镜解析/非法输入/拆分阈值/临时文件过滤/扫描容错);
+  - 真机夹具 `plugins/camera-path/test/live-harness.js`: 2 帧世界预设播放正常; 12 帧世界(自动 6+6) 80 条 Pose / 7.35m; 10 帧玩家(6+4) 75 条 Pose; 仅导入不动相机; 播放中 stop 后 Pose 归零; 无新的 routine-is-null 报错。
+  - 清理: 测试写入 CameraPaths 的 `TEST_*`/临时文件/导出测试文件已删除, 目录恢复原 9 个文件。
+- 待办: 记录-重放(模拟量连续矢量)搬进插件(Pose 输入需核心 OSC hub 或插件独占 9001); 导出按钮; 时长估计优化。
+
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -3237,5 +3258,6 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 | 380 | 2026-10-30 | 模拟量连续矢量验证: 线加速度噪声 38.9→11.1(-71%); 偏航收敛修好; 完整段待复位 |
 | 381 | 2026-10-30 | 模拟量连续矢量完整验证通过: 17.0s, 平均3.3/终点3.4cm; 线加速度噪声 51.2→7.0(-86%), P95 296→22(… |
 | 382 | 2026-10-30 | 相机运镜录制/重放插件化准备: 缺口清单 + 里程碑 + 需要拍板的点 |
+| 383 | 2026-10-30 | VRC+ 运镜 dolly OSC 语义实测 + camera-path v0.2.0 落地(导入/播放/多预设/自动拆分) |
 
 <!-- DEV-NOTES-INDEX:END -->

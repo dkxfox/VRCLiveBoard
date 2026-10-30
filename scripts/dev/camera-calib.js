@@ -14,6 +14,9 @@
 //   dolly-play [延迟秒]        触发运镜播放(默认 1 秒)
 //   dolly-stop                 停止运镜
 //   dolly-import <字符串>      试导入(语义未证实)
+//   dolly-test <文件路径> [秒] 导入并播放运镜, 监听 Pose/Play 输出时间线(验收用)
+//   dolly-delayed <文件路径> [延迟秒] 验证 /dolly/PlayDelayed(int) 是否自动开播
+//   dolly-export <字符串>      试导出(语义未证实), 随后列出 CameraPaths 新文件
 //   pose-listen [秒]          只监听 Pose 并打印(诊断 9001 是否空闲、游戏是否在发)
 //   move-forward <米>          闭环: 相机向前自动走 N 米后停住并报误差(默认 1.000)
 //   move-left <米>             闭环: 相机向左平移 N 米后停住并报误差(默认 1.000)
@@ -1487,6 +1490,83 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
   });
 }
 
+// ===== 2026-10-30: VRC+ 运镜 dolly 语义实测/验收命令 =====
+function dollyKeyframes(file) {
+  const arr = JSON.parse(fs.readFileSync(file, 'utf8'));
+  if (!Array.isArray(arr)) throw new Error('不是数组');
+  const segs = {}; arr.forEach(function (k) { (segs[k.PathIndex || 0] = segs[k.PathIndex || 0] || []).push(k); });
+  let dist = 0; Object.keys(segs).forEach(function (p) { const s = segs[p]; for (let i = 1; i < s.length; i++) { const a = s[i - 1].Position || {}, b = s[i].Position || {}; dist += Math.hypot((b.X || 0) - (a.X || 0), (b.Y || 0) - (a.Y || 0), (b.Z || 0) - (a.Z || 0)); } });
+  const first = arr[0], last = arr[arr.length - 1];
+  return { count: arr.length, segs: Object.keys(segs).length, dist: dist, first: first, last: last, isLocal: !!first.IsLocal, speeds: arr.map(function (k) { return Number(k.Speed); }) };
+}
+async function dollyTest(file, waitSec) {
+  const info = dollyKeyframes(file);
+  console.log('运镜文件: ' + file);
+  console.log('  关键帧 ' + info.count + ' / 路径段 ' + info.segs + ' / 直线长度 ' + info.dist.toFixed(2) + ' m / IsLocal=' + info.isLocal);
+  console.log('  首帧 pos=[' + [info.first.Position.X, info.first.Position.Y, info.first.Position.Z].map(function (x) { return Number(x).toFixed(2); }).join(', ') + '] Speed=' + info.first.Speed + ' Duration=' + info.first.Duration);
+  lastPose = null; lastPoseAt = 0; poseT0 = 0; poseSamples.length = 0;
+  poseSock = await bindPose();
+  try {
+    if (!lastPose) { try { await pulseAxis('MoveForward', 40); } catch (e) {} if (!(await waitPose(0, 1500))) console.log('  (未取到初始 Pose; 飞行关闭时正常, play 期间会收到 Pose)'); }
+    await send('/dolly/Import', [String(file)]);
+    await sleep(400);
+    console.log('  Import 后 Play=' + JSON.stringify(await getVal('/dolly/Play')));
+    await send('/dolly/Play', [true]);
+    const t0 = Date.now();
+    let states = [];
+    while ((Date.now() - t0) / 1000 < (Number(waitSec) || 8)) {
+      states.push(JSON.stringify(await getVal('/dolly/Play')));
+      await sleep(400);
+    }
+    await send('/dolly/Play', [false]);
+    await sleep(300);
+    const samples = poseSamples.length;
+    let path = 0; for (let i = 1; i < poseSamples.length; i++) path += dist3(poseSamples[i].pos, poseSamples[i - 1].pos);
+    console.log('  Play 期间 Pose 采样 ' + samples + ' 条 / 相机路径长 ' + path.toFixed(2) + ' m');
+    if (samples >= 2) { const ms0 = poseSamples[0].ms, ms1 = poseSamples[poseSamples.length - 1].ms; console.log('  Pose 时间跨度 ' + ((ms1 - ms0) / 1000).toFixed(2) + ' s; 最后运动时刻 ' + (ms1 / 1000).toFixed(2) + ' s'); }
+    if (samples) console.log('  首 Pose [' + lastPose.pos.map(function (x) { return x.toFixed(2); }).join(', ') + ']');
+    console.log('  Play 状态序列(去重): ' + Array.from(new Set(states)).join(' -> '));
+    console.log('  末尾 Play=' + JSON.stringify(await getVal('/dolly/Play')));
+  } finally {
+    try { await send('/dolly/Play', [false]); } catch (e) {}
+    try { await zeroAll(); } catch (e) {}
+    if (poseSock) { try { poseSock.close(); } catch (e) {} poseSock = null; }
+  }
+}
+async function dollyDelayedTest(file, delaySec) {
+  const d = Math.max(1, Number(delaySec) || 3);
+  lastPose = null; lastPoseAt = 0; poseT0 = 0; poseSamples.length = 0;
+  poseSock = await bindPose();
+  try {
+    if (!lastPose) { try { await pulseAxis('MoveForward', 40); } catch (e) {} if (!(await waitPose(0, 1500))) console.log('(未取到初始 Pose; 继续)'); }
+    console.log('Import: ' + file);
+    await send('/dolly/Import', [String(file)]);
+    await sleep(400);
+    await sendNum('/dolly/PlayDelayed', d);
+    await sleep(300);
+    console.log('  PlayDelayed 写入 ' + d + ' -> 读回 ' + JSON.stringify(await getVal('/dolly/PlayDelayed')) + ' / Play=' + JSON.stringify(await getVal('/dolly/Play')));
+    const t0 = Date.now();
+    while ((Date.now() - t0) / 1000 < d + 4) {
+      const p = await getVal('/dolly/Play');
+      console.log('  t=' + ((Date.now() - t0) / 1000).toFixed(1) + 's Play=' + JSON.stringify(p) + ' Pose=' + poseSamples.length);
+      await sleep(500);
+    }
+  } finally {
+    try { await send('/dolly/Play', [false]); } catch (e) {}
+    try { await zeroAll(); } catch (e) {}
+    if (poseSock) { try { poseSock.close(); } catch (e) {} poseSock = null; }
+  }
+}
+async function dollyExportTest(str) {
+  const dir = path.join(os.homedir(), 'Documents', 'VRChat', 'CameraPaths');
+  const before = new Set(fs.existsSync(dir) ? fs.readdirSync(dir) : []);
+  await send('/dolly/Export', [String(str)]);
+  await sleep(1500);
+  const after = fs.existsSync(dir) ? fs.readdirSync(dir) : [];
+  const added = after.filter(function (x) { return !before.has(x); });
+  console.log('Export "' + str + '" -> 新文件: ' + (added.length ? added.join(', ') : '(无)'));
+}
+
 (async () => {
   const [cmd, a1, a2, a3, a4] = process.argv.slice(2);
   const parse = v => v === 'true' ? true : (v === 'false' ? false : (isFinite(Number(v)) ? (String(v).indexOf('.') >= 0 ? Number(v) : Number(v)) : v));
@@ -1601,6 +1681,9 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
     await replaySmooth(String(a1), Number(a2) || 1.0, maxSec3, dry3);
     sock.close(); return;
   }
+  if (cmd === 'dolly-test') { if (!a1) { console.log('用法: dolly-test <文件> [秒]'); sock.close(); return; } await dollyTest(String(a1), Number(a2) || 8); sock.close(); return; }
+  if (cmd === 'dolly-delayed') { if (!a1) { console.log('用法: dolly-delayed <文件> [延迟秒]'); sock.close(); return; } await dollyDelayedTest(String(a1), Number(a2) || 3); sock.close(); return; }
+  if (cmd === 'dolly-export') { await dollyExportTest(String(a1 || '')); sock.close(); return; }
   if (cmd === 'pose-listen') {
     const secs = Math.max(1, Math.min(120, Number(a1) || 10));
     lastPose = null; lastPoseAt = 0; poseT0 = 0; poseSamples.length = 0;

@@ -184,6 +184,59 @@ function plgWarn(p,onOk){var m=$('plgModal');if(!m){onOk();return;}var hr=!!(p.p
         var wantId=String(p.id||'').trim().toLowerCase();
         var wantName=String(plgName(p)||'').trim().toLowerCase();
         if(tv!==wantId && tv!==wantName){var rn2=$('plgRiskNote');if(rn2)rn2.textContent='⚠ '+tr('plgTypeBad');return;}}m.style.display='none';onOk();};$('plgCancel').onclick=function(){m.style.display='none';clearInterval(window._plgIv);};}
+// 相机运镜(camera-path) 自定义卡片: 预设列表 + 一键导入播放/停止(2026-10-30)
+function plgCameraPath(p, body){
+  body.innerHTML='';
+  var head=document.createElement('div');head.className='sub';head.style.margin='0 0 6px';head.textContent=tr('cpTitle')+' — '+tr('cpDesc');body.appendChild(head);
+  var row=document.createElement('div');row.className='row';row.style.cssText='gap:8px;flex-wrap:wrap;margin:6px 0;align-items:center';
+  var labDelay=document.createElement('label');labDelay.className='sub';labDelay.textContent=tr('cpDelay')+' ';
+  var inDelay=document.createElement('input');inDelay.type='number';inDelay.min='0';inDelay.max='60';inDelay.style.width='64px';inDelay.value='1';labDelay.appendChild(inDelay);
+  var labAuto=document.createElement('label');labAuto.className='sub';labAuto.textContent=tr('cpAutoStop')+' ';
+  var inAuto=document.createElement('input');inAuto.type='number';inAuto.min='0';inAuto.max='600';inAuto.style.width='64px';inAuto.value='0';labAuto.appendChild(inAuto);
+  var bSave=document.createElement('button');bSave.className='small';bSave.textContent=tr('cpSave');
+  var bRefresh=document.createElement('button');bRefresh.className='small gray';bRefresh.textContent=tr('cpRefresh');
+  var bStop=document.createElement('button');bStop.className='small danger';bStop.textContent=tr('cpStop');
+  var msg=document.createElement('span');msg.className='sub';
+  row.appendChild(labDelay);row.appendChild(labAuto);row.appendChild(bSave);row.appendChild(bRefresh);row.appendChild(bStop);row.appendChild(msg);
+  body.appendChild(row);
+  var statusEl=document.createElement('div');statusEl.className='sub';statusEl.style.margin='4px 0';body.appendChild(statusEl);
+  var listEl=document.createElement('div');body.appendChild(listEl);
+  function setMsg(txt,warn){msg.style.color=warn?'var(--warn)':'';msg.textContent=txt||'';}
+  function renderList(presets){
+    listEl.innerHTML='';
+    if(!presets||!presets.length){var e=document.createElement('div');e.className='sub';e.textContent=tr('cpNoPresets');listEl.appendChild(e);return;}
+    presets.forEach(function(it){
+      var r=document.createElement('div');r.className='row';r.style.cssText='gap:8px;align-items:center;margin:4px 0;flex-wrap:wrap';
+      var name=document.createElement('span');name.className='sub';name.style.minWidth='260px';name.style.wordBreak='break-all';name.textContent=it.file;r.appendChild(name);
+      var badge=document.createElement('span');badge.className='sub';badge.style.opacity='0.75';
+      badge.textContent=(it.isLocal?tr('cpLocal'):tr('cpWorld'))+' · '+it.points+' '+tr('cpPoints')+' · '+it.segments+' '+tr('cpSegments')+(it.needsSplit?' · '+tr('cpNeedsSplit'):'');
+      r.appendChild(badge);
+      if(!it.ok){var bad=document.createElement('span');bad.className='sub';bad.style.color='var(--warn)';bad.textContent='⚠ '+(it.error||'');r.appendChild(bad);return;}
+      var imp=document.createElement('button');imp.className='small gray';imp.textContent=tr('cpImport');
+      imp.onclick=function(){setMsg('...');plugCall('camera-path','importPreset',{file:it.file}).then(function(j){setMsg(j&&j.ok?tr('cpImported')+': '+it.file:(tr('cpSaveFail')+((j&&j.error)||'')),!(j&&j.ok));}).catch(function(e){setMsg(tr('cpSaveFail')+e.message,true);});};
+      r.appendChild(imp);
+      var play=document.createElement('button');play.className='small';play.textContent=tr('cpPlay');
+      play.onclick=function(){setMsg('...');plugCall('camera-path','playPreset',{file:it.file,delaySec:Number(inDelay.value)||0}).then(function(j){if(j&&j.ok){setMsg(tr('cpPlaying')+': '+it.file+(j.sanitized?(' ['+tr('cpNeedsSplit')+']'):''));refreshStatus();}else{setMsg(tr('cpSaveFail')+((j&&j.error)||''),true);}}).catch(function(e){setMsg(tr('cpSaveFail')+e.message,true);});};
+      r.appendChild(play);
+      listEl.appendChild(r);
+    });
+  }
+  function refreshStatus(){
+    plugCall('camera-path','status',{}).then(function(st){
+      if(!st||!st.ok){statusEl.textContent='';return;}
+      statusEl.textContent=tr('cpStatus')+(st.playing?tr('cpPlaying'):tr('cpIdle'))+' | '+tr('cpPresetsDir')+(st.presetsDir||'')+(st.camera?' | OSCQuery '+(st.oscQueryPort||''):'');
+      if(st.settings){if(document.activeElement!==inDelay)inDelay.value=st.settings.delaySec;if(document.activeElement!==inAuto)inAuto.value=st.settings.autoStopSec;}
+    }).catch(function(){});
+  }
+  function refreshList(){setMsg('');plugCall('camera-path','listPresets',{}).then(function(j){if(j&&j.ok){renderList(j.presets||[]);}else{setMsg(tr('cpLoadFail')+((j&&j.error)||''),true);}}).catch(function(e){setMsg(tr('cpLoadFail')+e.message,true);});}
+  bRefresh.onclick=refreshList;
+  bStop.onclick=function(){plugCall('camera-path','stop',{}).then(function(j){setMsg(j&&j.ok?tr('cpIdle'):(tr('cpSaveFail')+((j&&j.error)||'')),!(j&&j.ok));refreshStatus();}).catch(function(e){setMsg(tr('cpSaveFail')+e.message,true);});};
+  bSave.onclick=function(){fetch('/api/plugins/config',{method:'POST',body:JSON.stringify({id:p.id,cfg:{delaySec:Number(inDelay.value)||0,autoStopSec:Number(inAuto.value)||0}})}).then(function(r){return r.json();}).then(function(j){setMsg(j&&j.ok!==false?tr('cpSaved'):(tr('cpSaveFail')+((j&&j.error)||'')),!(j&&j.ok!==false));}).catch(function(e){setMsg(tr('cpSaveFail')+e.message,true);});};
+  var advBtn=document.createElement('button');advBtn.className='small gray';advBtn.style.margin='6px 0';advBtn.textContent=tr('cpAdv');
+  var advBox=document.createElement('div');advBox.style.display='none';body.appendChild(advBtn);body.appendChild(advBox);
+  advBtn.onclick=function(){if(advBox.style.display==='none'){advBox.style.display='block';if(!advBox.dataset.done){advBox.dataset.done='1';plgSettingsForm(p,advBox);}}else{advBox.style.display='none';}};
+  refreshList();refreshStatus();
+}
 function plgCard(p){var en=!!(p.enabled||p.run),ap=!!p.approved;var d=document.createElement('div');d.className='plgcard';
  d.innerHTML='<div class="plgcard-head"><b class="plgcard-name">'+esc(plgName(p))+'</b><span class="tag">v'+(p.version||'')+'</span><span class="plgstat">'+(ap?'<span class="pill ok">'+tr('stApproved')+'</span>':'<span class="pill warn">'+tr('stUnapproved')+'</span>')+(en?'<span class="pill ok">'+tr('stEnabled')+'</span>':'<span class="pill gray">'+tr('stDisabled')+'</span>')+'</span><span class="plgcard-ctrl"><span class="sw'+(en?' on':'')+'" data-en="'+esc(p.id)+'"></span><button class="small gray" data-set="'+esc(p.id)+'">'+tr('btnSettings')+'</button></span></div><div class="plgcard-desc">'+esc(p.description||tr('plgNoDesc'))+'</div><div class="plgcard-meta">'+esc(p.id||'')+' · '+tr('plgPerms')+': '+esc(plgPermsDesc(p))+(p.error?(' · <span style="color:var(--err)">⚠ '+esc(p.error)+'</span>'):'')+((p.conflicts&&p.conflicts.length)?(' · <span style="color:var(--warn)">⚠ '+tr('plgConflict')+': '+esc(p.conflicts.map(function(c){return c.with;}).join(', '))+'</span>'):'')+'</div><div class="plgcard-body" style="display:none"></div>';
  d.querySelector('[data-en]').onclick=function(){var sw=this;var doEnable=function(){sw.classList.add('on');fetch('/api/plugins/approve',{method:'POST',body:JSON.stringify({id:p.id})}).then(function(r){return r.json();}).then(function(j){if(j&&j.ok===false){note(tr('opFail')+': '+(j.error||''),'warn');return;}plgToggle('/api/plugins/enable',p.id);});};if(!ap){plgWarn(p,doEnable);}else{var wantOn=!sw.classList.contains('on');sw.classList.toggle('on',wantOn);var url=wantOn?'/api/plugins/enable':'/api/plugins/disable';plgToggle(url,p.id);}};
@@ -246,7 +299,7 @@ function plgCard(p){var en=!!(p.enabled||p.run),ap=!!p.approved;var d=document.c
 function renderPlgCards(){var el=$('plugCards');if(!el)return;el.innerHTML='';if(!plgArr.length){el.innerHTML='<div class="sub">'+tr('plgNoPlugins')+'</div>';return;}plgArr.forEach(function(p){el.appendChild(plgCard(p));});}
 async function loadPlugins(){try{var r=await fetch('/api/plugins');var list=await r.json();plgArr=Array.isArray(list)?list:(list.plugins||list.entries||[]);
   // 声明了 manifest.settings 的插件 → 挂上通用设置渲染器(loadPlgSettings 按 __plgset_<id> 找它)
-  plgArr.forEach(function(p){if(p&&Array.isArray(p.settingsUi)&&p.settingsUi.length){window['__plgset_'+String(p.id||'').replace(/-/g,'_')]=plgSettingsForm;}});
+  plgArr.forEach(function(p){if(!p)return;if(p.id==='camera-path'){window.__plgset_camera_path=plgCameraPath;return;}if(Array.isArray(p.settingsUi)&&p.settingsUi.length){window['__plgset_'+String(p.id||'').replace(/-/g,'_')]=plgSettingsForm;}});
   renderPlgCards();if(typeof syncQuickPlg==='function')syncQuickPlg();}catch(e){apiFail('loadPlugins',e);}}
 function loadPlgSettings(p,body){if(!(p.enabled||p.run)){body.innerHTML='<div class="sub" style="margin:8px 0;color:var(--warn)">'+tr('plgNotEnabled')+'</div>';return;}if(!p.approved){body.innerHTML='<div class="sub" style="margin:8px 0;color:var(--warn)">'+tr('plgNotApproved')+'</div>';return;}body.innerHTML='<div class="sub" style="margin:8px 0">'+tr('plgLoading')+'</div>';var fn=window['__plgset_'+String(p.id||'').replace(/-/g,'_')];if(typeof fn==='function'){fn(p,body);}else{body.innerHTML='<div class="sub" style="margin:8px 0">'+tr('plgPerms')+': '+esc(plgPermsDesc(p))+'</div><div class="sub">'+tr('plgSettingsPending')+'</div>';}}
 // ===== 数据源/状态 =====

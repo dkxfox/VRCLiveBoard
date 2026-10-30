@@ -758,6 +758,22 @@ backward = ( -sin θ,     0, -cos θ )
 - 收尾: 先归零模拟量, TurnSpeed=0.1 + bool 小脉冲收偏航 -> 终点偏航从 7° 降到 0.63°。
 - 教训: VRChat 的 LookHorizontal 中间值在 VR 可能无效(收敛会卡在残差), 收尾必须用 bool 脉冲; kp 过高(12)会不稳, 9 左右最稳。
 
+### 7.10.23 ⭐ VRC+ 运镜(/dolly)OSC 语义与限制(2026-10-30, 已实机验证)
+
+| 端点 | 实测语义 |
+| --- | --- |
+| `/dolly/Import`(s) | 接受**绝对文件路径**; 导入本身不动相机; 相对路径报错 `Invalid JSON or file path` |
+| `/dolly/Play`(T) | true 开始播放 / false 停止; 播放期间 `/usercamera/Pose` 有事件 |
+| `/dolly/PlayDelayed`(i) | 读回不可靠(发后 Play 立即 true), 不适合做精确延迟 |
+| `/dolly/Export`(s) / `ExportLocal` | 会往 CameraPaths 写 `VRChat_CameraPath_{World,Local}_<时间>.json`(字符串参数未验证) |
+| 播放后状态 | `/usercamera/Lock` 可能变 true(相机被锁定), 可写 false 解锁 |
+
+**限制(实测)**:
+- 单段关键帧 **>6** 经 OSC 导入播放不稳定(7 有时 `routine is null`, 8+ 必崩); 拆成 ≤6 帧/段可稳定;
+- **拆分/临时文件必须位于 CameraPaths 目录内**(放 %TEMP% 会崩);
+- Import 后需等待 **≥约 800ms** 再 Play(大/多段文件), 否则会崩;
+- 播放时长与关键帧/段数/Speed 的关系非线性, 插件不承诺精确时长(可手动停止)。
+
 ## 八、待办清单
 
 **待测变量(10 个)**:Duration · PhotoRate · TriggerTakesPhotos · ShowFocus ·
