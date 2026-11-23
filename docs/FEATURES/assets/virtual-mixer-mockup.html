@@ -179,11 +179,11 @@ body:before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.5;bac
   <div class="card cue">
     <div class="cue-head"><div><b>同步播放 / Cue</b><span class="sub">两条文件在同一个音频时钟起播，适合假唱和运镜联动</span></div><span class="badge">播放中</span></div>
     <div class="cuerows">
-      <div class="cuerow"><span class="tag">系统音乐</span><span class="fname">D:\Music\intro.wav</span><span class="dur">03:12</span><button class="btn small">载入…</button></div>
-      <div class="cuerow"><span class="tag">自定义 1</span><span class="fname">D:\Music\vocal.wav</span><span class="dur">03:08</span><button class="btn small">载入…</button></div>
+      <div class="cuerow"><span class="tag">系统音乐</span><span class="fname">D:\Music\intro.wav</span><span class="dur">03:12</span><button class="btn small">载入…</button><button class="btn small" title="清除这个文件">×</button></div>
+      <div class="cuerow"><span class="tag">自定义 1</span><span class="fname">D:\Music\vocal.wav</span><span class="dur">03:08</span><button class="btn small">载入…</button><button class="btn small" title="清除这个文件">×</button></div>
     </div>
     <div class="cueprogress"><span>进度</span><div class="pbar"><i class="pfill"></i></div><span class="pnum">01:21 / 03:12</span><span class="cd">-01:51</span></div>
-    <div class="cuefoot"><span class="time">at 20:51:13 / lead 500ms</span><button class="btn pri">▶ 同步播放</button><button class="btn small">停止</button><span class="hint">起播偏差目标 ≤20ms；同一 cue 内的文件由插件自己播放；外部播放器只能近似同步。</span></div>
+    <div class="cuefoot"><span class="time">at 20:51:13 / lead 500ms</span><button class="btn pri">▶ 同步播放</button><button class="btn small">停止</button><button class="btn small">清空 Cue</button><span class="hint">起播偏差目标 ≤20ms；同一 cue 内的文件由插件自己播放；外部播放器只能近似同步。</span></div>
   </div>
   <div class="foot"><span><b>提示</b> 未检测到虚拟跳线时，页面显示“引导安装”，不会自动装驱动。</span><span><b>隐私</b> 只做实时混音，默认不录音；系统声音/麦克风需在红窗里确认。</span></div>
 </div>
