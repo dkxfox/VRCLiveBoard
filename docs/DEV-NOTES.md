@@ -769,7 +769,7 @@
 ## 394. docs 归档整理 + DEV-NOTES 保留窗口(2026-11-23, 用户指令)
 - 解读与边界: 用户要求“整理过时的文档资料和开发记录, 归档过时的内容; 从下个版本开始线上版本保留最近两个版本的开发记录, 过时的记录归档”。本轮只做**文档/记录归档与保留策略**, 不改运行时代码; 归档=移动+保留原文, 不删除历史。
 - 动作: ① 新增 `docs/DEV-NOTES-ARCHIVE.md`, 把条目 **110–348**(237 条, 281.7KB)原样移入; 主文件从 662KB 降到约 96KB, 只保留 §1–§5 速览 + 条目 **349–394**(1.4.7/1.4.8 周期); ② 主文件 §1 更新为 1.4.8 当前状态, 原 §1 历史正文存入归档; ③ 新增 `scripts/checks/dev-notes-archive.js`(按编号水位线归档, 先预览再 `--write`), 保留窗口起点写入主文件顶部; ④ 过时文档移入 `docs/ARCHIVE/`(1.4.6 发布说明/复盘、2026-10-22 会话摘要、无引用的 fader mockup), 删除生成的 `docs/Thumbs.db`; ⑤ `PROCESS-01 §10` 增加保留窗口与归档规则。
-- 证据: `node scripts/checks/dev-notes-index.js` → 索引与条目一致(49 条: §1–§5 + 349–394), 0 FAIL; `node scripts/checks/encoding-lint.js` → 0 violation; `git diff --check` 无空白错误; 归档后主文件无重复/乱序编号。
+- 证据: `node scripts/checks/dev-notes-index.js` → 索引与条目一致(51 条: §1–§5 + 349–394), 0 FAIL; `node scripts/checks/encoding-lint.js` → 0 violation; `git diff --check` 无空白错误; 归档后主文件无重复/乱序编号; `npm run gates` → **16 PASS / 0 FAIL**(含 GNOTES/GSYNC/G4 隔离冒烟 15/15)。
 - 遗留 / 教训: ① 旧文档里的 `DEV-NOTES 108/109` 等交叉引用仍写旧编号, 读者需到归档文件搜索; 主文件顶部与归档头部都已写明; ② 归档文件不随发布包(不在 docs 白名单), 因此不会增加安装包体积; ③ 从下个版本起, 版本收口时把水位线之前条目移入归档, 再更新水位线。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
