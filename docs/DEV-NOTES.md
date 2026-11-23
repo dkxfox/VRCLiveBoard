@@ -15,7 +15,7 @@
 - 用户: 工业/电气工程师, 非专业程序员; 要求最小改动、人类可预测的行为、中文答复结构(结论 → 证据 → 变更清单 → 未决与风险 → 下一步)。
 - 项目: VRCLiveBoard —— VRChat OSC 工具, 把电脑状态/正在播放的媒体/公告板/翻译字幕显示到玩家头顶聊天框; 另有 VR 覆盖层键盘、相机运镜等开发工具/插件。
 - 位置: Z:\DeepSeek Harness工作区\VRCLiveBoard (UNC: \\Tank_os\anm\DeepSeek Harness工作区\VRCLiveBoard)。
-- 当前待办: EA 测试组反馈; M-20260903-06“VRChat 已开 OSC 但全红”等反馈者补充排查资料; 主程序“手表形态”可拖拽跟随窗口(未开始)。
+- 当前待办: EA 测试组反馈; M-20260903-06“VRChat 已开 OSC 但全红”等反馈者补充排查资料; **虚拟混音台 S1(重启后开始)**; 主程序“手表形态”可拖拽跟随窗口(未开始)。
 
 ## 2. 架构速览
 
@@ -771,6 +771,12 @@
 - 动作: ① 新增 `docs/DEV-NOTES-ARCHIVE.md`, 把条目 **110–348**(237 条, 281.7KB)原样移入; 主文件从 662KB 降到约 96KB, 只保留 §1–§5 速览 + 条目 **349–394**(1.4.7/1.4.8 周期); ② 主文件 §1 更新为 1.4.8 当前状态, 原 §1 历史正文存入归档; ③ 新增 `scripts/checks/dev-notes-archive.js`(按编号水位线归档, 先预览再 `--write`), 保留窗口起点写入主文件顶部; ④ 过时文档移入 `docs/ARCHIVE/`(1.4.6 发布说明/复盘、2026-10-22 会话摘要、无引用的 fader mockup), 删除生成的 `docs/Thumbs.db`; ⑤ `PROCESS-01 §10` 增加保留窗口与归档规则。
 - 证据: `node scripts/checks/dev-notes-index.js` → 索引与条目一致(51 条: §1–§5 + 349–394), 0 FAIL; `node scripts/checks/encoding-lint.js` → 0 violation; `git diff --check` 无空白错误; 归档后主文件无重复/乱序编号; `npm run gates` → **16 PASS / 0 FAIL**(含 GNOTES/GSYNC/G4 隔离冒烟 15/15)。
 - 遗留 / 教训: ① 旧文档里的 `DEV-NOTES 108/109` 等交叉引用仍写旧编号, 读者需到归档文件搜索; 主文件顶部与归档头部都已写明; ② 归档文件不随发布包(不在 docs 白名单), 因此不会增加安装包体积; ③ 从下个版本起, 版本收口时把水位线之前条目移入归档, 再更新水位线。
+## 395. 进度记录: 文档归档收尾 + 虚拟混音台方案/环境准备(2026-11-23, 用户“记录进度, 下次继续”)
+- 解读与边界: 本轮只记录进度, 不写运行时代码; 下次从虚拟混音台 S1 开始。
+- 本轮已完成: ① docs 归档整理(DEV-NOTES 只保留 349–395, 110–348 入 `DEV-NOTES-ARCHIVE.md`; 过时文档入 `docs/ARCHIVE/`; 保留策略进 PROCESS-01); ② M-20260901-04 关闭; ③ M-20260903-06 排查资料落地; ④ 虚拟混音台功能卡与 A/B-VU 视觉稿确认; ⑤ 官方卸载 Voicemeeter, 音频端点 count=0, 驱动包 `oem70.inf` 待重启清理。
+- 虚拟混音台已确认: 引导安装 VB-CABLE; 一根虚拟跳线; 3–8 条内部混音通道(每路可选送跳线/仅监听)汇到一路虚拟麦克风; A 通道条 + B-VU 机械表双布局可切换; C#/.NET Framework + NAudio; `/api/plugins/call` + cue; VU 30fps 低开销, CPU 超过 1% 自动降级。
+- 证据/状态: HEAD `b14f14e`; 工作区干净; `Get-PnpDevice` 中 Voicemeeter 端点 0; **未写运行时代码**. 详细进度见 `docs/SESSION-2026-11-23-SUMMARY.md`。
+- 下次开工: 重启 Windows → 复查无 Voicemeeter 端点/默认音频 → S1 引擎骨架 + 插件骨架 + 文件混音离线自测。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -828,5 +834,6 @@
 | 392 | 2026-11-23 | M-20260901-04 收尾: 插件 vendor 裁剪效果复核并关闭 |
 | 393 | 2026-11-23 | M-20260903-06 OSC 全红: 排查资料落地 |
 | 394 | 2026-11-23 | docs 归档整理 + DEV-NOTES 保留窗口 |
+| 395 | 2026-11-23 | 进度记录: 文档归档收尾 + 虚拟混音台方案/环境准备 |
 
 <!-- DEV-NOTES-INDEX:END -->
