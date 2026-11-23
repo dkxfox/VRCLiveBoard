@@ -80,6 +80,7 @@ body:before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.5;bac
 .cuerow .tag{font-size:10.5px;color:var(--muted);min-width:58px}
 .cuerow .fname{flex:1;min-width:0;font-size:11.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cuerow .dur{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+.cueprogress{display:flex;align-items:center;gap:9px;margin-top:9px;font-size:10.5px;color:var(--faint)}.cueprogress .pbar{flex:1;height:5px;border-radius:3px;background:#0b1219;border:1px solid #263344;overflow:hidden}.cueprogress .pfill{display:block;height:100%;width:42%;background:linear-gradient(90deg,#2f6fd0,#5aa9ff);border-radius:3px}.cueprogress .pnum{font-family:Consolas,monospace;color:var(--muted)}.cueprogress .cd{font-family:Consolas,monospace;color:var(--warn)}
 .cuefoot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--border2)}
 .cuefoot .time{font-family:var(--mono);font-size:12px;color:var(--ok);background:rgba(61,220,132,.08);border:1px solid rgba(61,220,132,.25);border-radius:6px;padding:6px 9px}
 .cuefoot .hint{font-size:11px;color:var(--faint)}
@@ -176,11 +177,12 @@ body:before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.5;bac
   </div>
 
   <div class="card cue">
-    <div class="cue-head"><div><b>同步播放 / Cue</b><span class="sub">两条文件在同一个音频时钟起播，适合假唱和运镜联动</span></div><span class="badge">待命</span></div>
+    <div class="cue-head"><div><b>同步播放 / Cue</b><span class="sub">两条文件在同一个音频时钟起播，适合假唱和运镜联动</span></div><span class="badge">播放中</span></div>
     <div class="cuerows">
       <div class="cuerow"><span class="tag">系统音乐</span><span class="fname">D:\Music\intro.wav</span><span class="dur">03:12</span><button class="btn small">载入…</button></div>
       <div class="cuerow"><span class="tag">自定义 1</span><span class="fname">D:\Music\vocal.wav</span><span class="dur">03:08</span><button class="btn small">载入…</button></div>
     </div>
+    <div class="cueprogress"><span>进度</span><div class="pbar"><i class="pfill"></i></div><span class="pnum">01:21 / 03:12</span><span class="cd">-01:51</span></div>
     <div class="cuefoot"><span class="time">at 20:51:13 / lead 500ms</span><button class="btn pri">▶ 同步播放</button><button class="btn small">停止</button><span class="hint">起播偏差目标 ≤20ms；同一 cue 内的文件由插件自己播放；外部播放器只能近似同步。</span></div>
   </div>
   <div class="foot"><span><b>提示</b> 未检测到虚拟跳线时，页面显示“引导安装”，不会自动装驱动。</span><span><b>隐私</b> 只做实时混音，默认不录音；系统声音/麦克风需在红窗里确认。</span></div>

@@ -45,11 +45,12 @@ body:before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.5;bac
 .filebtn{border:1px solid var(--border2);background:var(--inset);color:var(--muted);border-radius:6px;padding:6px 8px;font-size:10.5px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .master{padding:14px 14px 12px;border-color:rgba(240,180,41,.34);background:linear-gradient(180deg,rgba(35,40,48,.95),rgba(20,28,38,.95))}
 .master .strip-head b{font-size:15px}.master .out{font-size:10.5px;color:var(--muted);line-height:1.6;margin:3px 0 10px;border-bottom:1px solid var(--border2);padding-bottom:9px}
-.dualmeter{display:flex;gap:8px;justify-content:center;margin:6px 0 10px}.dualmeter .analog{width:126px}.dualmeter .vu{width:126px;height:92px}
+.masteranalog{width:190px;margin:8px auto 0}.masteranalog .vu{width:190px;height:112px}.masterlabel{text-align:center;font-size:9.5px;letter-spacing:2px;color:var(--faint);margin:5px 0 7px}
 .master .bigdb{font-family:Consolas,monospace;font-size:22px;color:#fff;text-align:center;margin:7px 0 5px}.master .bigdb span{font-size:11px;color:var(--muted)}
 .master .faderline{margin:0 2px 7px}.master .safe{margin-top:auto;font-size:10.5px;color:var(--muted);border-top:1px solid var(--border2);padding-top:9px;line-height:1.6;margin-top:12px}
 .cue{margin-top:14px;padding:14px 15px}.cue-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}.cue-head b{font-size:14px}.cue-head .sub{font-size:11.5px;color:var(--muted);margin-left:8px}
 .cuerows{display:grid;grid-template-columns:1fr 1fr;gap:10px}.cuerow{display:flex;align-items:center;gap:9px;background:var(--inset);border:1px solid var(--border2);border-radius:8px;padding:9px 10px}.cuerow .tag{font-size:10.5px;color:var(--muted);min-width:58px}.cuerow .fname{flex:1;min-width:0;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cuerow .dur{font-family:Consolas,monospace;font-size:10.5px;color:var(--faint)}
+.cueprogress{display:flex;align-items:center;gap:9px;margin-top:9px;font-size:10.5px;color:var(--faint)}.cueprogress .pbar{flex:1;height:5px;border-radius:3px;background:#0b1219;border:1px solid #263344;overflow:hidden}.cueprogress .pfill{display:block;height:100%;width:42%;background:linear-gradient(90deg,#2f6fd0,#5aa9ff);border-radius:3px}.cueprogress .pnum{font-family:Consolas,monospace;color:var(--muted)}.cueprogress .cd{font-family:Consolas,monospace;color:var(--warn)}
 .cuefoot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--border2)}.cuefoot .time{font-family:Consolas,monospace;font-size:12px;color:var(--ok);background:rgba(61,220,132,.08);border:1px solid rgba(61,220,132,.25);border-radius:6px;padding:6px 9px}.cuefoot .hint{font-size:11px;color:var(--faint)}
 .foot{display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;color:var(--faint);font-size:11px;line-height:1.6}.foot b{color:var(--muted);font-weight:600}
 .watermark{position:fixed;right:18px;bottom:14px;color:#657487;font-size:11px;border:1px solid #263344;background:rgba(10,15,21,.8);padding:5px 8px;border-radius:6px}
@@ -80,9 +81,9 @@ body:before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.5;bac
     <div class="stripbody"><div class="analog"><div class="vu" data-vu="custom2" data-level="-30"></div><div class="vu-foot"><b>VU</b><span class="peak" style="opacity:.45">PEAK</span></div></div><div class="controls"><select><option>文件播放</option><option>线路输入</option></select><div class="faderline"><span class="trackline"><i class="fill" style="width:12%"></i><i class="knob" style="left:12%"></i></span><span class="db">-∞ dB</span></div><div class="msrow"><button>M</button><button>S</button><span class="db2">L / R</span></div><div class="filebtn">添加通道…</div></div></div>
   </div>
 </div>
-<aside class="card master"><div class="strip-head"><i class="dot"></i><b>主输出</b></div><div class="out">送往 CABLE Input<br>VRChat 选 CABLE Output</div><div class="dualmeter"><div class="analog"><div class="vu" data-vu="masterL" data-level="-6"></div></div><div class="analog"><div class="vu" data-vu="masterR" data-level="-8"></div></div></div><div style="display:flex;justify-content:center;gap:42px;font-size:10px;color:var(--faint);margin-top:-8px;margin-bottom:4px"><span>L</span><span>R</span></div><div class="bigdb">-4.5 <span>dB</span></div><div class="faderline"><span class="trackline"><i class="fill" style="width:70%"></i><i class="knob" style="left:70%"></i></span></div><div class="msrow" style="justify-content:center"><button>M</button><span style="font-size:10px;color:var(--faint)">主输出静音</span></div><div class="safe">峰值限幅 · 防削波<br>监听输出：关闭（默认）<br><span style="color:var(--warn)">⚠ 不要把监听输出选成系统声音来源</span></div></aside>
+<aside class="card master"><div class="strip-head"><i class="dot"></i><b>主输出</b></div><div class="out">送往 CABLE Input<br>VRChat 选 CABLE Output</div><div class="masteranalog"><div class="vu" data-vu="master" data-level="-6"></div><div class="masterlabel">MASTER</div></div><div class="bigdb">-4.5 <span>dB</span></div><div class="faderline"><span class="trackline"><i class="fill" style="width:70%"></i><i class="knob" style="left:70%"></i></span></div><div class="msrow" style="justify-content:center"><button>M</button><span style="font-size:10px;color:var(--faint)">主输出静音</span></div><div class="safe">峰值限幅 · 防削波<br>监听输出：关闭（默认）<br><span style="color:var(--warn)">⚠ 不要把监听输出选成系统声音来源</span></div></aside>
 </div>
-<div class="card cue"><div class="cue-head"><div><b>同步播放 / Cue</b><span class="sub">两条文件在同一个音频时钟起播，适合假唱和运镜联动</span></div><span class="badge">待命</span></div><div class="cuerows"><div class="cuerow"><span class="tag">系统音乐</span><span class="fname">D:\Music\intro.wav</span><span class="dur">03:12</span><button class="btn small">载入…</button></div><div class="cuerow"><span class="tag">自定义 1</span><span class="fname">D:\Music\vocal.wav</span><span class="dur">03:08</span><button class="btn small">载入…</button></div></div><div class="cuefoot"><span class="time">at 21:03:00 / lead 500ms</span><button class="btn pri">▶ 同步播放</button><button class="btn small">停止</button><span class="hint">起播偏差目标 ≤20ms；同一 cue 内的文件由插件自己播放；外部播放器只能近似同步。</span></div></div>
+<div class="card cue"><div class="cue-head"><div><b>同步播放 / Cue</b><span class="sub">两条文件在同一个音频时钟起播，适合假唱和运镜联动</span></div><span class="badge">播放中</span></div><div class="cuerows"><div class="cuerow"><span class="tag">系统音乐</span><span class="fname">D:\Music\intro.wav</span><span class="dur">03:12</span><button class="btn small">载入…</button></div><div class="cuerow"><span class="tag">自定义 1</span><span class="fname">D:\Music\vocal.wav</span><span class="dur">03:08</span><button class="btn small">载入…</button></div></div><div class="cueprogress"><span>进度</span><div class="pbar"><i class="pfill"></i></div><span class="pnum">01:21 / 03:12</span><span class="cd">-01:51</span></div><div class="cuefoot"><span class="time">at 21:03:00 / lead 500ms</span><button class="btn pri">▶ 同步播放</button><button class="btn small">停止</button><span class="hint">起播偏差目标 ≤20ms；同一 cue 内的文件由插件自己播放；外部播放器只能近似同步。</span></div></div>
 <div class="foot"><span><b>提示</b> 机械 VU 是风格化反馈，数字 dB 仍保留；未检测到虚拟跳线时显示“引导安装”。</span><span><b>隐私</b> 只做实时混音，默认不录音；系统声音/麦克风需在红窗里确认。</span></div>
 </div>
 <div class="watermark">视觉稿 B-VU · 仅确认布局，未接线</div>
@@ -100,49 +101,50 @@ body:before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.5;bac
   function ticks(){
     var out='';
     var major=[-20,-10,-7,-5,-3,-1,0,3];
-    var majorAng=[-52,-36,-25,-17,-9,-2,4,16];
-    for(var i=0;i<=34;i++){
-      var a=-52+i*(68/34);
-      var r1=58, r2=(i%2===0?67:63);
-      var p1=polar(92,88,r1,a), p2=polar(92,88,r2,a);
-      out+='<line x1="'+p1[0].toFixed(1)+'" y1="'+p1[1].toFixed(1)+'" x2="'+p2[0].toFixed(1)+'" y2="'+p2[1].toFixed(1)+'" stroke="#3d2b1c" stroke-width="'+(i%2===0?1.3:0.8)+'" opacity="'+(i%2===0?'.9':'.55')+'"/>';
+    var majorAng=[-58,-40,-30,-22,-14,-6,2,22];
+    for(var i=0;i<=31;i++){
+      var a=-58+i*(80/31);
+      var isMajor=false;
+      for(var m=0;m<majorAng.length;m++){ if(Math.abs(a-majorAng[m])<1.3) isMajor=true; }
+      var r1=76, r2=(isMajor?91:83);
+      var p1=polar(92,120,r1,a), p2=polar(92,120,r2,a);
+      out+='<line x1="'+p1[0].toFixed(1)+'" y1="'+p1[1].toFixed(1)+'" x2="'+p2[0].toFixed(1)+'" y2="'+p2[1].toFixed(1)+'" stroke="#3a2718" stroke-width="'+(isMajor?1.45:0.8)+'" opacity="'+(isMajor?'.9':'.45')+'"/>';
     }
     for(var j=0;j<major.length;j++){
-      var a2=majorAng[j];
-      var p=polar(92,88,75,a2);
-      out+='<text x="'+p[0].toFixed(1)+'" y="'+(p[1]+2.5).toFixed(1)+'" text-anchor="middle" font-size="8" fill="#3a2718" font-family="Consolas,monospace">'+(major[j]>0?'+':'')+major[j]+'</text>';
+      var p=polar(92,120,101,majorAng[j]);
+      var label=(major[j]>0?'+':'')+major[j];
+      out+='<text x="'+p[0].toFixed(1)+'" y="'+(p[1]+2.5).toFixed(1)+'" text-anchor="middle" font-size="8" fill="#3a2718" font-family="Consolas,monospace">'+label+'</text>';
     }
     return out;
   }
   function svgMeter(level){
     var v=Math.max(-20,Math.min(3,Number(level)||0));
-    var t=(v+20)/23; var ang=-52+t*68;
+    var t=(v+20)/23; var ang=-58+t*80;
     var tickHtml=ticks();
-    var red=arcPath(92,88,64,4,16);
+    var red=arcPath(92,120,84,2,22);
     return '<svg viewBox="0 0 184 108" preserveAspectRatio="xMidYMid meet">'+
       '<defs>'+
-      '<linearGradient id="paper" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f7e8c8"/><stop offset=".62" stop-color="#efd8ad"/><stop offset="1" stop-color="#d8b57d"/></linearGradient>'+
-      '<radialGradient id="bulb" cx="50%" cy="100%" r="70%"><stop offset="0" stop-color="#ffd38c" stop-opacity=".85"/><stop offset=".45" stop-color="#ffae52" stop-opacity=".25"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>'+
-      '<linearGradient id="bezel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#30261c"/><stop offset=".5" stop-color="#17120e"/><stop offset="1" stop-color="#0b0907"/></linearGradient>'+
+      '<linearGradient id="paper" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f8e9ca"/><stop offset=".62" stop-color="#efd7aa"/><stop offset="1" stop-color="#d5b076"/></linearGradient>'+
+      '<radialGradient id="bulb" cx="50%" cy="102%" r="70%"><stop offset="0" stop-color="#ffd38c" stop-opacity=".9"/><stop offset=".5" stop-color="#ffae52" stop-opacity=".25"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>'+
+      '<linearGradient id="bezel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#33281c"/><stop offset=".5" stop-color="#16110c"/><stop offset="1" stop-color="#090705"/></linearGradient>'+
       '<clipPath id="faceclip"><rect x="10" y="8" width="164" height="92" rx="2"/></clipPath>'+
       '</defs>'+
-      '<rect x="1" y="1" width="182" height="106" rx="7" fill="url(#bezel)" stroke="#4f3e2d" stroke-opacity=".55"/>'+
+      '<rect x="1" y="1" width="182" height="106" rx="7" fill="url(#bezel)" stroke="#4f3e2d" stroke-opacity=".6"/>'+
       '<rect x="8" y="6" width="168" height="96" rx="3" fill="#0c0907" opacity=".55"/>'+
       '<g clip-path="url(#faceclip)">'+
       '<rect x="10" y="8" width="164" height="92" fill="url(#paper)"/>'+
       '<rect x="10" y="8" width="164" height="92" fill="url(#bulb)"/>'+
-      '<path d="'+arcPath(92,88,64,-52,16)+'" fill="none" stroke="#3e2a1a" stroke-width="1.2" opacity=".9"/>'+
-      '<path d="'+red+'" fill="none" stroke="#b03a2a" stroke-width="4" opacity=".85"/>'+
+      '<path d="'+arcPath(92,120,84,-58,22)+'" fill="none" stroke="#3e2a1a" stroke-width="1.2" opacity=".9"/>'+
+      '<path d="'+red+'" fill="none" stroke="#b03a2a" stroke-width="4.6" opacity=".9"/>'+
       tickHtml+
-      '<text x="92" y="66" text-anchor="middle" font-size="17" font-weight="600" fill="#2f2115" font-family="Segoe UI">VU</text>'+
+      '<text x="92" y="78" text-anchor="middle" font-size="17" font-weight="600" fill="#2f2115" font-family="Segoe UI">VU</text>'+
       '<text x="16" y="98" font-size="6.5" fill="#6b4c30" font-family="Consolas,monospace">ANALOG</text>'+
-      '<circle cx="157" cy="20" r="3.2" fill="#c23b2c"/><circle cx="157" cy="20" r="1.2" fill="#ffb4a8"/>'+
-      '<text x="157" y="32" text-anchor="middle" font-size="6.5" fill="#5b3c27" font-family="Segoe UI">PEAK</text>'+
+      '<circle cx="158" cy="19" r="3.2" fill="#c23b2c"/><circle cx="158" cy="19" r="1.2" fill="#ffb4a8"/>'+
+      '<text x="158" y="31" text-anchor="middle" font-size="6.5" fill="#5b3c27" font-family="Segoe UI">PEAK</text>'+
       '<polygon points="12,9 58,9 46,20 12,20" fill="#fff" opacity=".10"/>'+
+      '<line x1="92" y1="120" x2="92" y2="20" stroke="#24170f" stroke-width="2.4" stroke-linecap="round" transform="rotate('+ang.toFixed(1)+' 92 120)"/>'+
+      '<line x1="92" y1="120" x2="92" y2="25" stroke="#f6e6c8" stroke-width=".6" opacity=".32" transform="rotate('+ang.toFixed(1)+' 92 120)"/>'+
       '</g>'+
-      '<line x1="92" y1="88" x2="92" y2="26" stroke="#24170f" stroke-width="2.2" stroke-linecap="round" transform="rotate('+ang.toFixed(1)+' 92 88)"/>'+
-      '<line x1="92" y1="88" x2="92" y2="32" stroke="#f6e6c8" stroke-width=".7" opacity=".35" transform="rotate('+ang.toFixed(1)+' 92 88)"/>'+
-      '<circle cx="92" cy="88" r="4.6" fill="#1d130d"/><circle cx="92" cy="88" r="1.8" fill="#c8a36b"/>'+
       '</svg>';
   }
   var nodes = document.querySelectorAll('.vu');
