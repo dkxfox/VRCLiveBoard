@@ -3100,6 +3100,11 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 - 决策: 不再共享 vendor(会破坏“复制文件夹即可装回”的自包含恢复); 不把备份里的 vendor 去掉(恢复后 Excel 导入会坏). 两项候选方案明确不做.
 - 验证: 1.4.8 release-audit AUDIT PASS; GPLUG/插件离线单测通过; 三插件导入导出与隔离实例 asset 加载沿用 2026-09-04 验证; pack-audit 两包 PASS; zipVolumes 基线已随 1.4.7/1.4.8 更新.
 - 结论: M-20260901-04 关闭(FIXED).
+## 393. M-20260903-06 OSC 全红: 排查资料落地(2026-11-23)
+- 用户要求“处理排查资料”. 产出 `docs/SUPPORT/M-20260903-06-OSC排查资料.md`: 给反馈者的 6 问(版本/圆点颜色/是否在世界内/OSC 是否启用/启动方式+加速器+端口/一键诊断+日志)、用户 3 分钟自查、证据清单、开发者分诊表、最低关闭证据.
+- 关键判定口径: ①≤1.3.1 旧版 UDP 空闲误报先用 1.4.8 复测; ②诊断报告 udpPortState = 被 VRChat 占用但全红 → 查前端/日志; ③空闲但 VRChat 开 OSC → 查是否进世界/账号设置/output_log; ④健康总览正常但软件发的不显示 → 优先加速器 loopback(DEV-NOTES 109); ⑤自定义端口/OSC 路由器另判.
+- 隐私: 明确不要求发送 config.json 原文, 截图打码好友名/UID.
+- 问题状态仍为 NEED-REPRO, 等反馈者按材料补充; 未改运行时代码, 未重新打包.
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -3392,5 +3397,6 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 | 390 | 2026-10-30 | 1.4.7「出鞘」EA 前收尾: 版本锁定 + 质量/安全证据 |
 | 391 | 2026-10-30 | 1.4.8「补漏」: 网络共享目录桌面版启动崩溃修复 |
 | 392 | 2026-11-23 | M-20260901-04 收尾: 插件 vendor 裁剪效果复核并关闭 |
+| 393 | 2026-11-23 | M-20260903-06 OSC 全红: 排查资料落地 |
 
 <!-- DEV-NOTES-INDEX:END -->
