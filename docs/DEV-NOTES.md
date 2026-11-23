@@ -3094,6 +3094,12 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 - 版本: 1.4.7 -> 1.4.8(补漏), 已重新打包/审计/发布(覆盖 1.4.7 的启动缺陷).
 - 备注: 网络盘首次启动复制约 350MB, 之后复用; 用户也可以直接把整个包解压到本地盘避免这次复制.
 - 关联: 开发者的母狗桌面程序(dev-dongle/master/启动母狗.bat)同样从网络盘启动 Electron, 已用同一套本地缓存逻辑修复; 母狗 selftest(list ok + passfile exists)通过. dev-dongle 为本地开发资产, 不随包/不入库.
+## 392. M-20260901-04 收尾: 插件 vendor 裁剪效果复核并关闭(2026-11-23)
+- 用户指定“进行 M-20260901-04”. 该问题主体(裁剪 vendor)已于 2026-09-04 完成, 剩“重打包对比体积 + 更新 zipVolumes 基线”未收尾.
+- 复核: 三插件 vendor 均为 4 文件(friend/sched 2,340,405B; weather 2,200,220B); 1.4.8 Lite 包 8.99MB(问题登记时 15.74MB / 启用恢复备份后 20.2MB), Desktop 281.44MB(主要被 Electron 运行时 + 52MB 彩蛋视频占据); Lite 内 vendor 24 条目压缩后 4.20MB(plugins + 官方可选插件恢复备份各一份).
+- 决策: 不再共享 vendor(会破坏“复制文件夹即可装回”的自包含恢复); 不把备份里的 vendor 去掉(恢复后 Excel 导入会坏). 两项候选方案明确不做.
+- 验证: 1.4.8 release-audit AUDIT PASS; GPLUG/插件离线单测通过; 三插件导入导出与隔离实例 asset 加载沿用 2026-09-04 验证; pack-audit 两包 PASS; zipVolumes 基线已随 1.4.7/1.4.8 更新.
+- 结论: M-20260901-04 关闭(FIXED).
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -3385,5 +3391,6 @@ canSegment('hahahahahahahaha') = true  -> 正常走引擎 1ms
 | 389 | 2026-10-30 | 1.4.x EA 前修 bug: 好友欢迎导入/快照 + AI 结构安全 + 依赖漏洞 |
 | 390 | 2026-10-30 | 1.4.7「出鞘」EA 前收尾: 版本锁定 + 质量/安全证据 |
 | 391 | 2026-10-30 | 1.4.8「补漏」: 网络共享目录桌面版启动崩溃修复 |
+| 392 | 2026-11-23 | M-20260901-04 收尾: 插件 vendor 裁剪效果复核并关闭 |
 
 <!-- DEV-NOTES-INDEX:END -->
