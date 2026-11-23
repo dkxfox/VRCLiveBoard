@@ -47,7 +47,9 @@ Get-FileHash .\VRCLiveBoard-Lite-RequiresNode-v1.4.8.zip -Algorithm SHA256
 | --- | --- |
 | `使用说明.txt` | 从零开始的完整手册(13 章) |
 | `版本说明.txt` | 版本变化与代号由来 |
-| `docs/DEV-NOTES.md` | 开发存档(给接手开发者看) |
+| `docs/DEV-NOTES.md` | 开发存档(最近两个版本; 给接手开发者看) |
+| `docs/DEV-NOTES-ARCHIVE.md` | 更早开发记录归档(只归档不删除) |
+| `docs/ARCHIVE/` | 过时文档归档(旧版本发布说明/复盘/会话摘要) |
 | `docs/PLUGIN-DEV.md`、`开发者文档/` | 插件开发与打包分发 |
 
 ## 授权说明

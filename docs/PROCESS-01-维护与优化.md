@@ -161,6 +161,7 @@ node scripts\checks\version-sync.js                              # 改版本号�
 node scripts\checks\auth-state-check.js                         # 授权体系状态(流程 3 的 3A; 开发者机)
 node scripts\checks\doc-consistency.js                          # 说明文件过时检查(GDOC)
 node scripts\checks\dev-notes-index.js --update                  # 刷新 DEV-NOTES 条目索引(加条目后必跑; GNOTES 守)
+node scripts\checks\dev-notes-archive.js --before <编号>        # 预览: 把更早条目移入 DEV-NOTES-ARCHIVE.md(加 --write 执行)
 powershell -File scripts\checks\run-gates.ps1 -Smoke -SmokeOnly  # 只跑隔离冒烟(前端/接口改动的自检)
 powershell -File scripts\make-dist.ps1                            # 打包(改打包脚本后必跑; -SkipLight 只出桌面包)
 powershell -File scripts\checks\release-audit.ps1                 # 3B 发布前检查(11 步; 见 PROCESS-03 §2)
@@ -183,9 +184,17 @@ node plugins\bilibili-live\test\run-all.js                       # 插件离线�
 | `logs\`(用户侧 app.log / boot.log / 插件审计日志等) | 超 100KB 只留尾部 100KB; 超 30 天删除; 残留截图临时文件超 1 天删除; 旧版本 electron 缓存删除 | `src/housekeeping.js` 每 6h 自动 |
 | `.electron-cache` / `.pydist` / `.ocr-langs`(开发机) | **保留**(删了要重新下载或编译); 空间紧张时再删, 删前在 DEV-NOTES 记一条 | 人工 |
 | `config.json.bak` 及任何含口令/密钥的副本 | **立刻删** —— 属机密面(secret-scan 会扫到) | 人工 |
-| `DEV-NOTES.md` / `ISSUES.md` / `docs` 下的基线 | 永久, **只归档不删除**(历史本身就是证据) | 人工 |
+| `DEV-NOTES.md` / `ISSUES.md` / `docs` 下的基线 | 永久, **只归档不删除**(历史本身就是证据); `DEV-NOTES.md` 只保留最近两个发布版本, 更早条目在 `docs/DEV-NOTES-ARCHIVE.md` | 人工 |
 | 临时脚本与中间产物 | 一律写 `$env:TEMP`, 不落仓库(PROCESS-04 §11 第 6 条) | 人工 |
 
+### 10.1 DEV-NOTES 保留窗口与归档(2026-11-23 增补)
+
+- **保留口径**: `docs/DEV-NOTES.md` 只保留**最近两个发布版本**的开发记录(当前 1.4.7 + 1.4.8); 更早的编号条目原样移入 `docs/DEV-NOTES-ARCHIVE.md`, **只归档不删除**。
+- **水位线**: 主文件顶部记录当前窗口起点(当前 = 条目 **349**, 1.4.7 开发周期开始)。每个版本收口时更新水位线; 下个版本发布后, 起点之前的条目再归档。
+- **归档工具**: `node scripts/checks/dev-notes-archive.js --before <编号>` 先预览; 确认后加 `--write`; 写完必须运行 `node scripts/checks/dev-notes-index.js --update` 并跑 GNOTES/G2。
+- **不归档**: 项目速览 §1–§5(保留但随版本更新)、`ISSUES.md`、`ISSUES-ARCHIVE.md`、`AUDIT-*`、`*-BASELINE.json` 证据链。
+- **发布包**: 归档文件不在 docs 出厂白名单, 不随包; 主 `DEV-NOTES.md` 仍随包, 体积随窗口缩小。
+- **历史引用**: 旧文档/旧问题卡里的 `DEV-NOTES n` 指向归档条目时, 到 `DEV-NOTES-ARCHIVE.md` 搜索原编号; 不重排编号。
 **节奏**: 每个 milestone 发布收口时做一次清点 —— ① `git status` 无悬空文件 ② `dist` 只剩当前版本 ③ 缓存体积记录在案 ④ 临时文件已清; 结果写进当次 DEV-NOTES 条目。
 
 **清理属"可逆性存疑"的动作**: 不确定能不能再生的, 先问再删; 已经删掉的, 在 DEV-NOTES 里留一句"删了什么、为什么可再生"。
