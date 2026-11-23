@@ -95,38 +95,54 @@ body:before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.5;bac
     var t = (v + 30) / 36; // 0..1
     return -42 + t * 84;
   }
+  function polar(cx,cy,r,deg){ var a=deg*Math.PI/180; return [cx+Math.sin(a)*r, cy-Math.cos(a)*r]; }
+  function arcPath(cx,cy,r,a1,a2){ var p1=polar(cx,cy,r,a1), p2=polar(cx,cy,r,a2); var large=Math.abs(a2-a1)>180?1:0; return 'M'+p1[0].toFixed(1)+' '+p1[1].toFixed(1)+' A'+r+' '+r+' 0 '+large+' 1 '+p2[0].toFixed(1)+' '+p2[1].toFixed(1); }
   function ticks(){
-    var out = '';
-    var labels = [-20,-10,-5,-3,-1,0,1,2,3];
-    var angles = [-42,-31,-20,-13,-6,0,7,14,21,28,35,42];
-    for (var i=0;i<angles.length;i++){
-      var a = angles[i] * Math.PI / 180;
-      var r1 = 63, r2 = 70;
-      var x1 = 92 + Math.sin(a)*r1, y1 = 88 - Math.cos(a)*r1;
-      var x2 = 92 + Math.sin(a)*r2, y2 = 88 - Math.cos(a)*r2;
-      out += '<line x1="'+x1.toFixed(1)+'" y1="'+y1.toFixed(1)+'" x2="'+x2.toFixed(1)+'" y2="'+y2.toFixed(1)+'" stroke="#4a3623" stroke-width="1.4"/>';
-      if (i % 2 === 0 && labels[i/2] !== undefined) {
-        var tx = 92 + Math.sin(a)*80, ty = 88 - Math.cos(a)*80 + 3;
-        out += '<text x="'+tx.toFixed(1)+'" y="'+ty.toFixed(1)+'" text-anchor="middle" font-size="8.5" fill="#4b3825" font-family="Consolas,monospace">'+labels[i/2]+'</text>';
-      }
+    var out='';
+    var major=[-20,-10,-7,-5,-3,-1,0,3];
+    var majorAng=[-52,-36,-25,-17,-9,-2,4,16];
+    for(var i=0;i<=34;i++){
+      var a=-52+i*(68/34);
+      var r1=58, r2=(i%2===0?67:63);
+      var p1=polar(92,88,r1,a), p2=polar(92,88,r2,a);
+      out+='<line x1="'+p1[0].toFixed(1)+'" y1="'+p1[1].toFixed(1)+'" x2="'+p2[0].toFixed(1)+'" y2="'+p2[1].toFixed(1)+'" stroke="#3d2b1c" stroke-width="'+(i%2===0?1.3:0.8)+'" opacity="'+(i%2===0?'.9':'.55')+'"/>';
+    }
+    for(var j=0;j<major.length;j++){
+      var a2=majorAng[j];
+      var p=polar(92,88,75,a2);
+      out+='<text x="'+p[0].toFixed(1)+'" y="'+(p[1]+2.5).toFixed(1)+'" text-anchor="middle" font-size="8" fill="#3a2718" font-family="Consolas,monospace">'+(major[j]>0?'+':'')+major[j]+'</text>';
     }
     return out;
   }
   function svgMeter(level){
-    var ang = tone(level);
-    var ticksHtml = ticks();
-    return '<svg viewBox="0 0 184 108" preserveAspectRatio="none">'+
-      '<defs><radialGradient id="bulb" cx="50%" cy="105%" r="85%"><stop offset="0%" stop-color="#ffd28a" stop-opacity=".55"/><stop offset="60%" stop-color="#ffb15a" stop-opacity=".12"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient></defs>'+
-      '<rect x="0" y="0" width="184" height="108" fill="url(#bulb)"/>'+
-      '<rect x="7" y="7" width="170" height="94" rx="3" fill="none" stroke="#7c5a33" stroke-opacity=".35"/>'+
-      '<path d="M25 88 A67 67 0 0 1 159 88" fill="none" stroke="#5a4129" stroke-width="1.4" opacity=".85"/>'+
-      ticksHtml+
-      '<line x1="92" y1="88" x2="92" y2="25" stroke="#2a1f16" stroke-width="2.4" stroke-linecap="round" transform="rotate('+ang.toFixed(1)+' 92 88)"/>'+
-      '<circle cx="92" cy="88" r="4.2" fill="#2a1f16"/><circle cx="92" cy="88" r="1.7" fill="#d8b77a"/>'+
-      '<text x="92" y="102" text-anchor="middle" font-size="7.5" fill="#5b4229" font-family="Segoe UI">VU</text>'+
-      '<text x="18" y="98" font-size="7" fill="#7a5a34" font-family="Consolas,monospace">-20</text>'+
-      '<text x="148" y="98" font-size="7" fill="#a33a2a" font-family="Consolas,monospace">+3</text>'+
-      '<rect x="150" y="16" width="5" height="5" rx="1" fill="#a33a2a" opacity=".8"/>'+
+    var v=Math.max(-20,Math.min(3,Number(level)||0));
+    var t=(v+20)/23; var ang=-52+t*68;
+    var tickHtml=ticks();
+    var red=arcPath(92,88,64,4,16);
+    return '<svg viewBox="0 0 184 108" preserveAspectRatio="xMidYMid meet">'+
+      '<defs>'+
+      '<linearGradient id="paper" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f7e8c8"/><stop offset=".62" stop-color="#efd8ad"/><stop offset="1" stop-color="#d8b57d"/></linearGradient>'+
+      '<radialGradient id="bulb" cx="50%" cy="100%" r="70%"><stop offset="0" stop-color="#ffd38c" stop-opacity=".85"/><stop offset=".45" stop-color="#ffae52" stop-opacity=".25"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>'+
+      '<linearGradient id="bezel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#30261c"/><stop offset=".5" stop-color="#17120e"/><stop offset="1" stop-color="#0b0907"/></linearGradient>'+
+      '<clipPath id="faceclip"><rect x="10" y="8" width="164" height="92" rx="2"/></clipPath>'+
+      '</defs>'+
+      '<rect x="1" y="1" width="182" height="106" rx="7" fill="url(#bezel)" stroke="#4f3e2d" stroke-opacity=".55"/>'+
+      '<rect x="8" y="6" width="168" height="96" rx="3" fill="#0c0907" opacity=".55"/>'+
+      '<g clip-path="url(#faceclip)">'+
+      '<rect x="10" y="8" width="164" height="92" fill="url(#paper)"/>'+
+      '<rect x="10" y="8" width="164" height="92" fill="url(#bulb)"/>'+
+      '<path d="'+arcPath(92,88,64,-52,16)+'" fill="none" stroke="#3e2a1a" stroke-width="1.2" opacity=".9"/>'+
+      '<path d="'+red+'" fill="none" stroke="#b03a2a" stroke-width="4" opacity=".85"/>'+
+      tickHtml+
+      '<text x="92" y="66" text-anchor="middle" font-size="17" font-weight="600" fill="#2f2115" font-family="Segoe UI">VU</text>'+
+      '<text x="16" y="98" font-size="6.5" fill="#6b4c30" font-family="Consolas,monospace">ANALOG</text>'+
+      '<circle cx="157" cy="20" r="3.2" fill="#c23b2c"/><circle cx="157" cy="20" r="1.2" fill="#ffb4a8"/>'+
+      '<text x="157" y="32" text-anchor="middle" font-size="6.5" fill="#5b3c27" font-family="Segoe UI">PEAK</text>'+
+      '<polygon points="12,9 58,9 46,20 12,20" fill="#fff" opacity=".10"/>'+
+      '</g>'+
+      '<line x1="92" y1="88" x2="92" y2="26" stroke="#24170f" stroke-width="2.2" stroke-linecap="round" transform="rotate('+ang.toFixed(1)+' 92 88)"/>'+
+      '<line x1="92" y1="88" x2="92" y2="32" stroke="#f6e6c8" stroke-width=".7" opacity=".35" transform="rotate('+ang.toFixed(1)+' 92 88)"/>'+
+      '<circle cx="92" cy="88" r="4.6" fill="#1d130d"/><circle cx="92" cy="88" r="1.8" fill="#c8a36b"/>'+
       '</svg>';
   }
   var nodes = document.querySelectorAll('.vu');
