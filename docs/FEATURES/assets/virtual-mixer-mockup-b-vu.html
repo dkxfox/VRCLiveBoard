@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>VRCLiveBoard 混音台视觉稿 · 机械 VU</title>
+<style>
+:root{--bg:#0d1219;--card:#16202b;--inset:#101821;--deep:#0a0f15;--border:#2a3442;--border2:#233040;--text:#e8edf3;--muted:#8b98a8;--faint:#667588;--accent:#3b82f6;--accent2:#2f6fd0;--ok:#3ddc84;--warn:#f0b429;--err:#e5484d;--violet:#9b8cff;--cream:#f1e1bd;--ink:#241b13}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(900px 500px at 12% -5%,rgba(59,130,246,.14),transparent 60%),radial-gradient(700px 400px at 92% 8%,rgba(155,140,255,.10),transparent 65%),linear-gradient(180deg,#0d1219,#0a0f15 60%,#0b1119);color:var(--text);font-family:"Segoe UI","Microsoft YaHei",sans-serif;min-height:100vh}
+body:before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.5;background-image:radial-gradient(1px 1px at 12% 18%,#fff,transparent),radial-gradient(1px 1px at 27% 9%,#bcd4ff,transparent),radial-gradient(1px 1px at 41% 31%,#fff,transparent),radial-gradient(1px 1px at 63% 14%,#bcd4ff,transparent),radial-gradient(1px 1px at 78% 28%,#fff,transparent),radial-gradient(1px 1px at 88% 11%,#bcd4ff,transparent)}
+.app{position:relative;max-width:1240px;margin:0 auto;padding:22px 26px 40px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}
+.brand{display:flex;align-items:center;gap:12px}.logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#2f6fd0,#9b8cff);display:flex;align-items:center;justify-content:center;font-size:20px;color:#fff;box-shadow:0 0 22px rgba(59,130,246,.35)}
+.brand b{font-size:17px}.brand span{display:block;color:var(--muted);font-size:11.5px;margin-top:2px}
+.topright{display:flex;gap:10px;align-items:center;color:var(--muted);font-size:12px}
+.pill{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border2);background:rgba(16,24,33,.8);padding:7px 11px;border-radius:999px;font-size:12px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px rgba(61,220,132,.8)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0 18px;border-bottom:1px solid rgba(42,52,66,.6);padding-bottom:12px}
+.tab{color:var(--muted);font-size:13px;padding:8px 13px;border-radius:8px;border:1px solid transparent;background:rgba(22,30,42,.35)}
+.tab.on{color:#fff;background:var(--accent);border-color:var(--accent);font-weight:700;box-shadow:0 4px 16px rgba(59,130,246,.25)}
+.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin:2px 0 14px}.pagehead h1{font-size:24px;margin:0 0 6px}.pagehead p{margin:0;color:var(--muted);font-size:12.5px;line-height:1.7;max-width:760px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.btn{border:1px solid var(--border);background:#1d2937;color:var(--text);border-radius:8px;padding:8px 13px;font-size:12.5px;font-family:inherit;white-space:nowrap}.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}.btn.ghost{background:transparent;color:var(--muted)}.btn.small{padding:6px 9px;font-size:11.5px}
+.card{background:rgba(22,32,43,.84);border:1px solid rgba(96,128,180,.25);border-radius:12px;box-shadow:0 8px 26px rgba(0,0,0,.18)}
+.route{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:13px 15px;margin-bottom:14px;background:linear-gradient(90deg,rgba(61,220,132,.08),rgba(59,130,246,.06));border-color:rgba(61,220,132,.28)}
+.route .rlabel{font-size:11.5px;color:var(--muted);letter-spacing:.5px}.route .rval{font-size:13px;font-weight:600}.route .arrow{color:var(--faint);font-size:16px}.route .spacer{flex:1}
+.badge{font-size:11px;color:var(--muted);border:1px solid var(--border2);background:var(--deep);padding:4px 7px;border-radius:6px}
+.mixer{display:grid;grid-template-columns:1fr 285px;gap:14px;align-items:stretch}
+.channels{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.strip{padding:13px 14px 12px;position:relative;overflow:hidden;min-height:244px}
+.strip:before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:#5aa9ff}.strip.mic:before{background:var(--ok)}.strip.custom:before{background:var(--violet)}.strip.custom2:before{background:#6b7888}
+.strip-head{display:flex;align-items:center;gap:7px;margin-bottom:8px}.strip-head b{font-size:13.5px}.strip-head .dot{width:7px;height:7px}
+.strip-head .send{margin-left:auto;font-size:10px;color:var(--ok);border:1px solid rgba(61,220,132,.3);background:rgba(61,220,132,.08);padding:3px 6px;border-radius:5px;white-space:nowrap}
+.strip-head .send.off{color:var(--faint);border-color:var(--border2);background:var(--deep)}
+.stripbody{display:flex;gap:12px;align-items:stretch}
+.analog{width:184px;flex:none;position:relative}
+.vu{width:184px;height:108px;position:relative;border-radius:7px;background:linear-gradient(180deg,#f6e8c9,#e8d1a0 70%,#d7b878);box-shadow:inset 0 0 0 1px rgba(80,56,28,.55),0 2px 8px rgba(0,0,0,.45),0 0 22px rgba(255,174,72,.13);overflow:hidden}
+.vu:before{content:'';position:absolute;inset:0;background:radial-gradient(120% 80% at 50% 105%,rgba(255,174,72,.35),transparent 60%);pointer-events:none}
+.vu:after{content:'';position:absolute;inset:5px;border:1px solid rgba(83,59,31,.35);border-radius:4px;pointer-events:none}
+.vu svg{width:100%;height:100%;display:block;position:relative}
+.vu-foot{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--faint);margin-top:5px;padding:0 2px}
+.vu-foot b{color:var(--muted);font-weight:600;letter-spacing:.8px}
+.vu-foot .peak{color:#ff8a7a;font-size:9.5px;border:1px solid rgba(229,72,77,.35);background:rgba(229,72,77,.1);padding:2px 4px;border-radius:4px}
+.controls{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px}
+.controls select{background:var(--deep);border:1px solid var(--border);color:var(--muted);font-size:11.5px;padding:6px 7px;border-radius:6px;width:100%}
+.faderline{display:flex;align-items:center;gap:7px;margin-top:2px}.faderline .trackline{position:relative;flex:1;height:5px;border-radius:3px;background:#0b1219;border:1px solid #263344}.faderline .fill{position:absolute;left:0;top:0;bottom:0;width:66%;background:linear-gradient(90deg,#2f6fd0,#5aa9ff);border-radius:3px}.faderline .knob{position:absolute;left:66%;top:50%;width:18px;height:18px;transform:translate(-50%,-50%);border-radius:50%;background:linear-gradient(180deg,#eef5ff,#aab6c4);border:1px solid #fff;box-shadow:0 2px 6px #000}.faderline .db{font-family:Consolas,monospace;font-size:11px;color:#c9d6e6;min-width:47px;text-align:right}
+.msrow{display:flex;align-items:center;gap:6px}.msrow button{border:1px solid var(--border);background:var(--deep);color:var(--muted);border-radius:5px;padding:4px 9px;font-size:10.5px;font-weight:700}.msrow .db2{margin-left:auto;font-family:Consolas,monospace;font-size:10.5px;color:var(--faint)}
+.filebtn{border:1px solid var(--border2);background:var(--inset);color:var(--muted);border-radius:6px;padding:6px 8px;font-size:10.5px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.master{padding:14px 14px 12px;border-color:rgba(240,180,41,.34);background:linear-gradient(180deg,rgba(35,40,48,.95),rgba(20,28,38,.95))}
+.master .strip-head b{font-size:15px}.master .out{font-size:10.5px;color:var(--muted);line-height:1.6;margin:3px 0 10px;border-bottom:1px solid var(--border2);padding-bottom:9px}
+.dualmeter{display:flex;gap:8px;justify-content:center;margin:6px 0 10px}.dualmeter .analog{width:126px}.dualmeter .vu{width:126px;height:92px}
+.master .bigdb{font-family:Consolas,monospace;font-size:22px;color:#fff;text-align:center;margin:7px 0 5px}.master .bigdb span{font-size:11px;color:var(--muted)}
+.master .faderline{margin:0 2px 7px}.master .safe{margin-top:auto;font-size:10.5px;color:var(--muted);border-top:1px solid var(--border2);padding-top:9px;line-height:1.6;margin-top:12px}
+.cue{margin-top:14px;padding:14px 15px}.cue-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}.cue-head b{font-size:14px}.cue-head .sub{font-size:11.5px;color:var(--muted);margin-left:8px}
+.cuerows{display:grid;grid-template-columns:1fr 1fr;gap:10px}.cuerow{display:flex;align-items:center;gap:9px;background:var(--inset);border:1px solid var(--border2);border-radius:8px;padding:9px 10px}.cuerow .tag{font-size:10.5px;color:var(--muted);min-width:58px}.cuerow .fname{flex:1;min-width:0;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cuerow .dur{font-family:Consolas,monospace;font-size:10.5px;color:var(--faint)}
+.cuefoot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--border2)}.cuefoot .time{font-family:Consolas,monospace;font-size:12px;color:var(--ok);background:rgba(61,220,132,.08);border:1px solid rgba(61,220,132,.25);border-radius:6px;padding:6px 9px}.cuefoot .hint{font-size:11px;color:var(--faint)}
+.foot{display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;color:var(--faint);font-size:11px;line-height:1.6}.foot b{color:var(--muted);font-weight:600}
+.watermark{position:fixed;right:18px;bottom:14px;color:#657487;font-size:11px;border:1px solid #263344;background:rgba(10,15,21,.8);padding:5px 8px;border-radius:6px}
+@media(max-width:1000px){.app{padding:16px}.mixer{grid-template-columns:1fr}.strip{min-height:0}.channels{grid-template-columns:1fr}.cuerows{grid-template-columns:1fr}.pagehead{flex-direction:column;align-items:flex-start}.actions{justify-content:flex-start}}
+</style></head>
+<body>
+<div class="app">
+<div class="top"><div class="brand"><div class="logo">✧</div><div><b>VRCLiveBoard</b><span>控制台 · 视觉稿</span></div></div><div class="topright"><span class="pill"><i class="dot"></i> 引擎运行中</span><span class="pill"><i class="dot"></i> VRChat 已连接</span><span class="pill">v1.4.8</span></div></div>
+<nav class="tabs"><span class="tab">仪表盘</span><span class="tab">公告板</span><span class="tab">插件</span><span class="tab">数据源</span><span class="tab">翻译</span><span class="tab">环境</span><span class="tab">键盘</span><span class="tab">跳舞</span><span class="tab">高级</span><span class="tab on">混音台</span></nav>
+<div class="pagehead"><div><h1>混音台 <span style="font-size:12px;color:var(--warn);font-weight:400;vertical-align:middle">机械 VU 皮肤 · 视觉稿</span></h1><p>每条混音通道可选是否送入虚拟跳线；四路 VU 只是视觉反馈，精确控制看下方数字 dB。</p></div><div class="actions"><button class="btn ghost small">刷新设备</button><button class="btn small">停止引擎</button><button class="btn pri">保存设置</button></div></div>
+<div class="card route"><div><div class="rlabel">虚拟跳线</div><div class="rval">CABLE Input</div></div><div class="arrow">→</div><div><div class="rlabel">VRChat 麦克风</div><div class="rval">CABLE Output <span class="badge">已检测</span></div></div><div class="arrow">·</div><div><div class="rlabel">系统声音来源</div><div class="rval">扬声器 (Realtek USB Audio)</div></div><div class="spacer"></div><button class="btn small">更换跳线 / 引导安装</button></div>
+<div class="mixer">
+<div class="channels">
+  <div class="card strip system">
+    <div class="strip-head"><i class="dot"></i><b>系统声音</b><span class="badge">回环</span><span class="send">→ 送跳线</span></div>
+    <div class="stripbody"><div class="analog"><div class="vu" data-vu="system" data-level="-8"></div><div class="vu-foot"><b>VU</b><span class="peak">PEAK</span></div></div><div class="controls"><select><option>扬声器 (Realtek USB Audio)</option></select><div class="faderline"><span class="trackline"><i class="fill"></i><i class="knob"></i></span><span class="db">-6.0 dB</span></div><div class="msrow"><button>M</button><button>S</button><span class="db2">L / R</span></div><div class="filebtn">播放文件…</div></div></div>
+  </div>
+  <div class="card strip mic">
+    <div class="strip-head"><i class="dot"></i><b>麦克风</b><span class="badge">输入</span><span class="send">→ 送跳线</span></div>
+    <div class="stripbody"><div class="analog"><div class="vu" data-vu="mic" data-level="-14"></div><div class="vu-foot"><b>VU</b><span class="peak">PEAK</span></div></div><div class="controls"><select><option>麦克风 (USB Audio CODEC)</option></select><div class="faderline"><span class="trackline"><i class="fill" style="width:55%"></i><i class="knob" style="left:55%"></i></span><span class="db">0.0 dB</span></div><div class="msrow"><button>M</button><button>S</button><span class="db2">L / R</span></div><div class="filebtn">选择麦克风…</div></div></div>
+  </div>
+  <div class="card strip custom">
+    <div class="strip-head"><i class="dot" style="background:var(--violet)"></i><b>自定义 1</b><span class="badge">文件 / 线路</span><span class="send">→ 送跳线</span></div>
+    <div class="stripbody"><div class="analog"><div class="vu" data-vu="custom" data-level="-4"></div><div class="vu-foot"><b>VU</b><span class="peak">PEAK</span></div></div><div class="controls"><select><option>文件播放</option><option>线路输入</option></select><div class="faderline"><span class="trackline"><i class="fill" style="width:62%"></i><i class="knob" style="left:62%"></i></span><span class="db">-3.0 dB</span></div><div class="msrow"><button>M</button><button>S</button><span class="db2">L / R</span></div><div class="filebtn">载入音乐…</div></div></div>
+  </div>
+  <div class="card strip custom2">
+    <div class="strip-head"><i class="dot" style="background:#6b7888"></i><b>自定义 2</b><span class="badge">未启用</span><span class="send off">仅监听</span></div>
+    <div class="stripbody"><div class="analog"><div class="vu" data-vu="custom2" data-level="-30"></div><div class="vu-foot"><b>VU</b><span class="peak" style="opacity:.45">PEAK</span></div></div><div class="controls"><select><option>文件播放</option><option>线路输入</option></select><div class="faderline"><span class="trackline"><i class="fill" style="width:12%"></i><i class="knob" style="left:12%"></i></span><span class="db">-∞ dB</span></div><div class="msrow"><button>M</button><button>S</button><span class="db2">L / R</span></div><div class="filebtn">添加通道…</div></div></div>
+  </div>
+</div>
+<aside class="card master"><div class="strip-head"><i class="dot"></i><b>主输出</b></div><div class="out">送往 CABLE Input<br>VRChat 选 CABLE Output</div><div class="dualmeter"><div class="analog"><div class="vu" data-vu="masterL" data-level="-6"></div></div><div class="analog"><div class="vu" data-vu="masterR" data-level="-8"></div></div></div><div style="display:flex;justify-content:center;gap:42px;font-size:10px;color:var(--faint);margin-top:-8px;margin-bottom:4px"><span>L</span><span>R</span></div><div class="bigdb">-4.5 <span>dB</span></div><div class="faderline"><span class="trackline"><i class="fill" style="width:70%"></i><i class="knob" style="left:70%"></i></span></div><div class="msrow" style="justify-content:center"><button>M</button><span style="font-size:10px;color:var(--faint)">主输出静音</span></div><div class="safe">峰值限幅 · 防削波<br>监听输出：关闭（默认）<br><span style="color:var(--warn)">⚠ 不要把监听输出选成系统声音来源</span></div></aside>
+</div>
+<div class="card cue"><div class="cue-head"><div><b>同步播放 / Cue</b><span class="sub">两条文件在同一个音频时钟起播，适合假唱和运镜联动</span></div><span class="badge">待命</span></div><div class="cuerows"><div class="cuerow"><span class="tag">系统音乐</span><span class="fname">D:\Music\intro.wav</span><span class="dur">03:12</span><button class="btn small">载入…</button></div><div class="cuerow"><span class="tag">自定义 1</span><span class="fname">D:\Music\vocal.wav</span><span class="dur">03:08</span><button class="btn small">载入…</button></div></div><div class="cuefoot"><span class="time">at 21:03:00 / lead 500ms</span><button class="btn pri">▶ 同步播放</button><button class="btn small">停止</button><span class="hint">起播偏差目标 ≤20ms；同一 cue 内的文件由插件自己播放；外部播放器只能近似同步。</span></div></div>
+<div class="foot"><span><b>提示</b> 机械 VU 是风格化反馈，数字 dB 仍保留；未检测到虚拟跳线时显示“引导安装”。</span><span><b>隐私</b> 只做实时混音，默认不录音；系统声音/麦克风需在红窗里确认。</span></div>
+</div>
+<div class="watermark">视觉稿 B-VU · 仅确认布局，未接线</div>
+<script>
+(function(){
+  function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');}
+  function tone(level){
+    // level: negative dB-ish display level; map to needle angle; decorative.
+    var v = Math.max(-30, Math.min(6, Number(level) || 0));
+    var t = (v + 30) / 36; // 0..1
+    return -42 + t * 84;
+  }
+  function ticks(){
+    var out = '';
+    var labels = [-20,-10,-5,-3,-1,0,1,2,3];
+    var angles = [-42,-31,-20,-13,-6,0,7,14,21,28,35,42];
+    for (var i=0;i<angles.length;i++){
+      var a = angles[i] * Math.PI / 180;
+      var r1 = 63, r2 = 70;
+      var x1 = 92 + Math.sin(a)*r1, y1 = 88 - Math.cos(a)*r1;
+      var x2 = 92 + Math.sin(a)*r2, y2 = 88 - Math.cos(a)*r2;
+      out += '<line x1="'+x1.toFixed(1)+'" y1="'+y1.toFixed(1)+'" x2="'+x2.toFixed(1)+'" y2="'+y2.toFixed(1)+'" stroke="#4a3623" stroke-width="1.4"/>';
+      if (i % 2 === 0 && labels[i/2] !== undefined) {
+        var tx = 92 + Math.sin(a)*80, ty = 88 - Math.cos(a)*80 + 3;
+        out += '<text x="'+tx.toFixed(1)+'" y="'+ty.toFixed(1)+'" text-anchor="middle" font-size="8.5" fill="#4b3825" font-family="Consolas,monospace">'+labels[i/2]+'</text>';
+      }
+    }
+    return out;
+  }
+  function svgMeter(level){
+    var ang = tone(level);
+    var ticksHtml = ticks();
+    return '<svg viewBox="0 0 184 108" preserveAspectRatio="none">'+
+      '<defs><radialGradient id="bulb" cx="50%" cy="105%" r="85%"><stop offset="0%" stop-color="#ffd28a" stop-opacity=".55"/><stop offset="60%" stop-color="#ffb15a" stop-opacity=".12"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient></defs>'+
+      '<rect x="0" y="0" width="184" height="108" fill="url(#bulb)"/>'+
+      '<rect x="7" y="7" width="170" height="94" rx="3" fill="none" stroke="#7c5a33" stroke-opacity=".35"/>'+
+      '<path d="M25 88 A67 67 0 0 1 159 88" fill="none" stroke="#5a4129" stroke-width="1.4" opacity=".85"/>'+
+      ticksHtml+
+      '<line x1="92" y1="88" x2="92" y2="25" stroke="#2a1f16" stroke-width="2.4" stroke-linecap="round" transform="rotate('+ang.toFixed(1)+' 92 88)"/>'+
+      '<circle cx="92" cy="88" r="4.2" fill="#2a1f16"/><circle cx="92" cy="88" r="1.7" fill="#d8b77a"/>'+
+      '<text x="92" y="102" text-anchor="middle" font-size="7.5" fill="#5b4229" font-family="Segoe UI">VU</text>'+
+      '<text x="18" y="98" font-size="7" fill="#7a5a34" font-family="Consolas,monospace">-20</text>'+
+      '<text x="148" y="98" font-size="7" fill="#a33a2a" font-family="Consolas,monospace">+3</text>'+
+      '<rect x="150" y="16" width="5" height="5" rx="1" fill="#a33a2a" opacity=".8"/>'+
+      '</svg>';
+  }
+  var nodes = document.querySelectorAll('.vu');
+  for (var i=0;i<nodes.length;i++) nodes[i].innerHTML = svgMeter(nodes[i].getAttribute('data-level'));
+})();
+</script>
+</body></html>
