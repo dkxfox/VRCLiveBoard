@@ -783,6 +783,13 @@
 - 证据: `node plugins\virtual-mixer\test\engine-selftest.js` → **12 PASS / 0 FAIL**(version/devices/WAV 48k-2ch/2s/peak/rms/插件桥); `npm run gates` → **16 PASS / 0 FAIL**; `plugin-check` / `plugin-behavior` / `surface-scan` / `encoding-lint` 全部 PASS; 引擎 exe + NAudio.dll 已随插件源码放在 engine/。
 - 安全/边界: 插件 process=true 需红窗授权; 测试文件与运行 data 不进包(`pack-exclude`); S1 不监听端口、不联网、不采集麦克风; 音频引擎只在调用 devices/selftest 时短进程运行。
 - 下一步: S2a 系统回环 + 麦克风采集 + 48k 混音 + **电台讲话闪避(核心)**; S2b mic 压缩/预设; S3 A/B-VU 页面; S4 cue/运镜联动/打包。
+## 397. 虚拟混音台 S2a 核心: mic 侧链电台闪避算法(2026-11-24, 用户“继续”)
+- 解读与边界: 用户重启后继续; 本轮只做 **S2a 的闪避核心算法与离线验证**, 不接实时采集/输出; 实时链路下一片。
+- 改动: 新增 `engine/Ducker.cs`(mic 高通侧链/包络/阈值/深度/attack/release/hold/lookahead; 只压低目标音乐, 不压 mic); 引擎新增 `--duck-selftest`; 插件 `duckSelftest()` 桥; 插件/引擎版本 0.1.0 -> **0.2.0**; build.bat 编译 Ducker.cs。
+- 参数: threshold -35dB, depth -15dB, attack 30ms, release 400ms, hold 500ms, lookahead 8ms, sidechain HPF 120Hz。
+- 证据: `npm run test:mixer` → **17 PASS / 0 FAIL**(新增 duck attenuation 9.7dB / quiet>speech / WAV 48k-2ch / 插件 duckSelftest 桥); `plugin-check` PASS; 全量 `npm run gates` 待本轮收口复跑。
+- 安全/边界: 仍无麦克风/系统声音采集, 无网络, 无输出设备打开; 闪避只在离线合成 WAV 上验证; 插件 experimental 且不自动启动。
+- 下一步: S2a 实时链路( WasapiLoopbackCapture + WasapiCapture + 48k mix + WAV/监听输出 ), 再做 mic 降噪/压缩、A/B-VU 页面。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -842,5 +849,6 @@
 | 394 | 2026-11-23 | docs 归档整理 + DEV-NOTES 保留窗口 |
 | 395 | 2026-11-23 | 进度记录: 文档归档收尾 + 虚拟混音台方案/环境准备 |
 | 396 | 2026-11-24 | 虚拟混音台 S1: 插件骨架 + C#/NAudio 引擎 + 离线混音自测 |
+| 397 | 2026-11-24 | 虚拟混音台 S2a 核心: mic 侧链电台闪避算法 |
 
 <!-- DEV-NOTES-INDEX:END -->

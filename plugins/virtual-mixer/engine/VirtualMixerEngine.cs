@@ -15,7 +15,7 @@ using NAudio.Wave.SampleProviders;
 // No live capture/output yet; S2 adds channel capture and ducking.
 internal static class Program
 {
-    private const string EngineVersion = "0.1.0";
+    private const string EngineVersion = "0.2.0";
     private const int SampleRate = 48000;
     private const int Channels = 2;
 
@@ -31,6 +31,7 @@ internal static class Program
             }
             if (args[0] == "--list-devices" && args.Length >= 2) return ListDevices(args[1]);
             if (args[0] == "--selftest" && args.Length >= 2) return SelfTest(args[1], args.Length >= 3 ? args[2] : null);
+            if (args[0] == "--duck-selftest" && args.Length >= 2) return DuckSelfTest(args[1], args.Length >= 3 ? args[2] : null);
             Usage();
             return 2;
         }
@@ -47,6 +48,7 @@ internal static class Program
         Console.Error.WriteLine("  --version");
         Console.Error.WriteLine("  --list-devices <out.json>");
         Console.Error.WriteLine("  --selftest <out.wav> [result.json]");
+        Console.Error.WriteLine("  --duck-selftest <out.wav> [result.json]");
     }
 
     private static int ListDevices(string outPath)
@@ -134,6 +136,55 @@ internal static class Program
                 done += frames;
             }
         }
+    }
+
+
+    private static int DuckSelfTest(string outWav, string resultJson)
+    {
+        const int seconds = 3;
+        var d = new Ducker(SampleRate);
+        int frames = SampleRate * seconds;
+        var left = new double[frames];
+        var right = new double[frames];
+        var buffer = new float[SampleRate * Channels];
+        double musicAmp = 0.20;
+        double micAmp = 0.15;
+        using (var writer = new WaveFileWriter(outWav, WaveFormat.CreateIeeeFloatWaveFormat(SampleRate, Channels)))
+        {
+            int at = 0;
+            for (int i = 0; i < frames; i++)
+            {
+                double t = i / (double)SampleRate;
+                bool speech = (t >= 0.3 && t < 1.0) || (t >= 1.4 && t < 2.2);
+                double music = Math.Sin(2.0 * Math.PI * 440.0 * t) * musicAmp;
+                double mic = speech ? Math.Sin(2.0 * Math.PI * 180.0 * t) * micAmp : 0.0;
+                float applied;
+                double ducked = d.Process((float)music, (float)mic, out applied);
+                left[i] = ducked;
+                right[i] = mic;
+                buffer[at++] = (float)ducked;
+                buffer[at++] = (float)mic;
+                if (at == buffer.Length) { writer.WriteSamples(buffer, 0, at); at = 0; }
+            }
+            if (at > 0) writer.WriteSamples(buffer, 0, at);
+        }
+        double quiet = 0, loud = 0;
+        int qn = 0, ln = 0;
+        for (int i = 0; i < frames; i++)
+        {
+            double t = i / (double)SampleRate;
+            if ((t >= 0.05 && t < 0.2) || (t >= 2.5 && t < 2.9)) { quiet += left[i] * left[i]; qn++; }
+            if ((t >= 0.6 && t < 0.9) || (t >= 1.7 && t < 2.0)) { loud += left[i] * left[i]; ln++; }
+        }
+        double q = qn > 0 ? Math.Sqrt(quiet / qn) : 0;
+        double l = ln > 0 ? Math.Sqrt(loud / ln) : 0;
+        double att = (q > 0 && l > 0) ? 20.0 * Math.Log10(q / l) : 0;
+        var json = "{\"ok\":true,\"engine\":\"VirtualMixerEngine\",\"version\":\"" + EngineVersion + "\",\"sampleRate\":" + SampleRate +
+            ",\"channels\":" + Channels + ",\"frames\":" + frames + ",\"durationMs\":" + (frames * 1000L / SampleRate) +
+            ",\"quietMusicRms\":" + F(q) + ",\"speechMusicRms\":" + F(l) + ",\"attenuationDb\":" + F(att) + ",\"output\":\"" + J(outWav) + "\"}";
+        if (!string.IsNullOrEmpty(resultJson)) WriteText(resultJson, json);
+        Console.WriteLine(json);
+        return att >= 6.0 ? 0 : 3;
     }
 
     private static void ReadStats(string path, out double peak, out double rms, out long frames)

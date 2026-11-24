@@ -25,7 +25,7 @@ function wavInfo(file) {
   try {
     if (!fs.existsSync(ENGINE)) { console.error('  FAIL engine not built: ' + ENGINE); process.exit(1); }
     const v = parseJson(execFileSync(ENGINE, ['--version'], { encoding: 'utf8' }));
-    ok(v.ok === true && v.engine === 'VirtualMixerEngine' && v.version === '0.1.0', 'version: ' + JSON.stringify(v));
+    ok(v.ok === true && v.engine === 'VirtualMixerEngine' && v.version === '0.2.0', 'version: ' + JSON.stringify(v));
     const devFile = path.join(os.tmpdir(), 'vrcb-mixer-dev-' + process.pid + '.json');
     execFileSync(ENGINE, ['--list-devices', devFile], { encoding: 'utf8' });
     const dev = JSON.parse(fs.readFileSync(devFile, 'utf8'));
@@ -43,6 +43,15 @@ function wavInfo(file) {
     ok(j.peak > 0.1 && j.peak < 0.99, 'peak in range: ' + j.peak);
     ok(j.rms > 0.01, 'rms > 0: ' + j.rms);
     fs.unlinkSync(wav); fs.unlinkSync(jf);
+    const dwav = path.join(os.tmpdir(), 'vrcb-mixer-duck-' + process.pid + '.wav');
+    const dj = path.join(os.tmpdir(), 'vrcb-mixer-duck-' + process.pid + '.json');
+    execFileSync(ENGINE, ['--duck-selftest', dwav, dj], { encoding: 'utf8' });
+    const duck = JSON.parse(fs.readFileSync(dj, 'utf8'));
+    ok(duck.ok === true && duck.attenuationDb >= 6, 'duck selftest: attenuation >=6dB (' + duck.attenuationDb + ')');
+    ok(duck.quietMusicRms > duck.speechMusicRms, 'duck selftest: music quieter while speaking');
+    const dinfo = wavInfo(dwav);
+    ok(dinfo.fmt && dinfo.fmt.rate === 48000 && dinfo.fmt.channels === 2, 'duck selftest WAV 48k/2ch');
+    fs.unlinkSync(dwav); fs.unlinkSync(dj);
     const factory = require(path.join(ROOT, 'index.js'));
     const ctx = {
       config: {},
@@ -60,6 +69,8 @@ function wavInfo(file) {
     ok(d.ok === true && Array.isArray(d.render) && d.render.length > 0, 'plugin devices() bridge');
     const s = await plugin.api.selftest();
     ok(s.ok === true && s.frames === 96000 && s.peak > 0.1, 'plugin selftest() bridge');
+    const ds = await plugin.api.duckSelftest();
+    ok(ds.ok === true && ds.attenuationDb >= 6, 'plugin duckSelftest() bridge');
     console.log('  ---- ' + pass + ' PASS ----');
   } catch (e) {
     console.error('  FAIL ' + (e && e.message ? e.message : e));

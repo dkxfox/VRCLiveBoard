@@ -1,9 +1,9 @@
 {
   "id": "virtual-mixer",
   "name": "虚拟混音台",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "VRCLiveBoard 官方",
-  "description": "把系统声音、麦克风和自定义文件混成一路送入虚拟跳线；实验版 S1：设备枚举与离线混音自测，实时采集/闪避/UI 在后续切片。",
+  "description": "把系统声音、麦克风和自定义文件混成一路送入虚拟跳线；实验版 S2a：设备枚举/离线混音/电台侧链闪避核心；实时采集/UI 在后续切片。",
   "api": "2.0.0",
   "experimental": true,
   "minApp": "1.4.8",
@@ -58,6 +58,6 @@
     }
   ],
   "changelog": [
-    "0.1.0 S1 骨架：C#/NAudio 引擎、设备枚举、离线双轨混音自测；实时混音/闪避/UI 尚未接入"
+    "0.2.0 S2a 核心: 麦克风侧链电台闪避算法 + 离线 duck-selftest（-15dB/30ms attack/400ms release/500ms hold/8ms lookahead）；实时采集仍在下一片"
   ]
 }

@@ -15,8 +15,8 @@
 - **M-20260903-06** OSC 全红排查资料已落地: `docs/SUPPORT/M-20260903-06-OSC排查资料.md`; 问题仍为 NEED-REPRO, 等反馈者补充。
 
 ### 1.3 虚拟混音台(下一步开发)
-- 功能卡: `docs/FEATURES/F-20261123-01-虚拟混音台.md` (**BUILD**: 方案/视觉确认, S1 已完成)。
-- **2026-11-24 S1 已完成**: `plugins/virtual-mixer` v0.1.0 experimental + C#/NAudio 引擎；`--list-devices` / `--selftest`(48k 2ch 离线混音)；测试 12 PASS，全量门禁 16 PASS / 0 FAIL；未接实时采集/闪避/UI。
+- 功能卡: `docs/FEATURES/F-20261123-01-虚拟混音台.md` (**BUILD**: 方案/视觉确认, S1 完成; S2a 闪避核心完成)。
+- **2026-11-24 S1 已完成**: `plugins/virtual-mixer` v0.2.0 experimental + C#/NAudio 引擎；`--list-devices` / `--selftest` / `--duck-selftest`；测试 **17 PASS**，全量门禁 **16 PASS / 0 FAIL**；侧链闪避核心已离线验证，实时采集/输出未接。
 - 已确认:
   - 引导安装第三方 VB-CABLE; 用户态插件不创建/打包驱动。
   - 一根虚拟跳线即可; 三条(可扩到 8)内部混音通道, 每路可选“送跳线/仅监听”, 汇到一路虚拟麦克风。

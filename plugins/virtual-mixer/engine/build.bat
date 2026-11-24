@@ -9,7 +9,7 @@ if not exist "%CSC%" (
   exit /b 1
 )
 pushd "%~dp0"
-%CSC% /nologo /target:exe /out:VirtualMixerEngine.exe /r:NAudio.dll /r:System.Windows.Forms.dll /r:System.Core.dll VirtualMixerEngine.cs
+%CSC% /nologo /target:exe /out:VirtualMixerEngine.exe /r:NAudio.dll /r:System.Windows.Forms.dll /r:System.Core.dll VirtualMixerEngine.cs Ducker.cs
 if errorlevel 1 (echo [ERROR] compile failed & popd & exit /b 1)
 echo Built VirtualMixerEngine.exe
 popd
