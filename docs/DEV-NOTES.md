@@ -814,6 +814,12 @@
 - 验证: 插件 `setup()` 现在 `installed=true` 并返回 CABLE Input/Output; 设备枚举正常; 重启后做 VRChat 麦克风实测。
 - 安全: 官方包已校验签名; 不把驱动/安装器放进仓库/发布包; 产品侧仍是“引导安装”而不是静默安装。
 - 下一步: 用户重启 → 选 CABLE Input 输出/CABLE Output 给 VRChat → 真实讲话+音乐闪避测试。
+## 402. 进度保存: VB-CABLE 已安装, 待重启做端到端实测(2026-11-24, 用户“保存进度, 下次继续”)
+- 本轮无代码改动; 只保存环境/测试状态与下一步。
+- 虚拟混音台: 插件 v0.4.1 / 引擎 0.4.0; `setup()` installed=true; CABLE Input(播放)/CABLE Output(录音)已出现。
+- VB-CABLE: 官方 Driver Pack46 / Setup 2.1.5.8, 签名验证通过, UAC 安装完成; 安装器改默认音频已用 PolicyConfig 恢复为安装前设备。
+- 验证: test:mixer 18 PASS; test:mixer:capture 6 PASS; gates 16 PASS/0 FAIL (安装前代码状态; 安装只影响环境, 未改代码)。
+- 下次: 重启 Windows → 复查端点 → output-test 指向 CABLE Input, capture CABLE Output → VRChat 麦克风选 CABLE Output → 讲话+音乐闪避/压缩/恢复实测; 再做 A/B-VU 页面。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -878,5 +884,6 @@
 | 399 | 2026-11-24 | 虚拟混音台 S2b: WasapiOut 输出 smoke |
 | 400 | 2026-11-24 | 虚拟混音台 S3 准备: setup() 虚拟跳线检测 |
 | 401 | 2026-11-24 | VB-CABLE 安装完成 + 默认音频恢复 |
+| 402 | 2026-11-24 | 进度保存: VB-CABLE 已安装, 待重启做端到端实测 |
 
 <!-- DEV-NOTES-INDEX:END -->

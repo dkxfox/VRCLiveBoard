@@ -3,6 +3,14 @@
 > 用途: 下次接手时先看本文件, 再读 `docs/DEV-NOTES.md` §1 与条目 349–395。
 > 当前版本: **1.4.8「补漏」EA**; 功能卡/环境准备最后提交: **b14f14e**; 工作区干净。
 
+## 0. 最新状态保存(2026-11-24)
+
+- 虚拟混音台插件: **v0.4.1**(experimental), 引擎 **0.4.0**; `setup()` 已检测到 VB-CABLE, 返回 `installed=true`。
+- **VB-CABLE 已安装**: 官方 Driver Pack 46 / 安装器 2.1.5.8, 签名验证通过, UAC 安装完成; `CABLE Input` / `CABLE Output` 已出现。
+- 安装器曾把 Windows 默认播放/录音改为 CABLE; 已恢复为安装前的物理设备, 避免系统声音被吞。
+- **待重启 Windows**: 官方要求重启后驱动最终生效; 尚未自动重启。
+- 最新验证: `npm run test:mixer` 18 PASS; `npm run test:mixer:capture` 6 PASS; `npm run gates` 16 PASS / 0 FAIL。
+- 下一步: 重启 → 复查 CABLE Input/Output → `--output-test` 指 CABLE Input + 采集 CABLE Output → VRChat 麦克风选 CABLE Output → 真人讲话+音乐闪避实测。
 ## 1. 本轮完成
 
 ### 1.1 文档与开发记录归档
