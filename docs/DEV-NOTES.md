@@ -780,7 +780,7 @@
 ## 396. 虚拟混音台 S1: 插件骨架 + C#/NAudio 引擎 + 离线混音自测(2026-11-24, 用户“开始写代码按标准流程”)
 - 解读与边界: 本轮只做 **S1 引擎骨架 + 设备枚举 + 离线文件混音**, 不接实时采集/闪避/UI; 插件默认 experimental 且不自动启动, 不影响正常用户。
 - 改动: 新增 `plugins/virtual-mixer`(manifest v0.1.0; status/engineVersion/devices/selftest/start/stop; process 权限); C#/.NET Framework 引擎 `engine/VirtualMixerEngine.cs` + vendor NAudio 1.10.0(MIT, 许可证/第三方声明齐全); `--list-devices` 枚举 render/capture; `--selftest` 生成两条 48kHz/2ch 文件并混音为 WAV, 输出 peak/RMS/时长。
-- 证据: `node plugins\virtual-mixer\test\engine-selftest.js` → **12 PASS / 0 FAIL**(version/devices/WAV 48k-2ch/2s/peak/rms/插件桥); `plugin-check` / `plugin-behavior` / `surface-scan` / `encoding-lint` 全部 PASS; 引擎 exe + NAudio.dll 已随插件源码放在 engine/。
+- 证据: `node plugins\virtual-mixer\test\engine-selftest.js` → **12 PASS / 0 FAIL**(version/devices/WAV 48k-2ch/2s/peak/rms/插件桥); `npm run gates` → **16 PASS / 0 FAIL**; `plugin-check` / `plugin-behavior` / `surface-scan` / `encoding-lint` 全部 PASS; 引擎 exe + NAudio.dll 已随插件源码放在 engine/。
 - 安全/边界: 插件 process=true 需红窗授权; 测试文件与运行 data 不进包(`pack-exclude`); S1 不监听端口、不联网、不采集麦克风; 音频引擎只在调用 devices/selftest 时短进程运行。
 - 下一步: S2a 系统回环 + 麦克风采集 + 48k 混音 + **电台讲话闪避(核心)**; S2b mic 压缩/预设; S3 A/B-VU 页面; S4 cue/运镜联动/打包。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
