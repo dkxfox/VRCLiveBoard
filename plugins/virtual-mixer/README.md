@@ -1,7 +1,7 @@
 # 虚拟混音台（S1 骨架）
 
 > 状态：实验插件，**S2a 核心完成：设备枚举 + 离线混音 + 电台侧链闪避算法**。
-> 实时采集/输出、降噪/压缩、A/B-VU 控制台页面在后续切片接入。
+> 实时输出、降噪/压缩、A/B-VU 控制台页面在后续切片接入。
 
 ## 文件
 
@@ -24,19 +24,26 @@ cd plugins\virtual-mixer\engine
 ## 自测
 
 ```powershell
-node plugins\virtual-mixer\test\engine-selftest.js
+npm run test:mixer
 ```
 
 检查：
 1. `--version`
 2. `--list-devices` 输出可解析的 render/capture JSON
 3. `--selftest` 生成 48kHz/2ch/2s WAV，峰值与 RMS 合理
-4. 插件 `devices()` / `selftest()` / `duckSelftest()` 桥返回结构正确
+4. 插件 `devices()` / `selftest()` / `duckSelftest()` / `captureTest()` 桥返回结构正确
 5. duck selftest：讲话段音乐衰减 ≥6dB（实测约 9.7dB）
+6. `captureTest()` 真实采集到 WAV（可选，见下）
 
 ## 当前不支持
 
-- 实时系统回环 / 麦克风采集（S2a 核心算法已离线验证，实时链路下一片）
+- 实时输出到虚拟跳线（采集可写 WAV，但尚未接扬声器/虚拟线输出）
+
+### 真实采集 smoke（会占用麦克风 ~1.5 秒，不打开扬声器）
+
+```powershell
+npm run test:mixer:capture
+```
 - 虚拟跳线路由 / 闪避 / 压缩 / 降噪
 - 控制台 A/B-VU 页面
 

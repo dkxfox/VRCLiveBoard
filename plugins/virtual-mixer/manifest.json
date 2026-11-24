@@ -1,9 +1,9 @@
 {
   "id": "virtual-mixer",
   "name": "虚拟混音台",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "VRCLiveBoard 官方",
-  "description": "把系统声音、麦克风和自定义文件混成一路送入虚拟跳线；实验版 S2a：设备枚举/离线混音/电台侧链闪避核心；实时采集/UI 在后续切片。",
+  "description": "把系统声音、麦克风和自定义文件混成一路送入虚拟跳线；实验版 S2a：设备枚举/离线混音/侧链闪避/真实采集到 WAV；实时输出/降噪/压缩/UI 在后续切片。",
   "api": "2.0.0",
   "experimental": true,
   "minApp": "1.4.8",
@@ -58,6 +58,6 @@
     }
   ],
   "changelog": [
-    "0.2.0 S2a 核心: 麦克风侧链电台闪避算法 + 离线 duck-selftest（-15dB/30ms attack/400ms release/500ms hold/8ms lookahead）；实时采集仍在下一片"
+    "0.3.0 S2a: 真实系统回环+麦克风采集 -> 48k 混音 -> WAV (不开扬声器输出), 带侧链闪避统计; 实时输出/降噪/压缩/UI 待后续"
   ]
 }

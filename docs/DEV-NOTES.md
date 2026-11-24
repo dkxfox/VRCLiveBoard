@@ -790,6 +790,12 @@
 - 证据: `npm run test:mixer` → **17 PASS / 0 FAIL**(新增 duck attenuation 9.7dB / quiet>speech / WAV 48k-2ch / 插件 duckSelftest 桥); `plugin-check` PASS; 全量 `npm run gates` → **16 PASS / 0 FAIL**。
 - 安全/边界: 仍无麦克风/系统声音采集, 无网络, 无输出设备打开; 闪避只在离线合成 WAV 上验证; 插件 experimental 且不自动启动。
 - 下一步: S2a 实时链路( WasapiLoopbackCapture + WasapiCapture + 48k mix + WAV/监听输出 ), 再做 mic 降噪/压缩、A/B-VU 页面。
+## 398. 虚拟混音台 S2a 实时采集到 WAV + capture smoke(2026-11-24, 用户“继续”)
+- 解读与边界: 接 S2a 的实时链路第一段 —— **只采集/混音/写 WAV**, 不打开扬声器或虚拟跳线输出; 避免干扰用户当前音频环境。
+- 改动: 新增 `engine/CaptureTest.cs`: WasapiLoopbackCapture(系统) + WasapiCapture(麦克风) → WavBuffer → 48k/2ch 归一化 → Ducker → WAV; CLI `--capture-test <wav> <seconds> [renderId] [micId] [json]`; 插件加 `captureTest()` 桥; 版本 0.2.0 -> **0.3.0**; build.bat 编译新文件。
+- 证据: `npm run test:mixer` → **17 PASS / 0 FAIL**; `npm run test:mixer:capture` → **6 PASS / 0 FAIL**(frames 66720, sysBytes 660480, micBytes 328320, WAV>1KB, duck gains valid); 无扬声器输出。
+- 安全/边界: 采集只写 TEMP WAV/JSON, 不落仓库/不发音; 插件仍 experimental, 默认不启用; 真实输出、降噪/压缩、UI 未接。
+- 下一步: 实时输出到选定设备/虚拟跳线 + 监听保护; 再接 A/B-VU 页面与 cue/运镜联动。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -850,5 +856,6 @@
 | 395 | 2026-11-23 | 进度记录: 文档归档收尾 + 虚拟混音台方案/环境准备 |
 | 396 | 2026-11-24 | 虚拟混音台 S1: 插件骨架 + C#/NAudio 引擎 + 离线混音自测 |
 | 397 | 2026-11-24 | 虚拟混音台 S2a 核心: mic 侧链电台闪避算法 |
+| 398 | 2026-11-24 | 虚拟混音台 S2a 实时采集到 WAV + capture smoke |
 
 <!-- DEV-NOTES-INDEX:END -->

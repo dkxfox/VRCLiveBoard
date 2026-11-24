@@ -64,8 +64,8 @@ module.exports = function (c) {
         try { exists = fs.existsSync(enginePath()); } catch (e) {}
         return {
           ok: true,
-          stage: 'S2a',
-          engine: { path: enginePath(), exists: exists, version: '0.2.0' },
+          stage: 'S2a-live',
+          engine: { path: enginePath(), exists: exists, version: '0.3.0' },
           channels: [
             { id: 'system', name: '系统声音', denoise: 'off', compressor: 'off' },
             { id: 'mic', name: '麦克风', denoise: 'off', compressor: 'off' },
@@ -73,13 +73,26 @@ module.exports = function (c) {
           ]
         };
       },
-      engineVersion: function () { return { ok: true, version: '0.2.0', naudio: '1.10.0' }; },
+      engineVersion: function () { return { ok: true, version: '0.3.0', naudio: '1.10.0' }; },
       devices: async function () {
         if (!fs.existsSync(enginePath())) throw new Error('NO_ENGINE: build plugins/virtual-mixer/engine/build.bat first');
         const out = tempPath('.json');
         await ctx.fs.write(out, '{}');
         await runEngine(['--list-devices', out], 20000);
         return readJson(out);
+      },
+      captureTest: async function (args) {
+        args = args || {};
+        const seconds = Math.max(0.5, Math.min(30, Number(args.seconds) || 2));
+        const render = String(args.render || ctx.config.masterOutputDevice || '');
+        const mic = String(args.mic || ctx.config.micCaptureDevice || '');
+        if (!fs.existsSync(enginePath())) throw new Error('NO_ENGINE: build plugins/virtual-mixer/engine/build.bat first');
+        const wav = tempPath('.wav');
+        const json = tempPath('.json');
+        await ctx.fs.write(wav, '');
+        await ctx.fs.write(json, '{}');
+        await runEngine(['--capture-test', wav, String(seconds), render, mic, json], Math.round((seconds + 15) * 1000));
+        return readJson(json);
       },
       duckSelftest: async function () {
         if (!fs.existsSync(enginePath())) throw new Error('NO_ENGINE: build plugins/virtual-mixer/engine/build.bat first');

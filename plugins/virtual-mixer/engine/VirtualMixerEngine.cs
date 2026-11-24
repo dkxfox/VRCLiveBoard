@@ -15,7 +15,7 @@ using NAudio.Wave.SampleProviders;
 // No live capture/output yet; S2 adds channel capture and ducking.
 internal static class Program
 {
-    private const string EngineVersion = "0.2.0";
+    private const string EngineVersion = "0.3.0";
     private const int SampleRate = 48000;
     private const int Channels = 2;
 
@@ -32,6 +32,7 @@ internal static class Program
             if (args[0] == "--list-devices" && args.Length >= 2) return ListDevices(args[1]);
             if (args[0] == "--selftest" && args.Length >= 2) return SelfTest(args[1], args.Length >= 3 ? args[2] : null);
             if (args[0] == "--duck-selftest" && args.Length >= 2) return DuckSelfTest(args[1], args.Length >= 3 ? args[2] : null);
+            if (args[0] == "--capture-test") return CaptureTest.Run(args);
             Usage();
             return 2;
         }
@@ -49,6 +50,7 @@ internal static class Program
         Console.Error.WriteLine("  --list-devices <out.json>");
         Console.Error.WriteLine("  --selftest <out.wav> [result.json]");
         Console.Error.WriteLine("  --duck-selftest <out.wav> [result.json]");
+        Console.Error.WriteLine("  --capture-test <out.wav> <seconds> [renderId] [micId] [result.json]");
     }
 
     private static int ListDevices(string outPath)
