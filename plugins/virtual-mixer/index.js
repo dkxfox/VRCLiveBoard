@@ -65,7 +65,7 @@ module.exports = function (c) {
         return {
           ok: true,
           stage: 'S2b',
-          engine: { path: enginePath(), exists: exists, version: '0.4.0' },
+          engine: { path: enginePath(), exists: exists, version: '0.4.1' },
           channels: [
             { id: 'system', name: '系统声音', denoise: 'off', compressor: 'off' },
             { id: 'mic', name: '麦克风', denoise: 'off', compressor: 'off' },
@@ -73,13 +73,35 @@ module.exports = function (c) {
           ]
         };
       },
-      engineVersion: function () { return { ok: true, version: '0.4.0', naudio: '1.10.0' }; },
+      engineVersion: function () { return { ok: true, version: '0.4.1', naudio: '1.10.0' }; },
       devices: async function () {
         if (!fs.existsSync(enginePath())) throw new Error('NO_ENGINE: build plugins/virtual-mixer/engine/build.bat first');
         const out = tempPath('.json');
         await ctx.fs.write(out, '{}');
         await runEngine(['--list-devices', out], 20000);
         return readJson(out);
+      },
+      setup: async function () {
+        if (!fs.existsSync(enginePath())) throw new Error('NO_ENGINE: build plugins/virtual-mixer/engine/build.bat first');
+        const out = tempPath('.json');
+        await ctx.fs.write(out, '{}');
+        await runEngine(['--list-devices', out], 20000);
+        const dev = readJson(out);
+        const render = (dev.render || []).find(function (d) { return /cable input|voicemeeter.*input/i.test(d.name || ''); }) || null;
+        const capture = (dev.capture || []).find(function (d) { return /cable output|voicemeeter.*output/i.test(d.name || ''); }) || null;
+        return {
+          ok: true,
+          installed: !!(render && capture),
+          render: render,
+          capture: capture,
+          guideUrl: 'https://vb-audio.com/Cable/',
+          steps: [
+            '安装 VB-CABLE（官方安装程序，需管理员/UAC）并重启 Windows',
+            '插件检测到 CABLE Input（播放端）与 CABLE Output（录音端）',
+            '本插件输出选 CABLE Input；VRChat 麦克风选 CABLE Output',
+            '先在 VRChat 内说话确认麦克风有电平，再开音乐测试讲话闪避'
+          ]
+        };
       },
       captureTest: async function (args) {
         args = args || {};

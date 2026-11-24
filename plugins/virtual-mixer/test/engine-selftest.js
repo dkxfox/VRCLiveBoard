@@ -69,6 +69,8 @@ function wavInfo(file) {
     ok(d.ok === true && Array.isArray(d.render) && d.render.length > 0, 'plugin devices() bridge');
     const s = await plugin.api.selftest();
     ok(s.ok === true && s.frames === 96000 && s.peak > 0.1, 'plugin selftest() bridge');
+    const su = await plugin.api.setup();
+    ok(su.ok === true && typeof su.installed === 'boolean' && su.guideUrl.indexOf('vb-audio.com') >= 0, 'plugin setup() guide');
     const ds = await plugin.api.duckSelftest();
     ok(ds.ok === true && ds.attenuationDb >= 6, 'plugin duckSelftest() bridge');
     console.log('  ---- ' + pass + ' PASS ----');

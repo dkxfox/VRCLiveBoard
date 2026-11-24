@@ -802,6 +802,11 @@
 - 证据: 默认设备 1s 静音 smoke → `ok=true`, frames 45120, sysBytes 506880, micBytes 249600, mixedPeak 0, duck gains 1; 没有可听输出(采集源静音); 全量 `npm run gates` → **16 PASS / 0 FAIL**。
 - 安全/边界: 输出测试会打开选定 render 设备并可能发出采集到的声音; 只用于虚拟跳线/静音端点; 插件不自动启动, UI 未接。
 - 下一步: 引导安装 VB-CABLE → 选 CABLE Input 输出 / VRChat CABLE Output 输入 → 真人说话 + 音乐闪避实测; 再做 A/B-VU 页面。
+## 400. 虚拟混音台 S3 准备: setup() 虚拟跳线检测(2026-11-24, 用户“继续”)
+- 解读与边界: 只做引导检测，不自动安装/分发驱动; 安装需要管理员/UAC 与重启, 由用户确认。
+- 改动: 插件 `setup()` 枚举 render/capture, 匹配 CABLE Input/Output 或 Voicemeeter 输入/输出; 返回 installed/两端设备/官方 guideUrl/4 步说明; 版本 0.4.0 -> 0.4.1。
+- 证据: `npm run test:mixer` → **18 PASS / 0 FAIL**(新增 setup guide); 当前 installed=false(无端点); 官方 VB-CABLE 包已下载并核对签名, 未运行安装器。
+- 下一步: 用户批准 UAC 后安装 VB-CABLE + 重启 → setup() true → output-test 到 CABLE Input → VRChat 选 CABLE Output 实测闪避。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -864,5 +869,6 @@
 | 397 | 2026-11-24 | 虚拟混音台 S2a 核心: mic 侧链电台闪避算法 |
 | 398 | 2026-11-24 | 虚拟混音台 S2a 实时采集到 WAV + capture smoke |
 | 399 | 2026-11-24 | 虚拟混音台 S2b: WasapiOut 输出 smoke |
+| 400 | 2026-11-24 | 虚拟混音台 S3 准备: setup() 虚拟跳线检测 |
 
 <!-- DEV-NOTES-INDEX:END -->

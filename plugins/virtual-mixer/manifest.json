@@ -1,7 +1,7 @@
 {
   "id": "virtual-mixer",
   "name": "虚拟混音台",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "author": "VRCLiveBoard 官方",
   "description": "把系统声音、麦克风和自定义文件混成一路送入虚拟跳线；实验版 S2b：设备枚举/离线混音/侧链闪避/真实采集与输出 smoke；UI/降噪/压缩待后续。",
   "api": "2.0.0",
@@ -58,6 +58,6 @@
     }
   ],
   "changelog": [
-    "0.4.0 S2b: 真实采集 + WasapiOut 输出 smoke（默认设备静音验证）；实时输出虚拟跳线待引导安装 VB-CABLE 后实测"
+    "0.4.1 S3 准备: setup() 检测 CABLE Input/Output 并返回官方引导 URL/步骤"
   ]
 }

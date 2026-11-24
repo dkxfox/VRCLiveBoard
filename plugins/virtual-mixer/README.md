@@ -6,7 +6,7 @@
 ## 文件
 
 - `manifest.json`：插件声明，`process: true`（会触发红窗授权）
-- `index.js`：插件入口；暴露 `status` / `engineVersion` / `devices` / `selftest` / `start` / `stop`
+- `index.js`：插件入口；暴露 `status` / `engineVersion` / `devices` / `setup` / `selftest` / `duckSelftest` / `captureTest` / `start` / `stop`
 - `engine/VirtualMixerEngine.cs` / `Ducker.cs` / `CaptureTest.cs` / `OutputTest.cs`：引擎、侧链闪避、采集与输出 smoke
 - `engine/NAudio.dll`：NAudio 1.10.0（MIT，见 `NAudio.LICENSE.txt`）
 - `engine/build.bat`：用 Windows 自带的 csc 编译引擎
