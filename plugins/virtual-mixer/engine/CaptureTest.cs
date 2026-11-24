@@ -116,7 +116,7 @@ internal static class CaptureTest
         return 2;
     }
 
-    private static MMDevice FindDevice(MMDeviceEnumerator en, DataFlow flow, string idOrName)
+    internal static MMDevice FindDevice(MMDeviceEnumerator en, DataFlow flow, string idOrName)
     {
         MMDevice fallback = null;
         try { fallback = en.GetDefaultAudioEndpoint(flow, Role.Console); } catch { }
@@ -128,7 +128,7 @@ internal static class CaptureTest
         return fallback;
     }
 
-    private static ISampleProvider Normalize(BufferedWaveProvider buffer)
+    internal static ISampleProvider Normalize(BufferedWaveProvider buffer)
     {
         ISampleProvider sp = buffer.ToSampleProvider();
         if (sp.WaveFormat.SampleRate != Rate) sp = new WdlResamplingSampleProvider(sp, Rate);
@@ -136,7 +136,7 @@ internal static class CaptureTest
         return sp;
     }
 
-    private static void ReadSome(ISampleProvider sp, float[] buf, int count)
+    internal static void ReadSome(ISampleProvider sp, float[] buf, int count)
     {
         int got = 0;
         while (got < count)
@@ -148,14 +148,14 @@ internal static class CaptureTest
         for (int i = got; i < count; i++) buf[i] = 0f;
     }
 
-    private static void WriteText(string path, string text)
+    internal static void WriteText(string path, string text)
     {
         var dir = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
         File.WriteAllText(path, text, new UTF8Encoding(false));
     }
 
-    private static string J(string s)
+    internal static string J(string s)
     {
         if (s == null) return "";
         var sb = new StringBuilder();
@@ -174,5 +174,5 @@ internal static class CaptureTest
         return sb.ToString();
     }
 
-    private static string F(double v) { return v.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture); }
+    internal static string F(double v) { return v.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture); }
 }

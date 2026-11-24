@@ -796,6 +796,12 @@
 - 证据: `npm run test:mixer` → **17 PASS / 0 FAIL**; `npm run test:mixer:capture` → **6 PASS / 0 FAIL**(frames 66720, sysBytes 660480, micBytes 328320, WAV>1KB, duck gains valid); `npm run gates` → **16 PASS / 0 FAIL**; 无扬声器输出。
 - 安全/边界: 采集只写 TEMP WAV/JSON, 不落仓库/不发音; 插件仍 experimental, 默认不启用; 真实输出、降噪/压缩、UI 未接。
 - 下一步: 实时输出到选定设备/虚拟跳线 + 监听保护; 再接 A/B-VU 页面与 cue/运镜联动。
+## 399. 虚拟混音台 S2b: WasapiOut 输出 smoke(2026-11-24, 用户“继续”)
+- 解读与边界: 只加 **输出链路代码 + 默认设备静音 smoke**, 不做虚拟跳线实测; 当前系统无 VB-CABLE/Voicemeeter 端点, 不能验证“VRChat 麦克风实际收到”。
+- 改动: 新增 `engine/OutputTest.cs` (`--output-test <seconds> [renderId] [micId] [result]`): WasapiLoopbackCapture + WasapiCapture → Ducker → BufferedWaveProvider → WasapiOut; 复用 CaptureTest 的归一化/设备选择; 插件/引擎版本 0.3.0 -> **0.4.0**。
+- 证据: 默认设备 1s 静音 smoke → `ok=true`, frames 45120, sysBytes 506880, micBytes 249600, mixedPeak 0, duck gains 1; 没有可听输出(采集源静音); 全量门禁待收口复跑。
+- 安全/边界: 输出测试会打开选定 render 设备并可能发出采集到的声音; 只用于虚拟跳线/静音端点; 插件不自动启动, UI 未接。
+- 下一步: 引导安装 VB-CABLE → 选 CABLE Input 输出 / VRChat CABLE Output 输入 → 真人说话 + 音乐闪避实测; 再做 A/B-VU 页面。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -857,5 +863,6 @@
 | 396 | 2026-11-24 | 虚拟混音台 S1: 插件骨架 + C#/NAudio 引擎 + 离线混音自测 |
 | 397 | 2026-11-24 | 虚拟混音台 S2a 核心: mic 侧链电台闪避算法 |
 | 398 | 2026-11-24 | 虚拟混音台 S2a 实时采集到 WAV + capture smoke |
+| 399 | 2026-11-24 | 虚拟混音台 S2b: WasapiOut 输出 smoke |
 
 <!-- DEV-NOTES-INDEX:END -->

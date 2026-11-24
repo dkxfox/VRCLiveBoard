@@ -64,8 +64,8 @@ module.exports = function (c) {
         try { exists = fs.existsSync(enginePath()); } catch (e) {}
         return {
           ok: true,
-          stage: 'S2a-live',
-          engine: { path: enginePath(), exists: exists, version: '0.3.0' },
+          stage: 'S2b',
+          engine: { path: enginePath(), exists: exists, version: '0.4.0' },
           channels: [
             { id: 'system', name: '系统声音', denoise: 'off', compressor: 'off' },
             { id: 'mic', name: '麦克风', denoise: 'off', compressor: 'off' },
@@ -73,7 +73,7 @@ module.exports = function (c) {
           ]
         };
       },
-      engineVersion: function () { return { ok: true, version: '0.3.0', naudio: '1.10.0' }; },
+      engineVersion: function () { return { ok: true, version: '0.4.0', naudio: '1.10.0' }; },
       devices: async function () {
         if (!fs.existsSync(enginePath())) throw new Error('NO_ENGINE: build plugins/virtual-mixer/engine/build.bat first');
         const out = tempPath('.json');

@@ -1,13 +1,13 @@
 # 虚拟混音台（S1 骨架）
 
 > 状态：实验插件，**S2a 核心完成：设备枚举 + 离线混音 + 电台侧链闪避算法**。
-> 实时输出、降噪/压缩、A/B-VU 控制台页面在后续切片接入。
+> 虚拟跳线实时输出实测、降噪/压缩、A/B-VU 控制台页面在后续切片接入。
 
 ## 文件
 
 - `manifest.json`：插件声明，`process: true`（会触发红窗授权）
 - `index.js`：插件入口；暴露 `status` / `engineVersion` / `devices` / `selftest` / `start` / `stop`
-- `engine/VirtualMixerEngine.cs` / `Ducker.cs`：C#/.NET Framework 引擎与侧链闪避核心
+- `engine/VirtualMixerEngine.cs` / `Ducker.cs` / `CaptureTest.cs` / `OutputTest.cs`：引擎、侧链闪避、采集与输出 smoke
 - `engine/NAudio.dll`：NAudio 1.10.0（MIT，见 `NAudio.LICENSE.txt`）
 - `engine/build.bat`：用 Windows 自带的 csc 编译引擎
 - `test/engine-selftest.js`：离线引擎/插件桥自测
@@ -37,7 +37,7 @@ npm run test:mixer
 
 ## 当前不支持
 
-- 实时输出到虚拟跳线（采集可写 WAV，但尚未接扬声器/虚拟线输出）
+- 虚拟跳线实时输出实测（输出代码已 smoke，但当前未安装 VB-CABLE）
 
 ### 真实采集 smoke（会占用麦克风 ~1.5 秒，不打开扬声器）
 
