@@ -24,6 +24,7 @@ Lite 包不带 electron(需系统 Node 22+), 其余依赖由 npm 按需安装, �
 | SheetJS `xlsx`(CJS 构建 `vendor/xlsx.js`) | 0.20.3 | Apache-2.0(SheetJS Community Edition) | friend-welcome / scheduled-board | 文件头只有 `(C) 2013-present SheetJS`, **许可证文本没有随 vendor 附带** |
 | SheetJS `xlsx`(CJS 构建 `vendor/xlsx.js`) | **0.18.5** | Apache-2.0 | weather-board | **版本落后**, 已挂 PROCESS-02 §7 台账(M-20260904-01: 统一 0.20.3 + 回归 Excel 导入导出) |
 | SheetJS `xlsx`(浏览器构建 `vendor/xlsx.full.min.js`) | 与同目录 `xlsx.js` 同源 | Apache-2.0 | 三个插件的面板 / 前端 | 文件头里的 `cptable{version:"1.15.0"}` 是**代码页表**版本, **不是** SheetJS 版本(已实测) |
+| NAudio | 1.10.0 (net35 build) | MIT | virtual-mixer 插件的 C# 音频引擎(S1) | `plugins/virtual-mixer/engine/NAudio.dll`; 许可全文 `LICENSE-MIT.txt`, 声明 `THIRD-PARTY-NOTICE.txt`; 上游 https://github.com/naudio/NAudio |
 
 **✅ 已补齐(2026-09-27)**: 三个插件各自在**插件目录根**放了 `LICENSE-Apache-2.0.txt`(Apache-2.0 全文, 取自本仓库 `node_modules/tesseract.js/LICENSE.md` 的规范文本)与 `THIRD-PARTY-NOTICE.txt`(声明: 组件/版本/上游/许可/我们只做原样拷贝)。放在**插件根而不是 vendor/** 是有意的: ① surface-scan 不扫 `.txt`, 所以不会让攻击面基线漂移; ② dep-audit 只监控 `plugins/<id>/vendor/` 的聚合哈希, 根目录新增文件不影响它; ③ 市场 zip 会带上这两个文件(许可随分发一起走)。**代价(已接受并记录)**: 授权哈希覆盖整个插件目录 → 三个插件各升一个补丁位(`friend-welcome 1.3.3` / `scheduled-board 2.0.1` / `weather-board 1.0.1`), **已装用户更新后需要重新授权一次**; `market/packages` 与 `market/index.json` 已同步重建。
 

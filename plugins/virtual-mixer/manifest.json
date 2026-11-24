@@ -1,0 +1,63 @@
+{
+  "id": "virtual-mixer",
+  "name": "虚拟混音台",
+  "version": "0.1.0",
+  "author": "VRCLiveBoard 官方",
+  "description": "把系统声音、麦克风和自定义文件混成一路送入虚拟跳线；实验版 S1：设备枚举与离线混音自测，实时采集/闪避/UI 在后续切片。",
+  "api": "2.0.0",
+  "experimental": true,
+  "minApp": "1.4.8",
+  "permissions": {
+    "network": [],
+    "filesystem": {
+      "read": [],
+      "write": []
+    },
+    "process": true,
+    "ports": []
+  },
+  "dependencies": {},
+  "conflicts": [],
+  "exclusive": [],
+  "loadOrder": 80,
+  "settings": [
+    {
+      "key": "autoStart",
+      "label": "启用后自动启动引擎",
+      "type": "bool",
+      "default": false,
+      "hint": "S1 暂不自动启动；实时引擎在 S2 接入"
+    },
+    {
+      "key": "musicDir",
+      "label": "允许播放的音乐目录",
+      "type": "text",
+      "default": "",
+      "hint": "留空 = 仅自测；S1 不下发文件播放"
+    },
+    {
+      "key": "masterOutputDevice",
+      "label": "主输出(虚拟跳线播放端)",
+      "type": "text",
+      "default": "",
+      "hint": "如 CABLE Input；S2 使用"
+    },
+    {
+      "key": "systemCaptureDevice",
+      "label": "系统声音采集端",
+      "type": "text",
+      "default": "",
+      "hint": "留空 = 默认播放设备；S2 使用"
+    },
+    {
+      "key": "micCaptureDevice",
+      "label": "麦克风输入",
+      "type": "text",
+      "default": "",
+      "hint": "留空 = 默认录音设备；S2 使用"
+    }
+  ],
+  "changelog": [
+    "0.1.0 S1 骨架：C#/NAudio 引擎、设备枚举、离线双轨混音自测；实时混音/闪避/UI 尚未接入"
+  ]
+}

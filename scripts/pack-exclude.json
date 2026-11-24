@@ -29,7 +29,9 @@
     "market",
     "_removed-plugins",
     "_归档-2026-09",
-    "assets\\motions"
+    "assets\\motions",
+    "plugins\\virtual-mixer\\data",
+    "plugins\\virtual-mixer\\test"
   ],
   "files": [
     "config.json",

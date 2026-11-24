@@ -75,3 +75,4 @@ scripts/vrkeyboard/preview.png
 # User-supplied motion assets (MMD/VMD etc). Licences belong to their authors:
 # never commit them and never ship them in the package.
 assets/motions/
+plugins/virtual-mixer/data/

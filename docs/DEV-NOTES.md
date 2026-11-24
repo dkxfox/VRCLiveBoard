@@ -15,7 +15,7 @@
 - 用户: 工业/电气工程师, 非专业程序员; 要求最小改动、人类可预测的行为、中文答复结构(结论 → 证据 → 变更清单 → 未决与风险 → 下一步)。
 - 项目: VRCLiveBoard —— VRChat OSC 工具, 把电脑状态/正在播放的媒体/公告板/翻译字幕显示到玩家头顶聊天框; 另有 VR 覆盖层键盘、相机运镜等开发工具/插件。
 - 位置: Z:\DeepSeek Harness工作区\VRCLiveBoard (UNC: \\Tank_os\anm\DeepSeek Harness工作区\VRCLiveBoard)。
-- 当前待办: EA 测试组反馈; M-20260903-06“VRChat 已开 OSC 但全红”等反馈者补充排查资料; **虚拟混音台 S1(重启后开始)**; 主程序“手表形态”可拖拽跟随窗口(未开始)。
+- 当前待办: EA 测试组反馈; M-20260903-06“VRChat 已开 OSC 但全红”等反馈者补充排查资料; **虚拟混音台 S2a(实时采集+电台闪避)**; 主程序“手表形态”可拖拽跟随窗口(未开始)。
 
 ## 2. 架构速览
 
@@ -777,6 +777,12 @@
 - 虚拟混音台已确认: 引导安装 VB-CABLE; 一根虚拟跳线; 3–8 条内部混音通道(每路可选送跳线/仅监听)汇到一路虚拟麦克风; A 通道条 + B-VU 机械表双布局可切换; C#/.NET Framework + NAudio; `/api/plugins/call` + cue; VU 30fps 低开销, CPU 超过 1% 自动降级。
 - 证据/状态: HEAD `b14f14e`; 工作区干净; `Get-PnpDevice` 中 Voicemeeter 端点 0; **未写运行时代码**. 详细进度见 `docs/SESSION-2026-11-23-SUMMARY.md`。
 - 下次开工: 重启 Windows → 复查无 Voicemeeter 端点/默认音频 → S1 引擎骨架 + 插件骨架 + 文件混音离线自测。
+## 396. 虚拟混音台 S1: 插件骨架 + C#/NAudio 引擎 + 离线混音自测(2026-11-24, 用户“开始写代码按标准流程”)
+- 解读与边界: 本轮只做 **S1 引擎骨架 + 设备枚举 + 离线文件混音**, 不接实时采集/闪避/UI; 插件默认 experimental 且不自动启动, 不影响正常用户。
+- 改动: 新增 `plugins/virtual-mixer`(manifest v0.1.0; status/engineVersion/devices/selftest/start/stop; process 权限); C#/.NET Framework 引擎 `engine/VirtualMixerEngine.cs` + vendor NAudio 1.10.0(MIT, 许可证/第三方声明齐全); `--list-devices` 枚举 render/capture; `--selftest` 生成两条 48kHz/2ch 文件并混音为 WAV, 输出 peak/RMS/时长。
+- 证据: `node plugins\virtual-mixer\test\engine-selftest.js` → **12 PASS / 0 FAIL**(version/devices/WAV 48k-2ch/2s/peak/rms/插件桥); `plugin-check` / `plugin-behavior` / `surface-scan` / `encoding-lint` 全部 PASS; 引擎 exe + NAudio.dll 已随插件源码放在 engine/。
+- 安全/边界: 插件 process=true 需红窗授权; 测试文件与运行 data 不进包(`pack-exclude`); S1 不监听端口、不联网、不采集麦克风; 音频引擎只在调用 devices/selftest 时短进程运行。
+- 下一步: S2a 系统回环 + 麦克风采集 + 48k 混音 + **电台讲话闪避(核心)**; S2b mic 压缩/预设; S3 A/B-VU 页面; S4 cue/运镜联动/打包。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -835,5 +841,6 @@
 | 393 | 2026-11-23 | M-20260903-06 OSC 全红: 排查资料落地 |
 | 394 | 2026-11-23 | docs 归档整理 + DEV-NOTES 保留窗口 |
 | 395 | 2026-11-23 | 进度记录: 文档归档收尾 + 虚拟混音台方案/环境准备 |
+| 396 | 2026-11-24 | 虚拟混音台 S1: 插件骨架 + C#/NAudio 引擎 + 离线混音自测 |
 
 <!-- DEV-NOTES-INDEX:END -->
