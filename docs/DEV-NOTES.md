@@ -807,6 +807,13 @@
 - 改动: 插件 `setup()` 枚举 render/capture, 匹配 CABLE Input/Output 或 Voicemeeter 输入/输出; 返回 installed/两端设备/官方 guideUrl/4 步说明; 版本 0.4.0 -> 0.4.1。
 - 证据: `npm run test:mixer` → **18 PASS / 0 FAIL**(新增 setup guide); 当前 installed=false(无端点); 官方 VB-CABLE 包已下载并核对签名, 未运行安装器; `npm run gates` → **16 PASS / 0 FAIL**。
 - 下一步: 用户批准 UAC 后安装 VB-CABLE + 重启 → setup() true → output-test 到 CABLE Input → VRChat 选 CABLE Output 实测闪避。
+## 401. VB-CABLE 安装完成 + 默认音频恢复(2026-11-24, 用户“继续安装”)
+- 解读与边界: 用户明确同意安装; 只装官方签名的 VB-CABLE, 不打包/不分发; 安装后不自动重启。
+- 安装: 官方 `VBCABLE_Driver_Pack46.zip` → `VBCABLE_Setup_x64.exe` 2.1.5.8; 签名验证通过; 走 UAC 安装; 端点出现 `CABLE Input` / `CABLE Output` / `CABLE In 16ch`。
+- 后续处理: 安装器把默认播放/录音改为 CABLE; 已用 PolicyConfig 恢复安装前的默认: 播放 `RTK FHD HDR (NVIDIA High Definition Audio)`、录音 `Virtual Desktop Audio`; 避免用户系统声音被吞。
+- 验证: 插件 `setup()` 现在 `installed=true` 并返回 CABLE Input/Output; 设备枚举正常; 重启后做 VRChat 麦克风实测。
+- 安全: 官方包已校验签名; 不把驱动/安装器放进仓库/发布包; 产品侧仍是“引导安装”而不是静默安装。
+- 下一步: 用户重启 → 选 CABLE Input 输出/CABLE Output 给 VRChat → 真实讲话+音乐闪避测试。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -870,5 +877,6 @@
 | 398 | 2026-11-24 | 虚拟混音台 S2a 实时采集到 WAV + capture smoke |
 | 399 | 2026-11-24 | 虚拟混音台 S2b: WasapiOut 输出 smoke |
 | 400 | 2026-11-24 | 虚拟混音台 S3 准备: setup() 虚拟跳线检测 |
+| 401 | 2026-11-24 | VB-CABLE 安装完成 + 默认音频恢复 |
 
 <!-- DEV-NOTES-INDEX:END -->
