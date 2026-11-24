@@ -787,7 +787,7 @@
 - 解读与边界: 用户重启后继续; 本轮只做 **S2a 的闪避核心算法与离线验证**, 不接实时采集/输出; 实时链路下一片。
 - 改动: 新增 `engine/Ducker.cs`(mic 高通侧链/包络/阈值/深度/attack/release/hold/lookahead; 只压低目标音乐, 不压 mic); 引擎新增 `--duck-selftest`; 插件 `duckSelftest()` 桥; 插件/引擎版本 0.1.0 -> **0.2.0**; build.bat 编译 Ducker.cs。
 - 参数: threshold -35dB, depth -15dB, attack 30ms, release 400ms, hold 500ms, lookahead 8ms, sidechain HPF 120Hz。
-- 证据: `npm run test:mixer` → **17 PASS / 0 FAIL**(新增 duck attenuation 9.7dB / quiet>speech / WAV 48k-2ch / 插件 duckSelftest 桥); `plugin-check` PASS; 全量 `npm run gates` 待本轮收口复跑。
+- 证据: `npm run test:mixer` → **17 PASS / 0 FAIL**(新增 duck attenuation 9.7dB / quiet>speech / WAV 48k-2ch / 插件 duckSelftest 桥); `plugin-check` PASS; 全量 `npm run gates` → **16 PASS / 0 FAIL**。
 - 安全/边界: 仍无麦克风/系统声音采集, 无网络, 无输出设备打开; 闪避只在离线合成 WAV 上验证; 插件 experimental 且不自动启动。
 - 下一步: S2a 实时链路( WasapiLoopbackCapture + WasapiCapture + 48k mix + WAV/监听输出 ), 再做 mic 降噪/压缩、A/B-VU 页面。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
