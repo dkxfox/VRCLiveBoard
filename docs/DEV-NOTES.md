@@ -849,7 +849,7 @@
 ## 407. 虚拟混音台 A/B 卡片 UI + 实时电平(2026-11-25, 用户“继续”)
 - 改动: `src/web/public/app.js` 新增 `plgVirtualMixer`(插件卡片内嵌)；A/B 两种布局、设备下拉、麦克风/音乐/系统增益、深度/阈值/attack/release/hold/lookahead/HPF、开始/停止/保存；`lang.js` 补三语键；`plugins/virtual-mixer/index.js` 新增 `meter()`。
 - 引擎: LiveEngine 每秒写 system/mic/custom/master 峰值 + duckGain；采集缓冲 `ReadFully=false`，状态改为按循环计数写入（修掉 ReadFully 卡死导致 frames 一直 0 的问题）。
-- 验证: 前端语法/控件/启动门禁 PASS；`test:mixer` 21 PASS；插件 start→meter(frames>0/levels)→stop 实测；全量门禁待提交后复跑。
+- 验证: 前端语法/控件/启动门禁 PASS；`test:mixer` 21 PASS；插件 start→meter(frames>0/levels)→stop 实测；全量门禁 **16 PASS / 0 FAIL**。
 - 边界: A/B 是插件卡片内 UI，不是独立主页面；cue/运镜/降噪/压缩未接。
 - 下一步: A/B 视觉细调 + cue 同步播放/运镜联动 + 打包。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
