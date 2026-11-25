@@ -865,6 +865,13 @@
 - 系统采集: 值 `__none__` = 不使用; LiveEngine 不创建 loopback, 系统电平恒 0; A/B 卡片系统下拉新增“不使用”。
 - 证据: 编译通过; test:mixer 21 PASS; no-system 插件 start→meter 实测 system=0/mic/custom 正常; 全量门禁 **16 PASS / 0 FAIL**; 待用户复测 3s 延迟与界面卡顿。
 - 边界: 若仍有延迟, 需区分引擎缓冲、VRChat 语音处理、VB-CABLE; 界面卡若仍在, 下一步降 B-VU 刷新/动效。
+## 410. 虚拟混音台 VU 表不刷新修复(2026-11-25, 用户“两种VU表不刷新”)
+- 检查方式: 用 headless Edge + CDP 打开真实控制台页面, 展开插件设置, 通过 `/api/plugins/call` 启动引擎, 观察 A 通道条/B-VU 的 DOM。
+- 发现: 页面加载时 `pollMeter` 要等 `liveConfig + devices` 两个异步调用都完成才开始; 之前的 `wrap.offsetParent` 守卫在卡片隐藏/布局变化时会跳过刷新; 旧页面/旧状态还会留下冻结值。
+- 修复: `renderStage` 后立即开始 meter 轮询, 不再依赖设备枚举; 移除 offsetParent 守卫; 保留 500ms 刷新。
+- 证据: CDP 实测 start 后 A fills 由 0/4/80/80% 更新, dB 从 -inf/-24.6/-11.5/-11.4 变化; B 表针 rotate 值随电平变化; stop 后状态回到已停止。
+- 说明: 若用户仍看到旧界面, 需要刷新/重载控制台(旧 app.js 缓存)。
+- 下一步: 待用户确认 VU 与 3s 延迟; 然后 cue/运镜/包装。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -937,5 +944,6 @@
 | 407 | 2026-11-25 | 虚拟混音台 A/B 卡片 UI + 实时电平 |
 | 408 | 2026-11-25 | 虚拟混音台 A/B UI 卡顿修复 |
 | 409 | 2026-11-25 | 虚拟混音台高延迟修复 + 系统采集“不使用” |
+| 410 | 2026-11-25 | 虚拟混音台 VU 表不刷新修复 |
 
 <!-- DEV-NOTES-INDEX:END -->

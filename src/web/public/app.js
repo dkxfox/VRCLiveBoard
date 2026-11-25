@@ -319,7 +319,6 @@ function plgVirtualMixer(p, body){
   function pollMeter(){
     if(state.timer)clearTimeout(state.timer);
     if(!document.body.contains(wrap))return;
-    if(!wrap.offsetParent){state.timer=setTimeout(pollMeter,1000);return;}
     plugCall('virtual-mixer','meter',{}).then(function(j){
       var d=j&&j.data,levels=(d&&d.levels)||{};state.running=!!(j&&j.running);
       badge.textContent=state.running?tr('vmRunning'):tr('vmStopped');badge.className='vmBadge'+(state.running?' on':'');
@@ -335,7 +334,8 @@ function plgVirtualMixer(p, body){
   bStart.onclick=start;bStop.onclick=stop;
   bSave.onclick=function(){save().then(function(j){setMsg(j&&j.ok!==false?tr('vmSaved'):(tr('vmSaveFail')+((j&&j.error)||'')),!(j&&j.ok!==false));if(state.running)start();}).catch(function(e){setMsg(tr('vmSaveFail')+(e&&e.message||e),true);});};
   renderStage();
-  Promise.all([plugCall('virtual-mixer','liveConfig',{}),plugCall('virtual-mixer','devices',{})]).then(function(res){var cfg=(res[0]&&res[0].config)||{};state.devices=res[1]||{};fillCfg(cfg);addDefaults();pollMeter();}).catch(function(e){setMsg(tr('vmStartFail')+(e&&e.message||e),true);});
+  pollMeter();
+  Promise.all([plugCall('virtual-mixer','liveConfig',{}),plugCall('virtual-mixer','devices',{})]).then(function(res){var cfg=(res[0]&&res[0].config)||{};state.devices=res[1]||{};fillCfg(cfg);addDefaults();}).catch(function(e){setMsg(tr('vmStartFail')+(e&&e.message||e),true);});
 }
 
 function plgCard(p){var en=!!(p.enabled||p.run),ap=!!p.approved;var d=document.createElement('div');d.className='plgcard';
