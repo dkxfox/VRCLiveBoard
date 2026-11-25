@@ -35,6 +35,7 @@ internal static class Program
             if (args[0] == "--capture-test") return CaptureTest.Run(args);
             if (args[0] == "--output-test") return OutputTest.Run(args);
             if (args[0] == "--tone-test") return ToneTest.Run(args);
+            if (args[0] == "--probe-captures") return ProbeCaptures.Run(args);
             Usage();
             return 2;
         }
@@ -55,6 +56,7 @@ internal static class Program
         Console.Error.WriteLine("  --capture-test <out.wav> <seconds> [renderId] [micId] [result.json]");
         Console.Error.WriteLine("  --output-test <seconds> [renderId] [micId] [result.json]");
         Console.Error.WriteLine("  --tone-test <seconds> [renderId] [result.json]");
+        Console.Error.WriteLine("  --probe-captures <seconds> [result.json]");
     }
 
     private static int ListDevices(string outPath)

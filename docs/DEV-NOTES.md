@@ -826,6 +826,19 @@
 - 工具/改动: 新增 `engine/ToneTest.cs` (`--tone-test`) 和 `test/cable-smoke.js`; 只用于虚拟线回路测试。
 - 证据: `npm run test:mixer:cable` → **3 PASS / 0 FAIL**; 440Hz 注入 CABLE Input 后 CABLE Output 采集 mixedPeak **0.162**; 无物理扬声器输出; 全量 `npm run gates` → **16 PASS / 0 FAIL**。
 - 下一步: VRChat 内麦克风选 CABLE Output → 真人讲话 + 音乐 → 验证 -15dB 闪避/400ms release/500ms hold; 然后 A/B-VU 页面。
+## 404. VRChat 麦克风链路打通 + CABLE 自反馈修复(2026-11-25, 用户实机反馈)
+- 真实设备: 耳机播放/麦克风 `Front Mic (Realtek USB Audio)`; 磁带音乐在 `麦克风 (USB Audio CODEC )`; VRChat 日志确认麦克风已切到 `CABLE Output (VB-Audio Virtual Cable)`。
+- 关键 bug: 旧 `--output-test` 用同一个 render 设备同时做 WasapiLoopbackCapture 和 WasapiOut; 输出到 CABLE Input 时把自身输出又采回来, 形成反馈/削波, 导致“闪避不自然/麦克风被压低”的错觉。
+- 修复: `--output-test` 参数改为 `<seconds> [captureRenderId] [micId] [customId] [outputRenderId] [result]`; 采集物理 RTK, 输出 CABLE; 新增 `ProbeCaptures.cs` 识别真实录音设备。
+- 调音: 磁带 custom 0.45, 耳机麦 +6dB, 硬限幅; 20s 无语音 smoke peak 0.237 无削波; 用户实机电平表已反应。
+- 待办: 按听感调 threshold/depth/attack/release/hold; 当前用户反馈暂未最终确认; UI/自动化未接。
+## 405. 虚拟混音台实机音色确认: 麦+4dB / 音乐0.72 / 淡入淡出放缓(2026-11-25, 用户“稍微降低...适当增加...”)
+- 用户要求: 麦克风略降、音乐略增、淡入淡出加一点; 按听感调完复测。
+- 参数: 耳机麦输出 +4dB; 磁带自定义通道 0.72; Ducker attack 45ms / release 600ms / hold 650ms; threshold -35dB / depth -15dB 不变。
+- 实机: 60s 测试 `duckMinGain=0.1778`, `duckMax=1`, `mixedPeak=0.437`; VRChat 电平表有反应; 用户确认“够了，可以定”。
+- 设备/路由: `Front Mic (Realtek USB Audio)` + `麦克风 (USB Audio CODEC )` 磁带 → CABLE Input; VRChat 麦克风 CABLE Output。
+- 关键既有修复: captureRender/outputRender 分离, 防止 CABLE 自反馈。
+- 下一步: 把该链路的启停/参数接到插件与 A/B-VU 页面; 补 cue/运镜联动。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -892,5 +905,7 @@
 | 401 | 2026-11-24 | VB-CABLE 安装完成 + 默认音频恢复 |
 | 402 | 2026-11-24 | 进度保存: VB-CABLE 已安装, 待重启做端到端实测 |
 | 403 | 2026-11-25 | VB-CABLE 回路验证通过 |
+| 404 | 2026-11-25 | VRChat 麦克风链路打通 + CABLE 自反馈修复 |
+| 405 | 2026-11-25 | 虚拟混音台实机音色确认: 麦+4dB / 音乐0.72 / 淡入淡出放缓 |
 
 <!-- DEV-NOTES-INDEX:END -->

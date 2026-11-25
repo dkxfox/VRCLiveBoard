@@ -6,9 +6,9 @@ internal sealed class Ducker
 {
     public double ThresholdDb = -35.0;
     public double DepthDb = -15.0;
-    public double AttackMs = 30.0;
-    public double ReleaseMs = 400.0;
-    public double HoldMs = 500.0;
+    public double AttackMs = 45.0;
+    public double ReleaseMs = 600.0;
+    public double HoldMs = 650.0;
     public double LookaheadMs = 8.0;
     public double SidechainHpfHz = 120.0;
 
