@@ -24,7 +24,7 @@
 
 ### 1.3 虚拟混音台(下一步开发)
 - 功能卡: `docs/FEATURES/F-20261123-01-虚拟混音台.md` (**BUILD**: 方案/视觉确认, S1 完成; S2a 闪避核心完成)。
-- **2026-11-24 S1 已完成**: `plugins/virtual-mixer` v0.2.0 experimental + C#/NAudio 引擎；`--list-devices` / `--selftest` / `--duck-selftest`；测试 **17 PASS**，全量门禁 **16 PASS / 0 FAIL**；侧链闪避核心已离线验证；真实采集到 WAV 已通过 smoke（6 PASS）；`WasapiOut` 输出代码已静音 smoke，VB-CABLE 已安装（setup installed=true），默认音频已恢复物理设备；待重启/VRChat 实测；UI 未接。
+- **2026-11-24 S1 已完成**: `plugins/virtual-mixer` v0.2.0 experimental + C#/NAudio 引擎；`--list-devices` / `--selftest` / `--duck-selftest`；测试 **17 PASS**，全量门禁 **16 PASS / 0 FAIL**；侧链闪避核心已离线验证；真实采集到 WAV 已通过 smoke（6 PASS）；`WasapiOut` 输出代码已静音 smoke，VB-CABLE 已安装且 CABLE 回路 3 PASS；默认音频为物理设备；待 VRChat 麦克风端到端；UI 未接。
 - 已确认:
   - 引导安装第三方 VB-CABLE; 用户态插件不创建/打包驱动。
   - 一根虚拟跳线即可; 三条(可扩到 8)内部混音通道, 每路可选“送跳线/仅监听”, 汇到一路虚拟麦克风。

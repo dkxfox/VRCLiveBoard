@@ -34,6 +34,7 @@ internal static class Program
             if (args[0] == "--duck-selftest" && args.Length >= 2) return DuckSelfTest(args[1], args.Length >= 3 ? args[2] : null);
             if (args[0] == "--capture-test") return CaptureTest.Run(args);
             if (args[0] == "--output-test") return OutputTest.Run(args);
+            if (args[0] == "--tone-test") return ToneTest.Run(args);
             Usage();
             return 2;
         }
@@ -53,6 +54,7 @@ internal static class Program
         Console.Error.WriteLine("  --duck-selftest <out.wav> [result.json]");
         Console.Error.WriteLine("  --capture-test <out.wav> <seconds> [renderId] [micId] [result.json]");
         Console.Error.WriteLine("  --output-test <seconds> [renderId] [micId] [result.json]");
+        Console.Error.WriteLine("  --tone-test <seconds> [renderId] [result.json]");
     }
 
     private static int ListDevices(string outPath)

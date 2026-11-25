@@ -11,6 +11,7 @@
     "gates:fast": "node \"%npm_package_json%\\..\\scripts\\checks\\html-inline-check.js\" && node \"%npm_package_json%\\..\\scripts\\checks\\ui-wiring.js\" && node \"%npm_package_json%\\..\\scripts\\checks\\frontend-boot.js\"",
   "test:mixer": "node \"%npm_package_json%\\..\\plugins\\virtual-mixer\\test\\engine-selftest.js\"",
   "test:mixer:capture": "node \"%npm_package_json%\\..\\plugins\\virtual-mixer\\test\\capture-smoke.js\"",
+  "test:mixer:cable": "node \"%npm_package_json%\\..\\plugins\\virtual-mixer\\test\\cable-smoke.js\"",
     "selftest": "powershell -NoProfile -ExecutionPolicy Bypass -File \"%npm_package_json%\\..\\scripts\\checks\\gate-selftest.ps1\""
   },
   "engines": {

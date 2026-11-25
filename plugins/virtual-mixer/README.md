@@ -39,6 +39,12 @@ npm run test:mixer
 
 - 虚拟跳线实时输出实测（输出代码已 smoke，但当前未安装 VB-CABLE）
 
+### CABLE 回路 smoke（仅虚拟线，不打开物理扬声器）
+
+```powershell
+npm run test:mixer:cable
+```
+
 ### 真实采集 smoke（会占用麦克风 ~1.5 秒，不打开扬声器）
 
 ```powershell

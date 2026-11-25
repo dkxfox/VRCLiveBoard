@@ -820,6 +820,12 @@
 - VB-CABLE: 官方 Driver Pack46 / Setup 2.1.5.8, 签名验证通过, UAC 安装完成; 安装器改默认音频已用 PolicyConfig 恢复为安装前设备。
 - 验证: test:mixer 18 PASS; test:mixer:capture 6 PASS; gates 16 PASS/0 FAIL (安装前代码状态; 安装只影响环境, 未改代码)。
 - 下次: 重启 Windows → 复查端点 → output-test 指向 CABLE Input, capture CABLE Output → VRChat 麦克风选 CABLE Output → 讲话+音乐闪避/压缩/恢复实测; 再做 A/B-VU 页面。
+## 403. VB-CABLE 回路验证通过(2026-11-25, 用户“已重启”)
+- 解读与边界: 验证虚拟线“写入 CABLE Input → 从 CABLE Output 读出”，不打开物理扬声器; VRChat 麦克风端到端仍待做。
+- 环境: 重启完成(LastBootUpTime 11-25 18:05); CABLE Input/Output/CABLE In16ch 端点正常; 默认播放/录音仍为物理设备。
+- 工具/改动: 新增 `engine/ToneTest.cs` (`--tone-test`) 和 `test/cable-smoke.js`; 只用于虚拟线回路测试。
+- 证据: `npm run test:mixer:cable` → **3 PASS / 0 FAIL**; 440Hz 注入 CABLE Input 后 CABLE Output 采集 mixedPeak **0.162**; 无物理扬声器输出。
+- 下一步: VRChat 内麦克风选 CABLE Output → 真人讲话 + 音乐 → 验证 -15dB 闪避/400ms release/500ms hold; 然后 A/B-VU 页面。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -885,5 +891,6 @@
 | 400 | 2026-11-24 | 虚拟混音台 S3 准备: setup() 虚拟跳线检测 |
 | 401 | 2026-11-24 | VB-CABLE 安装完成 + 默认音频恢复 |
 | 402 | 2026-11-24 | 进度保存: VB-CABLE 已安装, 待重启做端到端实测 |
+| 403 | 2026-11-25 | VB-CABLE 回路验证通过 |
 
 <!-- DEV-NOTES-INDEX:END -->
