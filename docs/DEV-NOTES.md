@@ -835,7 +835,7 @@
 ## 405. 虚拟混音台实机音色确认: 麦+4dB / 音乐0.72 / 淡入淡出放缓(2026-11-25, 用户“稍微降低...适当增加...”)
 - 用户要求: 麦克风略降、音乐略增、淡入淡出加一点; 按听感调完复测。
 - 参数: 耳机麦输出 +4dB; 磁带自定义通道 0.72; Ducker attack 45ms / release 600ms / hold 650ms; threshold -35dB / depth -15dB 不变。
-- 实机: 60s 测试 `duckMinGain=0.1778`, `duckMax=1`, `mixedPeak=0.437`; VRChat 电平表有反应; 用户确认“够了，可以定”。
+- 实机: 60s 测试 `duckMinGain=0.1778`, `duckMax=1`, `mixedPeak=0.437`; VRChat 电平表有反应; 用户确认“够了，可以定”; `test:mixer` 18 PASS / capture 6 PASS / cable 3 PASS; `npm run gates` **16 PASS / 0 FAIL**。
 - 设备/路由: `Front Mic (Realtek USB Audio)` + `麦克风 (USB Audio CODEC )` 磁带 → CABLE Input; VRChat 麦克风 CABLE Output。
 - 关键既有修复: captureRender/outputRender 分离, 防止 CABLE 自反馈。
 - 下一步: 把该链路的启停/参数接到插件与 A/B-VU 页面; 补 cue/运镜联动。
