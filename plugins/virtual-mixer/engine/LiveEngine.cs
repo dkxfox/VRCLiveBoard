@@ -148,6 +148,7 @@ internal static class LiveEngine
                     outBuf.AddSamples(outBytes, 0, outBytes.Length);
                     frames += nf;
                     statusBox.Update(frames, lastGain, sysPeak, micPeak, customPeak, masterPeak);
+                    sysPeak = 0; micPeak = 0; customPeak = 0; masterPeak = 0;
                     nextLoopMs += 10;
                     int waitMs = (int)(nextLoopMs - loopClock.ElapsedMilliseconds);
                     if (waitMs > 0) Thread.Sleep(waitMs);
@@ -219,10 +220,10 @@ internal static class LiveEngine
             {
                 frames = f;
                 gain = g;
-                sys = s;
-                mic = m;
-                custom = c;
-                master = outPeak;
+                if (s > sys) sys = s;
+                if (m > mic) mic = m;
+                if (c > custom) custom = c;
+                if (outPeak > master) master = outPeak;
             }
         }
 
@@ -239,6 +240,7 @@ internal static class LiveEngine
                 m = mic;
                 c = custom;
                 outPeak = master;
+                sys = 0; mic = 0; custom = 0; master = 0;
             }
             try
             {
