@@ -44,6 +44,8 @@ internal static class LiveEngine
         WasapiLoopbackCapture loop = null;
         WasapiCapture micCap = null, customCap = null;
         WasapiOut output = null;
+        Timer statusTimer = null;
+        StatusBox statusBox = new StatusBox();
         try
         {
             using (var en = new MMDeviceEnumerator())
@@ -104,8 +106,11 @@ internal static class LiveEngine
                 var outF = new float[sysF.Length];
                 var outBytes = new byte[sysF.Length * sizeof(float)];
                 var sw = Stopwatch.StartNew();
-                long statusCounter = 0;
-                if (!string.IsNullOrEmpty(statusPath)) CaptureTest.WriteText(statusPath, "{\"ok\":true,\"running\":true,\"frames\":0,\"duckGain\":1,\"levels\":{\"system\":0,\"mic\":0,\"custom\":0,\"master\":0}}");
+                if (!string.IsNullOrEmpty(statusPath))
+                {
+                    CaptureTest.WriteText(statusPath, "{\"ok\":true,\"running\":true,\"frames\":0,\"duckGain\":1,\"levels\":{\"system\":0,\"mic\":0,\"custom\":0,\"master\":0}}");
+                    statusTimer = new Timer(delegate { statusBox.Write(statusPath); }, null, 500, 500);
+                }
                 while (true)
                 {
                     CaptureTest.ReadSome(sys, sysF, sysF.Length);
@@ -137,13 +142,7 @@ internal static class LiveEngine
                     Buffer.BlockCopy(outF, 0, outBytes, 0, outBytes.Length);
                     outBuf.AddSamples(outBytes, 0, outBytes.Length);
                     frames += nf;
-                    statusCounter++;
-                    if (!string.IsNullOrEmpty(statusPath) && statusCounter >= 50)
-                    {
-                        statusCounter = 0;
-                        CaptureTest.WriteText(statusPath, "{\"ok\":true,\"running\":true,\"frames\":" + frames + ",\"duckGain\":" + CaptureTest.F(lastGain) + ",\"levels\":{\"system\":" + CaptureTest.F(sysPeak) + ",\"mic\":" + CaptureTest.F(micPeak) + ",\"custom\":" + CaptureTest.F(customPeak) + ",\"master\":" + CaptureTest.F(masterPeak) + "}}");
-                        sysPeak = 0; micPeak = 0; customPeak = 0; masterPeak = 0;
-                    }
+                    statusBox.Update(frames, lastGain, sysPeak, micPeak, customPeak, masterPeak);
                     Thread.Sleep(10);
                 }
             }
@@ -156,6 +155,7 @@ internal static class LiveEngine
         }
         finally
         {
+            try { if (statusTimer != null) statusTimer.Dispose(); } catch { }
             try { if (output != null) output.Dispose(); } catch { }
             try { if (loop != null) loop.Dispose(); } catch { }
             try { if (micCap != null) micCap.Dispose(); } catch { }
@@ -199,4 +199,46 @@ internal static class LiveEngine
         Console.Error.WriteLine("  --run <config.json>");
         return 2;
     }
+    private sealed class StatusBox
+    {
+        private readonly object gate = new object();
+        private long frames;
+        private float gain = 1f;
+        private double sys, mic, custom, master;
+
+        public void Update(long f, float g, double s, double m, double c, double outPeak)
+        {
+            lock (gate)
+            {
+                frames = f;
+                gain = g;
+                sys = s;
+                mic = m;
+                custom = c;
+                master = outPeak;
+            }
+        }
+
+        public void Write(string path)
+        {
+            long f;
+            float g;
+            double s, m, c, outPeak;
+            lock (gate)
+            {
+                f = frames;
+                g = gain;
+                s = sys;
+                m = mic;
+                c = custom;
+                outPeak = master;
+            }
+            try
+            {
+                CaptureTest.WriteText(path, "{\"ok\":true,\"running\":true,\"frames\":" + f + ",\"duckGain\":" + CaptureTest.F(g) + ",\"levels\":{\"system\":" + CaptureTest.F(s) + ",\"mic\":" + CaptureTest.F(m) + ",\"custom\":" + CaptureTest.F(c) + ",\"master\":" + CaptureTest.F(outPeak) + "}}");
+            }
+            catch { }
+        }
+    }
+
 }

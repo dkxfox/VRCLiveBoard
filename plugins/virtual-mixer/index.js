@@ -193,9 +193,12 @@ module.exports = function (c) {
         return readJson(json);
       },
       liveConfig: function () { return { ok: true, config: buildLiveConfig() }; },
-      meter: function () {
-        try { return { ok: true, running: !!(liveChild && liveChild.exitCode === null), data: readJson(liveStatusPath()) }; }
-        catch (e) { return { ok: true, running: !!(liveChild && liveChild.exitCode === null), data: null }; }
+      meter: async function () {
+        const running = !!(liveChild && liveChild.exitCode === null);
+        try {
+          const text = await fs.promises.readFile(liveStatusPath(), 'utf8');
+          return { ok: true, running: running, data: JSON.parse(text) };
+        } catch (e) { return { ok: true, running: running, data: null }; }
       },
       start: async function () { return startLive(); },
       stop: function () { stopLive(); return { ok: true, running: false }; },

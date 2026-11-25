@@ -10,7 +10,7 @@
 - 安装器曾把 Windows 默认播放/录音改为 CABLE; 已恢复为安装前的物理设备, 避免系统声音被吞。
 - **待重启 Windows**: 官方要求重启后驱动最终生效; 尚未自动重启。
 - 最新验证: `npm run test:mixer` 18 PASS; `test:mixer:capture` 6 PASS; `test:mixer:cable` 3 PASS; `gates` 16 PASS / 0 FAIL。
-- 2026-11-25 VRChat 实机链路已通: 耳机麦 Front Mic + 磁带 USB CODEC -> CABLE Input, VRChat 麦克风 CABLE Output; 用户确认麦+4dB/音乐0.72/attack45-release600-hold650；S3 实时 start/stop + 手动参数 + A/B 卡片 UI 已接；cue/运镜待做。
+- 2026-11-25 VRChat 实机链路已通: 耳机麦 Front Mic + 磁带 USB CODEC -> CABLE Input, VRChat 麦克风 CABLE Output; 用户确认麦+4dB/音乐0.72/attack45-release600-hold650；S3 实时 start/stop + 手动参数 + A/B 卡片 UI 已接；状态 I/O 移出音频线程修卡顿；cue/运镜待做。
 - 下一步: 重启 → 复查 CABLE Input/Output → `--output-test` 指 CABLE Input + 采集 CABLE Output → VRChat 麦克风选 CABLE Output → 真人讲话+音乐闪避实测。
 ## 1. 本轮完成
 
