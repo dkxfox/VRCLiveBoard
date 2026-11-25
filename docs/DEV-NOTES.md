@@ -857,7 +857,7 @@
 - 根因 1: `LiveEngine` 在音频循环里同步写 status 文件(路径在 UNC 网络盘), 每 0.5s 一次磁盘/网络 I/O 会阻塞音频线程, 造成周期性卡顿/欠载。
 - 根因 2: UI `meter` 每 250ms 同步读同一 status 文件; 每次全页 querySelectorAll 更新, 且卡片关闭后仍轮询。
 - 修复: 状态写入改用后台 `System.Threading.Timer`(500ms), 音频线程只更新内存 StatusBox; 插件 `meter` 改 async 文件读; UI 改 500ms 刷新、只保留本卡片元素引用、卡片不可见时降频。
-- 证据: `npm run test:mixer` 21 PASS; 插件 start→meter 实测 frames 34080/124800, custom/master 电平正常; 下一步由用户实机确认是否仍有音频/界面卡顿。
+- 证据: `npm run test:mixer` 21 PASS; 插件 start→meter 实测 frames 34080/124800, custom/master 电平正常; 全量门禁 **16 PASS / 0 FAIL**; 下一步由用户实机确认是否仍有音频/界面卡顿。
 - 边界: 取消的是状态 I/O 造成的周期卡顿; 若仍有卡顿需区分 UI 渲染还是音频缓冲(500ms 输出缓冲)。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
