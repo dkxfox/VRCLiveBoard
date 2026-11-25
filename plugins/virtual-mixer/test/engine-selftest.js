@@ -25,7 +25,7 @@ function wavInfo(file) {
   try {
     if (!fs.existsSync(ENGINE)) { console.error('  FAIL engine not built: ' + ENGINE); process.exit(1); }
     const v = parseJson(execFileSync(ENGINE, ['--version'], { encoding: 'utf8' }));
-    ok(v.ok === true && v.engine === 'VirtualMixerEngine' && v.version === '0.4.0', 'version: ' + JSON.stringify(v));
+    ok(v.ok === true && v.engine === 'VirtualMixerEngine' && v.version === '0.5.0', 'version: ' + JSON.stringify(v));
     const devFile = path.join(os.tmpdir(), 'vrcb-mixer-dev-' + process.pid + '.json');
     execFileSync(ENGINE, ['--list-devices', devFile], { encoding: 'utf8' });
     const dev = JSON.parse(fs.readFileSync(devFile, 'utf8'));
@@ -65,6 +65,11 @@ function wavInfo(file) {
     const plugin = factory(ctx);
     const st = plugin.api.status();
     ok(st.ok === true && st.engine.exists === true && st.channels.length >= 3, 'plugin status: engine + 3 channels');
+    ok(st.running === false, 'plugin status: not running by default');
+    const lc = plugin.api.liveConfig();
+    ok(lc.ok === true && lc.config.micGainDb === 4 && lc.config.musicGain === 0.72 && lc.config.duckAttackMs === 45 && lc.config.duckReleaseMs === 600 && lc.config.duckHoldMs === 650, 'plugin liveConfig: tuned defaults');
+    const rc = await plugin.api.reloadConfig();
+    ok(rc.ok === true && rc.running === false, 'plugin reloadConfig: autoStart off stays stopped');
     const d = await plugin.api.devices();
     ok(d.ok === true && Array.isArray(d.render) && d.render.length > 0, 'plugin devices() bridge');
     const s = await plugin.api.selftest();
