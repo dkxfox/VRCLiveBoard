@@ -843,7 +843,7 @@
 - 用户要求: 把 2026-11-25 实机确认值作为默认, 增加手动调整适配不同声卡/乐器组合。
 - 默认: micGainDb=4, musicGain=0.72, systemGain=1; duck depth=-15/threshold=-35/attack=45/release=600/hold=650/lookahead=8/HPF=120; autoStart=false。
 - 新增: `LiveEngine.cs` + `--run <config.json>` 持续实时混音; 插件 `start/stop/liveConfig/reloadConfig`; 插件设置新增自定义输入设备和 14 个可调项(控制台自动渲染数字/布尔输入); 数值夹取范围; 设备名精确匹配, 找不到拒绝启动。
-- 验证: `test:mixer` **21 PASS**(新增 liveConfig 默认值/未运行/autoStart off 断言); 插件 start→running→stop 实测; 全量门禁待提交后复跑。
+- 验证: `test:mixer` **21 PASS**(新增 liveConfig 默认值/未运行/autoStart off 断言); 插件 start→running→stop 实测; 全量 `npm run gates` → **16 PASS / 0 FAIL**。
 - 安全/边界: 默认 autoStart=false 不自动打开音频; 不打包驱动; A/B-VU 页面仍未接。
 - 下一步: A/B-VU 页面(设备选择/推子/电平/闪避指示) + cue/运镜联动。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
