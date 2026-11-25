@@ -859,6 +859,12 @@
 - 修复: 状态写入改用后台 `System.Threading.Timer`(500ms), 音频线程只更新内存 StatusBox; 插件 `meter` 改 async 文件读; UI 改 500ms 刷新、只保留本卡片元素引用、卡片不可见时降频。
 - 证据: `npm run test:mixer` 21 PASS; 插件 start→meter 实测 frames 34080/124800, custom/master 电平正常; 全量门禁 **16 PASS / 0 FAIL**; 下一步由用户实机确认是否仍有音频/界面卡顿。
 - 边界: 取消的是状态 I/O 造成的周期卡顿; 若仍有卡顿需区分 UI 渲染还是音频缓冲(500ms 输出缓冲)。
+## 409. 虚拟混音台高延迟修复 + 系统采集“不使用”(2026-11-25, 用户“延迟3秒/界面卡”)
+- 高延迟根因: LiveEngine 每循环固定 `Thread.Sleep(10)` 之外还要做采集/混音/输出处理, 实际周期 >10ms; 而每循环只消费 10ms 音频 -> 采集缓冲持续增长, 延迟随时间累积(实机约 3s)。启动时又保留 250ms 预热缓冲, 输出缓冲 500ms。
+- 修复: 循环按目标时钟(每 10ms 一段)补偿处理耗时; 启动后清空预热采集缓冲; 输出缓冲 500ms -> 200ms; WASAPI 输出延迟 50 -> 30ms; 音频线程 AboveNormal。
+- 系统采集: 值 `__none__` = 不使用; LiveEngine 不创建 loopback, 系统电平恒 0; A/B 卡片系统下拉新增“不使用”。
+- 证据: 编译通过; test:mixer 21 PASS; no-system 插件 start→meter 实测 system=0/mic/custom 正常; 待用户复测 3s 延迟与界面卡顿。
+- 边界: 若仍有延迟, 需区分引擎缓冲、VRChat 语音处理、VB-CABLE; 界面卡若仍在, 下一步降 B-VU 刷新/动效。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -930,5 +936,6 @@
 | 406 | 2026-11-25 | 虚拟混音台 S3: 实时启停 + 手动参数(默认来自实机确认值) |
 | 407 | 2026-11-25 | 虚拟混音台 A/B 卡片 UI + 实时电平 |
 | 408 | 2026-11-25 | 虚拟混音台 A/B UI 卡顿修复 |
+| 409 | 2026-11-25 | 虚拟混音台高延迟修复 + 系统采集“不使用” |
 
 <!-- DEV-NOTES-INDEX:END -->

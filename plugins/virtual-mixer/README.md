@@ -38,7 +38,7 @@
 | key | 默认 | 说明 |
 |---|---|---|
 | masterOutputDevice | 空 | 输出，通常 CABLE Input (VB-Audio Virtual Cable) |
-| systemCaptureDevice | 空 | 系统回环采集的播放设备；空=默认播放设备 |
+| systemCaptureDevice | 空 | 系统回环采集的播放设备；空=默认播放设备；选“不使用”=关闭系统采集 |
 | micCaptureDevice | 空 | 耳机/声卡麦克风 |
 | customCaptureDevice | 空 | 磁带/乐器/第二声卡等自定义输入；空=关闭 |
 | micGainDb | 4 | 麦克风输出增益 dB |

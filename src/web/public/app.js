@@ -286,11 +286,11 @@ function plgVirtualMixer(p, body){
   var stage=document.createElement('div');stage.className='vmStage';wrap.appendChild(stage);
   function E(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.textContent=txt;return e;}
   function db(v){if(!(v>0))return '-inf';var d=20*Math.log(v)/Math.LN10;return (d>0?'+':'')+d.toFixed(1);}
-  function addOpts(sel,arr,emptyLabel){sel.innerHTML='';var o=E('option','',emptyLabel);o.value='';sel.appendChild(o);(arr||[]).forEach(function(d){var q=E('option','',d.name||'');q.value=d.name||'';sel.appendChild(q);});}
+  function addOpts(sel,arr,emptyLabel,extraLabel,extraValue){sel.innerHTML='';var o=E('option','',emptyLabel);o.value='';sel.appendChild(o);(arr||[]).forEach(function(d){var q=E('option','',d.name||'');q.value=d.name||'';sel.appendChild(q);});if(extraLabel){var x=E('option','',extraLabel);x.value=extraValue;sel.appendChild(x);}}
   function addDefaults(){
     var dev=state.devices||{},cfg=state.cfg||{};
     addOpts(selOut,dev.render||[],tr('vmDefault'));
-    addOpts(selSys,dev.render||[],tr('vmDefault'));
+    addOpts(selSys,dev.render||[],tr('vmDefault'),tr('vmOff'),'__none__');
     addOpts(selMic,dev.capture||[],tr('vmDefault'));
     addOpts(selCus,dev.capture||[],tr('vmOff'));
     function pick(sel,val){for(var i=0;i<sel.options.length;i++){if(sel.options[i].value===val){sel.selectedIndex=i;return;}}}

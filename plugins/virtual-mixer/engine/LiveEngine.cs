@@ -51,36 +51,38 @@ internal static class LiveEngine
             using (var en = new MMDeviceEnumerator())
             {
                 outputDev = FindConfigured(en, DataFlow.Render, outputId, "output");
-                captureDev = FindConfigured(en, DataFlow.Render, captureId, "capture");
+                bool useSystem = captureId != "__none__";
+                if (useSystem) captureDev = FindConfigured(en, DataFlow.Render, captureId, "capture");
                 mic = FindConfigured(en, DataFlow.Capture, micId, "mic");
                 customDev = string.IsNullOrEmpty(customId) ? null : FindConfigured(en, DataFlow.Capture, customId, "custom");
                 if (outputDev == null) throw new Exception("NO_OUTPUT_DEVICE");
-                if (captureDev == null) throw new Exception("NO_CAPTURE_DEVICE");
+                if (useSystem && captureDev == null) throw new Exception("NO_CAPTURE_DEVICE");
                 if (mic == null) throw new Exception("NO_MIC_DEVICE");
 
-                loop = new WasapiLoopbackCapture(captureDev);
+                BufferedWaveProvider sysBuf = null;
+                if (useSystem) { loop = new WasapiLoopbackCapture(captureDev); sysBuf = new BufferedWaveProvider(loop.WaveFormat) { BufferDuration = TimeSpan.FromMilliseconds(500), DiscardOnBufferOverflow = true, ReadFully = false }; }
                 micCap = new WasapiCapture(mic);
-                var sysBuf = new BufferedWaveProvider(loop.WaveFormat) { BufferDuration = TimeSpan.FromSeconds(2), DiscardOnBufferOverflow = true, ReadFully = false };
-                var micBuf = new BufferedWaveProvider(micCap.WaveFormat) { BufferDuration = TimeSpan.FromSeconds(2), DiscardOnBufferOverflow = true, ReadFully = false };
+                var micBuf = new BufferedWaveProvider(micCap.WaveFormat) { BufferDuration = TimeSpan.FromMilliseconds(500), DiscardOnBufferOverflow = true, ReadFully = false };
                 long sysBytes = 0, micBytes = 0, customBytes = 0;
-                loop.DataAvailable += delegate (object s, WaveInEventArgs e) { if (e.BytesRecorded > 0) { sysBuf.AddSamples(e.Buffer, 0, e.BytesRecorded); sysBytes += e.BytesRecorded; } };
+                if (loop != null) loop.DataAvailable += delegate (object s, WaveInEventArgs e) { if (e.BytesRecorded > 0) { sysBuf.AddSamples(e.Buffer, 0, e.BytesRecorded); sysBytes += e.BytesRecorded; } };
                 micCap.DataAvailable += delegate (object s, WaveInEventArgs e) { if (e.BytesRecorded > 0) { micBuf.AddSamples(e.Buffer, 0, e.BytesRecorded); micBytes += e.BytesRecorded; } };
 
                 BufferedWaveProvider customBuf = null;
                 if (customDev != null)
                 {
                     customCap = new WasapiCapture(customDev);
-                    customBuf = new BufferedWaveProvider(customCap.WaveFormat) { BufferDuration = TimeSpan.FromSeconds(2), DiscardOnBufferOverflow = true, ReadFully = false };
+                    customBuf = new BufferedWaveProvider(customCap.WaveFormat) { BufferDuration = TimeSpan.FromMilliseconds(500), DiscardOnBufferOverflow = true, ReadFully = false };
                     customCap.DataAvailable += delegate (object s, WaveInEventArgs e) { if (e.BytesRecorded > 0) { customBuf.AddSamples(e.Buffer, 0, e.BytesRecorded); customBytes += e.BytesRecorded; } };
                 }
 
-                var sys = CaptureTest.Normalize(sysBuf);
+                var sys = sysBuf == null ? null : CaptureTest.Normalize(sysBuf);
                 var micSp = CaptureTest.Normalize(micBuf);
                 var customSp = customBuf == null ? null : CaptureTest.Normalize(customBuf);
-                loop.StartRecording();
+                if (loop != null) loop.StartRecording();
                 micCap.StartRecording();
                 if (customCap != null) customCap.StartRecording();
                 Thread.Sleep(250);
+                try { if (sysBuf != null) sysBuf.ClearBuffer(); micBuf.ClearBuffer(); if (customBuf != null) customBuf.ClearBuffer(); } catch { }
 
                 var outFmt = WaveFormat.CreateIeeeFloatWaveFormat(Rate, Channels);
                 var outBuf = new BufferedWaveProvider(outFmt) { BufferDuration = TimeSpan.FromMilliseconds(500), DiscardOnBufferOverflow = true };
@@ -111,9 +113,12 @@ internal static class LiveEngine
                     CaptureTest.WriteText(statusPath, "{\"ok\":true,\"running\":true,\"frames\":0,\"duckGain\":1,\"levels\":{\"system\":0,\"mic\":0,\"custom\":0,\"master\":0}}");
                     statusTimer = new Timer(delegate { statusBox.Write(statusPath); }, null, 500, 500);
                 }
+                try { Thread.CurrentThread.Priority = ThreadPriority.AboveNormal; } catch { }
+                var loopClock = Stopwatch.StartNew();
+                long nextLoopMs = 0;
                 while (true)
                 {
-                    CaptureTest.ReadSome(sys, sysF, sysF.Length);
+                    if (sys != null) CaptureTest.ReadSome(sys, sysF, sysF.Length); else Array.Clear(sysF, 0, sysF.Length);
                     CaptureTest.ReadSome(micSp, micF, micF.Length);
                     if (customSp != null) CaptureTest.ReadSome(customSp, customF, customF.Length);
                     int nf = sysF.Length / Channels;
@@ -143,7 +148,9 @@ internal static class LiveEngine
                     outBuf.AddSamples(outBytes, 0, outBytes.Length);
                     frames += nf;
                     statusBox.Update(frames, lastGain, sysPeak, micPeak, customPeak, masterPeak);
-                    Thread.Sleep(10);
+                    nextLoopMs += 10;
+                    int waitMs = (int)(nextLoopMs - loopClock.ElapsedMilliseconds);
+                    if (waitMs > 0) Thread.Sleep(waitMs);
                 }
             }
         }
