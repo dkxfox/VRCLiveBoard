@@ -824,7 +824,7 @@
 - 解读与边界: 验证虚拟线“写入 CABLE Input → 从 CABLE Output 读出”，不打开物理扬声器; VRChat 麦克风端到端仍待做。
 - 环境: 重启完成(LastBootUpTime 11-25 18:05); CABLE Input/Output/CABLE In16ch 端点正常; 默认播放/录音仍为物理设备。
 - 工具/改动: 新增 `engine/ToneTest.cs` (`--tone-test`) 和 `test/cable-smoke.js`; 只用于虚拟线回路测试。
-- 证据: `npm run test:mixer:cable` → **3 PASS / 0 FAIL**; 440Hz 注入 CABLE Input 后 CABLE Output 采集 mixedPeak **0.162**; 无物理扬声器输出。
+- 证据: `npm run test:mixer:cable` → **3 PASS / 0 FAIL**; 440Hz 注入 CABLE Input 后 CABLE Output 采集 mixedPeak **0.162**; 无物理扬声器输出; 全量 `npm run gates` → **16 PASS / 0 FAIL**。
 - 下一步: VRChat 内麦克风选 CABLE Output → 真人讲话 + 音乐 → 验证 -15dB 闪避/400ms release/500ms hold; 然后 A/B-VU 页面。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
