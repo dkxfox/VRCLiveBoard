@@ -40,8 +40,8 @@ internal static class CaptureTest
 
                 loop = new WasapiLoopbackCapture(render);
                 micCap = new WasapiCapture(mic);
-                var sysBuf = new BufferedWaveProvider(loop.WaveFormat) { BufferDuration = TimeSpan.FromSeconds(2), DiscardOnBufferOverflow = true };
-                var micBuf = new BufferedWaveProvider(micCap.WaveFormat) { BufferDuration = TimeSpan.FromSeconds(2), DiscardOnBufferOverflow = true };
+                var sysBuf = new BufferedWaveProvider(loop.WaveFormat) { BufferDuration = TimeSpan.FromSeconds(2), ReadFully = false, DiscardOnBufferOverflow = true };
+                var micBuf = new BufferedWaveProvider(micCap.WaveFormat) { BufferDuration = TimeSpan.FromSeconds(2), ReadFully = false, DiscardOnBufferOverflow = true };
                 long sysBytes = 0, micBytes = 0;
                 loop.DataAvailable += delegate (object s, WaveInEventArgs e) { if (e.BytesRecorded > 0) { sysBuf.AddSamples(e.Buffer, 0, e.BytesRecorded); sysBytes += e.BytesRecorded; } };
                 micCap.DataAvailable += delegate (object s, WaveInEventArgs e) { if (e.BytesRecorded > 0) { micBuf.AddSamples(e.Buffer, 0, e.BytesRecorded); micBytes += e.BytesRecorded; } };

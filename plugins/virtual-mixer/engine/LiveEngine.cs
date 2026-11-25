@@ -58,8 +58,8 @@ internal static class LiveEngine
 
                 loop = new WasapiLoopbackCapture(captureDev);
                 micCap = new WasapiCapture(mic);
-                var sysBuf = new BufferedWaveProvider(loop.WaveFormat) { BufferDuration = TimeSpan.FromSeconds(2), DiscardOnBufferOverflow = true };
-                var micBuf = new BufferedWaveProvider(micCap.WaveFormat) { BufferDuration = TimeSpan.FromSeconds(2), DiscardOnBufferOverflow = true };
+                var sysBuf = new BufferedWaveProvider(loop.WaveFormat) { BufferDuration = TimeSpan.FromSeconds(2), DiscardOnBufferOverflow = true, ReadFully = false };
+                var micBuf = new BufferedWaveProvider(micCap.WaveFormat) { BufferDuration = TimeSpan.FromSeconds(2), DiscardOnBufferOverflow = true, ReadFully = false };
                 long sysBytes = 0, micBytes = 0, customBytes = 0;
                 loop.DataAvailable += delegate (object s, WaveInEventArgs e) { if (e.BytesRecorded > 0) { sysBuf.AddSamples(e.Buffer, 0, e.BytesRecorded); sysBytes += e.BytesRecorded; } };
                 micCap.DataAvailable += delegate (object s, WaveInEventArgs e) { if (e.BytesRecorded > 0) { micBuf.AddSamples(e.Buffer, 0, e.BytesRecorded); micBytes += e.BytesRecorded; } };
@@ -68,7 +68,7 @@ internal static class LiveEngine
                 if (customDev != null)
                 {
                     customCap = new WasapiCapture(customDev);
-                    customBuf = new BufferedWaveProvider(customCap.WaveFormat) { BufferDuration = TimeSpan.FromSeconds(2), DiscardOnBufferOverflow = true };
+                    customBuf = new BufferedWaveProvider(customCap.WaveFormat) { BufferDuration = TimeSpan.FromSeconds(2), DiscardOnBufferOverflow = true, ReadFully = false };
                     customCap.DataAvailable += delegate (object s, WaveInEventArgs e) { if (e.BytesRecorded > 0) { customBuf.AddSamples(e.Buffer, 0, e.BytesRecorded); customBytes += e.BytesRecorded; } };
                 }
 
@@ -97,14 +97,15 @@ internal static class LiveEngine
                 double micGain = Math.Pow(10.0, micGainDb / 20.0);
                 long frames = 0;
                 float lastGain = 1f;
+                double sysPeak = 0, micPeak = 0, customPeak = 0, masterPeak = 0;
                 var sysF = new float[Rate * Channels / 100];
                 var micF = new float[Rate * Channels / 100];
                 var customF = new float[Rate * Channels / 100];
                 var outF = new float[sysF.Length];
                 var outBytes = new byte[sysF.Length * sizeof(float)];
                 var sw = Stopwatch.StartNew();
-                long lastStatus = 0;
-                if (!string.IsNullOrEmpty(statusPath)) CaptureTest.WriteText(statusPath, "{\"ok\":true,\"running\":true,\"frames\":0}");
+                long statusCounter = 0;
+                if (!string.IsNullOrEmpty(statusPath)) CaptureTest.WriteText(statusPath, "{\"ok\":true,\"running\":true,\"frames\":0,\"duckGain\":1,\"levels\":{\"system\":0,\"mic\":0,\"custom\":0,\"master\":0}}");
                 while (true)
                 {
                     CaptureTest.ReadSome(sys, sysF, sysF.Length);
@@ -115,9 +116,13 @@ internal static class LiveEngine
                     {
                         float l = sysF[i * Channels];
                         float r = sysF[i * Channels + 1];
-                        float music = (l + r) * 0.5f * (float)systemGain;
-                        if (customSp != null) music += (customF[i * Channels] + customF[i * Channels + 1]) * 0.5f * (float)musicGain;
+                        float sysMono = (l + r) * 0.5f * (float)systemGain;
+                        float customMono = customSp == null ? 0f : (customF[i * Channels] + customF[i * Channels + 1]) * 0.5f * (float)musicGain;
+                        float music = sysMono + customMono;
                         float micMono = (micF[i * Channels] + micF[i * Channels + 1]) * 0.5f;
+                        if (Math.Abs(sysMono) > sysPeak) sysPeak = Math.Abs(sysMono);
+                        if (Math.Abs(customMono) > customPeak) customPeak = Math.Abs(customMono);
+                        if (Math.Abs(micMono) > micPeak) micPeak = Math.Abs(micMono);
                         float gain = 1f;
                         float ducked = music;
                         if (duckEnabled) ducked = duck.Process(music, micMono, out gain);
@@ -125,16 +130,19 @@ internal static class LiveEngine
                         float mixed = ducked + micMono * (float)micGain;
                         if (mixed > 1f) mixed = 1f;
                         else if (mixed < -1f) mixed = -1f;
+                        if (Math.Abs(mixed) > masterPeak) masterPeak = Math.Abs(mixed);
                         outF[i * Channels] = mixed;
                         outF[i * Channels + 1] = mixed;
                     }
                     Buffer.BlockCopy(outF, 0, outBytes, 0, outBytes.Length);
                     outBuf.AddSamples(outBytes, 0, outBytes.Length);
                     frames += nf;
-                    if (!string.IsNullOrEmpty(statusPath) && sw.ElapsedMilliseconds - lastStatus >= 1000)
+                    statusCounter++;
+                    if (!string.IsNullOrEmpty(statusPath) && statusCounter >= 50)
                     {
-                        lastStatus = sw.ElapsedMilliseconds;
-                        CaptureTest.WriteText(statusPath, "{\"ok\":true,\"running\":true,\"frames\":" + frames + ",\"duckGain\":" + CaptureTest.F(lastGain) + "}");
+                        statusCounter = 0;
+                        CaptureTest.WriteText(statusPath, "{\"ok\":true,\"running\":true,\"frames\":" + frames + ",\"duckGain\":" + CaptureTest.F(lastGain) + ",\"levels\":{\"system\":" + CaptureTest.F(sysPeak) + ",\"mic\":" + CaptureTest.F(micPeak) + ",\"custom\":" + CaptureTest.F(customPeak) + ",\"master\":" + CaptureTest.F(masterPeak) + "}}");
+                        sysPeak = 0; micPeak = 0; customPeak = 0; masterPeak = 0;
                     }
                     Thread.Sleep(10);
                 }

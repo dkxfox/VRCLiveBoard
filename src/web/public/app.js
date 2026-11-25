@@ -243,6 +243,100 @@ function plgCameraPath(p, body){
   advBtn.onclick=function(){if(advBox.style.display==='none'){advBox.style.display='block';if(!advBox.dataset.done){advBox.dataset.done='1';plgSettingsForm(p,advBox);}}else{advBox.style.display='none';}};
   refreshList();refreshStatus();
 }
+// 虚拟混音台 A/B 卡片(2026-11-25): 在插件卡片里提供 A 通道条 / B 机械 VU 两种布局。
+// 设备/增益/闪避参数都写回插件配置；start/stop 走插件 API；电平由 LiveEngine 的 status 文件提供。
+function plgVirtualMixer(p, body){
+  body.innerHTML='';
+  var wrap=document.createElement('div');body.appendChild(wrap);
+  var style=document.createElement('style');style.textContent='.vmHead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0}.vmTitle{font-weight:700;font-size:15px}.vmHint{font-size:12px;color:var(--muted)}.vmGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:8px 0}.vmField{display:flex;flex-direction:column;gap:3px;min-width:0}.vmField label{font-size:12px;color:var(--muted)}.vmField select,.vmField input{width:100%;box-sizing:border-box}.vmStage{border:1px solid rgba(96,128,180,.25);border-radius:10px;background:rgba(12,15,20,.45);padding:10px;min-height:220px}.vmA{display:flex;gap:10px;align-items:flex-end;justify-content:center;flex-wrap:wrap}.vmStrip{width:76px;text-align:center}.vmStrip .nm{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vmMeter{height:120px;width:20px;margin:6px auto;background:#0a0d12;border:1px solid #2a3442;border-radius:4px;position:relative;overflow:hidden}.vmMeterFill{position:absolute;left:0;right:0;bottom:0;height:0;background:linear-gradient(to top,#3ddc84 0%,#3ddc84 55%,#f0b429 78%,#e5484d 100%);transition:height .06s linear}.vmDb{font:11px Consolas,monospace;color:var(--mono)}.vmMasterStrip{width:90px}.vmB{display:flex;gap:14px;align-items:flex-end;justify-content:center;flex-wrap:wrap}.vmVuFace{width:92px;height:96px;border:5px solid #7b8390;border-radius:8px;background:radial-gradient(ellipse at 50% 115%,#fff7dd 0%,#f3e6c4 58%,#d9c69c 100%);position:relative;overflow:hidden;box-shadow:inset 0 0 12px rgba(80,50,10,.25)}.vmVuFace.big{width:150px;height:134px;border-width:7px}.vmNeedle{position:absolute;left:50%;bottom:7px;width:2px;height:78px;background:#b3261e;transform-origin:bottom center;transform:rotate(-42deg);transition:transform .08s linear;box-shadow:0 0 2px rgba(180,40,30,.4)}.vmVuFace.big .vmNeedle{height:108px;bottom:9px}.vmVuPivot{position:absolute;left:50%;bottom:4px;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:#5d5140;border:1px solid #332b20}.vmVuFace .vlabel{position:absolute;left:5px;top:4px;font-size:10px;color:#5b4a32;font-weight:700}.vmVuFace .vdb{position:absolute;right:5px;bottom:3px;font:10px Consolas,monospace;color:#5b4a32}.vmVuFace .vpeak{position:absolute;right:5px;top:5px;width:6px;height:6px;border-radius:50%;background:#7b8390}.vmVuFace .vpeak.on{background:#e5484d;box-shadow:0 0 5px #e5484d}.vmBadge{font-size:11px;border:1px solid var(--border);border-radius:12px;padding:2px 8px;color:var(--muted)}.vmBadge.on{color:#3ddc84;border-color:#2c6a4f;background:rgba(61,220,132,.1)}.vmBadge.warn{color:#f0b429;border-color:#7a5c16}.vmDuck{font-size:11px;padding:2px 8px;border-radius:12px;border:1px solid var(--border);color:var(--muted)}.vmDuck.on{color:#e5484d;border-color:#7a2a2a;background:rgba(229,72,77,.12)}.vmDuck.off{color:#3ddc84;border-color:#2c6a4f}.vmAdv{margin-top:8px;border-top:1px solid var(--border2);padding-top:8px}.vmAdvBox{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.vmMsg{font-size:12px;color:var(--muted);min-height:16px}@media(max-width:920px){.vmAdvBox{grid-template-columns:repeat(2,minmax(0,1fr))}}';wrap.appendChild(style);
+  var state={cfg:null,devices:null,running:false,layout:'A',timer:0};
+  var head=document.createElement('div');head.className='vmHead';wrap.appendChild(head);
+  var title=document.createElement('span');title.className='vmTitle';title.textContent=tr('vmTitle');head.appendChild(title);
+  var bA=document.createElement('button');bA.className='small';bA.textContent=tr('vmLayoutA');head.appendChild(bA);
+  var bB=document.createElement('button');bB.className='small gray';bB.textContent=tr('vmLayoutB');head.appendChild(bB);
+  var bStart=document.createElement('button');bStart.className='small';bStart.textContent=tr('vmStart');head.appendChild(bStart);
+  var bStop=document.createElement('button');bStop.className='small gray';bStop.textContent=tr('vmStop');head.appendChild(bStop);
+  var badge=document.createElement('span');badge.className='vmBadge';badge.textContent=tr('vmStopped');head.appendChild(badge);
+  var duck=document.createElement('span');duck.className='vmDuck off';duck.textContent=tr('vmDuckOff');head.appendChild(duck);
+  var msg=document.createElement('div');msg.className='vmMsg';wrap.appendChild(msg);
+  var hint=document.createElement('div');hint.className='vmHint';hint.textContent=tr('vmHint');wrap.appendChild(hint);
+  var devTitle=document.createElement('div');devTitle.className='vmHint';devTitle.textContent=tr('vmDevices');wrap.appendChild(devTitle);
+  var devGrid=document.createElement('div');devGrid.className='vmGrid';wrap.appendChild(devGrid);
+  function field(label,id){var d=document.createElement('div');d.className='vmField';var l=document.createElement('label');l.textContent=label;d.appendChild(l);var s=document.createElement('select');s.id=id;d.appendChild(s);devGrid.appendChild(d);return s;}
+  var selOut=field(tr('vmOutput'),'vmOut'),selSys=field(tr('vmSystem'),'vmSys'),selMic=field(tr('vmMic'),'vmMic'),selCus=field(tr('vmCustom'),'vmCus');
+  function slider(label,min,max,step,id){var d=document.createElement('div');d.className='vmField';var l=document.createElement('label');l.textContent=label;d.appendChild(l);var r=document.createElement('div');r.style.cssText='display:flex;gap:6px;align-items:center';var i=document.createElement('input');i.type='range';i.min=String(min);i.max=String(max);i.step=String(step);i.id=id;i.style.flex='1';var v=document.createElement('span');v.className='vmDb';v.id=id+'V';r.appendChild(i);r.appendChild(v);d.appendChild(r);devGrid.appendChild(d);i._v=v;return i;}
+  var rMic=slider(tr('vmGainMic')+' ('+tr('vmDb')+')',-24,24,1,'vmMicGain');
+  var rMus=slider(tr('vmGainMusic'),0,2,0.01,'vmMusicGain');
+  var rSys=slider(tr('vmGainSystem'),0,2,0.01,'vmSysGain');
+  rMic.oninput=function(){rMic._v.textContent=Number(rMic.value).toFixed(0)+' '+tr('vmDb');};
+  rMus.oninput=function(){rMus._v.textContent=Number(rMus.value).toFixed(2);};
+  rSys.oninput=function(){rSys._v.textContent=Number(rSys.value).toFixed(2);};
+  var adv=document.createElement('details');adv.className='vmAdv';wrap.appendChild(adv);
+  var sum=document.createElement('summary');sum.className='vmHint';sum.textContent=tr('vmMore');adv.appendChild(sum);
+  var advGrid=document.createElement('div');advGrid.className='vmAdvBox';adv.appendChild(advGrid);
+  function numField(label,min,max,step,id){var d=document.createElement('div');d.className='vmField';var l=document.createElement('label');l.textContent=label;d.appendChild(l);var i=document.createElement('input');i.type='number';i.min=String(min);i.max=String(max);i.step=String(step);i.id=id;d.appendChild(i);advGrid.appendChild(d);return i;}
+  var nDepth=numField(tr('vmDepth')+' ('+tr('vmDb')+')',-60,0,1,'vmDepth');
+  var nThr=numField(tr('vmThreshold')+' ('+tr('vmDb')+')',-80,-5,1,'vmThreshold');
+  var nAttack=numField(tr('vmAttack')+' ('+tr('vmMs')+')',1,500,1,'vmAttack');
+  var nRelease=numField(tr('vmRelease')+' ('+tr('vmMs')+')',10,5000,10,'vmRelease');
+  var nHold=numField(tr('vmHold')+' ('+tr('vmMs')+')',0,3000,10,'vmHold');
+  var nLook=numField(tr('vmLookahead')+' ('+tr('vmMs')+')',0,50,1,'vmLookahead');
+  var nHpf=numField(tr('vmHpf')+' ('+tr('vmMs')+')',20,400,5,'vmHpf');
+  var bSave=document.createElement('button');bSave.className='small';bSave.textContent=tr('vmSave');head.appendChild(bSave);
+  var stage=document.createElement('div');stage.className='vmStage';wrap.appendChild(stage);
+  function E(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.textContent=txt;return e;}
+  function db(v){if(!(v>0))return '-inf';var d=20*Math.log(v)/Math.LN10;return (d>0?'+':'')+d.toFixed(1);}
+  function addOpts(sel,arr,emptyLabel){sel.innerHTML='';var o=E('option','',emptyLabel);o.value='';sel.appendChild(o);(arr||[]).forEach(function(d){var q=E('option','',d.name||'');q.value=d.name||'';sel.appendChild(q);});}
+  function addDefaults(){
+    var dev=state.devices||{},cfg=state.cfg||{};
+    addOpts(selOut,dev.render||[],tr('vmDefault'));
+    addOpts(selSys,dev.render||[],tr('vmDefault'));
+    addOpts(selMic,dev.capture||[],tr('vmDefault'));
+    addOpts(selCus,dev.capture||[],tr('vmOff'));
+    function pick(sel,val){for(var i=0;i<sel.options.length;i++){if(sel.options[i].value===val){sel.selectedIndex=i;return;}}}
+    pick(selOut,cfg.output||'');pick(selSys,cfg.capture||'');pick(selMic,cfg.mic||'');pick(selCus,cfg.custom||'');
+    if(!selOut.value){for(var i=0;i<selOut.options.length;i++){if(/cable input/i.test(selOut.options[i].value)){selOut.selectedIndex=i;break;}}}
+    if(!selSys.value){for(var j=0;j<selSys.options.length;j++){var nm=selSys.options[j].value;if(nm&&nm!==selOut.value&&!/cable/i.test(nm)){selSys.selectedIndex=j;break;}}}
+  }
+  function fillCfg(cfg){
+    state.cfg=cfg||{};
+    rMic.value=Number(cfg.micGainDb);rMus.value=Number(cfg.musicGain);rSys.value=Number(cfg.systemGain);
+    rMic._v.textContent=Number(rMic.value).toFixed(0)+' '+tr('vmDb');rMus._v.textContent=Number(rMus.value).toFixed(2);rSys._v.textContent=Number(rSys.value).toFixed(2);
+    nDepth.value=cfg.duckDepthDb;nThr.value=cfg.duckThresholdDb;nAttack.value=cfg.duckAttackMs;nRelease.value=cfg.duckReleaseMs;nHold.value=cfg.duckHoldMs;nLook.value=cfg.duckLookaheadMs;nHpf.value=cfg.sidechainHpfHz;
+  }
+  function collect(){
+    return {masterOutputDevice:selOut.value,systemCaptureDevice:selSys.value,micCaptureDevice:selMic.value,customCaptureDevice:selCus.value,micGainDb:Number(rMic.value),musicGain:Number(rMus.value),systemGain:Number(rSys.value),duckEnabled:true,duckDepthDb:Number(nDepth.value),duckThresholdDb:Number(nThr.value),duckAttackMs:Number(nAttack.value),duckReleaseMs:Number(nRelease.value),duckHoldMs:Number(nHold.value),duckLookaheadMs:Number(nLook.value),sidechainHpfHz:Number(nHpf.value)};
+  }
+  function setMsg(t,warn){msg.style.color=warn?'var(--warn)':'';msg.textContent=t||'';}
+  function save(){var cfg=collect();return fetch('/api/plugins/config',{method:'POST',body:JSON.stringify({id:p.id,cfg:cfg})}).then(function(r){return r.json();});}
+  function start(){if(!selOut.value||!selMic.value){setMsg(tr('vmNoDevice'),true);return;}bStart.disabled=true;save().then(function(j){if(j&&j.ok===false)throw new Error((j&&j.error)||'');return plugCall('virtual-mixer','start',{});}).then(function(j){if(!j||!j.ok)throw new Error((j&&j.error)||'');state.running=true;setMsg(tr('vmRunning'));pollMeter();}).catch(function(e){setMsg(tr('vmStartFail')+(e&&e.message||e),true);}).then(function(){bStart.disabled=false;});}
+  function stop(){plugCall('virtual-mixer','stop',{}).then(function(){state.running=false;badge.textContent=tr('vmStopped');badge.className='vmBadge';}).catch(function(e){setMsg(tr('vmSaveFail')+(e&&e.message||e),true);});}
+  function renderStage(){
+    stage.innerHTML='';var levels=[[tr('vmChSystem'),'system'],[tr('vmChMic'),'mic'],[tr('vmChCustom'),'custom'],[tr('vmMaster'),'master']];
+    if(state.layout==='A'){var a=E('div','vmA');levels.forEach(function(it){var s=E('div','vmStrip'+(it[1]==='master'?' vmMasterStrip':''));s.appendChild(E('div','nm',it[0]));var m=E('div','vmMeter');var f=E('div','vmMeterFill');f.dataset.lv=it[1];m.appendChild(f);s.appendChild(m);var d=E('div','vmDb','-inf dB');d.dataset.db=it[1];s.appendChild(d);a.appendChild(s);});stage.appendChild(a);}
+    else {var b=E('div','vmB');levels.forEach(function(it){var face=E('div','vmVuFace'+(it[1]==='master'?' big':''));face.appendChild(E('div','vlabel',it[0]));face.appendChild(E('div','vpeak'));var piv=E('div','vmVuPivot');face.appendChild(piv);var nd=E('div','vmNeedle');nd.dataset.needle=it[1];face.appendChild(nd);face.appendChild(E('div','vdb','-inf'));b.appendChild(face);});stage.appendChild(b);}
+  }
+  function pollMeter(){
+    if(state.timer)clearTimeout(state.timer);
+    if(!document.body.contains(wrap))return;
+    plugCall('virtual-mixer','meter',{}).then(function(j){
+      var d=j&&j.data,levels=(d&&d.levels)||{};state.running=!!(j&&j.running);
+      badge.textContent=state.running?tr('vmRunning'):tr('vmStopped');badge.className='vmBadge'+(state.running?' on':'');
+      var g=d&&typeof d.duckGain==='number'?d.duckGain:1;duck.textContent=(g<0.999)?tr('vmDuckOn'):tr('vmDuckOff');duck.className='vmDuck '+(g<0.999?'on':'off');
+      document.querySelectorAll('[data-lv]').forEach(function(el){var v=Number(levels[el.dataset.lv])||0;var d0=v>0?20*Math.log(v)/Math.LN10:-60;var p=Math.max(0,Math.min(1,(d0+60)/60));el.style.height=(p*100)+'%';});
+      document.querySelectorAll('[data-db]').forEach(function(el){var v=Number(levels[el.dataset.db])||0;el.textContent=(v>0?db(v):'-inf')+' '+tr('vmDb');});
+      document.querySelectorAll('[data-needle]').forEach(function(el){var v=Number(levels[el.dataset.needle])||0;var d0=v>0?20*Math.log(v)/Math.LN10:-60;var ang=Math.max(-45,Math.min(45,(d0+40)*1.1-45));el.style.transform='rotate('+ang+'deg)';var face=el.parentNode;var peak=face.querySelector('.vpeak');if(peak)peak.className='vpeak'+(v>0.85?' on':'');var txt=face.querySelector('.vdb');if(txt)txt.textContent=(v>0?d0.toFixed(1):'-inf');});
+      state.timer=setTimeout(pollMeter,250);
+    }).catch(function(){state.timer=setTimeout(pollMeter,1000);});
+  }
+  bA.onclick=function(){state.layout='A';bA.className='small';bB.className='small gray';renderStage();};
+  bB.onclick=function(){state.layout='B';bA.className='small gray';bB.className='small';renderStage();};
+  bStart.onclick=start;bStop.onclick=stop;
+  bSave.onclick=function(){save().then(function(j){setMsg(j&&j.ok!==false?tr('vmSaved'):(tr('vmSaveFail')+((j&&j.error)||'')),!(j&&j.ok!==false));if(state.running)start();}).catch(function(e){setMsg(tr('vmSaveFail')+(e&&e.message||e),true);});};
+  renderStage();
+  Promise.all([plugCall('virtual-mixer','liveConfig',{}),plugCall('virtual-mixer','devices',{})]).then(function(res){var cfg=(res[0]&&res[0].config)||{};state.devices=res[1]||{};fillCfg(cfg);addDefaults();pollMeter();}).catch(function(e){setMsg(tr('vmStartFail')+(e&&e.message||e),true);});
+}
+
 function plgCard(p){var en=!!(p.enabled||p.run),ap=!!p.approved;var d=document.createElement('div');d.className='plgcard';
  d.innerHTML='<div class="plgcard-head"><b class="plgcard-name">'+esc(plgName(p))+'</b><span class="tag">v'+(p.version||'')+'</span><span class="plgstat">'+(ap?'<span class="pill ok">'+tr('stApproved')+'</span>':'<span class="pill warn">'+tr('stUnapproved')+'</span>')+(en?'<span class="pill ok">'+tr('stEnabled')+'</span>':'<span class="pill gray">'+tr('stDisabled')+'</span>')+'</span><span class="plgcard-ctrl"><span class="sw'+(en?' on':'')+'" data-en="'+esc(p.id)+'"></span><button class="small gray" data-set="'+esc(p.id)+'">'+tr('btnSettings')+'</button></span></div><div class="plgcard-desc">'+esc(p.description||tr('plgNoDesc'))+'</div><div class="plgcard-meta">'+esc(p.id||'')+' · '+tr('plgPerms')+': '+esc(plgPermsDesc(p))+(p.error?(' · <span style="color:var(--err)">⚠ '+esc(p.error)+'</span>'):'')+((p.conflicts&&p.conflicts.length)?(' · <span style="color:var(--warn)">⚠ '+tr('plgConflict')+': '+esc(p.conflicts.map(function(c){return c.with;}).join(', '))+'</span>'):'')+'</div><div class="plgcard-body" style="display:none"></div>';
  d.querySelector('[data-en]').onclick=function(){var sw=this;var doEnable=function(){sw.classList.add('on');fetch('/api/plugins/approve',{method:'POST',body:JSON.stringify({id:p.id})}).then(function(r){return r.json();}).then(function(j){if(j&&j.ok===false){note(tr('opFail')+': '+(j.error||''),'warn');return;}plgToggle('/api/plugins/enable',p.id);});};if(!ap){plgWarn(p,doEnable);}else{var wantOn=!sw.classList.contains('on');sw.classList.toggle('on',wantOn);var url=wantOn?'/api/plugins/enable':'/api/plugins/disable';plgToggle(url,p.id);}};
@@ -305,7 +399,7 @@ function plgCard(p){var en=!!(p.enabled||p.run),ap=!!p.approved;var d=document.c
 function renderPlgCards(){var el=$('plugCards');if(!el)return;el.innerHTML='';if(!plgArr.length){el.innerHTML='<div class="sub">'+tr('plgNoPlugins')+'</div>';return;}plgArr.forEach(function(p){el.appendChild(plgCard(p));});}
 async function loadPlugins(){try{var r=await fetch('/api/plugins');var list=await r.json();plgArr=Array.isArray(list)?list:(list.plugins||list.entries||[]);
   // 声明了 manifest.settings 的插件 → 挂上通用设置渲染器(loadPlgSettings 按 __plgset_<id> 找它)
-  plgArr.forEach(function(p){if(!p)return;if(p.id==='camera-path'){window.__plgset_camera_path=plgCameraPath;return;}if(Array.isArray(p.settingsUi)&&p.settingsUi.length){window['__plgset_'+String(p.id||'').replace(/-/g,'_')]=plgSettingsForm;}});
+  plgArr.forEach(function(p){if(!p)return;if(p.id==='camera-path'){window.__plgset_camera_path=plgCameraPath;return;}if(p.id==='virtual-mixer'){window.__plgset_virtual_mixer=plgVirtualMixer;return;}if(Array.isArray(p.settingsUi)&&p.settingsUi.length){window['__plgset_'+String(p.id||'').replace(/-/g,'_')]=plgSettingsForm;}});
   renderPlgCards();if(typeof syncQuickPlg==='function')syncQuickPlg();}catch(e){apiFail('loadPlugins',e);}}
 function loadPlgSettings(p,body){if(!(p.enabled||p.run)){body.innerHTML='<div class="sub" style="margin:8px 0;color:var(--warn)">'+tr('plgNotEnabled')+'</div>';return;}if(!p.approved){body.innerHTML='<div class="sub" style="margin:8px 0;color:var(--warn)">'+tr('plgNotApproved')+'</div>';return;}body.innerHTML='<div class="sub" style="margin:8px 0">'+tr('plgLoading')+'</div>';var fn=window['__plgset_'+String(p.id||'').replace(/-/g,'_')];if(typeof fn==='function'){fn(p,body);}else{body.innerHTML='<div class="sub" style="margin:8px 0">'+tr('plgPerms')+': '+esc(plgPermsDesc(p))+'</div><div class="sub">'+tr('plgSettingsPending')+'</div>';}}
 // ===== 数据源/状态 =====

@@ -31,7 +31,7 @@ internal static class ProbeCaptures
                 try
                 {
                     cap = new WasapiCapture(dev);
-                    var buf = new BufferedWaveProvider(cap.WaveFormat) { BufferDuration = TimeSpan.FromSeconds(2), DiscardOnBufferOverflow = true };
+                    var buf = new BufferedWaveProvider(cap.WaveFormat) { BufferDuration = TimeSpan.FromSeconds(2), ReadFully = false, DiscardOnBufferOverflow = true };
                     long bytes = 0;
                     cap.DataAvailable += delegate (object s, WaveInEventArgs e) { if (e.BytesRecorded > 0) { buf.AddSamples(e.Buffer, 0, e.BytesRecorded); bytes += e.BytesRecorded; } };
                     cap.StartRecording();

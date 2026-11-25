@@ -846,6 +846,12 @@
 - 验证: `test:mixer` **21 PASS**(新增 liveConfig 默认值/未运行/autoStart off 断言); 插件 start→running→stop 实测; 全量 `npm run gates` → **16 PASS / 0 FAIL**。
 - 安全/边界: 默认 autoStart=false 不自动打开音频; 不打包驱动; A/B-VU 页面仍未接。
 - 下一步: A/B-VU 页面(设备选择/推子/电平/闪避指示) + cue/运镜联动。
+## 407. 虚拟混音台 A/B 卡片 UI + 实时电平(2026-11-25, 用户“继续”)
+- 改动: `src/web/public/app.js` 新增 `plgVirtualMixer`(插件卡片内嵌)；A/B 两种布局、设备下拉、麦克风/音乐/系统增益、深度/阈值/attack/release/hold/lookahead/HPF、开始/停止/保存；`lang.js` 补三语键；`plugins/virtual-mixer/index.js` 新增 `meter()`。
+- 引擎: LiveEngine 每秒写 system/mic/custom/master 峰值 + duckGain；采集缓冲 `ReadFully=false`，状态改为按循环计数写入（修掉 ReadFully 卡死导致 frames 一直 0 的问题）。
+- 验证: 前端语法/控件/启动门禁 PASS；`test:mixer` 21 PASS；插件 start→meter(frames>0/levels)→stop 实测；全量门禁待提交后复跑。
+- 边界: A/B 是插件卡片内 UI，不是独立主页面；cue/运镜/降噪/压缩未接。
+- 下一步: A/B 视觉细调 + cue 同步播放/运镜联动 + 打包。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -915,5 +921,6 @@
 | 404 | 2026-11-25 | VRChat 麦克风链路打通 + CABLE 自反馈修复 |
 | 405 | 2026-11-25 | 虚拟混音台实机音色确认: 麦+4dB / 音乐0.72 / 淡入淡出放缓 |
 | 406 | 2026-11-25 | 虚拟混音台 S3: 实时启停 + 手动参数(默认来自实机确认值) |
+| 407 | 2026-11-25 | 虚拟混音台 A/B 卡片 UI + 实时电平 |
 
 <!-- DEV-NOTES-INDEX:END -->

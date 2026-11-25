@@ -45,8 +45,8 @@ internal static class OutputTest
 
                 loop = new WasapiLoopbackCapture(captureRender);
                 micCap = new WasapiCapture(mic);
-                var sysBuf = new BufferedWaveProvider(loop.WaveFormat) { BufferDuration = TimeSpan.FromSeconds(2), DiscardOnBufferOverflow = true };
-                var micBuf = new BufferedWaveProvider(micCap.WaveFormat) { BufferDuration = TimeSpan.FromSeconds(2), DiscardOnBufferOverflow = true };
+                var sysBuf = new BufferedWaveProvider(loop.WaveFormat) { BufferDuration = TimeSpan.FromSeconds(2), ReadFully = false, DiscardOnBufferOverflow = true };
+                var micBuf = new BufferedWaveProvider(micCap.WaveFormat) { BufferDuration = TimeSpan.FromSeconds(2), ReadFully = false, DiscardOnBufferOverflow = true };
                 long sysBytes = 0, micBytes = 0, customBytes = 0;
                 loop.DataAvailable += delegate (object s, WaveInEventArgs e) { if (e.BytesRecorded > 0) { sysBuf.AddSamples(e.Buffer, 0, e.BytesRecorded); sysBytes += e.BytesRecorded; } };
                 micCap.DataAvailable += delegate (object s, WaveInEventArgs e) { if (e.BytesRecorded > 0) { micBuf.AddSamples(e.Buffer, 0, e.BytesRecorded); micBytes += e.BytesRecorded; } };
@@ -55,7 +55,7 @@ internal static class OutputTest
                 if (customDev != null)
                 {
                     customCap = new WasapiCapture(customDev);
-                    customBuf = new BufferedWaveProvider(customCap.WaveFormat) { BufferDuration = TimeSpan.FromSeconds(2), DiscardOnBufferOverflow = true };
+                    customBuf = new BufferedWaveProvider(customCap.WaveFormat) { BufferDuration = TimeSpan.FromSeconds(2), ReadFully = false, DiscardOnBufferOverflow = true };
                     customCap.DataAvailable += delegate (object s, WaveInEventArgs e) { if (e.BytesRecorded > 0) { customBuf.AddSamples(e.Buffer, 0, e.BytesRecorded); customBytes += e.BytesRecorded; } };
                 }
 
@@ -68,7 +68,7 @@ internal static class OutputTest
                 Thread.Sleep(250);
 
                 var outFmt = WaveFormat.CreateIeeeFloatWaveFormat(Rate, Channels);
-                var outBuf = new BufferedWaveProvider(outFmt) { BufferDuration = TimeSpan.FromMilliseconds(500), DiscardOnBufferOverflow = true };
+                var outBuf = new BufferedWaveProvider(outFmt) { BufferDuration = TimeSpan.FromMilliseconds(500), ReadFully = false, DiscardOnBufferOverflow = true };
                 output = new WasapiOut(outputRender, AudioClientShareMode.Shared, false, 50);
                 output.Init(outBuf);
                 output.Play();
