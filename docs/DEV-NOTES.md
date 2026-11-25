@@ -877,7 +877,7 @@
 - 根因: 实时循环把累计峰值传给 StatusBox; StatusBox 只赋值(不是按区间取 max), 后台 Timer 读取后也从不把峰值清零 -> 一直保留历史最大。
 - 修复: 音频循环每帧更新区间峰值, 每段后清零本地峰值; StatusBox 只在区间内取 max; Timer 写 status 后清零区间峰值。现在每 500ms 是一段新的峰值。
 - 证据: 插件 start→meter 连续采样 levels 变化: mic 0.0333→0.0095→0.0026→0.0063, custom 0.1698→0.1602→0.2403→0.1902; 不再卡最大值。
-- 边界: 数字仍有 500ms 段峰值保持特性(不是瞬时 RMS); 若需要更细腻的 VU 弹道, 后续可做峰值衰减/表针惯性。
+- 边界: 数字仍有 500ms 段峰值保持特性(不是瞬时 RMS); 若需要更细腻的 VU 弹道, 后续可做峰值衰减/表针惯性。`npm run gates` **16 PASS / 0 FAIL**。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
