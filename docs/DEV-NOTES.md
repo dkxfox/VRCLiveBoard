@@ -870,7 +870,7 @@
 - 发现: 页面加载时 `pollMeter` 要等 `liveConfig + devices` 两个异步调用都完成才开始; 之前的 `wrap.offsetParent` 守卫在卡片隐藏/布局变化时会跳过刷新; 旧页面/旧状态还会留下冻结值。
 - 修复: `renderStage` 后立即开始 meter 轮询, 不再依赖设备枚举; 移除 offsetParent 守卫; 保留 500ms 刷新。
 - 证据: CDP 实测 start 后 A fills 由 0/4/80/80% 更新, dB 从 -inf/-24.6/-11.5/-11.4 变化; B 表针 rotate 值随电平变化; stop 后状态回到已停止。
-- 说明: 若用户仍看到旧界面, 需要刷新/重载控制台(旧 app.js 缓存)。
+- 说明: 若用户仍看到旧界面, 需要刷新/重载控制台(旧 app.js 缓存); 全量门禁 **16 PASS / 0 FAIL**。
 - 下一步: 待用户确认 VU 与 3s 延迟; 然后 cue/运镜/包装。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
