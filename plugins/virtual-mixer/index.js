@@ -7,6 +7,8 @@ const fs = require('fs');
 let ctx = null;
 let engineChild = null;
 let liveChild = null;
+let cueChild = null;
+let cueInfo = null;
 let seq = 0;
 
 function enginePath() { return path.join(__dirname, 'engine', 'VirtualMixerEngine.exe'); }
@@ -70,6 +72,21 @@ function buildLiveConfig() {
 }
 
 function liveStatusPath() { return path.join(__dirname, 'data', 'live-status.json'); }
+function cueStatusPath() { return path.join(__dirname, 'data', 'cue-status.json'); }
+function stopCue() { if (cueChild) { try { cueChild.kill(); } catch (e) {} cueChild = null; } }
+function normalizeCueFiles(input) {
+  var arr = input && Array.isArray(input.files) ? input.files : [];
+  var out = [];
+  arr.forEach(function (it) {
+    var p = String(it && it.path || it || '');
+    if (!p) return;
+    if (!/\.(wav|mp3|aiff?|wma)$/i.test(p)) throw new Error('UNSUPPORTED_FILE: ' + p);
+    if (!ctx.fs || !require('fs').existsSync(p)) throw new Error('FILE_NOT_FOUND: ' + p);
+    var g = it && typeof it.gainDb === 'number' ? it.gainDb : 0;
+    out.push({ path: p, gainDb: Math.max(-60, Math.min(12, g)) });
+  });
+  return out;
+}
 
 function stopLive() {
   if (liveChild) { try { liveChild.kill(); } catch (e) {} liveChild = null; }
@@ -113,6 +130,7 @@ module.exports = function (c) {
     },
     dispose: function () {
       stopLive();
+      stopCue();
       if (engineChild) { try { engineChild.kill(); } catch (e) {} engineChild = null; }
     },
     api: {
@@ -123,7 +141,8 @@ module.exports = function (c) {
           ok: true,
           stage: 'S3',
           running: !!(liveChild && liveChild.exitCode === null),
-          engine: { path: enginePath(), exists: exists, version: '0.5.1' },
+          cue: cueInfo ? { running: !!(cueChild && cueChild.exitCode === null), files: cueInfo.files, startedAt: cueInfo.startedAt } : null,
+          engine: { path: enginePath(), exists: exists, version: '0.6.0' },
           channels: [
             { id: 'system', name: '系统声音', denoise: 'off', compressor: 'off' },
             { id: 'mic', name: '麦克风', denoise: 'off', compressor: 'off' },
@@ -193,6 +212,30 @@ module.exports = function (c) {
         return readJson(json);
       },
       liveConfig: function () { return { ok: true, config: buildLiveConfig() }; },
+      cue: async function (args) {
+        args = (args && args.input) ? args.input : (args || {});
+        if (!fs.existsSync(enginePath())) throw new Error('NO_ENGINE');
+        const files = normalizeCueFiles(args);
+        if (!files.length) throw new Error('NO_CUE_FILES');
+        const output = String(ctx.config.masterOutputDevice || '');
+        if (!output) throw new Error('NO_OUTPUT_DEVICE');
+        const leadMs = Math.max(0, Math.min(5000, Number(args.leadMs) || 300));
+        stopCue();
+        await ctx.fs.write(cueStatusPath(), '{}');
+        const cargs = ['--cue', output, String(leadMs), cueStatusPath()];
+        files.forEach(function (f) { cargs.push(f.path); cargs.push(String(f.gainDb)); });
+        let child;
+        try { child = ctx.exec.run(enginePath(), cargs); } catch (e) { throw new Error('CUE_START_FAILED: ' + e.message); }
+        cueChild = child;
+        cueInfo = { files: files.map(function (f) { return f.path; }), startedAt: Date.now(), leadMs: leadMs };
+        child.on('exit', function () { if (cueChild === child) cueChild = null; });
+        await new Promise(function (r) { setTimeout(r, 250); });
+        if (child.exitCode !== null && child.exitCode !== undefined) { cueChild = null; throw new Error('CUE_ENGINE_EXIT_' + child.exitCode); }
+        return { ok: true, startedAt: cueInfo.startedAt, files: cueInfo.files, leadMs: leadMs };
+      },
+      cueStop: function () { stopCue(); return { ok: true, running: false }; },
+      cueClear: function () { stopCue(); cueInfo = null; return { ok: true, running: false, files: [] }; },
+      cueStatus: function () { return { ok: true, running: !!(cueChild && cueChild.exitCode === null), files: cueInfo ? cueInfo.files : [], startedAt: cueInfo ? cueInfo.startedAt : null }; },
       meter: async function () {
         const running = !!(liveChild && liveChild.exitCode === null);
         try {

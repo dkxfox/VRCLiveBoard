@@ -25,11 +25,13 @@
     npm run test:mixer:capture
     npm run test:mixer:cable
     npm run test:mixer:latency
+    npm run test:mixer:cue
 
 - test:mixer：版本/设备/离线混音/闪避/插件桥（不占用真实音频）
 - capture：真实采集到 WAV（占用麦克风约 1.5s，不打开扬声器）
 - cable：向 CABLE Input 注入 440Hz，从 CABLE Output 采集（仅虚拟线）
 - latency：测量 CABLE Input→CABLE Output 往返延迟（当前约 100–125ms）
+- cue：两条 WAV 同一输出时钟起播，验证起播偏差（实测 0ms）
 
 ## 实时启停与手动调整
 
@@ -57,6 +59,10 @@
 | autoStart | false | 打开并保存=启动实时混音；关闭=停止 |
 
 start() / stop() 也可由插件 API 调用。修改数值后，控制台保存会调用 reloadConfig；autoStart=true 时自动重启引擎应用新参数。
+
+### 同步 Cue API
+
+`cue({ files:[{path,gainDb}], leadMs })`：多条文件在同一 48kHz 输出时钟起播；`cue` 整体替换上一组，`cueStop` 只停，`cueClear` 停止并清空，`cueStatus` 返回运行状态。
 
 安全约定：默认 autoStart=false，不会自动打开音频；设备名必须精确匹配，找不到会拒绝启动，避免误输出到物理扬声器。
 

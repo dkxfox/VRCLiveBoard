@@ -899,6 +899,13 @@
 - 结论: 继续压延迟需要换音频路径(直接 AudioClient/更低层), 或接受 VB-CABLE/Windows 共享模式的地板; VRChat/VD 自身延迟还需单测。
 - 用户场景: 弹唱重点不是监听延迟, 而是伴奏/cue 同步; 唱歌需要低延迟监听/返送。下一步先做 cue 同步播放, 再评估本地监听路径。
 - 验证: test:mixer 21 PASS; test:mixer:latency 2 PASS; 全量 gates **16 PASS / 0 FAIL**。
+## 415. 虚拟混音台同步 Cue 引擎/API(2026-11-28, 弹唱同步优先)
+- 用户场景: 弹唱不在乎监听延迟, 更在乎两条文件/伴奏同拍; 唱歌才需要低延迟监听。
+- 新增 `CueEngine.cs` + `--cue <output> <leadMs> <status> <file> <gain> ...`: 多文件同一 48k 输出时钟起播, lead 预卷, 输出 CABLE; WAV/MP3/AIFF 解码, 支持增益。
+- 新增 `--cue-selftest`: 混音写 WAV 并返回 JSON; 插件 `cue/cueStop/cueClear/cueStatus`; `cue` 整体替换, 空列表拒绝, stop 只停, clear 清空; `dispose` 杀 cue 进程。
+- 证据: `npm run test:mixer:cue` → **3 PASS**; 440/880Hz 两条文件 onset 偏差 **0ms**(目标 ≤20ms); 插件 cue→status→stop→clear 实测通过。
+- 限制: 驱动/Windows 输出仍约 100–125ms; cue 与 live mic 混合目前是两个音频客户端(Windows 混音), 后续可并入同一输出回调; A/B 卡片 cue UI/camera-path 联动未做。
+- 下一步: cue 文件行/进度/清空 UI; camera-path 起播联动; 再评估把 cue 混入 LiveEngine 单进程。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -976,5 +983,6 @@
 | 412 | 2026-11-25 | 虚拟混音台阶段收口: A/B/VU 可用, 延迟与刷新列入正式版优化 |
 | 413 | 2026-11-28 | 虚拟混音台低延迟原型 + CABLE 延迟测量 |
 | 414 | 2026-11-28 | VU 30fps + 延迟下限测量 |
+| 415 | 2026-11-28 | 虚拟混音台同步 Cue 引擎/API |
 
 <!-- DEV-NOTES-INDEX:END -->

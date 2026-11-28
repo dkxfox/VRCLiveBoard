@@ -13,6 +13,7 @@
   "test:mixer:capture": "node \"%npm_package_json%\\..\\plugins\\virtual-mixer\\test\\capture-smoke.js\"",
   "test:mixer:cable": "node \"%npm_package_json%\\..\\plugins\\virtual-mixer\\test\\cable-smoke.js\"",
   "test:mixer:latency": "node \"%npm_package_json%\\..\\plugins\\virtual-mixer\\test\\latency-smoke.js\"",
+  "test:mixer:cue": "node \"%npm_package_json%\\..\\plugins\\virtual-mixer\\test\\cue-smoke.js\"",
     "selftest": "powershell -NoProfile -ExecutionPolicy Bypass -File \"%npm_package_json%\\..\\scripts\\checks\\gate-selftest.ps1\""
   },
   "engines": {
