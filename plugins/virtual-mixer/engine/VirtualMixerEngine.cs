@@ -15,7 +15,7 @@ using NAudio.Wave.SampleProviders;
 // No live capture/output yet; S2 adds channel capture and ducking.
 internal static class Program
 {
-    private const string EngineVersion = "0.6.0";
+    private const string EngineVersion = "0.6.1";
     private const int SampleRate = 48000;
     private const int Channels = 2;
 

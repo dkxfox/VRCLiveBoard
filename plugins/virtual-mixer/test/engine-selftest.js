@@ -25,7 +25,7 @@ function wavInfo(file) {
   try {
     if (!fs.existsSync(ENGINE)) { console.error('  FAIL engine not built: ' + ENGINE); process.exit(1); }
     const v = parseJson(execFileSync(ENGINE, ['--version'], { encoding: 'utf8' }));
-    ok(v.ok === true && v.engine === 'VirtualMixerEngine' && v.version === '0.6.0', 'version: ' + JSON.stringify(v));
+    ok(v.ok === true && v.engine === 'VirtualMixerEngine' && v.version === '0.6.1', 'version: ' + JSON.stringify(v));
     const devFile = path.join(os.tmpdir(), 'vrcb-mixer-dev-' + process.pid + '.json');
     execFileSync(ENGINE, ['--list-devices', devFile], { encoding: 'utf8' });
     const dev = JSON.parse(fs.readFileSync(devFile, 'utf8'));

@@ -28,19 +28,20 @@ internal static class CueEngine
     {
         private readonly object gate = new object();
         private long frames;
+        private double level;
         private bool running = true;
         public long StartedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         public long DurationMs;
         public string Files;
-        public void Update(long f) { lock (gate) { frames = f; } }
+        public void Update(long f, double p) { lock (gate) { frames = f; if (p > level) level = p; } }
         public void Stop() { lock (gate) { running = false; } }
         public void Write(string path)
         {
             if (string.IsNullOrEmpty(path)) return;
-            long f; bool r;
-            lock (gate) { f = frames; r = running; }
+            long f; bool r; double lv;
+            lock (gate) { f = frames; r = running; lv = level; level = 0; }
             double progress = DurationMs > 0 ? Math.Min(1.0, (f * 1000.0 / Rate) / DurationMs) : 0;
-            try { CaptureTest.WriteText(path, "{\"ok\":true,\"running\":" + (r ? "true" : "false") + ",\"startedAt\":" + StartedAt + ",\"durationMs\":" + DurationMs + ",\"frames\":" + f + ",\"progress\":" + CaptureTest.F(progress) + ",\"files\":\"" + CaptureTest.J(Files) + "\"}"); } catch { }
+            try { CaptureTest.WriteText(path, "{\"ok\":true,\"running\":" + (r ? "true" : "false") + ",\"startedAt\":" + StartedAt + ",\"durationMs\":" + DurationMs + ",\"frames\":" + f + ",\"progress\":" + CaptureTest.F(progress) + ",\"level\":" + CaptureTest.F(lv) + ",\"files\":\"" + CaptureTest.J(Files) + "\"}"); } catch { }
         }
     }
 
@@ -78,12 +79,26 @@ internal static class CueEngine
             double gainDb;
             if (!double.TryParse(args[i + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out gainDb)) gainDb = 0;
             if (!File.Exists(path)) throw new Exception("FILE_NOT_FOUND: " + path);
-            var reader = new AudioFileReader(path);
-            ISampleProvider sp = reader;
+            ISampleProvider sp;
+            long durationMs;
+            if (path.EndsWith(".flac", StringComparison.OrdinalIgnoreCase))
+            {
+                // Windows Media Foundation has a built-in FLAC decoder on Win10/11;
+                // NAudio's managed AudioFileReader does not decode FLAC.
+                var mf = new MediaFoundationReader(path);
+                sp = mf.ToSampleProvider();
+                durationMs = (long)mf.TotalTime.TotalMilliseconds;
+            }
+            else
+            {
+                var reader = new AudioFileReader(path);
+                sp = reader;
+                durationMs = (long)reader.TotalTime.TotalMilliseconds;
+            }
             if (sp.WaveFormat.SampleRate != Rate) sp = new WdlResamplingSampleProvider(sp, Rate);
             if (sp.WaveFormat.Channels == 1) sp = new MonoToStereoSampleProvider(sp);
             else if (sp.WaveFormat.Channels > 2) throw new Exception("UNSUPPORTED_CHANNELS: " + path);
-            list.Add(new Track { Path = path, Provider = sp, Gain = Math.Pow(10.0, gainDb / 20.0), DurationMs = (long)reader.TotalTime.TotalMilliseconds });
+            list.Add(new Track { Path = path, Provider = sp, Gain = Math.Pow(10.0, gainDb / 20.0), DurationMs = durationMs });
         }
         return list;
     }
@@ -127,8 +142,10 @@ internal static class CueEngine
                         if (got < tmp.Length) tr.Done = true;
                         any = true;
                     }
+                    double chunkPeak = 0;
                     for (int i = 0; i < mix.Length; i++)
                     {
+                        if (Math.Abs(mix[i]) > chunkPeak) chunkPeak = Math.Abs(mix[i]);
                         if (mix[i] > 1f) mix[i] = 1f;
                         else if (mix[i] < -1f) mix[i] = -1f;
                     }
@@ -136,7 +153,7 @@ internal static class CueEngine
                     Buffer.BlockCopy(mix, 0, bytes, 0, bytes.Length);
                     outBuf.AddSamples(bytes, 0, bytes.Length);
                     frames += mix.Length / Channels;
-                    status.Update(frames);
+                    status.Update(frames, chunkPeak);
                     if (!any) break;
                     Thread.Sleep(10);
                 }

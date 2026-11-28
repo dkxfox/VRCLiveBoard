@@ -62,9 +62,9 @@ start() / stop() 也可由插件 API 调用。修改数值后，控制台保存�
 
 ### 同步 Cue
 
-A/B 卡片底部新增 Cue 两行：填文件路径、可单独 `×` 清空；`同步起播`/`停止 Cue`/`清空 Cue`；进度条按引擎 status 更新。空槽不会播放。若选择“联动运镜”，会先 Import 相机预设，再在 cue lead 后调 camera-path `playNow`。camera-path 已升 0.4.1，需要重新授权。
+A/B 卡片底部新增 Cue 两行：填文件路径、可单独 `×` 清空；`同步起播`/`停止 Cue`/`清空 Cue`；进度条和 **Cue 峰值 dB 电平表**按引擎 status 更新。空槽不会播放。若选择“联动运镜”，会先 Import 相机预设，再在 cue lead 后调 camera-path `playNow`。camera-path 已升 0.4.1，需要重新授权。
 
-API：`cue({ files:[{path,gainDb}], leadMs })` 多条文件在同一 48kHz 输出时钟起播；`cue` 整体替换上一组，`cueStop` 只停，`cueClear` 停止并清空，`cueStatus` 返回运行/进度。
+API：Cue 支持 WAV/MP3/FLAC/AIFF/WMA；FLAC 走 Windows Media Foundation（Win10/11 自带）。`cue({ files:[{path,gainDb}], leadMs })` 多条文件在同一 48kHz 输出时钟起播；`cue` 整体替换上一组，`cueStop` 只停，`cueClear` 停止并清空，`cueStatus` 返回运行/进度。
 
 安全约定：默认 autoStart=false，不会自动打开音频；设备名必须精确匹配，找不到会拒绝启动，避免误输出到物理扬声器。
 

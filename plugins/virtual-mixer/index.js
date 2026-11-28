@@ -80,7 +80,7 @@ function normalizeCueFiles(input) {
   arr.forEach(function (it) {
     var p = String(it && it.path || it || '');
     if (!p) return;
-    if (!/\.(wav|mp3|aiff?|wma)$/i.test(p)) throw new Error('UNSUPPORTED_FILE: ' + p);
+    if (!/\.(wav|mp3|flac|aiff?|wma)$/i.test(p)) throw new Error('UNSUPPORTED_FILE: ' + p);
     if (!ctx.fs || !require('fs').existsSync(p)) throw new Error('FILE_NOT_FOUND: ' + p);
     var g = it && typeof it.gainDb === 'number' ? it.gainDb : 0;
     out.push({ path: p, gainDb: Math.max(-60, Math.min(12, g)) });
@@ -142,7 +142,7 @@ module.exports = function (c) {
           stage: 'S3',
           running: !!(liveChild && liveChild.exitCode === null),
           cue: cueInfo ? { running: !!(cueChild && cueChild.exitCode === null), files: cueInfo.files, startedAt: cueInfo.startedAt } : null,
-          engine: { path: enginePath(), exists: exists, version: '0.6.0' },
+          engine: { path: enginePath(), exists: exists, version: '0.6.1' },
           channels: [
             { id: 'system', name: '系统声音', denoise: 'off', compressor: 'off' },
             { id: 'mic', name: '麦克风', denoise: 'off', compressor: 'off' },

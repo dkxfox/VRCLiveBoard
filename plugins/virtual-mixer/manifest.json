@@ -1,7 +1,7 @@
 {
   "id": "virtual-mixer",
   "name": "虚拟混音台",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "author": "VRCLiveBoard 官方",
   "description": "把系统声音、麦克风、磁带/乐器等自定义输入混成一路送入虚拟跳线；S3 实时启停/可调参数/A-B 卡片；新增同步 cue 播放(sample-aligned) 与 CABLE 延迟测量。",
   "api": "2.0.0",
@@ -135,6 +135,6 @@
     }
   ],
   "changelog": [
-    "0.6.0 同步 cue: 多文件同一 48k 输出时钟起播(cue-selftest 实测 440/880Hz onset delta=0ms); 插件 cue/cueStop/cueClear/cueStatus; LiveEngine 事件驱动; VU 30fps"
+    "0.6.1 Cue 增加 FLAC(Media Foundation) 与 cue 电平表; A/B Cue 区显示峰值 dB; 需 Windows 10/11 的 FLAC 解码"
   ]
 }

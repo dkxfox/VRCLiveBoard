@@ -918,6 +918,12 @@
 - 证据: 前端/插件语法通过; mixer 21 PASS; cue 3 PASS; plugin-check PASS; ui-wiring PASS; 全量 gates 待收口复跑。
 - 限制: 相机与 cue 是两次控制调用, 非同一时钟精确锁相; 若需要 ≤20ms, 应把 cue 与 camera Play 命令放到同一调度点(后续)。
 - 下一步: camera cue 实机验证; 再把 cue 并入 LiveEngine 同回调。全量 `npm run gates` **16 PASS / 0 FAIL**。
+## 418. 同步 Cue: FLAC + 电平表(2026-11-28, 用户实测通过后小改)
+- FLAC: NAudio 1.10 的 AudioFileReader 不解 FLAC; `.flac` 改走 Windows Media Foundation `MediaFoundationReader` (Win10/11 自带解码), 再 48k/2ch 归一化。插件文件扩展名允许 flac。
+- Cue 电平: CueEngine 200ms status 增加区间峰值 `level`; A/B Cue 区新增峰值条, 显示 -inf/dB(复用 vmPeak/vmDb)。
+- 证据: 真实 FLAC (`Slicex Electro Hats.flac`) cue-selftest 成功, duration=2420ms, WAV 929KB; cueStatus 实测 level 0.352051(约 -9.1dB), progress 8.6%→34.1%。
+- 验证: test:mixer 21 PASS; test:mixer:cue 3 PASS; 全量 gates 待收口复跑。
+- 限制: FLAC 依赖 Windows 10/11 Media Foundation; 极老/N 版可能失败; Cue 仍是独立输出客户端。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -998,5 +1004,6 @@
 | 415 | 2026-11-28 | 虚拟混音台同步 Cue 引擎/API |
 | 416 | 2026-11-28 | 同步 Cue 进度/UI |
 | 417 | 2026-11-28 | Cue 运镜联动 |
+| 418 | 2026-11-28 | 同步 Cue: FLAC + 电平表 |
 
 <!-- DEV-NOTES-INDEX:END -->
