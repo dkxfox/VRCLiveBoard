@@ -967,7 +967,7 @@
 - A 通道条改为横向: 设备下拉 + 横向 dB 电平条 + 增益滑杆 + M/S, 卡高约 205px; 不再使用竖向长电平条。
 - B VU 改为 SVG 机械表盘: 按 TEAC 实机刻度 -20/-10/-7/-5/-3/0/+3, 0~+3 红区, PEAK 灯, 48000? 不, 面板保持约 4:3; 指针 -48°~+48°。
 - 证据: headless 19190/?tab=mixer A 卡 254×205、4 条横向电平; B VU 142×108、SVG 刻度文本 -20 -10 -7 -5 -3 0 +3; 截图已核对。
-- 全量 gates 待收口; 推送仍受 GitHub TLS 网络影响。
+- 全量 `npm run gates` **16 PASS / 0 FAIL**; 已推送 `ddaaa99`。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
