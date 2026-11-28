@@ -128,3 +128,6 @@ advTitle:'Advanced (usually untouched)', portsOsc:'OSC send port:', portsApply:'
 
 // Cue 监听/音量 + 麦克风降噪(2026-11-28)
 (function(){var N=JSON.parse("{\"zh-CN\":{\"vmCueMonitor\":\"Cue 监听\",\"vmCueGain\":\"Cue 音量\",\"vmMicNr\":\"降噪\"},\"zh-TW\":{\"vmCueMonitor\":\"Cue 監聽\",\"vmCueGain\":\"Cue 音量\",\"vmMicNr\":\"降噪\"},\"en\":{\"vmCueMonitor\":\"Cue monitor\",\"vmCueGain\":\"Cue volume\",\"vmMicNr\":\"Noise gate\"}}");for(var L in N){for(var k in N[L]){(window.VRCB_LANG[L]=window.VRCB_LANG[L]||{})[k]=N[L][k];}}})();
+
+// Cue 运镜不使用(2026-11-28)
+(function(){var N=JSON.parse("{\"zh-CN\":{\"vmCameraNone\":\"不使用\"},\"zh-TW\":{\"vmCameraNone\":\"不使用\"},\"en\":{\"vmCameraNone\":\"None\"}}");for(var L in N){for(var k in N[L]){(window.VRCB_LANG[L]=window.VRCB_LANG[L]||{})[k]=N[L][k];}}})();
