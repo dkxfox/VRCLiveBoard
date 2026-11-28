@@ -954,7 +954,7 @@
 ## 424. 主混音台通道卡片 M/S(2026-11-28, M2.2 续)
 - 主程序 LiveEngine 新增 `systemMuted/micMuted/customMuted` 与 `systemSolo/micSolo/customSolo`; solo 时只保留选中输入(主输出不受影响)。
 - 主 manager 配置/启动下发这些字段; 主页面 4 张通道卡新增 M/S 按钮; mic 被 mute/solo 排除时不再触发闪避(避免静音麦克风仍压音乐)。
-- 证据: 主 manager 配置 systemMuted+micMuted+customMuted 启动→meter frames=58560, levels 0; 主引擎编译通过; 全量门禁待收口。
+- 证据: 主 manager 配置 systemMuted+micMuted+customMuted 启动→meter frames=58560, levels 0; 主引擎编译通过; 全量 `npm run gates` **16 PASS / 0 FAIL**。
 - 说明: 插件旧引擎尚未同步 M/S(主程序已独立); 插件退役前不双改。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
