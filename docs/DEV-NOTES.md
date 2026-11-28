@@ -986,6 +986,13 @@
 - 证据(带监听 CABLE→Realtek Digital Output): 10s 音乐 steady rate 1.00~1.02x; 5s 文件 1.3s 后 steady 1.01~1.02x; monitor on/off 均正常。启动首 0.5~0.8s 仍有设备初始化延迟, 不是持续变速。
 - 全量 `npm run gates` **16 PASS / 0 FAIL**。
 - 限制: Cue 音量/监听仍起播时生效; 首帧延迟可另做预打开优化。
+## 430. Z:\曲库 高码率压力测试(2026-11-28)
+- 素材: Z:\曲库 1050 个文件(FLAC 813, MP3 180, WAV 57; FLAC 合计约 67GB)。取 192kHz/24bit FLAC 3 首(312~353MB, 6分24秒~8分25秒)与 598MB/44.1kHz/16bit 74分钟连续 DJ Mix 做实测。
+- 环境: 主输出 CABLE Input, 监听 Realtek Digital Output; 通过主 MixerManager/CueEngine 播放, 每 2s 采样 status + 子进程 CPU/内存句柄。
+- 结果: 单首 192k/24bit 监听关 1.00~1.01x; 双首 192k/24bit 监听开 1.00~1.01x; 598MB 44.1k/16bit 监听开 1.00~1.01x. 无卡顿/变速/崩溃。
+- 资源: 单首 CPU 累计 0.59→0.83s / 15.7s, 内存 33.6→39.1MB, handles 537 稳定; 双首 CPU 0.69→1.02s, 内存 36.1→41.6MB, handles ~594; 598MB CPU 0.77→1.00s, 内存 32.2→37.3MB, handles ~565. 首帧启动约 0.9~1.0s(设备+FLAC 解码), 之后稳定。
+- 5 次快速起停全部成功, 各次 PID 回收, 无残留 VirtualMixerEngine.exe。
+- 结论: 先前 `Thread.Sleep(10)` 的定时器粒度问题已修; 高码率大文件在当前机器上可实时稳定播放。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1078,5 +1085,6 @@
 | 427 | 2026-11-28 | 实时监听输出 + 通道监听按钮 |
 | 428 | 2026-11-28 | Cue 监听/音量 + 麦克风降噪 |
 | 429 | 2026-11-28 | 同步 Cue 播放变慢/卡顿修复 |
+| 430 | 2026-11-28 | Z:\曲库 高码率压力测试 |
 
 <!-- DEV-NOTES-INDEX:END -->
