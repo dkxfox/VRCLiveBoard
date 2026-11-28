@@ -45,6 +45,19 @@ internal static class CueEngine
         }
     }
 
+    private sealed class DuckOptions
+    {
+        public bool Enabled;
+        public string MicDevice = "";
+        public double DepthDb = -15;
+        public double ThresholdDb = -35;
+        public double AttackMs = 45;
+        public double ReleaseMs = 600;
+        public double HoldMs = 650;
+        public double LookaheadMs = 8;
+        public double HpfHz = 120;
+    }
+
     public static int Run(string[] args)
     {
         if (args.Length < 5) return Usage();
@@ -52,12 +65,33 @@ internal static class CueEngine
         double leadMs;
         if (!double.TryParse(args[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out leadMs)) leadMs = 300;
         string statusPath = args[3];
-        var tracks = LoadTracks(args, 4);
+        var tracks = new List<Track>();
+        var duck = new DuckOptions();
+        int i = 4;
+        while (i + 1 < args.Length && args[i] != "--duck")
+        {
+            double gainDb;
+            if (!double.TryParse(args[i + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out gainDb)) gainDb = 0;
+            tracks.Add(LoadTrack(args[i], gainDb));
+            i += 2;
+        }
+        if (i < args.Length && args[i] == "--duck")
+        {
+            duck.Enabled = true;
+            if (i + 1 < args.Length) duck.MicDevice = args[i + 1];
+            if (i + 2 < args.Length) double.TryParse(args[i + 2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out duck.DepthDb);
+            if (i + 3 < args.Length) double.TryParse(args[i + 3], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out duck.ThresholdDb);
+            if (i + 4 < args.Length) double.TryParse(args[i + 4], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out duck.AttackMs);
+            if (i + 5 < args.Length) double.TryParse(args[i + 5], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out duck.ReleaseMs);
+            if (i + 6 < args.Length) double.TryParse(args[i + 6], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out duck.HoldMs);
+            if (i + 7 < args.Length) double.TryParse(args[i + 7], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out duck.LookaheadMs);
+            if (i + 8 < args.Length) double.TryParse(args[i + 8], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out duck.HpfHz);
+        }
         if (tracks.Count == 0) return 2;
         if (leadMs < 0) leadMs = 0;
         if (leadMs > 5000) leadMs = 5000;
         int leadFrames = (int)Math.Round(Rate * leadMs / 1000.0);
-        return Play(outputId, tracks, leadFrames, statusPath);
+        return Play(outputId, tracks, leadFrames, statusPath, duck);
     }
 
     public static int SelfTest(string[] args)
@@ -75,44 +109,69 @@ internal static class CueEngine
         var list = new List<Track>();
         for (int i = start; i + 1 < args.Length; i += 2)
         {
-            string path = args[i];
             double gainDb;
             if (!double.TryParse(args[i + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out gainDb)) gainDb = 0;
-            if (!File.Exists(path)) throw new Exception("FILE_NOT_FOUND: " + path);
-            ISampleProvider sp;
-            long durationMs;
-            if (path.EndsWith(".flac", StringComparison.OrdinalIgnoreCase))
-            {
-                // Windows Media Foundation has a built-in FLAC decoder on Win10/11;
-                // NAudio's managed AudioFileReader does not decode FLAC.
-                var mf = new MediaFoundationReader(path);
-                sp = mf.ToSampleProvider();
-                durationMs = (long)mf.TotalTime.TotalMilliseconds;
-            }
-            else
-            {
-                var reader = new AudioFileReader(path);
-                sp = reader;
-                durationMs = (long)reader.TotalTime.TotalMilliseconds;
-            }
-            if (sp.WaveFormat.SampleRate != Rate) sp = new WdlResamplingSampleProvider(sp, Rate);
-            if (sp.WaveFormat.Channels == 1) sp = new MonoToStereoSampleProvider(sp);
-            else if (sp.WaveFormat.Channels > 2) throw new Exception("UNSUPPORTED_CHANNELS: " + path);
-            list.Add(new Track { Path = path, Provider = sp, Gain = Math.Pow(10.0, gainDb / 20.0), DurationMs = durationMs });
+            list.Add(LoadTrack(args[i], gainDb));
         }
         return list;
     }
 
-    private static int Play(string outputId, List<Track> tracks, int leadFrames, string statusPath)
+    private static Track LoadTrack(string path, double gainDb)
     {
-        MMDevice dev = null;
+        if (!File.Exists(path)) throw new Exception("FILE_NOT_FOUND: " + path);
+        ISampleProvider sp;
+        long durationMs;
+        if (path.EndsWith(".flac", StringComparison.OrdinalIgnoreCase))
+        {
+            // Windows Media Foundation has a built-in FLAC decoder on Win10/11;
+            // NAudio's managed AudioFileReader does not decode FLAC.
+            var mf = new MediaFoundationReader(path);
+            sp = mf.ToSampleProvider();
+            durationMs = (long)mf.TotalTime.TotalMilliseconds;
+        }
+        else
+        {
+            var reader = new AudioFileReader(path);
+            sp = reader;
+            durationMs = (long)reader.TotalTime.TotalMilliseconds;
+        }
+        if (sp.WaveFormat.SampleRate != Rate) sp = new WdlResamplingSampleProvider(sp, Rate);
+        if (sp.WaveFormat.Channels == 1) sp = new MonoToStereoSampleProvider(sp);
+        else if (sp.WaveFormat.Channels > 2) throw new Exception("UNSUPPORTED_CHANNELS: " + path);
+        return new Track { Path = path, Provider = sp, Gain = Math.Pow(10.0, gainDb / 20.0), DurationMs = durationMs };
+    }
+
+    private static int Play(string outputId, List<Track> tracks, int leadFrames, string statusPath, DuckOptions duckOpt)
+    {
+        MMDevice dev = null, mic = null;
         WasapiOut output = null;
+        WasapiCapture micCap = null;
         try
         {
             using (var en = new MMDeviceEnumerator())
             {
                 dev = CaptureTest.FindDevice(en, DataFlow.Render, outputId);
                 if (dev == null) throw new Exception("NO_OUTPUT_DEVICE");
+                BufferedWaveProvider micBuf = null;
+                ISampleProvider micSp = null;
+                Ducker duckL = null, duckR = null;
+                if (duckOpt.Enabled)
+                {
+                    mic = CaptureTest.FindDevice(en, DataFlow.Capture, duckOpt.MicDevice);
+                    if (mic == null) throw new Exception("NO_DUCK_MIC");
+                    micCap = CreateCapture(mic);
+                    micBuf = new BufferedWaveProvider(micCap.WaveFormat) { BufferDuration = TimeSpan.FromMilliseconds(500), DiscardOnBufferOverflow = true, ReadFully = false };
+                    micCap.DataAvailable += delegate (object s, WaveInEventArgs e) { if (e.BytesRecorded > 0) micBuf.AddSamples(e.Buffer, 0, e.BytesRecorded); };
+                    micCap.StartRecording();
+                    micSp = CaptureTest.Normalize(micBuf);
+                    duckL = new Ducker(Rate); duckR = new Ducker(Rate);
+                    foreach (var d in new[] { duckL, duckR })
+                    {
+                        d.DepthDb = duckOpt.DepthDb; d.ThresholdDb = duckOpt.ThresholdDb;
+                        d.AttackMs = duckOpt.AttackMs; d.ReleaseMs = duckOpt.ReleaseMs;
+                        d.HoldMs = duckOpt.HoldMs; d.LookaheadMs = duckOpt.LookaheadMs; d.SidechainHpfHz = duckOpt.HpfHz;
+                    }
+                }
                 var outFmt = WaveFormat.CreateIeeeFloatWaveFormat(Rate, Channels);
                 var outBuf = new BufferedWaveProvider(outFmt) { BufferDuration = TimeSpan.FromSeconds(1), DiscardOnBufferOverflow = true };
                 if (leadFrames > 0)
@@ -128,6 +187,7 @@ internal static class CueEngine
                 Timer statusTimer = null;
                 if (!string.IsNullOrEmpty(statusPath)) { status.Write(statusPath); statusTimer = new Timer(delegate { status.Write(statusPath); }, null, 200, 200); }
                 var tmp = new float[Rate * Channels / 100];
+                var micF = new float[tmp.Length];
                 var mix = new float[tmp.Length];
                 long frames = 0;
                 while (true)
@@ -142,12 +202,23 @@ internal static class CueEngine
                         if (got < tmp.Length) tr.Done = true;
                         any = true;
                     }
+                    if (micSp != null) ReadSome(micSp, micF, micF.Length);
                     double chunkPeak = 0;
-                    for (int i = 0; i < mix.Length; i++)
+                    for (int i = 0; i < mix.Length; i += 2)
                     {
-                        if (Math.Abs(mix[i]) > chunkPeak) chunkPeak = Math.Abs(mix[i]);
-                        if (mix[i] > 1f) mix[i] = 1f;
-                        else if (mix[i] < -1f) mix[i] = -1f;
+                        float ml = mix[i], mr = mix[i + 1];
+                        if (duckL != null)
+                        {
+                            float g1, g2;
+                            float micMono = (micF[i] + micF[i + 1]) * 0.5f;
+                            ml = duckL.Process(ml, micMono, out g1);
+                            mr = duckR.Process(mr, micMono, out g2);
+                        }
+                        if (Math.Abs(ml) > chunkPeak) chunkPeak = Math.Abs(ml);
+                        if (Math.Abs(mr) > chunkPeak) chunkPeak = Math.Abs(mr);
+                        if (ml > 1f) ml = 1f; else if (ml < -1f) ml = -1f;
+                        if (mr > 1f) mr = 1f; else if (mr < -1f) mr = -1f;
+                        mix[i] = ml; mix[i + 1] = mr;
                     }
                     var bytes = new byte[mix.Length * sizeof(float)];
                     Buffer.BlockCopy(mix, 0, bytes, 0, bytes.Length);
@@ -158,6 +229,7 @@ internal static class CueEngine
                     Thread.Sleep(10);
                 }
                 output.Stop();
+                try { if (micCap != null) micCap.StopRecording(); } catch { }
                 status.Stop();
                 if (statusTimer != null) statusTimer.Dispose();
                 status.Write(statusPath);
@@ -167,8 +239,16 @@ internal static class CueEngine
         finally
         {
             try { if (output != null) output.Dispose(); } catch { }
+            try { if (micCap != null) micCap.Dispose(); } catch { }
+            try { if (mic != null) mic.Dispose(); } catch { }
             try { if (dev != null) dev.Dispose(); } catch { }
         }
+    }
+
+    private static WasapiCapture CreateCapture(MMDevice dev)
+    {
+        try { return new WasapiCapture(dev, true, 10); }
+        catch { return new WasapiCapture(dev); }
     }
 
     private static int WriteMix(string outWav, string resultJson, List<Track> tracks)

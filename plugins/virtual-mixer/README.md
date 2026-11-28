@@ -26,12 +26,14 @@
     npm run test:mixer:cable
     npm run test:mixer:latency
     npm run test:mixer:cue
+    npm run test:mixer:cueapi
 
 - test:mixer：版本/设备/离线混音/闪避/插件桥（不占用真实音频）
 - capture：真实采集到 WAV（占用麦克风约 1.5s，不打开扬声器）
 - cable：向 CABLE Input 注入 440Hz，从 CABLE Output 采集（仅虚拟线）
 - latency：测量 CABLE Input→CABLE Output 往返延迟（当前约 100–125ms）
 - cue：两条 WAV 同一输出时钟起播，验证起播偏差（实测 0ms）
+- cueapi：带引号路径 + 麦克风回避参数转发（无需声卡）
 
 ## 实时启停与手动调整
 
@@ -62,7 +64,7 @@ start() / stop() 也可由插件 API 调用。修改数值后，控制台保存�
 
 ### 同步 Cue
 
-A/B 卡片底部新增 Cue 两行：填文件路径、可单独 `×` 清空；`同步起播`/`停止 Cue`/`清空 Cue`；进度条和 **Cue 峰值 dB 电平表**按引擎 status 更新。空槽不会播放。若选择“联动运镜”，会先 Import 相机预设，再在 cue lead 后调 camera-path `playNow`。camera-path 已升 0.4.1，需要重新授权。
+A/B 卡片底部新增 Cue 两行：填文件路径、可单独 `×` 清空；`同步起播`/`停止 Cue`/`清空 Cue`；进度条和 **Cue 峰值 dB 电平表**按引擎 status 更新。支持 Windows“复制文件地址”的带引号路径；**麦克风回避**开关默认关闭。空槽不会播放。若选择“联动运镜”，会先 Import 相机预设，再在 cue lead 后调 camera-path `playNow`。camera-path 已升 0.4.1，需要重新授权。
 
 API：Cue 支持 WAV/MP3/FLAC/AIFF/WMA；FLAC 走 Windows Media Foundation（Win10/11 自带）。`cue({ files:[{path,gainDb}], leadMs })` 多条文件在同一 48kHz 输出时钟起播；`cue` 整体替换上一组，`cueStop` 只停，`cueClear` 停止并清空，`cueStatus` 返回运行/进度。
 

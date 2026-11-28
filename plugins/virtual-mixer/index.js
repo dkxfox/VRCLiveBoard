@@ -74,11 +74,18 @@ function buildLiveConfig() {
 function liveStatusPath() { return path.join(__dirname, 'data', 'live-status.json'); }
 function cueStatusPath() { return path.join(__dirname, 'data', 'cue-status.json'); }
 function stopCue() { if (cueChild) { try { cueChild.kill(); } catch (e) {} cueChild = null; } }
+function cleanAudioPath(raw) {
+  var p = String(raw == null ? '' : raw).trim();
+  if ((p.length >= 2) && ((p[0] === '"' && p[p.length - 1] === '"') || (p[0] === "'" && p[p.length - 1] === "'"))) p = p.slice(1, -1).trim();
+  if (/^file:\/\//i.test(p)) { try { p = decodeURIComponent(p.replace(/^file:\/\/\/?/i, '')); } catch (e) {} }
+  return p;
+}
+
 function normalizeCueFiles(input) {
   var arr = input && Array.isArray(input.files) ? input.files : [];
   var out = [];
   arr.forEach(function (it) {
-    var p = String(it && it.path || it || '');
+    var p = cleanAudioPath(it && it.path || it || '');
     if (!p) return;
     if (!/\.(wav|mp3|flac|aiff?|wma)$/i.test(p)) throw new Error('UNSUPPORTED_FILE: ' + p);
     if (!ctx.fs || !require('fs').existsSync(p)) throw new Error('FILE_NOT_FOUND: ' + p);
@@ -142,7 +149,7 @@ module.exports = function (c) {
           stage: 'S3',
           running: !!(liveChild && liveChild.exitCode === null),
           cue: cueInfo ? { running: !!(cueChild && cueChild.exitCode === null), files: cueInfo.files, startedAt: cueInfo.startedAt } : null,
-          engine: { path: enginePath(), exists: exists, version: '0.6.1' },
+          engine: { path: enginePath(), exists: exists, version: '0.6.2' },
           channels: [
             { id: 'system', name: '系统声音', denoise: 'off', compressor: 'off' },
             { id: 'mic', name: '麦克风', denoise: 'off', compressor: 'off' },
@@ -224,6 +231,17 @@ module.exports = function (c) {
         await ctx.fs.write(cueStatusPath(), '{}');
         const cargs = ['--cue', output, String(leadMs), cueStatusPath()];
         files.forEach(function (f) { cargs.push(f.path); cargs.push(String(f.gainDb)); });
+        if (args.duck) {
+          cargs.push('--duck');
+          cargs.push(String(ctx.config.micCaptureDevice || ''));
+          cargs.push(String(Number(ctx.config.duckDepthDb) || -15));
+          cargs.push(String(Number(ctx.config.duckThresholdDb) || -35));
+          cargs.push(String(Number(ctx.config.duckAttackMs) || 45));
+          cargs.push(String(Number(ctx.config.duckReleaseMs) || 600));
+          cargs.push(String(Number(ctx.config.duckHoldMs) || 650));
+          cargs.push(String(Number(ctx.config.duckLookaheadMs) || 8));
+          cargs.push(String(Number(ctx.config.sidechainHpfHz) || 120));
+        }
         let child;
         try { child = ctx.exec.run(enginePath(), cargs); } catch (e) { throw new Error('CUE_START_FAILED: ' + e.message); }
         cueChild = child;

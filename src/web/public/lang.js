@@ -107,3 +107,6 @@ advTitle:'Advanced (usually untouched)', portsOsc:'OSC send port:', portsApply:'
 
 // Cue 运镜联动(2026-11-28)
 (function(){var N=JSON.parse("{\"zh-CN\":{\"vmCueCamera\":\"联动运镜\",\"vmCueCameraNone\":\"不联动\",\"vmCueCameraImporting\":\"准备运镜...\",\"vmCueCameraFail\":\"运镜失败: \"},\"zh-TW\":{\"vmCueCamera\":\"聯動運鏡\",\"vmCueCameraNone\":\"不聯動\",\"vmCueCameraImporting\":\"準備運鏡...\",\"vmCueCameraFail\":\"運鏡失敗: \"},\"en\":{\"vmCueCamera\":\"Link camera preset\",\"vmCueCameraNone\":\"None\",\"vmCueCameraImporting\":\"Preparing camera...\",\"vmCueCameraFail\":\"Camera failed: \"}}");for(var L in N){for(var k in N[L]){(window.VRCB_LANG[L]=window.VRCB_LANG[L]||{})[k]=N[L][k];}}})();
+
+// Cue 麦克风回避(2026-11-28)
+(function(){var N=JSON.parse("{\"zh-CN\":{\"vmCueDuck\":\"麦克风回避\",\"vmCueDuckHint\":\"Cue 播放时麦克风一说话自动让路(默认关)\"},\"zh-TW\":{\"vmCueDuck\":\"麥克風迴避\",\"vmCueDuckHint\":\"Cue 播放時麥克風一說話自動讓路(預設關)\"},\"en\":{\"vmCueDuck\":\"Mic duck\",\"vmCueDuckHint\":\"Duck the cue when the mic speaks (default off)\"}}");for(var L in N){for(var k in N[L]){(window.VRCB_LANG[L]=window.VRCB_LANG[L]||{})[k]=N[L][k];}}})();
