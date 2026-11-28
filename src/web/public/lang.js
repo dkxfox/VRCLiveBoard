@@ -134,3 +134,6 @@ advTitle:'Advanced (usually untouched)', portsOsc:'OSC send port:', portsApply:'
 
 // 通道送跳线/主输出增益(2026-11-28)
 (function(){var N=JSON.parse("{\"zh-CN\":{\"vmSend\":\"跳线\",\"vmMasterGain\":\"主输出\"},\"zh-TW\":{\"vmSend\":\"跳線\",\"vmMasterGain\":\"主輸出\"},\"en\":{\"vmSend\":\"Cable\",\"vmMasterGain\":\"Master\"}}");for(var L in N){for(var k in N[L]){(window.VRCB_LANG[L]=window.VRCB_LANG[L]||{})[k]=N[L][k];}}})();
+
+// 混音台预设/CABLE 检测(2026-11-28)
+(function(){var N=JSON.parse("{\"zh-CN\":{\"vmPresetMusic\":\"音乐\",\"vmPresetRadio\":\"电台\",\"vmPresetSing\":\"弹唱\",\"vmNoCable\":\"未检测到 CABLE 虚拟跳线；请安装 VB-CABLE 后重试\"},\"zh-TW\":{\"vmPresetMusic\":\"音樂\",\"vmPresetRadio\":\"電台\",\"vmPresetSing\":\"彈唱\",\"vmNoCable\":\"未偵測到 CABLE 虛擬跳線；請安裝 VB-CABLE 後重試\"},\"en\":{\"vmPresetMusic\":\"Music\",\"vmPresetRadio\":\"Radio\",\"vmPresetSing\":\"Sing\",\"vmNoCable\":\"CABLE virtual cable not detected; install VB-CABLE and retry\"}}");for(var L in N){for(var k in N[L]){(window.VRCB_LANG[L]=window.VRCB_LANG[L]||{})[k]=N[L][k];}}})();

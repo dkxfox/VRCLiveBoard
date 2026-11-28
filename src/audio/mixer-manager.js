@@ -47,7 +47,8 @@ const DEFAULTS = {
   sidechainHpfHz: 120,
   cueDuck: false,
   cueLeadMs: 500,
-  layout: 'B'
+  layout: 'B',
+  preset: 'custom'
 };
 
 function controlPath() { return path.join(DATA_DIR, 'live-control.json'); }
@@ -92,6 +93,7 @@ class MixerManager {
     c.cueDuck = !!c.cueDuck;
     c.cueLeadMs = clamp(c.cueLeadMs, 0, 5000); if (c.cueLeadMs === null) c.cueLeadMs = 500;
     if (c.layout !== 'A' && c.layout !== 'B') c.layout = 'B';
+    if (!c.preset) c.preset = 'custom';
     c.monitorOutputDevice = c.monitorOutputDevice || '';
     c.monitorSystem = !!c.monitorSystem;
     c.monitorMic = !!c.monitorMic;
@@ -137,6 +139,17 @@ class MixerManager {
     keys.forEach(function (k) { if (patch[k] !== undefined) out[k] = (k === 'masterGain') ? (clamp(patch[k], 0, 2) === null ? 1 : clamp(patch[k], 0, 2)) : !!patch[k]; });
     if (Object.keys(out).length) this.setConfig(out);
     return this.getConfig();
+  }
+
+  applyPreset(name) {
+    var presets = {
+      music: { preset: 'music', duckEnabled: false, micDenoise: false },
+      radio: { preset: 'radio', duckEnabled: true, micDenoise: true, duckDepthDb: -15, duckThresholdDb: -35, duckAttackMs: 45, duckReleaseMs: 600, duckHoldMs: 650, duckLookaheadMs: 8, sidechainHpfHz: 120 },
+      sing: { preset: 'sing', duckEnabled: false, micDenoise: false }
+    };
+    if (!presets[name]) throw new Error('BAD_PRESET: ' + name);
+    this.setConfig(presets[name]);
+    return { ok: true, preset: name, config: this.getConfig() };
   }
 
   async setCueGain(gain) {

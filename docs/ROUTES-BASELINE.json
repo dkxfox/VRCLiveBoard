@@ -505,6 +505,12 @@
       "p": "/api/mixer/cue/gain",
       "level": 0,
       "note": "Cue 播放中实时调整音量; manager 写 cue-control.json, CueEngine 100ms 轮询"
+    },
+    {
+      "m": "POST",
+      "p": "/api/mixer/preset",
+      "level": 0,
+      "note": "应用 music/radio/sing 预设; 只改闪避/降噪参数"
     }
   ]
 }

@@ -1016,6 +1016,11 @@
 - CueEngine 新增 `--control <path>`: 100ms 轮询 `cue-control.json` 的 `gain`; manager 新增 `setCueGain`, UI Cue 音量滑杆 oninput 防抖调用 `/api/mixer/cue/gain`, 播放中实时改音量。
 - 实测: 5s 440Hz cue gain 1→0.2 后 status level 0.29999→0.05999, 子进程 pid 不变; Cue 音频线程继续。
 - 全量 `npm run gates` **16 PASS / 0 FAIL**; 已推送 `3638017`。
+## 435. 预设 + CABLE 检测提示(2026-11-28)
+- 主页面新增“音乐 / 电台 / 弹唱”预设按钮: 音乐关闭闪避+降噪, 电台打开闪避+降噪(恢复默认参数), 弹唱关闭闪避+降噪; 走 `/api/mixer/preset`, manager 一次 setConfig 并写 control。
+- 设备枚举后检测 CABLE Input + CABLE Output; 未检测到虚拟跳线时页面提示安装 VB-CABLE, 不阻止用户手选其它虚拟设备。
+- 预设目前只覆盖 duck/denoise 参数; mic 压缩与 RNNoise 挡位仍未实现。
+- 验证: route 91/91, i18n/硬编码检查通过; 全量 gates 待收口。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1113,5 +1118,6 @@
 | 432 | 2026-11-28 | Cue 运镜“不使用”选项 |
 | 433 | 2026-11-28 | 通道送跳线/仅监听 + 主输出增益/静音 |
 | 434 | 2026-11-28 | 布局持久化/低功耗暂停 + Cue 运行中音量 |
+| 435 | 2026-11-28 | 预设 + CABLE 检测提示 |
 
 <!-- DEV-NOTES-INDEX:END -->

@@ -542,6 +542,13 @@ function effPluginSec() {
       } catch (e) { return json(res, 400, { ok: false, error: String(e.message || e) }); }
     });
   });
+  on('POST', '/api/mixer/preset', function (req, res, url) {
+    if (needMixer(res)) return;
+    readBody(req, function (b) {
+      try { var body = JSON.parse(b || '{}'); return json(res, 200, mixer.applyPreset(body.name || body.preset)); }
+      catch (e) { return json(res, 400, { ok: false, error: String(e.message || e) }); }
+    });
+  });
   on('POST', '/api/mixer/channel', function (req, res, url) {
     if (needMixer(res)) return;
     readBody(req, function (b) {
