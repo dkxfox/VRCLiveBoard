@@ -898,7 +898,7 @@
 - 延迟测量: 探针从 5ms 改 1ms 测试无改善(99.9–126.3ms), 说明当前瓶颈不在探针缓冲; 已恢复 5ms。CABLE 往返约 112–126ms, 明显高于 100ms 目标。
 - 结论: 继续压延迟需要换音频路径(直接 AudioClient/更低层), 或接受 VB-CABLE/Windows 共享模式的地板; VRChat/VD 自身延迟还需单测。
 - 用户场景: 弹唱重点不是监听延迟, 而是伴奏/cue 同步; 唱歌需要低延迟监听/返送。下一步先做 cue 同步播放, 再评估本地监听路径。
-- 验证: test:mixer 21 PASS; test:mixer:latency 2 PASS; 全量 gates 待收口复跑。
+- 验证: test:mixer 21 PASS; test:mixer:latency 2 PASS; 全量 gates **16 PASS / 0 FAIL**。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
