@@ -116,3 +116,6 @@ advTitle:'Advanced (usually untouched)', portsOsc:'OSC send port:', portsApply:'
 
 // 主混音台未就绪(2026-11-28)
 (function(){var N=JSON.parse("{\"zh-CN\":{\"mixerNotReady\":\"混音台引擎未就绪（主程序资源缺失或启动失败）。\"},\"zh-TW\":{\"mixerNotReady\":\"混音台引擎尚未就緒（主程式資源遺失或啟動失敗）。\"},\"en\":{\"mixerNotReady\":\"Mixer engine is not ready (main-app resource missing or failed to start).\"}}");for(var L in N){for(var k in N[L]){(window.VRCB_LANG[L]=window.VRCB_LANG[L]||{})[k]=N[L][k];}}})();
+
+// 主混音台页头(2026-11-28)
+(function(){var N=JSON.parse("{\"zh-CN\":{\"mixerPageDesc\":\"把系统声音、麦克风和自定义输入混成一路，送到虚拟跳线；VRChat 的麦克风选跳线的录音端即可。\",\"mixerDetected\":\"已检测\",\"mixerNone\":\"不使用\"},\"zh-TW\":{\"mixerPageDesc\":\"把系統聲音、麥克風和自訂輸入混成一路，送到虛擬跳線；VRChat 的麥克風選跳線的錄音端即可。\",\"mixerDetected\":\"已偵測\",\"mixerNone\":\"不使用\"},\"en\":{\"mixerPageDesc\":\"Mix system audio, microphone and custom inputs into one virtual-cable feed; select the cable recording side as VRChat microphone.\",\"mixerDetected\":\"detected\",\"mixerNone\":\"not used\"}}");for(var L in N){for(var k in N[L]){(window.VRCB_LANG[L]=window.VRCB_LANG[L]||{})[k]=N[L][k];}}})();

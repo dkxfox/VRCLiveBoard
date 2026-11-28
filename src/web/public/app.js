@@ -1550,12 +1550,16 @@ function initMixerPage(){
   if(_mixerPageLoaded)return;
   var host=$('mixerPage');if(!host)return;
   _mixerPageLoaded=true;
-  host.innerHTML='<div class="sub">'+tr('plgLoading')+'</div>';
+  host.innerHTML='<div class="mxWrap"><div class="mxPageHead"><div><h1 class="mxTitle">'+tr('tabMixer')+'</h1><p class="mxDesc">'+tr('mixerPageDesc')+'</p></div><div class="mxActions"><span class="mxPill" id="mxStatePill">'+tr('vmStopped')+'</span></div></div><div class="mxRoute"><div><div class="mxRl">'+tr('vmOutput')+'</div><div class="mxRv" id="mxOut">—</div></div><div class="mxArrow">→</div><div><div class="mxRl">VRChat '+tr('vmMic')+'</div><div class="mxRv">CABLE Output</div></div><div class="mxArrow">·</div><div><div class="mxRl">'+tr('vmSystem')+'</div><div class="mxRv" id="mxSys">—</div></div></div><div class="sub" id="mxMsg" style="min-height:16px;color:var(--warn)"></div><div id="mixerBody"></div></div><style>.mxWrap{padding:2px 0 4px}.mxPageHead{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:2px 0 12px}.mxTitle{font-size:24px;margin:0 0 6px;letter-spacing:.4px}.mxDesc{margin:0;color:var(--muted);font-size:12.5px;line-height:1.7;max-width:760px}.mxActions{display:flex;gap:8px;align-items:center}.mxPill{font-size:11.5px;border:1px solid var(--border2);background:var(--deep);padding:6px 10px;border-radius:999px;color:var(--muted)}.mxPill.on{color:var(--ok);border-color:#2c6a4f;background:rgba(61,220,132,.08)}.mxRoute{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;margin:0 0 12px;background:linear-gradient(90deg,rgba(61,220,132,.08),rgba(59,130,246,.06));border:1px solid rgba(61,220,132,.25);border-radius:10px}.mxRl{font-size:11px;color:var(--muted);letter-spacing:.4px}.mxRv{font-size:13px;font-weight:600;margin-top:2px}.mxArrow{color:var(--faint);font-size:15px}#mixerBody .vmHead{margin-top:0}</style>';
   fetch('/api/mixer/status').then(function(r){return r.json();}).then(function(s){
-    if(!s||!s.ok){host.innerHTML='<div class="sub" style="color:var(--warn)">'+tr('mixerNotReady')+'</div>';return;}
-    host.innerHTML='';
-    plgVirtualMixer({id:'virtual-mixer',_mixerAdapter:mixerMainAdapter()},host);
-  }).catch(function(e){host.innerHTML='<div class="sub" style="color:var(--warn)">'+String((e&&e.message)||e)+'</div>';});
+    if(!s||!s.ok){host.querySelector('#mxMsg').textContent=tr('mixerNotReady');return;}
+    var c=s.config||{};
+    var out=host.querySelector('#mxOut'),sys=host.querySelector('#mxSys'),pill=host.querySelector('#mxStatePill');
+    if(out)out.textContent=c.masterOutputDevice||'—';
+    if(sys)sys.textContent=(c.systemCaptureDevice&&c.systemCaptureDevice!=='__none__')?c.systemCaptureDevice:tr('mixerNone');
+    if(pill){pill.textContent=s.running?tr('vmRunning'):tr('vmStopped');pill.className='mxPill'+(s.running?' on':'');}
+    plgVirtualMixer({id:'virtual-mixer',_mixerAdapter:mixerMainAdapter()},host.querySelector('#mixerBody'));
+  }).catch(function(e){var m=host.querySelector('#mxMsg');if(m)m.textContent=String((e&&e.message)||e);});
 }
 document.addEventListener('click',function(ev){try{var tabEl=ev.target&&ev.target.closest?ev.target.closest('#tabs .tab'):null;if(tabEl&&tabEl.dataset.tab==='mixer')initMixerPage();}catch(e){}});
 setTimeout(function(){try{var p=$('tab-mixer');if(p&&!p.hidden)initMixerPage();}catch(e){}},0);

@@ -941,6 +941,10 @@
 - 主控制台 Tab 的 `initMixerPage` 改为读 `/api/mixer/status`, 用主 API adapter 调 `plgVirtualMixer`; 混音台不再要求 virtual-mixer 插件启用/授权。
 - 证据: 主 API status/devices 实测; MixerManager 直接 start→meter frames>0→dispose; headless Edge 打开 ?tab=mixer, #mixerPage/.vmStage 渲染; 全量 `npm run gates` **16 PASS / 0 FAIL**。
 - 仍待: 主页面按开发初期 A/B 视觉定稿重绘; cue/camera 仍部分走插件; 插件退役最后做(迁移测试后)。
+## 422. 主混音台页面视觉壳(2026-11-28, M2.2 开始)
+- 主 Tab 新增页面头(混音台标题/说明/引擎状态 pill) + 路由条(主输出→VRChat mic→系统来源), 使用开发初期视觉稿的深色卡片/绿色路由风格。
+- 功能主体继续复用当前 A/B 组件; 下一片按 mockup 重做 4+1 通道卡片(系统/麦克风/自定义/主输出)、竖向电平/推子、Cue 卡片。
+- 验证: app.js 语法/控件/I18N 检查通过; 全量 gates 待提交后复跑。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1025,5 +1029,6 @@
 | 419 | 2026-11-28 | Cue 麦克风回避 + 智能路径 |
 | 420 | 2026-11-28 | 主控制台“混音台”Tab 第一片 |
 | 421 | 2026-11-28 | 主程序混音台后端迁移 |
+| 422 | 2026-11-28 | 主混音台页面视觉壳 |
 
 <!-- DEV-NOTES-INDEX:END -->
