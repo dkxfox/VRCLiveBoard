@@ -1025,7 +1025,7 @@
 - Cue A/B 每行新增 `-24~+12dB` 独立增益与 `…` 选择文件按钮; 起播时按行 gainDb 送 CueEngine。
 - 新增 `POST /api/mixer/pick-file`(Electron dialog, 仅桌面壳): 取消返回 canceled; 非 Electron/纯 Node 返回 501 PICKER_UNAVAILABLE, 不影响手输路径。
 - 说明: 文件选择走主进程原生对话框, 只返回用户选中的路径, 不接受任意路径参数。
-- 验证: route 92/92, i18n/硬编码通过; 全量 gates 待收口。
+- 验证: route 92/92, i18n/硬编码通过; 全量 `npm run gates` **16 PASS / 0 FAIL**; 已推送 `277b0e1`。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
