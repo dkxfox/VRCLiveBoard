@@ -993,6 +993,12 @@
 - 资源: 单首 CPU 累计 0.59→0.83s / 15.7s, 内存 33.6→39.1MB, handles 537 稳定; 双首 CPU 0.69→1.02s, 内存 36.1→41.6MB, handles ~594; 598MB CPU 0.77→1.00s, 内存 32.2→37.3MB, handles ~565. 首帧启动约 0.9~1.0s(设备+FLAC 解码), 之后稳定。
 - 5 次快速起停全部成功, 各次 PID 回收, 无残留 VirtualMixerEngine.exe。
 - 结论: 先前 `Thread.Sleep(10)` 的定时器粒度问题已修; 高码率大文件在当前机器上可实时稳定播放。
+## 431. 并发 + 低配置 CPU 压力测试(2026-11-28)
+- 并发场景: LiveEngine(麦克风+降噪+闪避+监听) + 双首 192kHz/24bit FLAC Cue + Cue 监听, 主输出 CABLE, 监听 Realtek, 24s. Cue rate 0.98~1.00x, LiveEngine rate 0.98~1.01x; Live CPU 0.86s/24s, Cue CPU 1.47s/24s; Live 内存 24.5→29.4MB, Cue 36.4→41.7MB; 无卡顿/崩溃。
+- 低配置模拟: 同一并发负载, 启动后把 LiveEngine 与 CueEngine 两个进程都固定到 **1 个逻辑核**(ProcessorAffinity=1) 并设 **BelowNormal** 优先级(本机 9800X3D, 16 逻辑核).
+- 结果: Cue rate 0.98~1.00x(偶发 1.07 为采样窗口误差), LiveEngine rate 0.98~1.00x; Live CPU 0.89s/25s, Cue CPU 1.45s/25s; 无错误、无持续变速。
+- 说明: 单核 + 低优先级是比“低配电脑”更严格的 CPU 上限模拟(总 CPU 池约 6.25%); 音频仍稳定。
+- 首帧仍需约 1s 设备/FLAC 初始化; 之后稳定。临时测试脚本与进程已清理。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1086,5 +1092,6 @@
 | 428 | 2026-11-28 | Cue 监听/音量 + 麦克风降噪 |
 | 429 | 2026-11-28 | 同步 Cue 播放变慢/卡顿修复 |
 | 430 | 2026-11-28 | Z:\曲库 高码率压力测试 |
+| 431 | 2026-11-28 | 并发 + 低配置 CPU 压力测试 |
 
 <!-- DEV-NOTES-INDEX:END -->
