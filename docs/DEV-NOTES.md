@@ -934,7 +934,7 @@
 - 用户确认: 主控制台新增“混音台”Tab; 视觉按开发初期 A/B 定稿; 插件在迁移测试完成后最后退役; Cue 麦克风回避默认关。
 - 改动: index.html 新增 mixer tab + #tab-mixer/#mixerPage; lang.js 增 tabMixer/mixerNeedsPlugin; app.js 新增 initMixerPage, 复用现有 plgVirtualMixer A/B UI; 插件未启用/未授权时显示迁移提示。
 - 当前仍是过渡: 页面走插件 API(/api/plugins/call)，引擎/配置尚未迁入主程序；下一步 M2.1 引擎归主程序 + 主 API。
-- 验证: app.js 语法通过; gates:fast 通过(动态 id 仅 WARN); 全量 gates 待收口复跑。
+- 验证: app.js 语法通过; gates:fast 通过(动态 id 仅 WARN); 全量 gates **16 PASS / 0 FAIL**。另修一处 `var t` 遮蔽 `tr` 的 GI18NU 失败。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
