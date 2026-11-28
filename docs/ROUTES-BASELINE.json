@@ -511,6 +511,12 @@
       "p": "/api/mixer/preset",
       "level": 0,
       "note": "应用 music/radio/sing 预设; 只改闪避/降噪参数"
+    },
+    {
+      "m": "POST",
+      "p": "/api/mixer/pick-file",
+      "level": 0,
+      "note": "主页面 Cue 文件选择器; 调用 Electron 原生打开对话框, 取消返回 canceled"
     }
   ]
 }

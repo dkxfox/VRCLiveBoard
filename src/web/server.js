@@ -579,6 +579,18 @@ function effPluginSec() {
     if (needMixer(res)) return;
     mixer.meter().then(function (r) { json(res, 200, r); }).catch(function (e) { json(res, 500, { ok: false, error: String(e.message || e) }); });
   });
+  on('POST', '/api/mixer/pick-file', function (req, res, url) {
+    if (needMixer(res)) return;
+    var electron;
+    try { electron = require('electron'); } catch (e) { electron = null; }
+    if (!electron || !electron.dialog) return json(res, 501, { ok: false, error: 'PICKER_UNAVAILABLE' });
+    try {
+      electron.dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'flac', 'aif', 'aiff', 'wma'] }] }).then(function (r) {
+        if (r.canceled || !r.filePaths || !r.filePaths.length) return json(res, 200, { ok: false, canceled: true });
+        return json(res, 200, { ok: true, path: r.filePaths[0] });
+      }).catch(function (e) { json(res, 500, { ok: false, error: String(e.message || e) }); });
+    } catch (e) { return json(res, 500, { ok: false, error: String(e.message || e) }); }
+  });
   on('POST', '/api/mixer/cue', function (req, res, url) {
     if (needMixer(res)) return;
     readBody(req, function (b) {

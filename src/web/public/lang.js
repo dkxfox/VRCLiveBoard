@@ -137,3 +137,6 @@ advTitle:'Advanced (usually untouched)', portsOsc:'OSC send port:', portsApply:'
 
 // 混音台预设/CABLE 检测(2026-11-28)
 (function(){var N=JSON.parse("{\"zh-CN\":{\"vmPresetMusic\":\"音乐\",\"vmPresetRadio\":\"电台\",\"vmPresetSing\":\"弹唱\",\"vmNoCable\":\"未检测到 CABLE 虚拟跳线；请安装 VB-CABLE 后重试\"},\"zh-TW\":{\"vmPresetMusic\":\"音樂\",\"vmPresetRadio\":\"電台\",\"vmPresetSing\":\"彈唱\",\"vmNoCable\":\"未偵測到 CABLE 虛擬跳線；請安裝 VB-CABLE 後重試\"},\"en\":{\"vmPresetMusic\":\"Music\",\"vmPresetRadio\":\"Radio\",\"vmPresetSing\":\"Sing\",\"vmNoCable\":\"CABLE virtual cable not detected; install VB-CABLE and retry\"}}");for(var L in N){for(var k in N[L]){(window.VRCB_LANG[L]=window.VRCB_LANG[L]||{})[k]=N[L][k];}}})();
+
+// Cue 文件选择(2026-11-28)
+(function(){var N=JSON.parse("{\"zh-CN\":{\"vmPickFile\":\"选择文件\"},\"zh-TW\":{\"vmPickFile\":\"選擇檔案\"},\"en\":{\"vmPickFile\":\"Choose file\"}}");for(var L in N){for(var k in N[L]){(window.VRCB_LANG[L]=window.VRCB_LANG[L]||{})[k]=N[L][k];}}})();

@@ -1021,6 +1021,11 @@
 - 设备枚举后检测 CABLE Input + CABLE Output; 未检测到虚拟跳线时页面提示安装 VB-CABLE, 不阻止用户手选其它虚拟设备。
 - 预设目前只覆盖 duck/denoise 参数; mic 压缩与 RNNoise 挡位仍未实现。
 - 验证: route 91/91, i18n/硬编码检查通过; 全量 `npm run gates` **16 PASS / 0 FAIL**; 已推送 `33ed4eb`。
+## 436. Cue 文件选择器 + 每行增益(2026-11-28)
+- Cue A/B 每行新增 `-24~+12dB` 独立增益与 `…` 选择文件按钮; 起播时按行 gainDb 送 CueEngine。
+- 新增 `POST /api/mixer/pick-file`(Electron dialog, 仅桌面壳): 取消返回 canceled; 非 Electron/纯 Node 返回 501 PICKER_UNAVAILABLE, 不影响手输路径。
+- 说明: 文件选择走主进程原生对话框, 只返回用户选中的路径, 不接受任意路径参数。
+- 验证: route 92/92, i18n/硬编码通过; 全量 gates 待收口。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1119,5 +1124,6 @@
 | 433 | 2026-11-28 | 通道送跳线/仅监听 + 主输出增益/静音 |
 | 434 | 2026-11-28 | 布局持久化/低功耗暂停 + Cue 运行中音量 |
 | 435 | 2026-11-28 | 预设 + CABLE 检测提示 |
+| 436 | 2026-11-28 | Cue 文件选择器 + 每行增益 |
 
 <!-- DEV-NOTES-INDEX:END -->
