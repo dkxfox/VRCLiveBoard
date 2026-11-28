@@ -1020,7 +1020,7 @@
 - 主页面新增“音乐 / 电台 / 弹唱”预设按钮: 音乐关闭闪避+降噪, 电台打开闪避+降噪(恢复默认参数), 弹唱关闭闪避+降噪; 走 `/api/mixer/preset`, manager 一次 setConfig 并写 control。
 - 设备枚举后检测 CABLE Input + CABLE Output; 未检测到虚拟跳线时页面提示安装 VB-CABLE, 不阻止用户手选其它虚拟设备。
 - 预设目前只覆盖 duck/denoise 参数; mic 压缩与 RNNoise 挡位仍未实现。
-- 验证: route 91/91, i18n/硬编码检查通过; 全量 gates 待收口。
+- 验证: route 91/91, i18n/硬编码检查通过; 全量 `npm run gates` **16 PASS / 0 FAIL**; 已推送 `33ed4eb`。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
