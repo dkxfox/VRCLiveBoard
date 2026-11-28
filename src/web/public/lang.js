@@ -110,3 +110,6 @@ advTitle:'Advanced (usually untouched)', portsOsc:'OSC send port:', portsApply:'
 
 // Cue 麦克风回避(2026-11-28)
 (function(){var N=JSON.parse("{\"zh-CN\":{\"vmCueDuck\":\"麦克风回避\",\"vmCueDuckHint\":\"Cue 播放时麦克风一说话自动让路(默认关)\"},\"zh-TW\":{\"vmCueDuck\":\"麥克風迴避\",\"vmCueDuckHint\":\"Cue 播放時麥克風一說話自動讓路(預設關)\"},\"en\":{\"vmCueDuck\":\"Mic duck\",\"vmCueDuckHint\":\"Duck the cue when the mic speaks (default off)\"}}");for(var L in N){for(var k in N[L]){(window.VRCB_LANG[L]=window.VRCB_LANG[L]||{})[k]=N[L][k];}}})();
+
+// 主控制台混音台 Tab(M2 过渡, 2026-11-28)
+(function(){var N=JSON.parse("{\"zh-CN\":{\"tabMixer\":\"混音台\",\"mixerNeedsPlugin\":\"混音台引擎正在迁移到主程序；当前请先在“插件”页启用并授权“虚拟混音台”。\"},\"zh-TW\":{\"tabMixer\":\"混音台\",\"mixerNeedsPlugin\":\"混音台引擎正在遷移到主程式；目前請先在「外掛」頁啟用並授權「虛擬混音台」。\"},\"en\":{\"tabMixer\":\"Mixer\",\"mixerNeedsPlugin\":\"The mixer engine is being migrated into the main app; for now enable and authorize \\\"Virtual Mixer\\\" on the Plugins tab.\"}}");for(var L in N){for(var k in N[L]){(window.VRCB_LANG[L]=window.VRCB_LANG[L]||{})[k]=N[L][k];}}})();

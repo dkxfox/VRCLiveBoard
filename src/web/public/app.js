@@ -1516,3 +1516,21 @@ if(window.__dsel){
     });
   }
 })();
+
+// ===== 主控制台混音台 Tab(M2 过渡) =====
+// 页面 UI 先复用现有 A/B 卡片，但承载在主控制台 Tab 里；后续 M2 再把引擎/API 迁入主程序。
+var _mixerPageLoaded=false;
+function initMixerPage(){
+  if(_mixerPageLoaded)return;
+  var host=$('mixerPage');if(!host)return;
+  _mixerPageLoaded=true;
+  host.innerHTML='<div class="sub">'+tr('plgLoading')+'</div>';
+  fetch('/api/plugins').then(function(r){return r.json();}).then(function(list){
+    var arr=Array.isArray(list)?list:(list.plugins||list.entries||[]);
+    var p=arr.find(function(x){return x&&x.id==='virtual-mixer';});
+    if(!p||!(p.enabled||p.run)||!p.approved){host.innerHTML='<div class="sub" style="color:var(--warn)">'+tr('mixerNeedsPlugin')+'</div>';return;}
+    host.innerHTML='';plgVirtualMixer(p,host);
+  }).catch(function(e){host.innerHTML='<div class="sub" style="color:var(--warn)">'+String((e&&e.message)||e)+'</div>';});
+}
+document.addEventListener('click',function(ev){try{var t=ev.target&&ev.target.closest?ev.target.closest('#tabs .tab'):null;if(t&&t.dataset.tab==='mixer')initMixerPage();}catch(e){}});
+setTimeout(function(){try{var p=$('tab-mixer');if(p&&!p.hidden)initMixerPage();}catch(e){}},0);

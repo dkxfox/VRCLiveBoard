@@ -930,6 +930,11 @@
 - Cue duck: CueEngine 可带 `--duck <mic> <depth> <threshold> <attack> <release> <hold> <lookahead> <hpf>`, 采集 mic 做侧链, 只压 Cue 输出; 默认关; 复用主闪避参数。
 - 证据: `test:mixer:cueapi` **4 PASS**(带引号路径被清洗, --duck/--mic 参数转发); cue 实际起播+duck 进程运行通过; `test:mixer` 21 PASS; `test:mixer:cue` 3 PASS; 全量 `npm run gates` **16 PASS / 0 FAIL**。
 - 下一步: 全量门禁; 然后 M2 主控制台“混音台”Tab 迁移(用户已选)。
+## 420. 主控制台“混音台”Tab 第一片(2026-11-28, M2 开始)
+- 用户确认: 主控制台新增“混音台”Tab; 视觉按开发初期 A/B 定稿; 插件在迁移测试完成后最后退役; Cue 麦克风回避默认关。
+- 改动: index.html 新增 mixer tab + #tab-mixer/#mixerPage; lang.js 增 tabMixer/mixerNeedsPlugin; app.js 新增 initMixerPage, 复用现有 plgVirtualMixer A/B UI; 插件未启用/未授权时显示迁移提示。
+- 当前仍是过渡: 页面走插件 API(/api/plugins/call)，引擎/配置尚未迁入主程序；下一步 M2.1 引擎归主程序 + 主 API。
+- 验证: app.js 语法通过; gates:fast 通过(动态 id 仅 WARN); 全量 gates 待收口复跑。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1012,5 +1017,6 @@
 | 417 | 2026-11-28 | Cue 运镜联动 |
 | 418 | 2026-11-28 | 同步 Cue: FLAC + 电平表 |
 | 419 | 2026-11-28 | Cue 麦克风回避 + 智能路径 |
+| 420 | 2026-11-28 | 主控制台“混音台”Tab 第一片 |
 
 <!-- DEV-NOTES-INDEX:END -->
