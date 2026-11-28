@@ -893,6 +893,12 @@
 - 证据: `test:mixer` 21 PASS; `test:mixer:latency` 2 PASS; `plugin-check` PASS; 全量 gates **16 PASS / 0 FAIL**。
 - 边界: 113ms 是 CABLE 往返, 还没算 VRChat/VD 语音处理; 正式版 <100ms 仍需继续压引擎与驱动缓冲/换事件路径, 不能只调 UI。
 - 下一步: 60Hz 遥测替代状态文件 + UI 30fps VU; 继续做无缓冲/自适应环形缓冲音频路径; 再做麦克风门限/降噪旁路。
+## 414. VU 30fps + 延迟下限测量(2026-11-28, 用户“尽可能低延迟/弹唱重同步”)
+- VU: LiveEngine 状态写入 500ms -> 33ms, 前端 meter 轮询 500ms -> 33ms(约30fps); 峰值仍按区间取 max; 状态 I/O 仍在后台线程, 不阻塞音频。
+- 延迟测量: 探针从 5ms 改 1ms 测试无改善(99.9–126.3ms), 说明当前瓶颈不在探针缓冲; 已恢复 5ms。CABLE 往返约 112–126ms, 明显高于 100ms 目标。
+- 结论: 继续压延迟需要换音频路径(直接 AudioClient/更低层), 或接受 VB-CABLE/Windows 共享模式的地板; VRChat/VD 自身延迟还需单测。
+- 用户场景: 弹唱重点不是监听延迟, 而是伴奏/cue 同步; 唱歌需要低延迟监听/返送。下一步先做 cue 同步播放, 再评估本地监听路径。
+- 验证: test:mixer 21 PASS; test:mixer:latency 2 PASS; 全量 gates 待收口复跑。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -969,5 +975,6 @@
 | 411 | 2026-11-25 | 虚拟混音台 VU 数字卡在历史最大值修复 |
 | 412 | 2026-11-25 | 虚拟混音台阶段收口: A/B/VU 可用, 延迟与刷新列入正式版优化 |
 | 413 | 2026-11-28 | 虚拟混音台低延迟原型 + CABLE 延迟测量 |
+| 414 | 2026-11-28 | VU 30fps + 延迟下限测量 |
 
 <!-- DEV-NOTES-INDEX:END -->

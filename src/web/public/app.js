@@ -326,7 +326,7 @@ function plgVirtualMixer(p, body){
       state.lvEls.forEach(function(it){var v=Number(levels[it.key])||0;var d0=v>0?20*Math.log(v)/Math.LN10:-60;var p=Math.max(0,Math.min(1,(d0+60)/60));it.el.style.height=(p*100)+'%';});
       state.dbEls.forEach(function(it){var v=Number(levels[it.key])||0;it.el.textContent=(v>0?db(v):'-inf')+' '+tr('vmDb');});
       state.needleEls.forEach(function(it){var v=Number(levels[it.key])||0;var d0=v>0?20*Math.log(v)/Math.LN10:-60;var ang=Math.max(-45,Math.min(45,(d0+40)*1.1-45));it.el.style.transform='rotate('+ang+'deg)';var face=it.el.parentNode;var peak=face.querySelector('.vpeak');if(peak)peak.className='vpeak'+(v>0.85?' on':'');var txt=face.querySelector('.vdb');if(txt)txt.textContent=(v>0?d0.toFixed(1):'-inf');});
-      state.timer=setTimeout(pollMeter,500);
+      state.timer=setTimeout(pollMeter,33);
     }).catch(function(){state.timer=setTimeout(pollMeter,1000);});
   }
   bA.onclick=function(){state.layout='A';bA.className='small';bB.className='small gray';renderStage();};

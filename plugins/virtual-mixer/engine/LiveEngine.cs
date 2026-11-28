@@ -111,7 +111,7 @@ internal static class LiveEngine
                 if (!string.IsNullOrEmpty(statusPath))
                 {
                     CaptureTest.WriteText(statusPath, "{\"ok\":true,\"running\":true,\"frames\":0,\"duckGain\":1,\"levels\":{\"system\":0,\"mic\":0,\"custom\":0,\"master\":0}}");
-                    statusTimer = new Timer(delegate { statusBox.Write(statusPath); }, null, 500, 500);
+                    statusTimer = new Timer(delegate { statusBox.Write(statusPath); }, null, 33, 33);
                 }
                 try { Thread.CurrentThread.Priority = ThreadPriority.AboveNormal; } catch { }
                 var loopClock = Stopwatch.StartNew();
