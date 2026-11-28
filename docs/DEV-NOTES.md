@@ -905,7 +905,7 @@
 - 新增 `--cue-selftest`: 混音写 WAV 并返回 JSON; 插件 `cue/cueStop/cueClear/cueStatus`; `cue` 整体替换, 空列表拒绝, stop 只停, clear 清空; `dispose` 杀 cue 进程。
 - 证据: `npm run test:mixer:cue` → **3 PASS**; 440/880Hz 两条文件 onset 偏差 **0ms**(目标 ≤20ms); 插件 cue→status→stop→clear 实测通过。
 - 限制: 驱动/Windows 输出仍约 100–125ms; cue 与 live mic 混合目前是两个音频客户端(Windows 混音), 后续可并入同一输出回调; A/B 卡片 cue UI/camera-path 联动未做。
-- 下一步: cue 文件行/进度/清空 UI; camera-path 起播联动; 再评估把 cue 混入 LiveEngine 单进程。
+- 下一步: cue 文件行/进度/清空 UI; camera-path 起播联动; 再评估把 cue 混入 LiveEngine 单进程。`npm run gates` **16 PASS / 0 FAIL**。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
