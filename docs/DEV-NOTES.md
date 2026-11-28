@@ -984,6 +984,7 @@
 - 根因: CueEngine 循环每生成 10ms 音频就 `Thread.Sleep(10)`; Windows 定时器实际常跳到 ~15.6ms, 生成速度只有实时 0.6 倍左右, 输出缓冲持续不饱和 → 卡顿/听起来变慢。
 - 修复: 改为按 `outBuf.BufferedDuration` 反馈补充: 缓冲低于 220ms 就连续生成多个 10ms 块, 循环 `Sleep(5)`; 播放结束先排空缓冲。监听输出同步写同一批块。
 - 证据(带监听 CABLE→Realtek Digital Output): 10s 音乐 steady rate 1.00~1.02x; 5s 文件 1.3s 后 steady 1.01~1.02x; monitor on/off 均正常。启动首 0.5~0.8s 仍有设备初始化延迟, 不是持续变速。
+- 全量 `npm run gates` **16 PASS / 0 FAIL**。
 - 限制: Cue 音量/监听仍起播时生效; 首帧延迟可另做预打开优化。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
