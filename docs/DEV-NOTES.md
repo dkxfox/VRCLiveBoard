@@ -977,7 +977,7 @@
 - Cue 增加 `--gain <linear>` 与 `--monitor <device>`: 同一 Cue 输出同时送 CABLE 主输出和独立监听输出; 音量在闪避后统一应用。
 - 主页面 Cue 区增加“Cue 监听”开关和“Cue 音量”滑杆; 监听输出复用页面顶部监听设备; manager 启动参数按配置下发。
 - 麦克风增加“降噪”按钮: 主引擎 NoiseGate(包络门限, -45dB/30dB范围/3ms起/120ms放), 走 control 文件实时开关; 降噪后信号同时用于混音与闪避侧链。
-- 证据: CueEngine 以 monitor=Realtek Digital Output + gain=0.5 起播, 1.2s 后 status frames=19200/progress=33%; 主 manager micDenoise=true 启动 frames=17760, control 写入 micDenoise=true; 编译通过。
+- 证据: CueEngine 以 monitor=Realtek Digital Output + gain=0.5 起播, 1.2s 后 status frames=19200/progress=33%; 主 manager micDenoise=true 启动 frames=17760, control 写入 micDenoise=true; headless 实测 Cue 区 2 checkbox + 1 音量滑杆, 麦克风卡出现“降噪”按钮; 全量 `npm run gates` **16 PASS / 0 FAIL**。
 - 限制: Cue 音量/监听当前在起播时生效; 运行中改滑杆要重新起播。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
