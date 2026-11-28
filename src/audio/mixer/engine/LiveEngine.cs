@@ -27,6 +27,7 @@ internal static class LiveEngine
         string captureId = S(json, "capture");
         string micId = S(json, "mic");
         string customId = S(json, "custom");
+        string monitorId = S(json, "monitorOutput");
         string statusPath = S(json, "status");
         double micGainDb = N(json, "micGainDb", 4.0);
         double musicGain = N(json, "musicGain", 0.72);
@@ -38,6 +39,10 @@ internal static class LiveEngine
         control.systemSolo = B(json, "systemSolo", false);
         control.micSolo = B(json, "micSolo", false);
         control.customSolo = B(json, "customSolo", false);
+        control.monitorSystem = B(json, "monitorSystem", false);
+        control.monitorMic = B(json, "monitorMic", false);
+        control.monitorCustom = B(json, "monitorCustom", false);
+        control.monitorMaster = B(json, "monitorMaster", false);
         string controlPath = S(json, "control");
         bool duckEnabled = B(json, "duckEnabled", true);
         double depthDb = N(json, "duckDepthDb", -15.0);
@@ -48,10 +53,10 @@ internal static class LiveEngine
         double lookaheadMs = N(json, "duckLookaheadMs", 8.0);
         double hpfHz = N(json, "sidechainHpfHz", 120.0);
 
-        MMDevice outputDev = null, captureDev = null, mic = null, customDev = null;
+        MMDevice outputDev = null, captureDev = null, mic = null, customDev = null, monitorDev = null;
         WasapiLoopbackCapture loop = null;
         WasapiCapture micCap = null, customCap = null;
-        WasapiOut output = null;
+        WasapiOut output = null, monitorOut = null;
         Timer statusTimer = null, controlTimer = null;
         StatusBox statusBox = new StatusBox();
         try
@@ -63,6 +68,8 @@ internal static class LiveEngine
                 if (useSystem) captureDev = FindConfigured(en, DataFlow.Render, captureId, "capture");
                 mic = FindConfigured(en, DataFlow.Capture, micId, "mic");
                 customDev = string.IsNullOrEmpty(customId) ? null : FindConfigured(en, DataFlow.Capture, customId, "custom");
+                bool useMonitor = !string.IsNullOrEmpty(monitorId);
+                monitorDev = useMonitor ? FindConfigured(en, DataFlow.Render, monitorId, "monitor") : null;
                 if (outputDev == null) throw new Exception("NO_OUTPUT_DEVICE");
                 if (useSystem && captureDev == null) throw new Exception("NO_CAPTURE_DEVICE");
                 if (mic == null) throw new Exception("NO_MIC_DEVICE");
@@ -97,6 +104,14 @@ internal static class LiveEngine
                 output = new WasapiOut(outputDev, AudioClientShareMode.Shared, false, 50);
                 output.Init(outBuf);
                 output.Play();
+                BufferedWaveProvider monBuf = null;
+                if (useMonitor)
+                {
+                    monBuf = new BufferedWaveProvider(outFmt) { BufferDuration = TimeSpan.FromMilliseconds(500), DiscardOnBufferOverflow = true };
+                    monitorOut = new WasapiOut(monitorDev, AudioClientShareMode.Shared, false, 50);
+                    monitorOut.Init(monBuf);
+                    monitorOut.Play();
+                }
 
                 var duck = new Ducker(Rate);
                 duck.ThresholdDb = thresholdDb;
@@ -114,7 +129,9 @@ internal static class LiveEngine
                 var micF = new float[Rate * Channels / 100];
                 var customF = new float[Rate * Channels / 100];
                 var outF = new float[sysF.Length];
+                var monF = new float[sysF.Length];
                 var outBytes = new byte[sysF.Length * sizeof(float)];
+                var monBytes = new byte[sysF.Length * sizeof(float)];
                 var sw = Stopwatch.StartNew();
                 if (!string.IsNullOrEmpty(statusPath))
                 {
@@ -145,6 +162,10 @@ internal static class LiveEngine
                         float music = sysOut + customOut;
                         float micMono = (micF[i * Channels] + micF[i * Channels + 1]) * 0.5f;
                         float micOut = (micMuted || (anySolo && !micSolo)) ? 0f : micMono;
+                        float mon = 0f;
+                        if (control.monitorSystem) mon += sysOut;
+                        if (control.monitorCustom) mon += customOut;
+                        if (control.monitorMic) mon += micOut * (float)micGain;
                         if (Math.Abs(sysMono) > sysPeak) sysPeak = Math.Abs(sysMono);
                         if (Math.Abs(customMono) > customPeak) customPeak = Math.Abs(customMono);
                         if (Math.Abs(micOut) > micPeak) micPeak = Math.Abs(micOut);
@@ -157,11 +178,15 @@ internal static class LiveEngine
                         if (mixed > 1f) mixed = 1f;
                         else if (mixed < -1f) mixed = -1f;
                         if (Math.Abs(mixed) > masterPeak) masterPeak = Math.Abs(mixed);
+                        if (control.monitorMaster) mon += mixed;
+                        if (mon > 1f) mon = 1f; else if (mon < -1f) mon = -1f;
+                        monF[i * Channels] = mon; monF[i * Channels + 1] = mon;
                         outF[i * Channels] = mixed;
                         outF[i * Channels + 1] = mixed;
                     }
                     Buffer.BlockCopy(outF, 0, outBytes, 0, outBytes.Length);
                     outBuf.AddSamples(outBytes, 0, outBytes.Length);
+                    if (monitorOut != null) { Buffer.BlockCopy(monF, 0, monBytes, 0, monBytes.Length); monBuf.AddSamples(monBytes, 0, monBytes.Length); }
                     frames += nf;
                     statusBox.Update(frames, lastGain, sysPeak, micPeak, customPeak, masterPeak);
                     sysPeak = 0; micPeak = 0; customPeak = 0; masterPeak = 0;
@@ -181,6 +206,7 @@ internal static class LiveEngine
         {
             try { if (statusTimer != null) statusTimer.Dispose(); } catch { }
             try { if (controlTimer != null) controlTimer.Dispose(); } catch { }
+            try { if (monitorOut != null) monitorOut.Dispose(); } catch { }
             try { if (output != null) output.Dispose(); } catch { }
             try { if (loop != null) loop.Dispose(); } catch { }
             try { if (micCap != null) micCap.Dispose(); } catch { }
@@ -189,6 +215,7 @@ internal static class LiveEngine
             try { if (captureDev != null) captureDev.Dispose(); } catch { }
             try { if (mic != null) mic.Dispose(); } catch { }
             try { if (customDev != null) customDev.Dispose(); } catch { }
+            try { if (monitorDev != null) monitorDev.Dispose(); } catch { }
         }
     }
 
@@ -238,7 +265,7 @@ internal static class LiveEngine
     }
     private sealed class LiveControl
     {
-        public volatile bool systemMuted, micMuted, customMuted, systemSolo, micSolo, customSolo;
+        public volatile bool systemMuted, micMuted, customMuted, systemSolo, micSolo, customSolo, monitorSystem, monitorMic, monitorCustom, monitorMaster;
         public void Load(string path)
         {
             try
@@ -250,6 +277,10 @@ internal static class LiveEngine
                 systemSolo = B(s, "systemSolo", false);
                 micSolo = B(s, "micSolo", false);
                 customSolo = B(s, "customSolo", false);
+                monitorSystem = B(s, "monitorSystem", false);
+                monitorMic = B(s, "monitorMic", false);
+                monitorCustom = B(s, "monitorCustom", false);
+                monitorMaster = B(s, "monitorMaster", false);
             }
             catch { }
         }

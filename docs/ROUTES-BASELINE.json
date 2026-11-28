@@ -493,6 +493,12 @@
       "p": "/api/mixer/channel",
       "level": 0,
       "note": "主程序 mixin 通道实时 M/S/增益监听状态; 只改配置并写 control 文件, 不重启引擎"
+    },
+    {
+      "m": "POST",
+      "p": "/api/mixer/monitor",
+      "level": 0,
+      "note": "选择实时监听输出设备; 运行中换了设备会重启引擎(会短暂断开), 通道监听开关走 /api/mixer/channel"
     }
   ]
 }

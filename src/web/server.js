@@ -553,6 +553,13 @@ function effPluginSec() {
       } catch (e) { return json(res, 400, { ok: false, error: String(e.message || e) }); }
     });
   });
+  on('POST', '/api/mixer/monitor', function (req, res, url) {
+    if (needMixer(res)) return;
+    readBody(req, function (b) {
+      var body; try { body = JSON.parse(b || '{}'); } catch (e) { return json(res, 400, { ok: false, error: String(e.message || e) }); }
+      mixer.setMonitor(body.device || body.monitorOutputDevice || '').then(function (r) { json(res, 200, r); }).catch(function (e) { json(res, 400, { ok: false, error: String(e.message || e) }); });
+    });
+  });
   on('POST', '/api/mixer/start', function (req, res, url) {
     if (needMixer(res)) return;
     mixer.start().then(function (r) { json(res, 200, r); }).catch(function (e) { json(res, 400, { ok: false, error: String(e.message || e) }); });

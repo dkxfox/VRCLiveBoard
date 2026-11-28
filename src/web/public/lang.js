@@ -122,3 +122,6 @@ advTitle:'Advanced (usually untouched)', portsOsc:'OSC send port:', portsApply:'
 
 // 主混音台通道徽标(2026-11-28)
 (function(){var N=JSON.parse("{\"zh-CN\":{\"mxBadgeLoop\":\"回环\",\"mxBadgeInput\":\"输入\",\"mxBadgeFileLine\":\"文件 / 线路\"},\"zh-TW\":{\"mxBadgeLoop\":\"回環\",\"mxBadgeInput\":\"輸入\",\"mxBadgeFileLine\":\"檔案 / 線路\"},\"en\":{\"mxBadgeLoop\":\"loopback\",\"mxBadgeInput\":\"input\",\"mxBadgeFileLine\":\"file / line\"}}");for(var L in N){for(var k in N[L]){(window.VRCB_LANG[L]=window.VRCB_LANG[L]||{})[k]=N[L][k];}}})();
+
+// 实时监听输出(2026-11-28)
+(function(){var N=JSON.parse("{\"zh-CN\":{\"vmMonitorOut\":\"监听输出\",\"vmMonitor\":\"监听\",\"vmMonitorHint\":\"把选中通道送到监听输出(耳机/音箱); 与虚拟跳线独立\"},\"zh-TW\":{\"vmMonitorOut\":\"監聽輸出\",\"vmMonitor\":\"監聽\",\"vmMonitorHint\":\"把選中通道送到監聽輸出(耳機/喇叭); 與虛擬跳線獨立\"},\"en\":{\"vmMonitorOut\":\"Monitor out\",\"vmMonitor\":\"Monitor\",\"vmMonitorHint\":\"Send selected channels to a separate monitor output (headphones/speakers), independent of the virtual cable\"}}");for(var L in N){for(var k in N[L]){(window.VRCB_LANG[L]=window.VRCB_LANG[L]||{})[k]=N[L][k];}}})();

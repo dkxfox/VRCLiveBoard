@@ -15,6 +15,11 @@ const DEFAULTS = {
   systemCaptureDevice: '__none__',
   micCaptureDevice: '',
   customCaptureDevice: '',
+  monitorOutputDevice: '',
+  monitorSystem: false,
+  monitorMic: false,
+  monitorCustom: false,
+  monitorMaster: false,
   micGainDb: 4,
   musicGain: 0.72,
   systemGain: 1,
@@ -76,6 +81,11 @@ class MixerManager {
     c.sidechainHpfHz = clamp(c.sidechainHpfHz, 20, 400) || 120;
     c.cueDuck = !!c.cueDuck;
     c.cueLeadMs = clamp(c.cueLeadMs, 0, 5000); if (c.cueLeadMs === null) c.cueLeadMs = 500;
+    c.monitorOutputDevice = c.monitorOutputDevice || '';
+    c.monitorSystem = !!c.monitorSystem;
+    c.monitorMic = !!c.monitorMic;
+    c.monitorCustom = !!c.monitorCustom;
+    c.monitorMaster = !!c.monitorMaster;
     c.systemCaptureDevice = c.systemCaptureDevice || '__none__';
     return c;
   }
@@ -94,7 +104,7 @@ class MixerManager {
 
   _control() {
     var c = this.getConfig();
-    return { systemMuted: c.systemMuted, micMuted: c.micMuted, customMuted: c.customMuted, systemSolo: c.systemSolo, micSolo: c.micSolo, customSolo: c.customSolo };
+    return { systemMuted: c.systemMuted, micMuted: c.micMuted, customMuted: c.customMuted, systemSolo: c.systemSolo, micSolo: c.micSolo, customSolo: c.customSolo, monitorSystem: c.monitorSystem, monitorMic: c.monitorMic, monitorCustom: c.monitorCustom, monitorMaster: c.monitorMaster };
   }
 
   _writeControl() {
@@ -103,11 +113,19 @@ class MixerManager {
 
   setChannel(patch) {
     if (!patch || typeof patch !== 'object') return this.getConfig();
-    var keys = ['systemMuted','micMuted','customMuted','systemSolo','micSolo','customSolo'];
+    var keys = ['systemMuted','micMuted','customMuted','systemSolo','micSolo','customSolo','monitorSystem','monitorMic','monitorCustom','monitorMaster'];
     var out = {};
     keys.forEach(function (k) { if (patch[k] !== undefined) out[k] = !!patch[k]; });
     if (Object.keys(out).length) this.setConfig(out);
     return this.getConfig();
+  }
+
+  async setMonitor(device) {
+    var before = this.getConfig().monitorOutputDevice;
+    this.setConfig({ monitorOutputDevice: String(device || '') });
+    var restarted = false;
+    if (this.liveChild && String(before) !== String(device || '')) { await this.start(); restarted = true; }
+    return { ok: true, restarted: restarted, config: this.getConfig() };
   }
 
   _runShort(args, timeoutMs) {
@@ -142,6 +160,8 @@ class MixerManager {
       micGainDb: c.micGainDb, musicGain: c.musicGain, systemGain: c.systemGain,
       systemMuted: c.systemMuted, micMuted: c.micMuted, customMuted: c.customMuted,
       systemSolo: c.systemSolo, micSolo: c.micSolo, customSolo: c.customSolo,
+      monitorOutput: c.monitorOutputDevice || '',
+      monitorSystem: c.monitorSystem, monitorMic: c.monitorMic, monitorCustom: c.monitorCustom, monitorMaster: c.monitorMaster,
       duckEnabled: c.duckEnabled, duckDepthDb: c.duckDepthDb, duckThresholdDb: c.duckThresholdDb,
       duckAttackMs: c.duckAttackMs, duckReleaseMs: c.duckReleaseMs, duckHoldMs: c.duckHoldMs,
       duckLookaheadMs: c.duckLookaheadMs, sidechainHpfHz: c.sidechainHpfHz,
