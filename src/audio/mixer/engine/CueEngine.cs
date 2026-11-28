@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
@@ -58,6 +59,23 @@ internal static class CueEngine
         public double HpfHz = 120;
     }
 
+    private sealed class CueControl
+    {
+        public volatile float Gain = 1f;
+        public void Load(string path)
+        {
+            try
+            {
+                string s = File.ReadAllText(path, Encoding.UTF8);
+                var m = Regex.Match(s, "\"gain\"\\s*:\\s*([0-9]+(?:\\.[0-9]+)?)");
+                double v;
+                if (m.Success && double.TryParse(m.Groups[1].Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out v))
+                    Gain = (float)Math.Max(0.0, Math.Min(2.0, v));
+            }
+            catch { }
+        }
+    }
+
     public static int Run(string[] args)
     {
         if (args.Length < 5) return Usage();
@@ -77,6 +95,7 @@ internal static class CueEngine
         }
         double cueGain = 1.0;
         string monitorId = "";
+        string controlPath = "";
         while (i < args.Length)
         {
             if (args[i] == "--duck")
@@ -102,6 +121,11 @@ internal static class CueEngine
                 monitorId = args[i + 1];
                 i += 2;
             }
+            else if (args[i] == "--control" && i + 1 < args.Length)
+            {
+                controlPath = args[i + 1];
+                i += 2;
+            }
             else i++;
         }
         if (cueGain < 0) cueGain = 0; if (cueGain > 2) cueGain = 2;
@@ -109,7 +133,7 @@ internal static class CueEngine
         if (leadMs < 0) leadMs = 0;
         if (leadMs > 5000) leadMs = 5000;
         int leadFrames = (int)Math.Round(Rate * leadMs / 1000.0);
-        return Play(outputId, tracks, leadFrames, statusPath, duck, monitorId, cueGain);
+        return Play(outputId, tracks, leadFrames, statusPath, duck, monitorId, cueGain, controlPath);
     }
 
     public static int SelfTest(string[] args)
@@ -159,7 +183,7 @@ internal static class CueEngine
         return new Track { Path = path, Provider = sp, Gain = Math.Pow(10.0, gainDb / 20.0), DurationMs = durationMs };
     }
 
-    private static int Play(string outputId, List<Track> tracks, int leadFrames, string statusPath, DuckOptions duckOpt, string monitorId, double cueGain)
+    private static int Play(string outputId, List<Track> tracks, int leadFrames, string statusPath, DuckOptions duckOpt, string monitorId, double cueGain, string controlPath)
     {
         MMDevice dev = null, mic = null, monDev = null;
         WasapiOut output = null, monOut = null;
@@ -216,6 +240,9 @@ internal static class CueEngine
                 }
                 long totalMs = 0; foreach (var tr in tracks) { if (tr.DurationMs > totalMs) totalMs = tr.DurationMs; } totalMs += leadFrames * 1000L / Rate;
                 var status = new CueState { DurationMs = totalMs, Files = string.Join("|", tracks.ConvertAll(t => t.Path).ToArray()) };
+                var cueControl = new CueControl(); cueControl.Gain = (float)cueGain;
+                Timer gainTimer = null;
+                if (!string.IsNullOrEmpty(controlPath)) gainTimer = new Timer(delegate { cueControl.Load(controlPath); }, null, 0, 100);
                 Timer statusTimer = null;
                 if (!string.IsNullOrEmpty(statusPath)) { status.Write(statusPath); statusTimer = new Timer(delegate { status.Write(statusPath); }, null, 200, 200); }
                 var tmp = new float[Rate * Channels / 100];
@@ -250,7 +277,8 @@ internal static class CueEngine
                                 ml = duckL.Process(ml, micMono, out g1);
                                 mr = duckR.Process(mr, micMono, out g2);
                             }
-                            ml = (float)(ml * cueGain); mr = (float)(mr * cueGain);
+                            float liveGain = cueControl.Gain;
+                            ml = (float)(ml * liveGain); mr = (float)(mr * liveGain);
                             if (Math.Abs(ml) > chunkPeak) chunkPeak = Math.Abs(ml);
                             if (Math.Abs(mr) > chunkPeak) chunkPeak = Math.Abs(mr);
                             if (ml > 1f) ml = 1f; else if (ml < -1f) ml = -1f;
@@ -274,6 +302,7 @@ internal static class CueEngine
                 try { if (micCap != null) micCap.StopRecording(); } catch { }
                 status.Stop();
                 if (statusTimer != null) statusTimer.Dispose();
+                if (gainTimer != null) gainTimer.Dispose();
                 status.Write(statusPath);
                 return 0;
             }

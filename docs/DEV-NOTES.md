@@ -1010,6 +1010,12 @@
 - 修复: `/api/mixer/channel` 先前把 masterGain 当布尔, 0.3 被写成 1; 现按数值夹取。
 - 实测: 启动后 setChannel({masterGain:0.3,masterMuted:true,systemSend:true}) control 正确写 0.3/true, 子进程 pid 不变; headless 3 个“跳线”按钮 + 主输出 1 滑杆/M. 
 - 全量 `npm run gates` **16 PASS / 0 FAIL**; 已推送 `8727e29`。
+## 434. 布局持久化/低功耗暂停 + Cue 运行中音量(2026-11-28)
+- 主页面布局默认改为 **B-VU**, 选择写入 `config.mixer.layout`; 刷新后保持; 切换时异步保存。
+- 页面隐藏/不再可见时, meter/cue 轮询自动降到 500ms/1s 暂停动画, 回来恢复, 降低后台占用。
+- CueEngine 新增 `--control <path>`: 100ms 轮询 `cue-control.json` 的 `gain`; manager 新增 `setCueGain`, UI Cue 音量滑杆 oninput 防抖调用 `/api/mixer/cue/gain`, 播放中实时改音量。
+- 实测: 5s 440Hz cue gain 1→0.2 后 status level 0.29999→0.05999, 子进程 pid 不变; Cue 音频线程继续。
+- 全量 gates 待收口。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1106,5 +1112,6 @@
 | 431 | 2026-11-28 | 并发 + 低配置 CPU 压力测试 |
 | 432 | 2026-11-28 | Cue 运镜“不使用”选项 |
 | 433 | 2026-11-28 | 通道送跳线/仅监听 + 主输出增益/静音 |
+| 434 | 2026-11-28 | 布局持久化/低功耗暂停 + Cue 运行中音量 |
 
 <!-- DEV-NOTES-INDEX:END -->

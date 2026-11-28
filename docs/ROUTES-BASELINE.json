@@ -499,6 +499,12 @@
       "p": "/api/mixer/monitor",
       "level": 0,
       "note": "选择实时监听输出设备; 运行中换了设备会重启引擎(会短暂断开), 通道监听开关走 /api/mixer/channel"
+    },
+    {
+      "m": "POST",
+      "p": "/api/mixer/cue/gain",
+      "level": 0,
+      "note": "Cue 播放中实时调整音量; manager 写 cue-control.json, CueEngine 100ms 轮询"
     }
   ]
 }

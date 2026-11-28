@@ -46,10 +46,12 @@ const DEFAULTS = {
   duckLookaheadMs: 8,
   sidechainHpfHz: 120,
   cueDuck: false,
-  cueLeadMs: 500
+  cueLeadMs: 500,
+  layout: 'B'
 };
 
 function controlPath() { return path.join(DATA_DIR, 'live-control.json'); }
+function cueControlPath() { return path.join(DATA_DIR, 'cue-control.json'); }
 
 function cleanAudioPath(raw) {
   var p = String(raw == null ? '' : raw).trim();
@@ -89,6 +91,7 @@ class MixerManager {
     c.sidechainHpfHz = clamp(c.sidechainHpfHz, 20, 400) || 120;
     c.cueDuck = !!c.cueDuck;
     c.cueLeadMs = clamp(c.cueLeadMs, 0, 5000); if (c.cueLeadMs === null) c.cueLeadMs = 500;
+    if (c.layout !== 'A' && c.layout !== 'B') c.layout = 'B';
     c.monitorOutputDevice = c.monitorOutputDevice || '';
     c.monitorSystem = !!c.monitorSystem;
     c.monitorMic = !!c.monitorMic;
@@ -134,6 +137,14 @@ class MixerManager {
     keys.forEach(function (k) { if (patch[k] !== undefined) out[k] = (k === 'masterGain') ? (clamp(patch[k], 0, 2) === null ? 1 : clamp(patch[k], 0, 2)) : !!patch[k]; });
     if (Object.keys(out).length) this.setConfig(out);
     return this.getConfig();
+  }
+
+  async setCueGain(gain) {
+    var g = clamp(gain, 0, 2); if (g === null) g = 1;
+    this.config.mixer.cueGain = g;
+    this.saveConfig();
+    try { if (this.cueChild) fs.writeFileSync(cueControlPath(), JSON.stringify({ gain: g }), 'utf8'); } catch (e) {}
+    return { ok: true, gain: g };
   }
 
   async setMonitor(device) {
@@ -239,8 +250,10 @@ class MixerManager {
       cargs.push(String(c.duckAttackMs)); cargs.push(String(c.duckReleaseMs));
       cargs.push(String(c.duckHoldMs)); cargs.push(String(c.duckLookaheadMs)); cargs.push(String(c.sidechainHpfHz));
     }
+    cargs.push('--control'); cargs.push(cueControlPath());
     if (cueGain !== 1) { cargs.push('--gain'); cargs.push(String(cueGain)); }
     if (useCueMonitor) { cargs.push('--monitor'); cargs.push(c.monitorOutputDevice); }
+    try { fs.writeFileSync(cueControlPath(), JSON.stringify({ gain: cueGain }), 'utf8'); } catch (e) {}
     var child = spawn(ENGINE, cargs, { windowsHide: true, stdio: 'ignore' });
     this.cueChild = child; this.cueInfo = { files: infoFiles, startedAt: Date.now() };
     var self = this;

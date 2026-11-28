@@ -579,6 +579,13 @@ function effPluginSec() {
       mixer.cue(args).then(function (r) { json(res, 200, r); }).catch(function (e) { json(res, 400, { ok: false, error: String(e.message || e) }); });
     });
   });
+  on('POST', '/api/mixer/cue/gain', function (req, res, url) {
+    if (needMixer(res)) return;
+    readBody(req, function (b) {
+      try { var body = JSON.parse(b || '{}'); mixer.setCueGain(body.gain).then(function (r) { json(res, 200, r); }).catch(function (e) { json(res, 400, { ok: false, error: String(e.message || e) }); }); }
+      catch (e) { json(res, 400, { ok: false, error: String(e.message || e) }); }
+    });
+  });
   on('POST', '/api/mixer/cue/stop', function (req, res, url) { if (needMixer(res)) return; try { return json(res, 200, mixer.cueStop()); } catch (e) { return json(res, 500, { ok: false, error: String(e.message || e) }); } });
   on('POST', '/api/mixer/cue/clear', function (req, res, url) { if (needMixer(res)) return; try { return json(res, 200, mixer.cueClear()); } catch (e) { return json(res, 500, { ok: false, error: String(e.message || e) }); } });
   on('GET', '/api/mixer/cue/status', function (req, res, url) { if (needMixer(res)) return; mixer.cueStatus().then(function (r) { json(res, 200, r); }).catch(function (e) { json(res, 500, { ok: false, error: String(e.message || e) }); }); });
