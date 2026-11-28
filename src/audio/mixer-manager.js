@@ -20,6 +20,11 @@ const DEFAULTS = {
   monitorMic: false,
   monitorCustom: false,
   monitorMaster: false,
+  systemSend: true,
+  micSend: true,
+  customSend: true,
+  masterMuted: false,
+  masterGain: 1,
   micDenoise: false,
   cueMonitor: false,
   cueGain: 1,
@@ -89,6 +94,11 @@ class MixerManager {
     c.monitorMic = !!c.monitorMic;
     c.monitorCustom = !!c.monitorCustom;
     c.monitorMaster = !!c.monitorMaster;
+    c.systemSend = c.systemSend !== false;
+    c.micSend = c.micSend !== false;
+    c.customSend = c.customSend !== false;
+    c.masterMuted = !!c.masterMuted;
+    c.masterGain = clamp(c.masterGain, 0, 2); if (c.masterGain === null) c.masterGain = 1;
     c.micDenoise = !!c.micDenoise;
     c.cueMonitor = !!c.cueMonitor;
     c.cueGain = clamp(c.cueGain, 0, 2); if (c.cueGain === null) c.cueGain = 1;
@@ -110,7 +120,7 @@ class MixerManager {
 
   _control() {
     var c = this.getConfig();
-    return { systemMuted: c.systemMuted, micMuted: c.micMuted, customMuted: c.customMuted, systemSolo: c.systemSolo, micSolo: c.micSolo, customSolo: c.customSolo, monitorSystem: c.monitorSystem, monitorMic: c.monitorMic, monitorCustom: c.monitorCustom, monitorMaster: c.monitorMaster, micDenoise: c.micDenoise };
+    return { systemMuted: c.systemMuted, micMuted: c.micMuted, customMuted: c.customMuted, systemSolo: c.systemSolo, micSolo: c.micSolo, customSolo: c.customSolo, monitorSystem: c.monitorSystem, monitorMic: c.monitorMic, monitorCustom: c.monitorCustom, monitorMaster: c.monitorMaster, micDenoise: c.micDenoise, systemSend: c.systemSend, micSend: c.micSend, customSend: c.customSend, masterMuted: c.masterMuted, masterGain: c.masterGain };
   }
 
   _writeControl() {
@@ -119,9 +129,9 @@ class MixerManager {
 
   setChannel(patch) {
     if (!patch || typeof patch !== 'object') return this.getConfig();
-    var keys = ['systemMuted','micMuted','customMuted','systemSolo','micSolo','customSolo','monitorSystem','monitorMic','monitorCustom','monitorMaster','micDenoise'];
+    var keys = ['systemMuted','micMuted','customMuted','systemSolo','micSolo','customSolo','monitorSystem','monitorMic','monitorCustom','monitorMaster','micDenoise','systemSend','micSend','customSend','masterMuted','masterGain'];
     var out = {};
-    keys.forEach(function (k) { if (patch[k] !== undefined) out[k] = !!patch[k]; });
+    keys.forEach(function (k) { if (patch[k] !== undefined) out[k] = (k === 'masterGain') ? (clamp(patch[k], 0, 2) === null ? 1 : clamp(patch[k], 0, 2)) : !!patch[k]; });
     if (Object.keys(out).length) this.setConfig(out);
     return this.getConfig();
   }
@@ -169,6 +179,7 @@ class MixerManager {
       monitorOutput: c.monitorOutputDevice || '',
       monitorSystem: c.monitorSystem, monitorMic: c.monitorMic, monitorCustom: c.monitorCustom, monitorMaster: c.monitorMaster,
       micDenoise: c.micDenoise,
+      systemSend: c.systemSend, micSend: c.micSend, customSend: c.customSend, masterMuted: c.masterMuted, masterGain: c.masterGain,
       duckEnabled: c.duckEnabled, duckDepthDb: c.duckDepthDb, duckThresholdDb: c.duckThresholdDb,
       duckAttackMs: c.duckAttackMs, duckReleaseMs: c.duckReleaseMs, duckHoldMs: c.duckHoldMs,
       duckLookaheadMs: c.duckLookaheadMs, sidechainHpfHz: c.sidechainHpfHz,

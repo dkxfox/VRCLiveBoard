@@ -44,6 +44,11 @@ internal static class LiveEngine
         control.monitorCustom = B(json, "monitorCustom", false);
         control.monitorMaster = B(json, "monitorMaster", false);
         control.micDenoise = B(json, "micDenoise", false);
+        control.systemSend = B(json, "systemSend", true);
+        control.micSend = B(json, "micSend", true);
+        control.customSend = B(json, "customSend", true);
+        control.masterMuted = B(json, "masterMuted", false);
+        control.masterGain = (float)N(json, "masterGain", 1.0);
         string controlPath = S(json, "control");
         bool duckEnabled = B(json, "duckEnabled", true);
         double depthDb = N(json, "duckDepthDb", -15.0);
@@ -149,6 +154,9 @@ internal static class LiveEngine
                     bool systemMuted = control.systemMuted, micMuted = control.micMuted, customMuted = control.customMuted;
                     bool systemSolo = control.systemSolo, micSolo = control.micSolo, customSolo = control.customSolo;
                     bool anySolo = systemSolo || micSolo || customSolo;
+                    bool systemSend = control.systemSend, micSend = control.micSend, customSend = control.customSend;
+                    bool masterMuted = control.masterMuted;
+                    float masterGain = control.masterGain;
                     if (sys != null) CaptureTest.ReadSome(sys, sysF, sysF.Length); else Array.Clear(sysF, 0, sysF.Length);
                     CaptureTest.ReadSome(micSp, micF, micF.Length);
                     if (customSp != null) CaptureTest.ReadSome(customSp, customF, customF.Length);
@@ -161,7 +169,7 @@ internal static class LiveEngine
                         float customMono = customSp == null ? 0f : (customF[i * Channels] + customF[i * Channels + 1]) * 0.5f * (float)musicGain;
                         float sysOut = (systemMuted || (anySolo && !systemSolo)) ? 0f : sysMono;
                         float customOut = (customMuted || (anySolo && !customSolo)) ? 0f : customMono;
-                        float music = sysOut + customOut;
+                        float music = (systemSend ? sysOut : 0f) + (customSend ? customOut : 0f);
                         float micMonoRaw = (micF[i * Channels] + micF[i * Channels + 1]) * 0.5f;
                         float micMono = control.micDenoise ? micGate.Process(micMonoRaw) : micMonoRaw;
                         float micOut = (micMuted || (anySolo && !micSolo)) ? 0f : micMono;
@@ -177,7 +185,8 @@ internal static class LiveEngine
                         float micForDuck = (micMuted || (anySolo && !micSolo)) ? 0f : micMono;
                         if (duckEnabled) ducked = duck.Process(music, micForDuck, out gain);
                         lastGain = gain;
-                        float mixed = ducked + micOut * (float)micGain;
+                        float mixed = masterMuted ? 0f : (ducked + (micSend ? micOut : 0f) * (float)micGain);
+                        mixed = (float)(mixed * masterGain);
                         if (mixed > 1f) mixed = 1f;
                         else if (mixed < -1f) mixed = -1f;
                         if (Math.Abs(mixed) > masterPeak) masterPeak = Math.Abs(mixed);
@@ -268,7 +277,8 @@ internal static class LiveEngine
     }
     private sealed class LiveControl
     {
-        public volatile bool systemMuted, micMuted, customMuted, systemSolo, micSolo, customSolo, monitorSystem, monitorMic, monitorCustom, monitorMaster, micDenoise;
+        public volatile bool systemMuted, micMuted, customMuted, systemSolo, micSolo, customSolo, monitorSystem, monitorMic, monitorCustom, monitorMaster, micDenoise, systemSend, micSend, customSend, masterMuted;
+        public volatile float masterGain = 1f;
         public void Load(string path)
         {
             try
@@ -285,6 +295,11 @@ internal static class LiveEngine
                 monitorCustom = B(s, "monitorCustom", false);
                 monitorMaster = B(s, "monitorMaster", false);
                 micDenoise = B(s, "micDenoise", false);
+                systemSend = B(s, "systemSend", true);
+                micSend = B(s, "micSend", true);
+                customSend = B(s, "customSend", true);
+                masterMuted = B(s, "masterMuted", false);
+                masterGain = (float)N(s, "masterGain", 1.0);
             }
             catch { }
         }

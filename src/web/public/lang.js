@@ -131,3 +131,6 @@ advTitle:'Advanced (usually untouched)', portsOsc:'OSC send port:', portsApply:'
 
 // Cue 运镜不使用(2026-11-28)
 (function(){var N=JSON.parse("{\"zh-CN\":{\"vmCameraNone\":\"不使用\"},\"zh-TW\":{\"vmCameraNone\":\"不使用\"},\"en\":{\"vmCameraNone\":\"None\"}}");for(var L in N){for(var k in N[L]){(window.VRCB_LANG[L]=window.VRCB_LANG[L]||{})[k]=N[L][k];}}})();
+
+// 通道送跳线/主输出增益(2026-11-28)
+(function(){var N=JSON.parse("{\"zh-CN\":{\"vmSend\":\"跳线\",\"vmMasterGain\":\"主输出\"},\"zh-TW\":{\"vmSend\":\"跳線\",\"vmMasterGain\":\"主輸出\"},\"en\":{\"vmSend\":\"Cable\",\"vmMasterGain\":\"Master\"}}");for(var L in N){for(var k in N[L]){(window.VRCB_LANG[L]=window.VRCB_LANG[L]||{})[k]=N[L][k];}}})();

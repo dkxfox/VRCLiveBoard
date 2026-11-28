@@ -1003,6 +1003,13 @@
 - 用户反馈: 同步 Cue 的运镜下拉缺少“不使用”, 无法明确关闭运镜联动。
 - 在 camera 选择框首项增加 `vmCameraNone`(“不使用”, value 空); 空值起播不 importPreset/playNow, 只有选中预设才运镜。
 - 验证: 语法/硬编码/i18n 引用检查通过; 全量 `npm run gates` **16 PASS / 0 FAIL**(GSYNC fetch 网络失败仅 WARN)。
+## 433. 通道送跳线/仅监听 + 主输出增益/静音(2026-11-28)
+- 每条子通道新增“跳线”按钮: 关闭后该通道只走监听/电平, 不进 CABLE 主输出; 通道监听不受送线状态影响。
+- 主输出卡新增增益滑杆与 M 静音; 主输出静音只静音 CABLE/主监听, 子通道监听仍可听。
+- LiveEngine 增加 systemSend/micSend/customSend、masterMuted、masterGain(0~2), 全部走 control 文件; manager/API/UI 同步。
+- 修复: `/api/mixer/channel` 先前把 masterGain 当布尔, 0.3 被写成 1; 现按数值夹取。
+- 实测: 启动后 setChannel({masterGain:0.3,masterMuted:true,systemSend:true}) control 正确写 0.3/true, 子进程 pid 不变; headless 3 个“跳线”按钮 + 主输出 1 滑杆/M. 
+- 全量 gates 待收口。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1098,5 +1105,6 @@
 | 430 | 2026-11-28 | Z:\曲库 高码率压力测试 |
 | 431 | 2026-11-28 | 并发 + 低配置 CPU 压力测试 |
 | 432 | 2026-11-28 | Cue 运镜“不使用”选项 |
+| 433 | 2026-11-28 | 通道送跳线/仅监听 + 主输出增益/静音 |
 
 <!-- DEV-NOTES-INDEX:END -->
