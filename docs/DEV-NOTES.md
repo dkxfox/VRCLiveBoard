@@ -960,8 +960,8 @@
 - 用户反馈: 通道 M/S 不是实时; VU 表没有刻度、长宽比不对。
 - 新增 `/api/mixer/channel` + manager `setChannel`: 只更新 M/S 配置并写 `live-control.json`; LiveEngine 100ms 轮询 control 文件, 不重启音频进程。
 - 实测: 启动后 `setChannel({micMuted:true})` 前后 child pid **相同**, control 文件即时更新, 引擎继续 running。
-- 卡片 A 通道条增加 dB 刻度(-60…0)与刻度线; B 机械 VU 增加模拟刻度/刻度线, 面板固定 1.35:1 比例; 主输出同样。
-- 验证: route 88/88, i18n/UI 检查通过; 全量 gates 待收口。
+- 卡片 A 通道条增加 dB 刻度(-60…0)与刻度线; B 机械 VU 增加模拟刻度/刻度线, 面板固定 1.35:1 比例; 主输出同样。B 卡修正为 VU 58% + 右侧增益/M-S, 避免表盘挤掉通道控制。
+- 验证: route 88/88, i18n/UI 检查通过; headless 实测 B 卡 4 个 M/S 与 VU 142×108; 全量 gates 待收口。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
