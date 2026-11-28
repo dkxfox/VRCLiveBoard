@@ -944,7 +944,7 @@
 ## 422. 主混音台页面视觉壳(2026-11-28, M2.2 开始)
 - 主 Tab 新增页面头(混音台标题/说明/引擎状态 pill) + 路由条(主输出→VRChat mic→系统来源), 使用开发初期视觉稿的深色卡片/绿色路由风格。
 - 功能主体继续复用当前 A/B 组件; 下一片按 mockup 重做 4+1 通道卡片(系统/麦克风/自定义/主输出)、竖向电平/推子、Cue 卡片。
-- 验证: app.js 语法/控件/I18N 检查通过; 全量 gates 待提交后复跑。
+- 验证: app.js 语法/控件/I18N 检查通过; 全量 gates **16 PASS / 0 FAIL**。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
