@@ -1026,6 +1026,11 @@
 - 新增 `POST /api/mixer/pick-file`(Electron dialog, 仅桌面壳): 取消返回 canceled; 非 Electron/纯 Node 返回 501 PICKER_UNAVAILABLE, 不影响手输路径。
 - 说明: 文件选择走主进程原生对话框, 只返回用户选中的路径, 不接受任意路径参数。
 - 验证: route 92/92, i18n/硬编码通过; 全量 `npm run gates` **16 PASS / 0 FAIL**; 已推送 `277b0e1`。
+## 437. 进度存档(2026-11-28 收口)
+- 主程序混音台已可用: 主引擎/manager/API、A/B 页面、通道送线/仅监听、M/S、主输出增益/M、监听输出、降噪门控、Cue(同步/监听/实时音量/每行增益/文件选择器)、预设、CABLE 检测、布局持久化。
+- 旧 virtual-mixer 插件仍在但主页面已不依赖; camera-path 运镜仍走插件; Cue 仍是独立进程。
+- 验证: 全量 gates **16 PASS / 0 FAIL**; 高码率/并发/单核低配 Cue 均 0.98~1.01x; 最近提交 `9d49a14`。
+- 交接: 下次先读 `docs/SESSION-2026-11-23-SUMMARY.md`(已改写为 2026-11-28 当前状态)与功能卡; 优先 Cue/Live 同回调、运镜内部化、插件退役/打包。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1125,5 +1130,6 @@
 | 434 | 2026-11-28 | 布局持久化/低功耗暂停 + Cue 运行中音量 |
 | 435 | 2026-11-28 | 预设 + CABLE 检测提示 |
 | 436 | 2026-11-28 | Cue 文件选择器 + 每行增益 |
+| 437 | 2026-11-28 | 进度存档 |
 
 <!-- DEV-NOTES-INDEX:END -->
