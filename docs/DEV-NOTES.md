@@ -911,7 +911,7 @@
 - A/B 卡片新增 Cue 区: 两行文件路径(可单行 × 清空)、lead ms、同步起播/停止/清空、进度条/百分比; 空槽不发; 进度 250ms 轮询。
 - 证据: 插件 cue→cueStatus 实测 progress 0.1227→0.5364; cue 2s+200ms lead durationMs=2200; cue-selftest 3 PASS onset delta 0ms。
 - 限制: cue 仍独立音频客户端, 和 live mic 是 Windows 混音而非同一回调; camera-path 联动未接; 文件路径需手填。
-- 下一步: camera-path 起播联动; 将 cue 并入 LiveEngine 同一输出回调; 再做 cue 行文件选择/进度。
+- 下一步: camera-path 起播联动; 将 cue 并入 LiveEngine 同一输出回调; 再做 cue 行文件选择/进度。全量 `npm run gates` **16 PASS / 0 FAIL**。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
