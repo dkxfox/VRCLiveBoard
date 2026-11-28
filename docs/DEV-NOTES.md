@@ -1015,7 +1015,7 @@
 - 页面隐藏/不再可见时, meter/cue 轮询自动降到 500ms/1s 暂停动画, 回来恢复, 降低后台占用。
 - CueEngine 新增 `--control <path>`: 100ms 轮询 `cue-control.json` 的 `gain`; manager 新增 `setCueGain`, UI Cue 音量滑杆 oninput 防抖调用 `/api/mixer/cue/gain`, 播放中实时改音量。
 - 实测: 5s 440Hz cue gain 1→0.2 后 status level 0.29999→0.05999, 子进程 pid 不变; Cue 音频线程继续。
-- 全量 gates 待收口。
+- 全量 `npm run gates` **16 PASS / 0 FAIL**; 已推送 `3638017`。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
