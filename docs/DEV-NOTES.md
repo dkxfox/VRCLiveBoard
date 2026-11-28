@@ -922,7 +922,7 @@
 - FLAC: NAudio 1.10 的 AudioFileReader 不解 FLAC; `.flac` 改走 Windows Media Foundation `MediaFoundationReader` (Win10/11 自带解码), 再 48k/2ch 归一化。插件文件扩展名允许 flac。
 - Cue 电平: CueEngine 200ms status 增加区间峰值 `level`; A/B Cue 区新增峰值条, 显示 -inf/dB(复用 vmPeak/vmDb)。
 - 证据: 真实 FLAC (`Slicex Electro Hats.flac`) cue-selftest 成功, duration=2420ms, WAV 929KB; cueStatus 实测 level 0.352051(约 -9.1dB), progress 8.6%→34.1%。
-- 验证: test:mixer 21 PASS; test:mixer:cue 3 PASS; 全量 gates 待收口复跑。
+- 验证: test:mixer 21 PASS; test:mixer:cue 3 PASS; 全量 gates **16 PASS / 0 FAIL**。
 - 限制: FLAC 依赖 Windows 10/11 Media Foundation; 极老/N 版可能失败; Cue 仍是独立输出客户端。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
