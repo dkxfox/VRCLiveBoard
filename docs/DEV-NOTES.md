@@ -979,6 +979,12 @@
 - 麦克风增加“降噪”按钮: 主引擎 NoiseGate(包络门限, -45dB/30dB范围/3ms起/120ms放), 走 control 文件实时开关; 降噪后信号同时用于混音与闪避侧链。
 - 证据: CueEngine 以 monitor=Realtek Digital Output + gain=0.5 起播, 1.2s 后 status frames=19200/progress=33%; 主 manager micDenoise=true 启动 frames=17760, control 写入 micDenoise=true; headless 实测 Cue 区 2 checkbox + 1 音量滑杆, 麦克风卡出现“降噪”按钮; 全量 `npm run gates` **16 PASS / 0 FAIL**。
 - 限制: Cue 音量/监听当前在起播时生效; 运行中改滑杆要重新起播。
+## 429. 同步 Cue 播放变慢/卡顿修复(2026-11-28)
+- 复现: 5s/10s WAV 经 CueEngine 播放, 状态 frames 增长约 **0.4~0.5 倍实时**, progress 明显落后; 带监听输出时同样。
+- 根因: CueEngine 循环每生成 10ms 音频就 `Thread.Sleep(10)`; Windows 定时器实际常跳到 ~15.6ms, 生成速度只有实时 0.6 倍左右, 输出缓冲持续不饱和 → 卡顿/听起来变慢。
+- 修复: 改为按 `outBuf.BufferedDuration` 反馈补充: 缓冲低于 220ms 就连续生成多个 10ms 块, 循环 `Sleep(5)`; 播放结束先排空缓冲。监听输出同步写同一批块。
+- 证据(带监听 CABLE→Realtek Digital Output): 10s 音乐 steady rate 1.00~1.02x; 5s 文件 1.3s 后 steady 1.01~1.02x; monitor on/off 均正常。启动首 0.5~0.8s 仍有设备初始化延迟, 不是持续变速。
+- 限制: Cue 音量/监听仍起播时生效; 首帧延迟可另做预打开优化。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1070,5 +1076,6 @@
 | 426 | 2026-11-28 | 通道条横向 + TEAC 参考 VU 刻度 |
 | 427 | 2026-11-28 | 实时监听输出 + 通道监听按钮 |
 | 428 | 2026-11-28 | Cue 监听/音量 + 麦克风降噪 |
+| 429 | 2026-11-28 | 同步 Cue 播放变慢/卡顿修复 |
 
 <!-- DEV-NOTES-INDEX:END -->

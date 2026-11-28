@@ -222,45 +222,52 @@ internal static class CueEngine
                 var micF = new float[tmp.Length];
                 var mix = new float[tmp.Length];
                 long frames = 0;
+                var targetBuffer = TimeSpan.FromMilliseconds(220);
                 while (true)
                 {
-                    Array.Clear(mix, 0, mix.Length);
-                    bool any = false;
-                    foreach (var tr in tracks)
+                    bool wroteChunk = false;
+                    while (outBuf.BufferedDuration < targetBuffer)
                     {
-                        if (tr.Done) continue;
-                        int got = ReadSome(tr.Provider, tmp, tmp.Length);
-                        for (int i = 0; i < got; i++) mix[i] += (float)(tmp[i] * tr.Gain);
-                        if (got < tmp.Length) tr.Done = true;
-                        any = true;
-                    }
-                    if (micSp != null) ReadSome(micSp, micF, micF.Length);
-                    double chunkPeak = 0;
-                    for (int i = 0; i < mix.Length; i += 2)
-                    {
-                        float ml = mix[i], mr = mix[i + 1];
-                        if (duckL != null)
+                        Array.Clear(mix, 0, mix.Length);
+                        bool anyTrack = false;
+                        foreach (var tr in tracks)
                         {
-                            float g1, g2;
-                            float micMono = (micF[i] + micF[i + 1]) * 0.5f;
-                            ml = duckL.Process(ml, micMono, out g1);
-                            mr = duckR.Process(mr, micMono, out g2);
+                            if (tr.Done) continue;
+                            int got = ReadSome(tr.Provider, tmp, tmp.Length);
+                            for (int i = 0; i < got; i++) mix[i] += (float)(tmp[i] * tr.Gain);
+                            if (got < tmp.Length) tr.Done = true;
+                            anyTrack = true;
                         }
-                        ml = (float)(ml * cueGain); mr = (float)(mr * cueGain);
-                        if (Math.Abs(ml) > chunkPeak) chunkPeak = Math.Abs(ml);
-                        if (Math.Abs(mr) > chunkPeak) chunkPeak = Math.Abs(mr);
-                        if (ml > 1f) ml = 1f; else if (ml < -1f) ml = -1f;
-                        if (mr > 1f) mr = 1f; else if (mr < -1f) mr = -1f;
-                        mix[i] = ml; mix[i + 1] = mr;
+                        if (micSp != null) ReadSome(micSp, micF, micF.Length);
+                        double chunkPeak = 0;
+                        for (int i = 0; i < mix.Length; i += 2)
+                        {
+                            float ml = mix[i], mr = mix[i + 1];
+                            if (duckL != null)
+                            {
+                                float g1, g2;
+                                float micMono = (micF[i] + micF[i + 1]) * 0.5f;
+                                ml = duckL.Process(ml, micMono, out g1);
+                                mr = duckR.Process(mr, micMono, out g2);
+                            }
+                            ml = (float)(ml * cueGain); mr = (float)(mr * cueGain);
+                            if (Math.Abs(ml) > chunkPeak) chunkPeak = Math.Abs(ml);
+                            if (Math.Abs(mr) > chunkPeak) chunkPeak = Math.Abs(mr);
+                            if (ml > 1f) ml = 1f; else if (ml < -1f) ml = -1f;
+                            if (mr > 1f) mr = 1f; else if (mr < -1f) mr = -1f;
+                            mix[i] = ml; mix[i + 1] = mr;
+                        }
+                        var bytes = new byte[mix.Length * sizeof(float)];
+                        Buffer.BlockCopy(mix, 0, bytes, 0, bytes.Length);
+                        outBuf.AddSamples(bytes, 0, bytes.Length);
+                        if (monOut != null) monBuf.AddSamples(bytes, 0, bytes.Length);
+                        frames += mix.Length / Channels;
+                        status.Update(frames, chunkPeak);
+                        wroteChunk = true;
+                        if (!anyTrack) break;
                     }
-                    var bytes = new byte[mix.Length * sizeof(float)];
-                    Buffer.BlockCopy(mix, 0, bytes, 0, bytes.Length);
-                    outBuf.AddSamples(bytes, 0, bytes.Length);
-                    if (monOut != null) monBuf.AddSamples(bytes, 0, bytes.Length);
-                    frames += mix.Length / Channels;
-                    status.Update(frames, chunkPeak);
-                    if (!any) break;
-                    Thread.Sleep(10);
+                    if (!wroteChunk && outBuf.BufferedDuration <= TimeSpan.FromMilliseconds(20)) break;
+                    Thread.Sleep(5);
                 }
                 output.Stop();
                 try { if (monOut != null) monOut.Stop(); } catch { }
