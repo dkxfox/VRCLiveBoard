@@ -1002,7 +1002,7 @@
 ## 432. Cue 运镜“不使用”选项(2026-11-28)
 - 用户反馈: 同步 Cue 的运镜下拉缺少“不使用”, 无法明确关闭运镜联动。
 - 在 camera 选择框首项增加 `vmCameraNone`(“不使用”, value 空); 空值起播不 importPreset/playNow, 只有选中预设才运镜。
-- 验证: 语法/硬编码/i18n 引用检查通过; 全量 gates 待收口。
+- 验证: 语法/硬编码/i18n 引用检查通过; 全量 `npm run gates` **16 PASS / 0 FAIL**(GSYNC fetch 网络失败仅 WARN)。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
