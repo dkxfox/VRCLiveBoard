@@ -13,6 +13,7 @@ const { setAutostart, isEnabled } = require('./autostart');
 const { getVrcStatus } = require('./vrcstatus');
 const { runHousekeeping } = require('./housekeeping');
 const { PluginManager } = require('./pluginsys/manager');
+const { MixerManager } = require('./audio/mixer-manager');
 
 async function main() {
   // 启动横幅的代号从 version.json 读(M-20260911-52): 原先把「星光」写死在这里, 1.4.0 换代号后日志仍报旧名 —— GVER 现在管这条
@@ -169,7 +170,8 @@ async function main() {
     if (!r.ok) logger.warn('[插件] 自动启用失败 ' + id + ': ' + r.error);
   }
 
-  const web = createServer({ mocap: mocap, web: config.web, config: config, configPath: configPath, composer: composer, logger: logger, projectDir: projectDir, pluginManager: pluginManager, osc: osc, triggers: triggers, dictation: dictation, actions: actions, ime: ime, onQuit: function () { shutdown('控制台退出'); }, onRestart: function (proceed) { shutdown('控制台重启', proceed); } });
+  const mixer = new MixerManager({ config: config, logger: logger, save: function () { try { require('./configio').writeConfigAtomic(configPath, config); } catch (e) { logger.warn('[混音台] 配置保存失败: ' + e.message); } } });
+  const web = createServer({ mocap: mocap, web: config.web, config: config, configPath: configPath, composer: composer, logger: logger, projectDir: projectDir, pluginManager: pluginManager, osc: osc, triggers: triggers, dictation: dictation, actions: actions, ime: ime, mixer: mixer, onQuit: function () { shutdown('控制台退出'); }, onRestart: function (proceed) { shutdown('控制台重启', proceed); } });
   const consolePort = await web.start();
   // 桌面壳必须知道**实际**端口: 19190 被占时上面会回退, 写死 URL 就会白屏(M-20260911-08)
   process.env.VRCB_CONSOLE_PORT = String(consolePort);
@@ -202,6 +204,7 @@ async function main() {
     try { triggers.close(); } catch (e) {}
     try { dictation.close(); } catch (e) {}
     try { actions.close(); } catch (e) {}
+    try { mixer.dispose(); } catch (e) {}
     try { if (mediaSource && mediaSource.stop) mediaSource.stop(); } catch (e) {}
     try { require('./capturehost').stopCaptureHost(); } catch (e) {}
     try { if (web && web.stop) await Promise.race([web.stop(), new Promise(function (r) { setTimeout(r, 1500); })]); } catch (e) {}

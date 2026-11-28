@@ -37,6 +37,7 @@ function effPluginSec() {
 }
   let gateFails = []; // 密码门失败时间戳(防爆破节流)
   const pluginManager = opts.pluginManager || null;
+  const mixer = opts.mixer || null;
   const oscSender = opts.osc || null;
  // 统一退出/重启钩子: 由 src/main.js 负责停服务、杀 python 助手、释放端口后再退出(M-20260911-07)
  const onQuit = opts.onQuit || null;
@@ -517,6 +518,54 @@ function effPluginSec() {
       } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }); }
     });
   });
+  // ===== 混音台主程序 API(M2) =====
+  function needMixer(res) {
+    if (!mixer) { json(res, 503, { ok: false, error: 'MIXER_NOT_READY' }); return true; }
+    return false;
+  }
+  on('GET', '/api/mixer/status', function (req, res, url) {
+    if (needMixer(res)) return;
+    try { return json(res, 200, mixer.status()); } catch (e) { return json(res, 500, { ok: false, error: String(e.message || e) }); }
+  });
+  on('GET', '/api/mixer/devices', function (req, res, url) {
+    if (needMixer(res)) return;
+    mixer.devices().then(function (d) { json(res, 200, d); }).catch(function (e) { json(res, 500, { ok: false, error: String(e.message || e) }); });
+  });
+  on('POST', '/api/mixer/config', function (req, res, url) {
+    if (needMixer(res)) return;
+    readBody(req, function (b) {
+      try {
+        var body = JSON.parse(b || '{}');
+        var cfg = mixer.setConfig(body.cfg || body);
+        persist();
+        return json(res, 200, { ok: true, config: cfg });
+      } catch (e) { return json(res, 400, { ok: false, error: String(e.message || e) }); }
+    });
+  });
+  on('POST', '/api/mixer/start', function (req, res, url) {
+    if (needMixer(res)) return;
+    mixer.start().then(function (r) { json(res, 200, r); }).catch(function (e) { json(res, 400, { ok: false, error: String(e.message || e) }); });
+  });
+  on('POST', '/api/mixer/stop', function (req, res, url) {
+    if (needMixer(res)) return;
+    try { return json(res, 200, mixer.stop()); } catch (e) { return json(res, 500, { ok: false, error: String(e.message || e) }); }
+  });
+  on('GET', '/api/mixer/meter', function (req, res, url) {
+    if (needMixer(res)) return;
+    mixer.meter().then(function (r) { json(res, 200, r); }).catch(function (e) { json(res, 500, { ok: false, error: String(e.message || e) }); });
+  });
+  on('POST', '/api/mixer/cue', function (req, res, url) {
+    if (needMixer(res)) return;
+    readBody(req, function (b) {
+      var args; try { args = JSON.parse(b || '{}'); } catch (e) { return json(res, 400, { ok: false, error: String(e.message || e) }); }
+      mixer.cue(args).then(function (r) { json(res, 200, r); }).catch(function (e) { json(res, 400, { ok: false, error: String(e.message || e) }); });
+    });
+  });
+  on('POST', '/api/mixer/cue/stop', function (req, res, url) { if (needMixer(res)) return; try { return json(res, 200, mixer.cueStop()); } catch (e) { return json(res, 500, { ok: false, error: String(e.message || e) }); } });
+  on('POST', '/api/mixer/cue/clear', function (req, res, url) { if (needMixer(res)) return; try { return json(res, 200, mixer.cueClear()); } catch (e) { return json(res, 500, { ok: false, error: String(e.message || e) }); } });
+  on('GET', '/api/mixer/cue/status', function (req, res, url) { if (needMixer(res)) return; mixer.cueStatus().then(function (r) { json(res, 200, r); }).catch(function (e) { json(res, 500, { ok: false, error: String(e.message || e) }); }); });
+  on('GET', '/api/mixer/latency', function (req, res, url) { if (needMixer(res)) return; mixer.latencyTest().then(function (r) { json(res, 200, r); }).catch(function (e) { json(res, 500, { ok: false, error: String(e.message || e) }); }); });
+
   on('GET', '/api/plugins/asset', function (req, res, url) {
     const id = url.searchParams.get('id');
     const file = url.searchParams.get('file');

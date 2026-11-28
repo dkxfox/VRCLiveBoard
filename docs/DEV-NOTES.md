@@ -935,6 +935,12 @@
 - 改动: index.html 新增 mixer tab + #tab-mixer/#mixerPage; lang.js 增 tabMixer/mixerNeedsPlugin; app.js 新增 initMixerPage, 复用现有 plgVirtualMixer A/B UI; 插件未启用/未授权时显示迁移提示。
 - 当前仍是过渡: 页面走插件 API(/api/plugins/call)，引擎/配置尚未迁入主程序；下一步 M2.1 引擎归主程序 + 主 API。
 - 验证: app.js 语法通过; gates:fast 通过(动态 id 仅 WARN); 全量 gates **16 PASS / 0 FAIL**。另修一处 `var t` 遮蔽 `tr` 的 GI18NU 失败。
+## 421. 主程序混音台后端迁移(2026-11-28, M2.1 第一片)
+- 引擎副本移到 `src/audio/mixer/engine/`; 新增 `src/audio/mixer-manager.js`: 设备/配置/start-stop/meter/cue/cueStatus/latency, 引擎子进程由主程序持有。
+- main.js 创建 MixerManager 并注入 web server; shutdown dispose; 新增 `/api/mixer/*` 11 条路由(已登记 ROUTES-BASELINE, L0)。
+- 主控制台 Tab 的 `initMixerPage` 改为读 `/api/mixer/status`, 用主 API adapter 调 `plgVirtualMixer`; 混音台不再要求 virtual-mixer 插件启用/授权。
+- 证据: 主 API status/devices 实测; MixerManager 直接 start→meter frames>0→dispose; headless Edge 打开 ?tab=mixer, #mixerPage/.vmStage 渲染; 全量 gates 待收口。
+- 仍待: 主页面按开发初期 A/B 视觉定稿重绘; cue/camera 仍部分走插件; 插件退役最后做(迁移测试后)。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1018,5 +1024,6 @@
 | 418 | 2026-11-28 | 同步 Cue: FLAC + 电平表 |
 | 419 | 2026-11-28 | Cue 麦克风回避 + 智能路径 |
 | 420 | 2026-11-28 | 主控制台“混音台”Tab 第一片 |
+| 421 | 2026-11-28 | 主程序混音台后端迁移 |
 
 <!-- DEV-NOTES-INDEX:END -->

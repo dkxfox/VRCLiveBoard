@@ -113,3 +113,6 @@ advTitle:'Advanced (usually untouched)', portsOsc:'OSC send port:', portsApply:'
 
 // 主控制台混音台 Tab(M2 过渡, 2026-11-28)
 (function(){var N=JSON.parse("{\"zh-CN\":{\"tabMixer\":\"混音台\",\"mixerNeedsPlugin\":\"混音台引擎正在迁移到主程序；当前请先在“插件”页启用并授权“虚拟混音台”。\"},\"zh-TW\":{\"tabMixer\":\"混音台\",\"mixerNeedsPlugin\":\"混音台引擎正在遷移到主程式；目前請先在「外掛」頁啟用並授權「虛擬混音台」。\"},\"en\":{\"tabMixer\":\"Mixer\",\"mixerNeedsPlugin\":\"The mixer engine is being migrated into the main app; for now enable and authorize \\\"Virtual Mixer\\\" on the Plugins tab.\"}}");for(var L in N){for(var k in N[L]){(window.VRCB_LANG[L]=window.VRCB_LANG[L]||{})[k]=N[L][k];}}})();
+
+// 主混音台未就绪(2026-11-28)
+(function(){var N=JSON.parse("{\"zh-CN\":{\"mixerNotReady\":\"混音台引擎未就绪（主程序资源缺失或启动失败）。\"},\"zh-TW\":{\"mixerNotReady\":\"混音台引擎尚未就緒（主程式資源遺失或啟動失敗）。\"},\"en\":{\"mixerNotReady\":\"Mixer engine is not ready (main-app resource missing or failed to start).\"}}");for(var L in N){for(var k in N[L]){(window.VRCB_LANG[L]=window.VRCB_LANG[L]||{})[k]=N[L][k];}}})();
