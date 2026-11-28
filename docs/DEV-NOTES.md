@@ -890,7 +890,7 @@
 - 目标: 正式版输出端到端 <100ms; 先分清引擎/CABLE 与 VRChat 的延迟。
 - 新增: `engine/LatencyTest.cs` (`--latency-test [seconds] [json]`): 向 CABLE Input 播 1kHz, 从 CABLE Output 采集并测往返; `test/latency-smoke.js` + `npm run test:mixer:latency`。
 - 优化: 探针从共享 30ms/默认采集(约190ms)改为事件驱动 5ms 采集/输出, 实测 **99.9–126.3ms**(典型 ~113ms); LiveEngine mic/custom 采集与输出改事件驱动 10ms, 失败回退默认。
-- 证据: `test:mixer` 21 PASS; `test:mixer:latency` 2 PASS; `plugin-check` PASS; 全量 gates 待收口复跑。
+- 证据: `test:mixer` 21 PASS; `test:mixer:latency` 2 PASS; `plugin-check` PASS; 全量 gates **16 PASS / 0 FAIL**。
 - 边界: 113ms 是 CABLE 往返, 还没算 VRChat/VD 语音处理; 正式版 <100ms 仍需继续压引擎与驱动缓冲/换事件路径, 不能只调 UI。
 - 下一步: 60Hz 遥测替代状态文件 + UI 30fps VU; 继续做无缓冲/自适应环形缓冲音频路径; 再做麦克风门限/降噪旁路。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
