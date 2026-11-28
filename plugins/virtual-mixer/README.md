@@ -60,9 +60,11 @@
 
 start() / stop() 也可由插件 API 调用。修改数值后，控制台保存会调用 reloadConfig；autoStart=true 时自动重启引擎应用新参数。
 
-### 同步 Cue API
+### 同步 Cue
 
-`cue({ files:[{path,gainDb}], leadMs })`：多条文件在同一 48kHz 输出时钟起播；`cue` 整体替换上一组，`cueStop` 只停，`cueClear` 停止并清空，`cueStatus` 返回运行状态。
+A/B 卡片底部新增 Cue 两行：填文件路径、可单独 `×` 清空；`同步起播`/`停止 Cue`/`清空 Cue`；进度条按引擎 status 更新。空槽不会播放。
+
+API：`cue({ files:[{path,gainDb}], leadMs })` 多条文件在同一 48kHz 输出时钟起播；`cue` 整体替换上一组，`cueStop` 只停，`cueClear` 停止并清空，`cueStatus` 返回运行/进度。
 
 安全约定：默认 autoStart=false，不会自动打开音频；设备名必须精确匹配，找不到会拒绝启动，避免误输出到物理扬声器。
 

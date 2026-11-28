@@ -906,6 +906,12 @@
 - 证据: `npm run test:mixer:cue` → **3 PASS**; 440/880Hz 两条文件 onset 偏差 **0ms**(目标 ≤20ms); 插件 cue→status→stop→clear 实测通过。
 - 限制: 驱动/Windows 输出仍约 100–125ms; cue 与 live mic 混合目前是两个音频客户端(Windows 混音), 后续可并入同一输出回调; A/B 卡片 cue UI/camera-path 联动未做。
 - 下一步: cue 文件行/进度/清空 UI; camera-path 起播联动; 再评估把 cue 混入 LiveEngine 单进程。`npm run gates` **16 PASS / 0 FAIL**。
+## 416. 同步 Cue 进度/UI(2026-11-28, 用户“继续”)
+- 新增 CueEngine 后台 status: `startedAt/durationMs/frames/progress/running/files`, 200ms 更新(后台 Timer, 不在 cue 音频循环里做文件 I/O); 插件 `cueStatus` 异步读。
+- A/B 卡片新增 Cue 区: 两行文件路径(可单行 × 清空)、lead ms、同步起播/停止/清空、进度条/百分比; 空槽不发; 进度 250ms 轮询。
+- 证据: 插件 cue→cueStatus 实测 progress 0.1227→0.5364; cue 2s+200ms lead durationMs=2200; cue-selftest 3 PASS onset delta 0ms。
+- 限制: cue 仍独立音频客户端, 和 live mic 是 Windows 混音而非同一回调; camera-path 联动未接; 文件路径需手填。
+- 下一步: camera-path 起播联动; 将 cue 并入 LiveEngine 同一输出回调; 再做 cue 行文件选择/进度。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -984,5 +990,6 @@
 | 413 | 2026-11-28 | 虚拟混音台低延迟原型 + CABLE 延迟测量 |
 | 414 | 2026-11-28 | VU 30fps + 延迟下限测量 |
 | 415 | 2026-11-28 | 虚拟混音台同步 Cue 引擎/API |
+| 416 | 2026-11-28 | 同步 Cue 进度/UI |
 
 <!-- DEV-NOTES-INDEX:END -->

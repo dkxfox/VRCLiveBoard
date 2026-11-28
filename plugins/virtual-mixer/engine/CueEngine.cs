@@ -21,6 +21,27 @@ internal static class CueEngine
         public ISampleProvider Provider;
         public double Gain = 1.0;
         public bool Done;
+        public long DurationMs;
+    }
+
+    private sealed class CueState
+    {
+        private readonly object gate = new object();
+        private long frames;
+        private bool running = true;
+        public long StartedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        public long DurationMs;
+        public string Files;
+        public void Update(long f) { lock (gate) { frames = f; } }
+        public void Stop() { lock (gate) { running = false; } }
+        public void Write(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return;
+            long f; bool r;
+            lock (gate) { f = frames; r = running; }
+            double progress = DurationMs > 0 ? Math.Min(1.0, (f * 1000.0 / Rate) / DurationMs) : 0;
+            try { CaptureTest.WriteText(path, "{\"ok\":true,\"running\":" + (r ? "true" : "false") + ",\"startedAt\":" + StartedAt + ",\"durationMs\":" + DurationMs + ",\"frames\":" + f + ",\"progress\":" + CaptureTest.F(progress) + ",\"files\":\"" + CaptureTest.J(Files) + "\"}"); } catch { }
+        }
     }
 
     public static int Run(string[] args)
@@ -62,7 +83,7 @@ internal static class CueEngine
             if (sp.WaveFormat.SampleRate != Rate) sp = new WdlResamplingSampleProvider(sp, Rate);
             if (sp.WaveFormat.Channels == 1) sp = new MonoToStereoSampleProvider(sp);
             else if (sp.WaveFormat.Channels > 2) throw new Exception("UNSUPPORTED_CHANNELS: " + path);
-            list.Add(new Track { Path = path, Provider = sp, Gain = Math.Pow(10.0, gainDb / 20.0) });
+            list.Add(new Track { Path = path, Provider = sp, Gain = Math.Pow(10.0, gainDb / 20.0), DurationMs = (long)reader.TotalTime.TotalMilliseconds });
         }
         return list;
     }
@@ -87,9 +108,13 @@ internal static class CueEngine
                 output = new WasapiOut(dev, AudioClientShareMode.Shared, true, 10);
                 output.Init(outBuf);
                 output.Play();
-                if (!string.IsNullOrEmpty(statusPath)) CaptureTest.WriteText(statusPath, "{\"ok\":true,\"running\":true,\"startedAt\":" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + ",\"files\":\"" + CaptureTest.J(string.Join("|", tracks.ConvertAll(t => t.Path).ToArray())) + "\"}");
+                long totalMs = 0; foreach (var tr in tracks) { if (tr.DurationMs > totalMs) totalMs = tr.DurationMs; } totalMs += leadFrames * 1000L / Rate;
+                var status = new CueState { DurationMs = totalMs, Files = string.Join("|", tracks.ConvertAll(t => t.Path).ToArray()) };
+                Timer statusTimer = null;
+                if (!string.IsNullOrEmpty(statusPath)) { status.Write(statusPath); statusTimer = new Timer(delegate { status.Write(statusPath); }, null, 200, 200); }
                 var tmp = new float[Rate * Channels / 100];
                 var mix = new float[tmp.Length];
+                long frames = 0;
                 while (true)
                 {
                     Array.Clear(mix, 0, mix.Length);
@@ -110,11 +135,15 @@ internal static class CueEngine
                     var bytes = new byte[mix.Length * sizeof(float)];
                     Buffer.BlockCopy(mix, 0, bytes, 0, bytes.Length);
                     outBuf.AddSamples(bytes, 0, bytes.Length);
+                    frames += mix.Length / Channels;
+                    status.Update(frames);
                     if (!any) break;
                     Thread.Sleep(10);
                 }
                 output.Stop();
-                if (!string.IsNullOrEmpty(statusPath)) CaptureTest.WriteText(statusPath, "{\"ok\":true,\"running\":false,\"files\":\"" + CaptureTest.J(string.Join("|", tracks.ConvertAll(t => t.Path).ToArray())) + "\"}");
+                status.Stop();
+                if (statusTimer != null) statusTimer.Dispose();
+                status.Write(statusPath);
                 return 0;
             }
         }

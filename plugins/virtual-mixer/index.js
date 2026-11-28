@@ -235,7 +235,11 @@ module.exports = function (c) {
       },
       cueStop: function () { stopCue(); return { ok: true, running: false }; },
       cueClear: function () { stopCue(); cueInfo = null; return { ok: true, running: false, files: [] }; },
-      cueStatus: function () { return { ok: true, running: !!(cueChild && cueChild.exitCode === null), files: cueInfo ? cueInfo.files : [], startedAt: cueInfo ? cueInfo.startedAt : null }; },
+      cueStatus: async function () {
+        let data = null;
+        try { data = readJson(cueStatusPath()); } catch (e) {}
+        return { ok: true, running: !!(cueChild && cueChild.exitCode === null), files: cueInfo ? cueInfo.files : [], startedAt: cueInfo ? cueInfo.startedAt : null, data: data };
+      },
       meter: async function () {
         const running = !!(liveChild && liveChild.exitCode === null);
         try {
