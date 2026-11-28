@@ -25,7 +25,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const VERSION = '0.4.0';
+const VERSION = '0.4.1';
 const DOLLY = {
   play: '/dolly/Play',
   playDelayed: '/dolly/PlayDelayed',
@@ -705,6 +705,16 @@ module.exports = function (ctx) {
         const lim = maxKF();
         list.presets.forEach(function (p) { p.needsSplit = p.ok && p.maxSegment > lim; p.playable = p.ok; });
         return { ok: true, dir: pathsDir(), maxKeyframesPerSegment: lim, presets: list.presets, lan: lanStatusInfo() };
+      },
+      playNow: async function () {
+        try {
+          const ok = await send(DOLLY.play, [true]);
+          if (!ok) return { ok: false, error: lastError || 'Play 发送失败' };
+          playing = true;
+          if (current) current.startedAt = Date.now();
+          log('info', '[camera-path] playNow 立即播放' + (current ? ' file=' + current.file : ''));
+          return { ok: true, playSent: true, file: current ? current.file : null };
+        } catch (e) { return { ok: false, error: String(e.message || e) }; }
       },
       playPreset: async function (args) { try { return await playPreset(args); } catch (e) { return { ok: false, error: String(e.message || e) }; } },
       importPreset: async function (args) {

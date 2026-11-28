@@ -296,6 +296,7 @@ function plgVirtualMixer(p, body){
   var cueMsg=document.createElement('div');cueMsg.className='vmMsg';cue.appendChild(cueMsg);
   function cueRow(label){var r=document.createElement('div');r.className='vmCueRow';var l=document.createElement('span');l.className='vmHint';l.textContent=label;r.appendChild(l);var i=document.createElement('input');i.type='text';i.placeholder=tr('vmCuePath');r.appendChild(i);var x=document.createElement('button');x.className='small gray';x.textContent='×';x.title=tr('vmCueClear');x.onclick=function(){i.value='';};r.appendChild(x);cue.appendChild(r);return i;}
   var cueA=cueRow(tr('vmCueA')),cueB=cueRow(tr('vmCueB'));
+  var camRow=document.createElement('div');camRow.className='vmCueRow';var camLab=document.createElement('span');camLab.className='vmHint';camLab.textContent=tr('vmCueCamera');camRow.appendChild(camLab);var camSel=document.createElement('select');var camNone=document.createElement('option');camNone.value='';camNone.textContent=tr('vmCueCameraNone');camSel.appendChild(camNone);camRow.appendChild(camSel);var camBlank=document.createElement('span');camRow.appendChild(camBlank);cue.appendChild(camRow);
   var cueBar=document.createElement('div');cueBar.className='vmCueBar';var cueFill=document.createElement('i');cueBar.appendChild(cueFill);cue.appendChild(cueBar);
   var cueHint=document.createElement('div');cueHint.className='vmHint';cueHint.textContent=tr('vmCueHint');cue.appendChild(cueHint);
   var cueProgress=document.createElement('div');cueProgress.className='vmDb';cueProgress.textContent='0%';cue.appendChild(cueProgress);
@@ -365,8 +366,11 @@ function plgVirtualMixer(p, body){
   cueStart.onclick=function(){
     var files=collectCue();
     if(!files.length){setCueMsg(tr('vmCueEmpty'),true);return;}
-    cueStart.disabled=true;setCueMsg('...');
-    plugCall('virtual-mixer','cue',{files:files,leadMs:Number(cueLead.value)||500}).then(function(j){if(!j||!j.ok)throw new Error((j&&j.error)||'');setCueMsg('');pollCue();}).catch(function(e){setCueMsg(tr('vmSaveFail')+(e&&e.message||e),true);}).then(function(){cueStart.disabled=false;});
+    var cam=camSel.value||'';
+    var lead=Math.max(0,Number(cueLead.value)||500);
+    cueStart.disabled=true;setCueMsg(cam?tr('vmCueCameraImporting'):'...');
+    var prep=cam?plugCall('camera-path','importPreset',{file:cam}):Promise.resolve({ok:true});
+    prep.then(function(cj){if(cam&&(!cj||!cj.ok))throw new Error(tr('vmCueCameraFail')+((cj&&cj.error)||''));return plugCall('virtual-mixer','cue',{files:files,leadMs:lead});}).then(function(j){if(!j||!j.ok)throw new Error((j&&j.error)||'');setCueMsg('');pollCue();if(cam){setTimeout(function(){plugCall('camera-path','playNow',{}).catch(function(e){setCueMsg(tr('vmCueCameraFail')+((e&&e.message)||e),true);});},lead);}}).catch(function(e){setCueMsg((cam?tr('vmCueCameraFail'):tr('vmSaveFail'))+(e&&e.message||e),true);}).then(function(){cueStart.disabled=false;});
   };
   cueStop.onclick=function(){plugCall('virtual-mixer','cueStop',{}).then(function(){setCueMsg('');pollCue();}).catch(function(e){setCueMsg(String(e&&e.message||e),true);});};
   cueClear.onclick=function(){plugCall('virtual-mixer','cueClear',{}).then(function(){cueA.value='';cueB.value='';cueFill.style.width='0%';cueProgress.textContent='0%';cueBadge.textContent=tr('vmCueIdle');cueBadge.className='vmBadge';pollCue();}).catch(function(e){setCueMsg(String(e&&e.message||e),true);});};
@@ -377,6 +381,7 @@ function plgVirtualMixer(p, body){
   renderStage();
   pollMeter();
   pollCue();
+  plugCall('camera-path','listPresets',{}).then(function(j){var ps=(j&&j.presets)||[];ps.forEach(function(it){if(!it||!it.ok)return;var o=document.createElement('option');o.value=it.file;o.textContent=it.file;camSel.appendChild(o);});}).catch(function(){});
   Promise.all([plugCall('virtual-mixer','liveConfig',{}),plugCall('virtual-mixer','devices',{})]).then(function(res){var cfg=(res[0]&&res[0].config)||{};state.devices=res[1]||{};fillCfg(cfg);addDefaults();}).catch(function(e){setMsg(tr('vmStartFail')+(e&&e.message||e),true);});
 }
 

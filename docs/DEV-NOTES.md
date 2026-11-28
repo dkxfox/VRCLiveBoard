@@ -912,6 +912,12 @@
 - 证据: 插件 cue→cueStatus 实测 progress 0.1227→0.5364; cue 2s+200ms lead durationMs=2200; cue-selftest 3 PASS onset delta 0ms。
 - 限制: cue 仍独立音频客户端, 和 live mic 是 Windows 混音而非同一回调; camera-path 联动未接; 文件路径需手填。
 - 下一步: camera-path 起播联动; 将 cue 并入 LiveEngine 同一输出回调; 再做 cue 行文件选择/进度。全量 `npm run gates` **16 PASS / 0 FAIL**。
+## 417. Cue 运镜联动(2026-11-28, 弹唱/运镜同步)
+- 新增 camera-path API `playNow`: 不重复 Import, 直接发 Play, 供 cue 起播后立即启动运镜; camera-path v0.4.1(需重新授权)。
+- 虚拟混音台 Cue 区新增“联动运镜”下拉(读取 camera-path listPresets); 起播流程: importPreset(noPlay) → 启动 cue → leadMs 后 playNow; 无相机时只启动 cue。
+- 证据: 前端/插件语法通过; mixer 21 PASS; cue 3 PASS; plugin-check PASS; ui-wiring PASS; 全量 gates 待收口复跑。
+- 限制: 相机与 cue 是两次控制调用, 非同一时钟精确锁相; 若需要 ≤20ms, 应把 cue 与 camera Play 命令放到同一调度点(后续)。
+- 下一步: 全量门禁; camera cue 实机验证; 再把 cue 并入 LiveEngine 同回调。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -991,5 +997,6 @@
 | 414 | 2026-11-28 | VU 30fps + 延迟下限测量 |
 | 415 | 2026-11-28 | 虚拟混音台同步 Cue 引擎/API |
 | 416 | 2026-11-28 | 同步 Cue 进度/UI |
+| 417 | 2026-11-28 | Cue 运镜联动 |
 
 <!-- DEV-NOTES-INDEX:END -->
