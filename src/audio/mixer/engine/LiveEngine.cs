@@ -31,13 +31,14 @@ internal static class LiveEngine
         double micGainDb = N(json, "micGainDb", 4.0);
         double musicGain = N(json, "musicGain", 0.72);
         double systemGain = N(json, "systemGain", 1.0);
-        bool systemMuted = B(json, "systemMuted", false);
-        bool micMuted = B(json, "micMuted", false);
-        bool customMuted = B(json, "customMuted", false);
-        bool systemSolo = B(json, "systemSolo", false);
-        bool micSolo = B(json, "micSolo", false);
-        bool customSolo = B(json, "customSolo", false);
-        bool anySolo = systemSolo || micSolo || customSolo;
+        var control = new LiveControl();
+        control.systemMuted = B(json, "systemMuted", false);
+        control.micMuted = B(json, "micMuted", false);
+        control.customMuted = B(json, "customMuted", false);
+        control.systemSolo = B(json, "systemSolo", false);
+        control.micSolo = B(json, "micSolo", false);
+        control.customSolo = B(json, "customSolo", false);
+        string controlPath = S(json, "control");
         bool duckEnabled = B(json, "duckEnabled", true);
         double depthDb = N(json, "duckDepthDb", -15.0);
         double thresholdDb = N(json, "duckThresholdDb", -35.0);
@@ -51,7 +52,7 @@ internal static class LiveEngine
         WasapiLoopbackCapture loop = null;
         WasapiCapture micCap = null, customCap = null;
         WasapiOut output = null;
-        Timer statusTimer = null;
+        Timer statusTimer = null, controlTimer = null;
         StatusBox statusBox = new StatusBox();
         try
         {
@@ -120,11 +121,15 @@ internal static class LiveEngine
                     CaptureTest.WriteText(statusPath, "{\"ok\":true,\"running\":true,\"frames\":0,\"duckGain\":1,\"levels\":{\"system\":0,\"mic\":0,\"custom\":0,\"master\":0}}");
                     statusTimer = new Timer(delegate { statusBox.Write(statusPath); }, null, 33, 33);
                 }
+                if (!string.IsNullOrEmpty(controlPath)) controlTimer = new Timer(delegate { control.Load(controlPath); }, null, 0, 100);
                 try { Thread.CurrentThread.Priority = ThreadPriority.AboveNormal; } catch { }
                 var loopClock = Stopwatch.StartNew();
                 long nextLoopMs = 0;
                 while (true)
                 {
+                    bool systemMuted = control.systemMuted, micMuted = control.micMuted, customMuted = control.customMuted;
+                    bool systemSolo = control.systemSolo, micSolo = control.micSolo, customSolo = control.customSolo;
+                    bool anySolo = systemSolo || micSolo || customSolo;
                     if (sys != null) CaptureTest.ReadSome(sys, sysF, sysF.Length); else Array.Clear(sysF, 0, sysF.Length);
                     CaptureTest.ReadSome(micSp, micF, micF.Length);
                     if (customSp != null) CaptureTest.ReadSome(customSp, customF, customF.Length);
@@ -175,6 +180,7 @@ internal static class LiveEngine
         finally
         {
             try { if (statusTimer != null) statusTimer.Dispose(); } catch { }
+            try { if (controlTimer != null) controlTimer.Dispose(); } catch { }
             try { if (output != null) output.Dispose(); } catch { }
             try { if (loop != null) loop.Dispose(); } catch { }
             try { if (micCap != null) micCap.Dispose(); } catch { }
@@ -230,6 +236,25 @@ internal static class LiveEngine
         Console.Error.WriteLine("  --run <config.json>");
         return 2;
     }
+    private sealed class LiveControl
+    {
+        public volatile bool systemMuted, micMuted, customMuted, systemSolo, micSolo, customSolo;
+        public void Load(string path)
+        {
+            try
+            {
+                string s = File.ReadAllText(path, Encoding.UTF8);
+                systemMuted = B(s, "systemMuted", false);
+                micMuted = B(s, "micMuted", false);
+                customMuted = B(s, "customMuted", false);
+                systemSolo = B(s, "systemSolo", false);
+                micSolo = B(s, "micSolo", false);
+                customSolo = B(s, "customSolo", false);
+            }
+            catch { }
+        }
+    }
+
     private sealed class StatusBox
     {
         private readonly object gate = new object();

@@ -956,6 +956,12 @@
 - 主 manager 配置/启动下发这些字段; 主页面 4 张通道卡新增 M/S 按钮; mic 被 mute/solo 排除时不再触发闪避(避免静音麦克风仍压音乐)。
 - 证据: 主 manager 配置 systemMuted+micMuted+customMuted 启动→meter frames=58560, levels 0; 主引擎编译通过; 全量 `npm run gates` **16 PASS / 0 FAIL**。
 - 说明: 插件旧引擎尚未同步 M/S(主程序已独立); 插件退役前不双改。
+## 425. M/S 实时监听 + VU 刻度/比例(2026-11-28)
+- 用户反馈: 通道 M/S 不是实时; VU 表没有刻度、长宽比不对。
+- 新增 `/api/mixer/channel` + manager `setChannel`: 只更新 M/S 配置并写 `live-control.json`; LiveEngine 100ms 轮询 control 文件, 不重启音频进程。
+- 实测: 启动后 `setChannel({micMuted:true})` 前后 child pid **相同**, control 文件即时更新, 引擎继续 running。
+- 卡片 A 通道条增加 dB 刻度(-60…0)与刻度线; B 机械 VU 增加模拟刻度/刻度线, 面板固定 1.35:1 比例; 主输出同样。
+- 验证: route 88/88, i18n/UI 检查通过; 全量 gates 待收口。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1043,5 +1049,6 @@
 | 422 | 2026-11-28 | 主混音台页面视觉壳 |
 | 423 | 2026-11-28 | 主混音台通道卡片 UI |
 | 424 | 2026-11-28 | 主混音台通道卡片 M/S |
+| 425 | 2026-11-28 | M/S 实时监听 + VU 刻度/比例 |
 
 <!-- DEV-NOTES-INDEX:END -->

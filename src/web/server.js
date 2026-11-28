@@ -542,6 +542,17 @@ function effPluginSec() {
       } catch (e) { return json(res, 400, { ok: false, error: String(e.message || e) }); }
     });
   });
+  on('POST', '/api/mixer/channel', function (req, res, url) {
+    if (needMixer(res)) return;
+    readBody(req, function (b) {
+      try {
+        var patch = JSON.parse(b || '{}');
+        var cfg = mixer.setChannel(patch);
+        persist();
+        return json(res, 200, { ok: true, config: cfg });
+      } catch (e) { return json(res, 400, { ok: false, error: String(e.message || e) }); }
+    });
+  });
   on('POST', '/api/mixer/start', function (req, res, url) {
     if (needMixer(res)) return;
     mixer.start().then(function (r) { json(res, 200, r); }).catch(function (e) { json(res, 400, { ok: false, error: String(e.message || e) }); });

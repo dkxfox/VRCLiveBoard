@@ -36,6 +36,8 @@ const DEFAULTS = {
   cueLeadMs: 500
 };
 
+function controlPath() { return path.join(DATA_DIR, 'live-control.json'); }
+
 function cleanAudioPath(raw) {
   var p = String(raw == null ? '' : raw).trim();
   if (p.length >= 2 && ((p[0] === '"' && p[p.length - 1] === '"') || (p[0] === "'" && p[p.length - 1] === "'"))) p = p.slice(1, -1).trim();
@@ -86,6 +88,25 @@ class MixerManager {
     Object.keys(DEFAULTS).forEach(function (k) { if (patch[k] !== undefined) c[k] = patch[k]; });
     this._normalize();
     this.saveConfig();
+    this._writeControl();
+    return this.getConfig();
+  }
+
+  _control() {
+    var c = this.getConfig();
+    return { systemMuted: c.systemMuted, micMuted: c.micMuted, customMuted: c.customMuted, systemSolo: c.systemSolo, micSolo: c.micSolo, customSolo: c.customSolo };
+  }
+
+  _writeControl() {
+    try { if (this.liveChild) fs.writeFileSync(controlPath(), JSON.stringify(this._control()), 'utf8'); } catch (e) {}
+  }
+
+  setChannel(patch) {
+    if (!patch || typeof patch !== 'object') return this.getConfig();
+    var keys = ['systemMuted','micMuted','customMuted','systemSolo','micSolo','customSolo'];
+    var out = {};
+    keys.forEach(function (k) { if (patch[k] !== undefined) out[k] = !!patch[k]; });
+    if (Object.keys(out).length) this.setConfig(out);
     return this.getConfig();
   }
 
@@ -124,10 +145,12 @@ class MixerManager {
       duckEnabled: c.duckEnabled, duckDepthDb: c.duckDepthDb, duckThresholdDb: c.duckThresholdDb,
       duckAttackMs: c.duckAttackMs, duckReleaseMs: c.duckReleaseMs, duckHoldMs: c.duckHoldMs,
       duckLookaheadMs: c.duckLookaheadMs, sidechainHpfHz: c.sidechainHpfHz,
+      control: controlPath(),
       status: path.join(DATA_DIR, 'live-status.json')
     };
     var cfgPath = path.join(DATA_DIR, 'live-config.json');
     await fs.promises.writeFile(cfgPath, JSON.stringify(cfg), 'utf8');
+    fs.writeFileSync(controlPath(), JSON.stringify(this._control()), 'utf8');
     var child = spawn(ENGINE, ['--run', cfgPath], { windowsHide: true, stdio: 'ignore' });
     this.liveChild = child;
     var self = this;

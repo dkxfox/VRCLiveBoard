@@ -487,6 +487,12 @@
       "p": "/api/mixer/latency",
       "level": 0,
       "note": "CABLE 往返延迟测量; 会短暂打开虚拟线设备"
+    },
+    {
+      "m": "POST",
+      "p": "/api/mixer/channel",
+      "level": 0,
+      "note": "主程序 mixin 通道实时 M/S/增益监听状态; 只改配置并写 control 文件, 不重启引擎"
     }
   ]
 }
