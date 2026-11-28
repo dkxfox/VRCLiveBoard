@@ -1532,5 +1532,5 @@ function initMixerPage(){
     host.innerHTML='';plgVirtualMixer(p,host);
   }).catch(function(e){host.innerHTML='<div class="sub" style="color:var(--warn)">'+String((e&&e.message)||e)+'</div>';});
 }
-document.addEventListener('click',function(ev){try{var t=ev.target&&ev.target.closest?ev.target.closest('#tabs .tab'):null;if(t&&t.dataset.tab==='mixer')initMixerPage();}catch(e){}});
+document.addEventListener('click',function(ev){try{var tabEl=ev.target&&ev.target.closest?ev.target.closest('#tabs .tab'):null;if(tabEl&&tabEl.dataset.tab==='mixer')initMixerPage();}catch(e){}});
 setTimeout(function(){try{var p=$('tab-mixer');if(p&&!p.hidden)initMixerPage();}catch(e){}},0);
