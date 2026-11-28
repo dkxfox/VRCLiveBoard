@@ -11,7 +11,7 @@
 - 当前延迟约 **1s**, 用户暂接受; VU 刷新仍约 500ms 级。
 - 正式版目标: 输出端到端 **<100ms**, VU 接近实时; 麦克风低电平门限/静默省 CPU; 先做低延迟音频原型 + `--latency-test`, 再做 60Hz 遥测/UI 30fps, 再做麦克风门限/降噪旁路。
 - 最新验证: test:mixer 21 PASS; test:mixer:cable 3 PASS; test:mixer:latency 2 PASS; gates 16 PASS / 0 FAIL。
-- 2026-11-28: latency-test CABLE 往返约 112–126ms; 1ms 探针无改善; VU 已到 30fps(状态/前端 33ms); 同步 cue 引擎/API/卡片 UI+进度已完成(0ms onset); camera-path 联动已接; Cue 增加 FLAC + 峰值电平表; M2.1 后端已迁主程序(引擎/manager/11 路由); 主 Tab 走主 API; 监听输出选择 + 每通道监听按钮已完成; 下一步 cue同回调、camera内部化、插件退役。
+- 2026-11-28: latency-test CABLE 往返约 112–126ms; 1ms 探针无改善; VU 已到 30fps(状态/前端 33ms); 同步 cue 引擎/API/卡片 UI+进度已完成(0ms onset); camera-path 联动已接; Cue 增加 FLAC + 峰值电平表; M2.1 后端已迁主程序(引擎/manager/11 路由); 主 Tab 走主 API; Cue 监听/音量、麦克风降噪、监听输出已完成; 下一步 cue同回调/运行中音量、camera内部化、插件退役。
 ## 0. 最新状态保存(2026-11-24)
 
 - 虚拟混音台插件: **v0.4.1**(experimental), 引擎 **0.4.0**; `setup()` 已检测到 VB-CABLE, 返回 `installed=true`。

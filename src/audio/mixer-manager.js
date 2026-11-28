@@ -20,6 +20,9 @@ const DEFAULTS = {
   monitorMic: false,
   monitorCustom: false,
   monitorMaster: false,
+  micDenoise: false,
+  cueMonitor: false,
+  cueGain: 1,
   micGainDb: 4,
   musicGain: 0.72,
   systemGain: 1,
@@ -86,6 +89,9 @@ class MixerManager {
     c.monitorMic = !!c.monitorMic;
     c.monitorCustom = !!c.monitorCustom;
     c.monitorMaster = !!c.monitorMaster;
+    c.micDenoise = !!c.micDenoise;
+    c.cueMonitor = !!c.cueMonitor;
+    c.cueGain = clamp(c.cueGain, 0, 2); if (c.cueGain === null) c.cueGain = 1;
     c.systemCaptureDevice = c.systemCaptureDevice || '__none__';
     return c;
   }
@@ -104,7 +110,7 @@ class MixerManager {
 
   _control() {
     var c = this.getConfig();
-    return { systemMuted: c.systemMuted, micMuted: c.micMuted, customMuted: c.customMuted, systemSolo: c.systemSolo, micSolo: c.micSolo, customSolo: c.customSolo, monitorSystem: c.monitorSystem, monitorMic: c.monitorMic, monitorCustom: c.monitorCustom, monitorMaster: c.monitorMaster };
+    return { systemMuted: c.systemMuted, micMuted: c.micMuted, customMuted: c.customMuted, systemSolo: c.systemSolo, micSolo: c.micSolo, customSolo: c.customSolo, monitorSystem: c.monitorSystem, monitorMic: c.monitorMic, monitorCustom: c.monitorCustom, monitorMaster: c.monitorMaster, micDenoise: c.micDenoise };
   }
 
   _writeControl() {
@@ -113,7 +119,7 @@ class MixerManager {
 
   setChannel(patch) {
     if (!patch || typeof patch !== 'object') return this.getConfig();
-    var keys = ['systemMuted','micMuted','customMuted','systemSolo','micSolo','customSolo','monitorSystem','monitorMic','monitorCustom','monitorMaster'];
+    var keys = ['systemMuted','micMuted','customMuted','systemSolo','micSolo','customSolo','monitorSystem','monitorMic','monitorCustom','monitorMaster','micDenoise'];
     var out = {};
     keys.forEach(function (k) { if (patch[k] !== undefined) out[k] = !!patch[k]; });
     if (Object.keys(out).length) this.setConfig(out);
@@ -162,6 +168,7 @@ class MixerManager {
       systemSolo: c.systemSolo, micSolo: c.micSolo, customSolo: c.customSolo,
       monitorOutput: c.monitorOutputDevice || '',
       monitorSystem: c.monitorSystem, monitorMic: c.monitorMic, monitorCustom: c.monitorCustom, monitorMaster: c.monitorMaster,
+      micDenoise: c.micDenoise,
       duckEnabled: c.duckEnabled, duckDepthDb: c.duckDepthDb, duckThresholdDb: c.duckThresholdDb,
       duckAttackMs: c.duckAttackMs, duckReleaseMs: c.duckReleaseMs, duckHoldMs: c.duckHoldMs,
       duckLookaheadMs: c.duckLookaheadMs, sidechainHpfHz: c.sidechainHpfHz,
@@ -204,6 +211,9 @@ class MixerManager {
     if (!c.masterOutputDevice) throw new Error('NO_OUTPUT_DEVICE');
     this.stopCue();
     var status = path.join(DATA_DIR, 'cue-status.json');
+    var cueGain = args.gain === undefined ? c.cueGain : clamp(args.gain, 0, 2); if (cueGain === null) cueGain = 1;
+    var useCueMonitor = !!(args.monitor || c.cueMonitor);
+    if (useCueMonitor && !c.monitorOutputDevice) throw new Error('NO_MONITOR_DEVICE');
     var cargs = ['--cue', c.masterOutputDevice, String(args.leadMs === undefined ? c.cueLeadMs : args.leadMs), status];
     var infoFiles = [];
     files.forEach(function (f) {
@@ -218,6 +228,8 @@ class MixerManager {
       cargs.push(String(c.duckAttackMs)); cargs.push(String(c.duckReleaseMs));
       cargs.push(String(c.duckHoldMs)); cargs.push(String(c.duckLookaheadMs)); cargs.push(String(c.sidechainHpfHz));
     }
+    if (cueGain !== 1) { cargs.push('--gain'); cargs.push(String(cueGain)); }
+    if (useCueMonitor) { cargs.push('--monitor'); cargs.push(c.monitorOutputDevice); }
     var child = spawn(ENGINE, cargs, { windowsHide: true, stdio: 'ignore' });
     this.cueChild = child; this.cueInfo = { files: infoFiles, startedAt: Date.now() };
     var self = this;

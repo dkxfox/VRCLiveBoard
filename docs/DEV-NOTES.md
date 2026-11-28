@@ -973,6 +973,12 @@
 - 每个通道(系统/麦克风/自定义/主输出)增加“监听”按钮; 走 `/api/mixer/channel` 写 control 文件, 100ms 内生效, 不重启主输出。
 - 监听信号: 子通道取 M/S+增益后的通道信号; 主输出监听取混音/闪避后的主输出; 监听设备改变时 manager 重启音频进程(会短暂断开), 通道开关不重启。
 - 证据: manager 用 Realtek Digital Output 作监听启动 → frames=21600, 四路监听开关写 control 前后 pid 不变; headless 主页面工具栏 1 个监听下拉(10 项)、10 个监听按钮(M/S/监听); 全量 `npm run gates` **16 PASS / 0 FAIL**(GSYNC fetch 网络失败仅 WARN, push 已成功)。
+## 428. Cue 监听/音量 + 麦克风降噪(2026-11-28)
+- Cue 增加 `--gain <linear>` 与 `--monitor <device>`: 同一 Cue 输出同时送 CABLE 主输出和独立监听输出; 音量在闪避后统一应用。
+- 主页面 Cue 区增加“Cue 监听”开关和“Cue 音量”滑杆; 监听输出复用页面顶部监听设备; manager 启动参数按配置下发。
+- 麦克风增加“降噪”按钮: 主引擎 NoiseGate(包络门限, -45dB/30dB范围/3ms起/120ms放), 走 control 文件实时开关; 降噪后信号同时用于混音与闪避侧链。
+- 证据: CueEngine 以 monitor=Realtek Digital Output + gain=0.5 起播, 1.2s 后 status frames=19200/progress=33%; 主 manager micDenoise=true 启动 frames=17760, control 写入 micDenoise=true; 编译通过。
+- 限制: Cue 音量/监听当前在起播时生效; 运行中改滑杆要重新起播。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -1063,5 +1069,6 @@
 | 425 | 2026-11-28 | M/S 实时监听 + VU 刻度/比例 |
 | 426 | 2026-11-28 | 通道条横向 + TEAC 参考 VU 刻度 |
 | 427 | 2026-11-28 | 实时监听输出 + 通道监听按钮 |
+| 428 | 2026-11-28 | Cue 监听/音量 + 麦克风降噪 |
 
 <!-- DEV-NOTES-INDEX:END -->

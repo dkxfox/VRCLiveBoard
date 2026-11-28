@@ -43,6 +43,7 @@ internal static class LiveEngine
         control.monitorMic = B(json, "monitorMic", false);
         control.monitorCustom = B(json, "monitorCustom", false);
         control.monitorMaster = B(json, "monitorMaster", false);
+        control.micDenoise = B(json, "micDenoise", false);
         string controlPath = S(json, "control");
         bool duckEnabled = B(json, "duckEnabled", true);
         double depthDb = N(json, "duckDepthDb", -15.0);
@@ -113,6 +114,7 @@ internal static class LiveEngine
                     monitorOut.Play();
                 }
 
+                var micGate = new NoiseGate(Rate, -45.0, 30.0, 3.0, 120.0);
                 var duck = new Ducker(Rate);
                 duck.ThresholdDb = thresholdDb;
                 duck.DepthDb = depthDb;
@@ -160,7 +162,8 @@ internal static class LiveEngine
                         float sysOut = (systemMuted || (anySolo && !systemSolo)) ? 0f : sysMono;
                         float customOut = (customMuted || (anySolo && !customSolo)) ? 0f : customMono;
                         float music = sysOut + customOut;
-                        float micMono = (micF[i * Channels] + micF[i * Channels + 1]) * 0.5f;
+                        float micMonoRaw = (micF[i * Channels] + micF[i * Channels + 1]) * 0.5f;
+                        float micMono = control.micDenoise ? micGate.Process(micMonoRaw) : micMonoRaw;
                         float micOut = (micMuted || (anySolo && !micSolo)) ? 0f : micMono;
                         float mon = 0f;
                         if (control.monitorSystem) mon += sysOut;
@@ -265,7 +268,7 @@ internal static class LiveEngine
     }
     private sealed class LiveControl
     {
-        public volatile bool systemMuted, micMuted, customMuted, systemSolo, micSolo, customSolo, monitorSystem, monitorMic, monitorCustom, monitorMaster;
+        public volatile bool systemMuted, micMuted, customMuted, systemSolo, micSolo, customSolo, monitorSystem, monitorMic, monitorCustom, monitorMaster, micDenoise;
         public void Load(string path)
         {
             try
@@ -281,6 +284,7 @@ internal static class LiveEngine
                 monitorMic = B(s, "monitorMic", false);
                 monitorCustom = B(s, "monitorCustom", false);
                 monitorMaster = B(s, "monitorMaster", false);
+                micDenoise = B(s, "micDenoise", false);
             }
             catch { }
         }

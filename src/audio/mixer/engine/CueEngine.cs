@@ -68,30 +68,48 @@ internal static class CueEngine
         var tracks = new List<Track>();
         var duck = new DuckOptions();
         int i = 4;
-        while (i + 1 < args.Length && args[i] != "--duck")
+        while (i + 1 < args.Length && !args[i].StartsWith("--"))
         {
             double gainDb;
             if (!double.TryParse(args[i + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out gainDb)) gainDb = 0;
             tracks.Add(LoadTrack(args[i], gainDb));
             i += 2;
         }
-        if (i < args.Length && args[i] == "--duck")
+        double cueGain = 1.0;
+        string monitorId = "";
+        while (i < args.Length)
         {
-            duck.Enabled = true;
-            if (i + 1 < args.Length) duck.MicDevice = args[i + 1];
-            if (i + 2 < args.Length) double.TryParse(args[i + 2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out duck.DepthDb);
-            if (i + 3 < args.Length) double.TryParse(args[i + 3], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out duck.ThresholdDb);
-            if (i + 4 < args.Length) double.TryParse(args[i + 4], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out duck.AttackMs);
-            if (i + 5 < args.Length) double.TryParse(args[i + 5], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out duck.ReleaseMs);
-            if (i + 6 < args.Length) double.TryParse(args[i + 6], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out duck.HoldMs);
-            if (i + 7 < args.Length) double.TryParse(args[i + 7], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out duck.LookaheadMs);
-            if (i + 8 < args.Length) double.TryParse(args[i + 8], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out duck.HpfHz);
+            if (args[i] == "--duck")
+            {
+                duck.Enabled = true;
+                if (i + 1 < args.Length) duck.MicDevice = args[i + 1];
+                if (i + 2 < args.Length) double.TryParse(args[i + 2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out duck.DepthDb);
+                if (i + 3 < args.Length) double.TryParse(args[i + 3], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out duck.ThresholdDb);
+                if (i + 4 < args.Length) double.TryParse(args[i + 4], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out duck.AttackMs);
+                if (i + 5 < args.Length) double.TryParse(args[i + 5], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out duck.ReleaseMs);
+                if (i + 6 < args.Length) double.TryParse(args[i + 6], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out duck.HoldMs);
+                if (i + 7 < args.Length) double.TryParse(args[i + 7], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out duck.LookaheadMs);
+                if (i + 8 < args.Length) double.TryParse(args[i + 8], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out duck.HpfHz);
+                i += 9;
+            }
+            else if (args[i] == "--gain" && i + 1 < args.Length)
+            {
+                double.TryParse(args[i + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out cueGain);
+                i += 2;
+            }
+            else if (args[i] == "--monitor" && i + 1 < args.Length)
+            {
+                monitorId = args[i + 1];
+                i += 2;
+            }
+            else i++;
         }
+        if (cueGain < 0) cueGain = 0; if (cueGain > 2) cueGain = 2;
         if (tracks.Count == 0) return 2;
         if (leadMs < 0) leadMs = 0;
         if (leadMs > 5000) leadMs = 5000;
         int leadFrames = (int)Math.Round(Rate * leadMs / 1000.0);
-        return Play(outputId, tracks, leadFrames, statusPath, duck);
+        return Play(outputId, tracks, leadFrames, statusPath, duck, monitorId, cueGain);
     }
 
     public static int SelfTest(string[] args)
@@ -141,10 +159,10 @@ internal static class CueEngine
         return new Track { Path = path, Provider = sp, Gain = Math.Pow(10.0, gainDb / 20.0), DurationMs = durationMs };
     }
 
-    private static int Play(string outputId, List<Track> tracks, int leadFrames, string statusPath, DuckOptions duckOpt)
+    private static int Play(string outputId, List<Track> tracks, int leadFrames, string statusPath, DuckOptions duckOpt, string monitorId, double cueGain)
     {
-        MMDevice dev = null, mic = null;
-        WasapiOut output = null;
+        MMDevice dev = null, mic = null, monDev = null;
+        WasapiOut output = null, monOut = null;
         WasapiCapture micCap = null;
         try
         {
@@ -152,6 +170,11 @@ internal static class CueEngine
             {
                 dev = CaptureTest.FindDevice(en, DataFlow.Render, outputId);
                 if (dev == null) throw new Exception("NO_OUTPUT_DEVICE");
+                if (!string.IsNullOrEmpty(monitorId))
+                {
+                    monDev = CaptureTest.FindDevice(en, DataFlow.Render, monitorId);
+                    if (monDev == null) throw new Exception("NO_MONITOR_DEVICE");
+                }
                 BufferedWaveProvider micBuf = null;
                 ISampleProvider micSp = null;
                 Ducker duckL = null, duckR = null;
@@ -182,6 +205,15 @@ internal static class CueEngine
                 output = new WasapiOut(dev, AudioClientShareMode.Shared, true, 10);
                 output.Init(outBuf);
                 output.Play();
+                BufferedWaveProvider monBuf = null;
+                if (monDev != null)
+                {
+                    monBuf = new BufferedWaveProvider(outFmt) { BufferDuration = TimeSpan.FromSeconds(1), DiscardOnBufferOverflow = true };
+                    if (leadFrames > 0) { var mlead = new byte[leadFrames * Channels * sizeof(float)]; monBuf.AddSamples(mlead, 0, mlead.Length); }
+                    monOut = new WasapiOut(monDev, AudioClientShareMode.Shared, true, 10);
+                    monOut.Init(monBuf);
+                    monOut.Play();
+                }
                 long totalMs = 0; foreach (var tr in tracks) { if (tr.DurationMs > totalMs) totalMs = tr.DurationMs; } totalMs += leadFrames * 1000L / Rate;
                 var status = new CueState { DurationMs = totalMs, Files = string.Join("|", tracks.ConvertAll(t => t.Path).ToArray()) };
                 Timer statusTimer = null;
@@ -214,6 +246,7 @@ internal static class CueEngine
                             ml = duckL.Process(ml, micMono, out g1);
                             mr = duckR.Process(mr, micMono, out g2);
                         }
+                        ml = (float)(ml * cueGain); mr = (float)(mr * cueGain);
                         if (Math.Abs(ml) > chunkPeak) chunkPeak = Math.Abs(ml);
                         if (Math.Abs(mr) > chunkPeak) chunkPeak = Math.Abs(mr);
                         if (ml > 1f) ml = 1f; else if (ml < -1f) ml = -1f;
@@ -223,12 +256,14 @@ internal static class CueEngine
                     var bytes = new byte[mix.Length * sizeof(float)];
                     Buffer.BlockCopy(mix, 0, bytes, 0, bytes.Length);
                     outBuf.AddSamples(bytes, 0, bytes.Length);
+                    if (monOut != null) monBuf.AddSamples(bytes, 0, bytes.Length);
                     frames += mix.Length / Channels;
                     status.Update(frames, chunkPeak);
                     if (!any) break;
                     Thread.Sleep(10);
                 }
                 output.Stop();
+                try { if (monOut != null) monOut.Stop(); } catch { }
                 try { if (micCap != null) micCap.StopRecording(); } catch { }
                 status.Stop();
                 if (statusTimer != null) statusTimer.Dispose();
@@ -238,10 +273,12 @@ internal static class CueEngine
         }
         finally
         {
+            try { if (monOut != null) monOut.Dispose(); } catch { }
             try { if (output != null) output.Dispose(); } catch { }
             try { if (micCap != null) micCap.Dispose(); } catch { }
             try { if (mic != null) mic.Dispose(); } catch { }
             try { if (dev != null) dev.Dispose(); } catch { }
+            try { if (monDev != null) monDev.Dispose(); } catch { }
         }
     }
 
