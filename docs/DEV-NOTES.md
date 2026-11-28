@@ -928,7 +928,7 @@
 - 用户确认: Cue 需要麦克风回避开关(默认关); 文件路径要识别 Windows“复制文件地址”的引号格式。
 - 路径: 插件/卡片统一 cleanAudioPath: trim、去成对单双引号、解 file:///; 扩展名/存在性校验; 不静默截断。
 - Cue duck: CueEngine 可带 `--duck <mic> <depth> <threshold> <attack> <release> <hold> <lookahead> <hpf>`, 采集 mic 做侧链, 只压 Cue 输出; 默认关; 复用主闪避参数。
-- 证据: `test:mixer:cueapi` **4 PASS**(带引号路径被清洗, --duck/--mic 参数转发); cue 实际起播+d uck 进程运行通过; `test:mixer` 21 PASS; `test:mixer:cue` 3 PASS。
+- 证据: `test:mixer:cueapi` **4 PASS**(带引号路径被清洗, --duck/--mic 参数转发); cue 实际起播+duck 进程运行通过; `test:mixer` 21 PASS; `test:mixer:cue` 3 PASS; 全量 `npm run gates` **16 PASS / 0 FAIL**。
 - 下一步: 全量门禁; 然后 M2 主控制台“混音台”Tab 迁移(用户已选)。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
