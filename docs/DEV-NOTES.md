@@ -1009,7 +1009,7 @@
 - LiveEngine 增加 systemSend/micSend/customSend、masterMuted、masterGain(0~2), 全部走 control 文件; manager/API/UI 同步。
 - 修复: `/api/mixer/channel` 先前把 masterGain 当布尔, 0.3 被写成 1; 现按数值夹取。
 - 实测: 启动后 setChannel({masterGain:0.3,masterMuted:true,systemSend:true}) control 正确写 0.3/true, 子进程 pid 不变; headless 3 个“跳线”按钮 + 主输出 1 滑杆/M. 
-- 全量 gates 待收口。
+- 全量 `npm run gates` **16 PASS / 0 FAIL**; 已推送 `8727e29`。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
