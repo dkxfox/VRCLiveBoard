@@ -119,3 +119,6 @@ advTitle:'Advanced (usually untouched)', portsOsc:'OSC send port:', portsApply:'
 
 // 主混音台页头(2026-11-28)
 (function(){var N=JSON.parse("{\"zh-CN\":{\"mixerPageDesc\":\"把系统声音、麦克风和自定义输入混成一路，送到虚拟跳线；VRChat 的麦克风选跳线的录音端即可。\",\"mixerDetected\":\"已检测\",\"mixerNone\":\"不使用\"},\"zh-TW\":{\"mixerPageDesc\":\"把系統聲音、麥克風和自訂輸入混成一路，送到虛擬跳線；VRChat 的麥克風選跳線的錄音端即可。\",\"mixerDetected\":\"已偵測\",\"mixerNone\":\"不使用\"},\"en\":{\"mixerPageDesc\":\"Mix system audio, microphone and custom inputs into one virtual-cable feed; select the cable recording side as VRChat microphone.\",\"mixerDetected\":\"detected\",\"mixerNone\":\"not used\"}}");for(var L in N){for(var k in N[L]){(window.VRCB_LANG[L]=window.VRCB_LANG[L]||{})[k]=N[L][k];}}})();
+
+// 主混音台通道徽标(2026-11-28)
+(function(){var N=JSON.parse("{\"zh-CN\":{\"mxBadgeLoop\":\"回环\",\"mxBadgeInput\":\"输入\",\"mxBadgeFileLine\":\"文件 / 线路\"},\"zh-TW\":{\"mxBadgeLoop\":\"回環\",\"mxBadgeInput\":\"輸入\",\"mxBadgeFileLine\":\"檔案 / 線路\"},\"en\":{\"mxBadgeLoop\":\"loopback\",\"mxBadgeInput\":\"input\",\"mxBadgeFileLine\":\"file / line\"}}");for(var L in N){for(var k in N[L]){(window.VRCB_LANG[L]=window.VRCB_LANG[L]||{})[k]=N[L][k];}}})();
