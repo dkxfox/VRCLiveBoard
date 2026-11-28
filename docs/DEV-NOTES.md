@@ -939,7 +939,7 @@
 - 引擎副本移到 `src/audio/mixer/engine/`; 新增 `src/audio/mixer-manager.js`: 设备/配置/start-stop/meter/cue/cueStatus/latency, 引擎子进程由主程序持有。
 - main.js 创建 MixerManager 并注入 web server; shutdown dispose; 新增 `/api/mixer/*` 11 条路由(已登记 ROUTES-BASELINE, L0)。
 - 主控制台 Tab 的 `initMixerPage` 改为读 `/api/mixer/status`, 用主 API adapter 调 `plgVirtualMixer`; 混音台不再要求 virtual-mixer 插件启用/授权。
-- 证据: 主 API status/devices 实测; MixerManager 直接 start→meter frames>0→dispose; headless Edge 打开 ?tab=mixer, #mixerPage/.vmStage 渲染; 全量 gates 待收口。
+- 证据: 主 API status/devices 实测; MixerManager 直接 start→meter frames>0→dispose; headless Edge 打开 ?tab=mixer, #mixerPage/.vmStage 渲染; 全量 `npm run gates` **16 PASS / 0 FAIL**。
 - 仍待: 主页面按开发初期 A/B 视觉定稿重绘; cue/camera 仍部分走插件; 插件退役最后做(迁移测试后)。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
