@@ -917,7 +917,7 @@
 - 虚拟混音台 Cue 区新增“联动运镜”下拉(读取 camera-path listPresets); 起播流程: importPreset(noPlay) → 启动 cue → leadMs 后 playNow; 无相机时只启动 cue。
 - 证据: 前端/插件语法通过; mixer 21 PASS; cue 3 PASS; plugin-check PASS; ui-wiring PASS; 全量 gates 待收口复跑。
 - 限制: 相机与 cue 是两次控制调用, 非同一时钟精确锁相; 若需要 ≤20ms, 应把 cue 与 camera Play 命令放到同一调度点(后续)。
-- 下一步: 全量门禁; camera cue 实机验证; 再把 cue 并入 LiveEngine 同回调。
+- 下一步: camera cue 实机验证; 再把 cue 并入 LiveEngine 同回调。全量 `npm run gates` **16 PASS / 0 FAIL**。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
