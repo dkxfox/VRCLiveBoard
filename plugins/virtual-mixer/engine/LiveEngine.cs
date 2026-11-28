@@ -61,7 +61,7 @@ internal static class LiveEngine
 
                 BufferedWaveProvider sysBuf = null;
                 if (useSystem) { loop = new WasapiLoopbackCapture(captureDev); sysBuf = new BufferedWaveProvider(loop.WaveFormat) { BufferDuration = TimeSpan.FromMilliseconds(500), DiscardOnBufferOverflow = true, ReadFully = false }; }
-                micCap = new WasapiCapture(mic);
+                micCap = CreateCapture(mic);
                 var micBuf = new BufferedWaveProvider(micCap.WaveFormat) { BufferDuration = TimeSpan.FromMilliseconds(500), DiscardOnBufferOverflow = true, ReadFully = false };
                 long sysBytes = 0, micBytes = 0, customBytes = 0;
                 if (loop != null) loop.DataAvailable += delegate (object s, WaveInEventArgs e) { if (e.BytesRecorded > 0) { sysBuf.AddSamples(e.Buffer, 0, e.BytesRecorded); sysBytes += e.BytesRecorded; } };
@@ -70,7 +70,7 @@ internal static class LiveEngine
                 BufferedWaveProvider customBuf = null;
                 if (customDev != null)
                 {
-                    customCap = new WasapiCapture(customDev);
+                    customCap = CreateCapture(customDev);
                     customBuf = new BufferedWaveProvider(customCap.WaveFormat) { BufferDuration = TimeSpan.FromMilliseconds(500), DiscardOnBufferOverflow = true, ReadFully = false };
                     customCap.DataAvailable += delegate (object s, WaveInEventArgs e) { if (e.BytesRecorded > 0) { customBuf.AddSamples(e.Buffer, 0, e.BytesRecorded); customBytes += e.BytesRecorded; } };
                 }
@@ -173,6 +173,18 @@ internal static class LiveEngine
             try { if (mic != null) mic.Dispose(); } catch { }
             try { if (customDev != null) customDev.Dispose(); } catch { }
         }
+    }
+
+    private static WasapiCapture CreateCapture(MMDevice dev)
+    {
+        try { return new WasapiCapture(dev, true, 10); }
+        catch { return new WasapiCapture(dev); }
+    }
+
+    private static WasapiOut CreateOutput(MMDevice dev)
+    {
+        try { return new WasapiOut(dev, AudioClientShareMode.Shared, true, 10); }
+        catch { return new WasapiOut(dev, AudioClientShareMode.Shared, false, 30); }
     }
 
     private static MMDevice FindConfigured(MMDeviceEnumerator en, DataFlow flow, string value, string label)

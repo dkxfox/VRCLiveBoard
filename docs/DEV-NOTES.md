@@ -886,6 +886,13 @@
 - 建议路线: ① 低延迟音频原型 + `--latency-test`(引擎→CABLE 目标 p95 <30ms); ② 命名管道/UDP 60Hz 遥测替代状态文件, UI 30fps 弹道; ③ 麦克风 RMS 门限/向下扩展 + 低电平旁路 RNNoise, sidechain 用原始 mic; ④ 再调 cue/运镜/视觉。
 - 已知边界: VRChat/VD 自身语音链路可能占 50–100ms, 游戏内 <100ms 需实测后定义验收; 当前插件 experimental, 无正式包。
 - 最新验证: test:mixer 21 PASS; test:mixer:cable 3 PASS; gates 16 PASS / 0 FAIL。
+## 413. 虚拟混音台低延迟原型 + CABLE 延迟测量(2026-11-28, 用户“继续开发”)
+- 目标: 正式版输出端到端 <100ms; 先分清引擎/CABLE 与 VRChat 的延迟。
+- 新增: `engine/LatencyTest.cs` (`--latency-test [seconds] [json]`): 向 CABLE Input 播 1kHz, 从 CABLE Output 采集并测往返; `test/latency-smoke.js` + `npm run test:mixer:latency`。
+- 优化: 探针从共享 30ms/默认采集(约190ms)改为事件驱动 5ms 采集/输出, 实测 **99.9–126.3ms**(典型 ~113ms); LiveEngine mic/custom 采集与输出改事件驱动 10ms, 失败回退默认。
+- 证据: `test:mixer` 21 PASS; `test:mixer:latency` 2 PASS; `plugin-check` PASS; 全量 gates 待收口复跑。
+- 边界: 113ms 是 CABLE 往返, 还没算 VRChat/VD 语音处理; 正式版 <100ms 仍需继续压引擎与驱动缓冲/换事件路径, 不能只调 UI。
+- 下一步: 60Hz 遥测替代状态文件 + UI 30fps VU; 继续做无缓冲/自适应环形缓冲音频路径; 再做麦克风门限/降噪旁路。
 <!-- DEV-NOTES-INDEX:BEGIN —— 由 `node scripts/checks/dev-notes-index.js --update` 生成, 勿手工编辑; GNOTES 门禁会比对 -->
 
 ## 附录: 条目索引(自动生成, 勿手工编辑)
@@ -961,5 +968,6 @@
 | 410 | 2026-11-25 | 虚拟混音台 VU 表不刷新修复 |
 | 411 | 2026-11-25 | 虚拟混音台 VU 数字卡在历史最大值修复 |
 | 412 | 2026-11-25 | 虚拟混音台阶段收口: A/B/VU 可用, 延迟与刷新列入正式版优化 |
+| 413 | 2026-11-28 | 虚拟混音台低延迟原型 + CABLE 延迟测量 |
 
 <!-- DEV-NOTES-INDEX:END -->

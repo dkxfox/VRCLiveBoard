@@ -24,10 +24,12 @@
     npm run test:mixer
     npm run test:mixer:capture
     npm run test:mixer:cable
+    npm run test:mixer:latency
 
 - test:mixer：版本/设备/离线混音/闪避/插件桥（不占用真实音频）
 - capture：真实采集到 WAV（占用麦克风约 1.5s，不打开扬声器）
 - cable：向 CABLE Input 注入 440Hz，从 CABLE Output 采集（仅虚拟线）
+- latency：测量 CABLE Input→CABLE Output 往返延迟（当前约 100–125ms）
 
 ## 实时启停与手动调整
 

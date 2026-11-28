@@ -10,7 +10,8 @@
 - 已修复: A/B VU 轮询、VU 数字卡历史最大值、状态 I/O 阻塞音频线程、CABLE 自反馈、采集缓冲积压。
 - 当前延迟约 **1s**, 用户暂接受; VU 刷新仍约 500ms 级。
 - 正式版目标: 输出端到端 **<100ms**, VU 接近实时; 麦克风低电平门限/静默省 CPU; 先做低延迟音频原型 + `--latency-test`, 再做 60Hz 遥测/UI 30fps, 再做麦克风门限/降噪旁路。
-- 最新验证: test:mixer 21 PASS; test:mixer:cable 3 PASS; gates 16 PASS / 0 FAIL; 工作区干净。
+- 最新验证: test:mixer 21 PASS; test:mixer:cable 3 PASS; test:mixer:latency 2 PASS; gates 16 PASS / 0 FAIL。
+- 2026-11-28: 新增 latency-test, CABLE 往返约 100–125ms(事件驱动 5ms 缓冲); LiveEngine 改事件驱动 10ms; 下一步 60Hz 遥测/VU 与继续压延迟。
 ## 0. 最新状态保存(2026-11-24)
 
 - 虚拟混音台插件: **v0.4.1**(experimental), 引擎 **0.4.0**; `setup()` 已检测到 VB-CABLE, 返回 `installed=true`。

@@ -123,7 +123,7 @@ module.exports = function (c) {
           ok: true,
           stage: 'S3',
           running: !!(liveChild && liveChild.exitCode === null),
-          engine: { path: enginePath(), exists: exists, version: '0.5.0' },
+          engine: { path: enginePath(), exists: exists, version: '0.5.1' },
           channels: [
             { id: 'system', name: '系统声音', denoise: 'off', compressor: 'off' },
             { id: 'mic', name: '麦克风', denoise: 'off', compressor: 'off' },

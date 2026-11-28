@@ -15,7 +15,7 @@ using NAudio.Wave.SampleProviders;
 // No live capture/output yet; S2 adds channel capture and ducking.
 internal static class Program
 {
-    private const string EngineVersion = "0.5.0";
+    private const string EngineVersion = "0.5.1";
     private const int SampleRate = 48000;
     private const int Channels = 2;
 
@@ -37,6 +37,7 @@ internal static class Program
             if (args[0] == "--tone-test") return ToneTest.Run(args);
             if (args[0] == "--probe-captures") return ProbeCaptures.Run(args);
             if (args[0] == "--run") return LiveEngine.Run(args);
+            if (args[0] == "--latency-test") return LatencyTest.Run(args);
             Usage();
             return 2;
         }
@@ -59,6 +60,7 @@ internal static class Program
         Console.Error.WriteLine("  --tone-test <seconds> [renderId] [result.json]");
         Console.Error.WriteLine("  --probe-captures <seconds> [result.json]");
         Console.Error.WriteLine("  --run <config.json>");
+        Console.Error.WriteLine("  --latency-test [seconds] [result.json]");
     }
 
     private static int ListDevices(string outPath)

@@ -1,7 +1,7 @@
 {
   "id": "virtual-mixer",
   "name": "虚拟混音台",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "author": "VRCLiveBoard 官方",
   "description": "把系统声音、麦克风、磁带/乐器等自定义输入混成一路送入虚拟跳线；S3 实时启停 + 可调增益/闪避参数；A/B-VU 页面后续。",
   "api": "2.0.0",
@@ -135,6 +135,6 @@
     }
   ],
   "changelog": [
-    "0.5.0 S3: 实时 --run 引擎 + 插件 start/stop；可调麦增益/音乐增益/闪避深度/阈值/attack/release/hold/lookahead/HPF；默认值来自 2026-11-25 VRChat 实机确认；A/B-VU 页面后续"
+    "0.5.1 延迟优化原型: 新增 --latency-test/CABLE 往返测量(约100–125ms); LiveEngine 采集/输出改 WASAPI 事件驱动 10ms 缓冲; 下一步遥测60Hz/UI 30fps"
   ]
 }
